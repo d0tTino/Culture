@@ -1,0 +1,11 @@
+# Core Dependencies
+python-dotenv
+redis
+langchain
+langgraph
+ollama
+
+# Ollama Python Client (Add the specific package name if known, otherwise keep as comment)
+# ollama
+
+# Add other dependencies as needed 
