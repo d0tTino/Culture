@@ -67,100 +67,108 @@ class Simulation:
                 logger.info(f"  - {agent.get_id()}")
 
 
-    def run_step(self):
+    def run_step(self, max_turns: int = 1) -> int:
         """
-        Executes a single step of the simulation.
+        Runs the simulation for a specified number of steps.
+
+        Args:
+            max_turns (int): Maximum number of turns to run.
+
+        Returns:
+            int: The actual number of turns executed.
         """
-        self.current_step += 1
-        logger.info(f"--- Simulation Step {self.current_step} ---")
+        steps_executed = 0
 
-        # --- Get broadcasts from the PREVIOUS step for current perception ---
-        # Make a copy to avoid modification issues if needed later
-        broadcasts_to_perceive = self.last_step_broadcasts.copy()
-        if broadcasts_to_perceive:
-            logger.debug(f"Step {self.current_step}: Agents will perceive {len(broadcasts_to_perceive)} broadcasts from Step {self.current_step - 1}.")
-        # --- End Get Broadcasts ---
-        
-        # --- Get current Knowledge Board state ---
-        board_state = self.knowledge_board.get_state()
-        logger.debug(f"Step {self.current_step}: Knowledge Board state has {len(board_state)} entries.")
-        # --- End Get Board State ---
+        for _ in range(max_turns):
+            self.current_step += 1
+            current_step = self.current_step
+            logger.info(f"\n--- Starting Simulation Step {current_step} ---")
 
-        if not self.agents:
-            logger.warning("No agents to process in simulation step.")
-            self.last_step_broadcasts = [] # Clear broadcasts if no agents
-            return
-
-        # List to collect broadcasts generated in THIS step
-        current_step_generated_broadcasts = []
-
-        # Simple round-robin activation for now
-        for agent in self.agents:
-            # --- Gather Environment Perception for the current agent ---
-            # Get richer state info (id, name, mood) of other agents
+            # Get state from all agents for shared perceptions
             other_agents_state = []
-            for other in self.agents:
-                if other.get_id() != agent.get_id(): # Exclude self
-                    other_state = other.get_state()
-                    other_agents_state.append({
-                        "id": other.get_id(),
-                        "name": other_state.get('name', other.get_id()), # Use name, fallback to ID
-                        "mood": other_state.get('mood', 'unknown') # Get current mood
-                    })
+            for agent in self.agents:
+                # Basic state - ID, mood, step counter only for now
+                agent_public_state = {
+                    "agent_id": agent.agent_id,
+                    "mood": agent.state.get('mood', 'neutral'),
+                    "step_counter": agent.state.get('step_counter', 0)
+                }
+                other_agents_state.append(agent_public_state)
 
-            # Prepare the perception dictionary
-            perception_data = {
-                # Add other perception data here if needed in the future
-                "other_agents_state": other_agents_state, # List of dicts with richer info
-                # --- ADD perceived broadcasts ---
-                "broadcasts": broadcasts_to_perceive, # Pass the list collected at the start
-                # --- Add Knowledge Board content ---
-                "knowledge_board_content": board_state, # Pass the current board state
-                # --- Add simulation scenario ---
-                "scenario_description": self.scenario # Pass the simulation scenario
-                # --- End ADD ---
-            }
-            # --- End Gather Environment Perception ---
+            # --- Access Knowledge Board State ---
+            board_state = []
+            if self.knowledge_board:
+                # Get the board state (list of entries) for passing to agents
+                board_state = self.knowledge_board.get_state()
+                logger.debug(f"Retrieved knowledge board state: {len(board_state)} entries")
+            # --- End Access Knowledge Board ---
 
-            logger.info(f"Activating agent: {agent.get_id()} for step {self.current_step}")
-            logger.debug(f"  Perception for {agent.get_id()}: {perception_data}") # Log the specific perception
+            # --- Collect Messages from Previous Step ---
+            # At the start of the step, the last_step_messages list contains
+            # all messages sent during the previous step
+            last_step_messages = getattr(self, 'last_step_messages', [])
+            # --- End Collection ---
+
+            # --- Process Each Agent's Turn ---
+            # A list to store all messages generated in this step (for next step)
+            this_step_messages = []
             
-            # --- Invoke Agent's Graph Turn ---
-            try:
-                # Pass the perception dictionary and vector store manager to the agent's turn method
-                success = agent.run_turn(
-                    simulation_step=self.current_step,
-                    environment_perception=perception_data, # Pass the gathered perception
-                    vector_store_manager=self.vector_store_manager, # Pass the vector store manager
-                    knowledge_board=self.knowledge_board # Pass the knowledge board instance
+            for agent in self.agents:
+                agent_id = agent.agent_id
+                logger.info(f"Running turn for Agent {agent_id} at step {current_step}...")
+
+                # Prepare the perception dictionary
+                perception_data = {
+                    # Add other perception data here if needed in the future
+                    "other_agents_state": other_agents_state, # List of dicts with richer info
+                    # --- ADD perceived messages ---
+                    # Filter messages: only broadcasts (recipient_id=None) OR 
+                    # messages specifically targeted to this agent
+                    "perceived_messages": [
+                        msg for msg in last_step_messages
+                        if msg.get('recipient_id') is None or msg.get('recipient_id') == agent_id
+                    ],
+                    # --- Add Knowledge Board content ---
+                    "knowledge_board_content": board_state, # Pass the current board state
+                    # --- Add simulation scenario ---
+                    "scenario_description": self.scenario # Pass the simulation scenario
+                    # --- End ADD ---
+                }
+
+                # Run the agent's turn with perception data
+                agent_output = agent.run_turn(
+                    simulation_step=current_step,
+                    environment_perception=perception_data,
+                    vector_store_manager=self.vector_store_manager,
+                    knowledge_board=self.knowledge_board
                 )
-                if not success:
-                    logger.warning(f"Agent {agent.get_id()} turn execution reported failure for step {self.current_step}.")
-                else:
-                    # --- Collect broadcast generated by THIS agent in THIS turn ---
-                    last_broadcast = agent.get_state().get('last_broadcast', None)
-                    if last_broadcast:
-                        current_step_generated_broadcasts.append({
-                            "sender_id": agent.get_id(),
-                            "message": last_broadcast
-                        })
-                    # --- End Collect Broadcast ---
-            except Exception as e:
-                # Catch potential errors bubbling up from run_turn if not handled internally
-                logger.error(f"Unhandled exception during agent {agent.get_id()} turn activation on step {self.current_step}: {e}", exc_info=True)
-            # --- End Agent's Graph Turn ---
+                
+                # --- Process Agent Output ---
+                # Add any broadcasts/messages to the collection for next step
+                message_content = agent_output.get('message_content')
+                message_recipient_id = agent_output.get('message_recipient_id')
+                
+                if message_content:
+                    message_type = "broadcast" if message_recipient_id is None else "targeted to agent"
+                    logger.info(f"Agent {agent_id} sent a message ({message_type}): '{message_content}'")
+                    
+                    # Store the message for the next step's perception
+                    this_step_messages.append({
+                        'sender_id': agent_id,
+                        'content': message_content,
+                        'recipient_id': message_recipient_id
+                    })
+                # --- End Process Agent Output ---
 
-        # --- Store broadcasts collected THIS step for the NEXT step ---
-        self.last_step_broadcasts = current_step_generated_broadcasts # Overwrite with new broadcasts
-        if self.last_step_broadcasts:
-            logger.info(f"--- Broadcasts generated and stored in Step {self.current_step} (for perception in Step {self.current_step + 1}) ---")
-            for broadcast in self.last_step_broadcasts:
-                logger.info(f"  From {broadcast['sender_id']}: {broadcast['message']}")
-        else:
-            logger.info(f"--- No broadcasts generated in Step {self.current_step} ---")
-        # --- End Store Broadcasts ---
+            # --- End of Step Processing ---
+            # Save the messages for the next step's perception
+            self.last_step_messages = this_step_messages
+            logger.info(f"Collected {len(this_step_messages)} messages for next step's perception")
+            logger.info(f"--- Completed Simulation Step {current_step} ---\n")
+            steps_executed += 1
+            # --- End of Step Processing ---
 
-        logger.info(f"--- End Simulation Step {self.current_step} ---")
+        return steps_executed
 
 
     def run(self, num_steps: int):

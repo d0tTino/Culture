@@ -27,7 +27,8 @@ RELATIONSHIP_DECAY_FACTOR = 0.01  # Relationships decay towards neutral by 1% ea
 class AgentActionOutput(BaseModel):
     """Defines the expected structured output from the LLM."""
     thought: str = Field(..., description="The agent's internal thought or reasoning for the turn.")
-    broadcast: Optional[str] = Field(None, description="The message to broadcast to other agents, or None if choosing not to broadcast.")
+    message_content: Optional[str] = Field(None, description="The message to send to other agents, or None if choosing not to send a message.")
+    message_recipient_id: Optional[str] = Field(None, description="The ID of the agent this message is directed to. None means broadcast to all agents.")
     action_intent: Literal["idle", "continue_collaboration", "propose_idea", "ask_clarification"] = Field(
         default="idle", # Default intent
         description="The agent's primary intent for this turn."
@@ -41,6 +42,7 @@ class AgentTurnState(TypedDict):
     simulation_step: int          # The current step number from the simulation
     previous_thought: str | None  # The thought from the *last* turn
     environment_perception: Dict[str, Any] # Perception data from the environment
+    perceived_messages: List[Dict[str, Any]] # Messages perceived from last step (broadcasts and targeted)
     memory_history_list: List[Tuple[int, str, str]] # Field for history list
     turn_sentiment_score: int     # Field for aggregated sentiment score
     prompt_modifier: str          # Field for relationship-based prompt adjustments
@@ -57,31 +59,35 @@ class AgentTurnState(TypedDict):
 
 def analyze_perception_sentiment_node(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Analyzes the sentiment of perceived broadcasts from the previous step.
+    Analyzes the sentiment of perceived messages from the previous step.
     Calculates an aggregated sentiment score for the turn.
     """
     agent_id = state['agent_id']
     sim_step = state['simulation_step']
-    perception = state.get('environment_perception', {})
-    perceived_broadcasts = perception.get('broadcasts', [])
+    perceived_messages = state.get('perceived_messages', [])
     logger.debug(f"Node 'analyze_perception_sentiment_node' executing for agent {agent_id} at step {sim_step}")
 
     total_sentiment_score = 0
     analyzed_count = 0
 
-    if not perceived_broadcasts:
-        logger.debug("  No broadcasts perceived, sentiment score remains 0.")
+    if not perceived_messages:
+        logger.debug("  No messages perceived, sentiment score remains 0.")
         return {"turn_sentiment_score": 0}
 
-    for msg in perceived_broadcasts:
+    for msg in perceived_messages:
         sender_id = msg.get('sender_id', 'unknown')
-        message = msg.get('message', None)
+        message_content = msg.get('content', None)
+        recipient_id = msg.get('recipient_id', None)
+        
+        # Optional: Add special handling for targeted messages
+        # For example, private messages might have more emotional impact
 
-        # Optional: Skip analyzing own messages if they are included in perception
-        # if sender_id == agent_id: continue
+        # Skip analyzing own messages if they are included in perception
+        if sender_id == agent_id: 
+            continue
 
-        if message:
-            sentiment = analyze_sentiment(message) # Use the new utility function
+        if message_content:
+            sentiment = analyze_sentiment(message_content) # Use the utility function
             if sentiment == 'positive':
                 total_sentiment_score += 1
                 analyzed_count += 1
@@ -98,13 +104,14 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> Dict[str, Any]:
 
 def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Optional[AgentActionOutput]]:
     """
-    Node that calls the LLM to generate structured output (thought, broadcast, intent)
+    Node that calls the LLM to generate structured output (thought, message_content, message_recipient_id, intent)
     based on context.
     """
     agent_id = state['agent_id']
     sim_step = state['simulation_step']
     prev_thought = state.get('previous_thought', None)
     perception = state.get('environment_perception', {})
+    perceived_messages = state.get('perceived_messages', [])
     sentiment_score = state.get('turn_sentiment_score', 0)
     prompt_modifier = state.get('prompt_modifier', "")
     agent_goal = state.get('agent_goal', "Contribute to the simulation as effectively as possible.")
@@ -124,6 +131,7 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     logger.debug(f"  Using memory summary: '{rag_summary}'")
     logger.debug(f"  Knowledge board has {len(knowledge_board_content)} entries")
     logger.debug(f"  Using simulation scenario: '{scenario_description}'")
+    logger.debug(f"  Perceived {len(perceived_messages)} messages")
 
     # Format other agents' information
     other_agents_info = perception.get('other_agents_state', [])
@@ -132,9 +140,8 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     # Format knowledge board content
     formatted_board = _format_knowledge_board(knowledge_board_content)
     
-    # Format broadcasts
-    broadcasts = perception.get('broadcasts', [])
-    formatted_broadcasts = _format_broadcasts(broadcasts)
+    # Format perceived messages
+    formatted_messages = _format_messages(perceived_messages)
     
     # Build the prompt with the agent's persona, context, and task
     prompt = f"""You are Agent_{agent_id}, an AI agent in a simulation.
@@ -157,13 +164,18 @@ Relevant Memory Context (Summarized):
 Current Knowledge Board Content (Last 10 Entries):
 {formatted_board}
   
-Messages Broadcast by Others in Previous Step:
-{formatted_broadcasts}
+Messages from Previous Step:
+{formatted_messages}
   The overall sentiment of messages you perceived last step was: {sentiment_score} (positive > 0, negative < 0, neutral = 0). 
 
 Guidance based on relationships: {prompt_modifier}
                             
-Task: Based on all the context, generate your internal thought, decide if you want to broadcast a message, and choose your primary action intent for this turn.
+Task: Based on all the context, generate your internal thought, decide if you want to send a message, and choose your primary action intent for this turn.
+
+MESSAGING OPTIONS:
+- Send a message to all agents (broadcast) by leaving message_recipient_id as null
+- Send a targeted message to a specific agent by setting message_recipient_id to their agent ID (as shown in "Other Agents Present")
+- Choose not to send any message by setting message_content to null
                             
 IMPORTANT ACTION CHOICES:
 1. 'idle' - No specific action, continue monitoring.
@@ -174,22 +186,32 @@ IMPORTANT ACTION CHOICES:
 If you have a significant insight or proposal you'd like to be added to the shared Knowledge Board, use 'propose_idea'.
 
 You MUST respond ONLY with a valid JSON object matching the specified schema.
-Example for no broadcast:
+Example for no message:
 {{
   "thought": "My internal reasoning...",
-  "broadcast": null,
+  "message_content": null,
+  "message_recipient_id": null,
   "action_intent": "idle"
 }}
-Example with broadcast:
+Example with broadcast message:
 {{
   "thought": "My internal reasoning...",
-  "broadcast": "My message to others.",
+  "message_content": "My message to everyone.",
+  "message_recipient_id": null,
+  "action_intent": "continue_collaboration"
+}}
+Example with targeted message:
+{{
+  "thought": "My internal reasoning...",
+  "message_content": "This is a private message just for you.",
+  "message_recipient_id": "agent_id_xyz",
   "action_intent": "continue_collaboration"
 }}
 Example with proposal for Knowledge Board:
 {{
   "thought": "I have a valuable idea to share...",
-  "broadcast": "I propose we consider implementing X to solve Y...",
+  "message_content": "I propose we consider implementing X to solve Y...",
+  "message_recipient_id": null,
   "action_intent": "propose_idea"
 }}
 """
@@ -205,7 +227,7 @@ Example with proposal for Knowledge Board:
     if structured_output:
         logger.info(f"Agent {agent_id} structured output received: "
                     f"Thought='{structured_output.thought}', "
-                    f"Broadcast='{structured_output.broadcast}', "
+                    f"Broadcast='{structured_output.message_content}', "
                     f"Intent='{structured_output.action_intent}'")
     else:
         logger.warning(f"Agent {agent_id} failed to generate or parse structured output.")
@@ -215,8 +237,8 @@ Example with proposal for Knowledge Board:
 def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     """
     Updates mood based on sentiment, updates relationships based on
-    perceived broadcast sentiment, stores the latest thought, and updates memory history.
-    This node prepares the state *before* the final decision on broadcasting.
+    perceived message sentiment, stores the latest thought, and updates memory history.
+    This node prepares the state *before* the final decision on sending messages.
     """
     agent_id = state['agent_id']
     sim_step = state['simulation_step']
@@ -224,11 +246,10 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     # --- Get Structured Output ---
     structured_output = state.get('structured_output')
     thought = structured_output.thought if structured_output else "[thought generation failed]"
-    # Broadcast will be handled by the routing/finalization steps
+    # Message will be handled by the routing/finalization steps
     # --- End Get Structured Output ---
     
-    perception = state.get('environment_perception', {})
-    perceived_broadcasts = perception.get('broadcasts', [])
+    perceived_messages = state.get('perceived_messages', [])
     sentiment_score = state.get('turn_sentiment_score', 0)
 
     logger.debug(f"Node 'update_state_node' executing for agent {agent_id}")
@@ -260,13 +281,13 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
 
         # Update Relationships Based on Individual Message Sentiment
         relationships = current_agent_state.get('relationships', {}).copy()
-        if perceived_broadcasts:
-            logger.debug(f"  Updating relationships based on {len(perceived_broadcasts)} perceived broadcasts...")
-            for msg in perceived_broadcasts:
+        if perceived_messages:
+            logger.debug(f"  Updating relationships based on {len(perceived_messages)} perceived messages...")
+            for msg in perceived_messages:
                 sender_id = msg.get('sender_id')
-                message = msg.get('message')
-                if sender_id and message and sender_id != agent_id:
-                    msg_sentiment = analyze_sentiment(message)
+                content = msg.get('content')
+                if sender_id and content and sender_id != agent_id:
+                    msg_sentiment = analyze_sentiment(content)
                     current_relationship_score = relationships.get(sender_id, 0.0)
                     new_relationship_score = current_relationship_score
                     sentiment_delta = 0.0
@@ -283,23 +304,25 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
                              logger.info(f"Agent {agent_id} relationship with {sender_id} updated to {new_relationship_score:.2f} (sentiment: {msg_sentiment})")
             current_agent_state['relationships'] = relationships
 
-        # Store latest thought (broadcast stored later based on decision)
+        # Store latest thought (message stored later based on decision)
         current_agent_state['last_thought'] = thought
 
-        # Update Memory History (including perceived, thought, but NOT sent broadcast yet)
+        # Update Memory History (including perceived messages, thought, but NOT sent message yet)
         memory_list = current_agent_state.get('memory_history', [])
         memory_deque = deque(memory_list, maxlen=5)
-        if perceived_broadcasts:
-            for msg in perceived_broadcasts:
+        if perceived_messages:
+            for msg in perceived_messages:
                 sender = msg.get('sender_id', 'unknown')
-                message = msg.get('message', '')
-                memory_deque.append((sim_step, 'broadcast_perceived', f"{sender}: \"{message}\""))
+                content = msg.get('content', '')
+                recipient = msg.get('recipient_id')
+                message_type = "private" if recipient else "broadcast"
+                memory_deque.append((sim_step, f'message_perceived_{message_type}', f"{sender}: \"{content}\""))
         if thought:
             memory_deque.append((sim_step, 'thought', thought))
-        # DO NOT add broadcast_sent here
+        # DO NOT add message_sent here
 
         current_agent_state['memory_history'] = list(memory_deque)
-        logger.debug(f"  Updated memory history (pre-broadcast decision): {list(memory_deque)}")
+        logger.debug(f"  Updated memory history (pre-message decision): {list(memory_deque)}")
 
     except Exception as e:
         logger.error(f"Error in update_state_node for agent {agent_id}: {e}", exc_info=True)
@@ -318,7 +341,7 @@ def route_broadcast_decision(state: AgentTurnState) -> str:
     # Get the mood from the *updated* state dictionary
     current_mood = state.get('updated_state', {}).get('mood', 'neutral')
     structured_output = state.get('structured_output')
-    potential_broadcast = structured_output.broadcast if structured_output else None
+    potential_broadcast = structured_output.message_content if structured_output else None
 
     # Simple logic: Only broadcast if mood is not 'unhappy' AND there's a message
     if current_mood != 'unhappy' and potential_broadcast:
@@ -330,33 +353,63 @@ def route_broadcast_decision(state: AgentTurnState) -> str:
         return "skip"
 
 # Add this final update node
-def finalize_state_node(state: AgentTurnState) -> Dict[str, Any]:
+def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Finalizes the agent state for the turn. If broadcasting, adds the
-    sent broadcast from structured_output to memory and sets 'last_broadcast'.
+    Makes the final decision on whether or not to send the message based on
+    agent's mood, updates memory history with the decision, and prepares the return value
+    to inform the simulation whether a message was sent or not.
     """
     agent_id = state['agent_id']
-    sim_step = state['simulation_step']
-    final_agent_state = state.get('updated_state', state['current_state']).copy()
+    sim_step = state.get('simulation_step', 0)
+    current_mood = state.get('updated_state', {}).get('mood', 'neutral')
     structured_output = state.get('structured_output')
-    broadcast_to_send = structured_output.broadcast if structured_output else None
-
-    memory_list = final_agent_state.get('memory_history', [])
-    memory_deque = deque(memory_list, maxlen=5)
-
-    # Implicitly check router decision: if broadcast_to_send exists AND mood wasn't unhappy (checked by router)
-    if broadcast_to_send:
-         final_agent_state['last_broadcast'] = broadcast_to_send
-         memory_deque.append((sim_step, 'broadcast_sent', broadcast_to_send)) # Add sent broadcast to memory
-         logger.debug(f"  Finalizing state: Added broadcast to memory and state.")
+    message_content = structured_output.message_content if structured_output else None
+    message_recipient_id = structured_output.message_recipient_id if structured_output else None
+    action_intent = structured_output.action_intent if structured_output else 'idle'
+  
+    # Simple logic: Only send message if mood is not 'unhappy' AND there's a message
+    should_send_message = current_mood != 'unhappy' and message_content is not None
+    
+    # Create a clone to avoid altering the original dictionary
+    final_agent_state = state.get('updated_state', state.get('current_state', {})).copy()
+    
+    if should_send_message:
+        # Store message in agent's state for reference
+        if message_recipient_id:
+            logger.info(f"Agent {agent_id} sending targeted message to {message_recipient_id}: '{message_content}'")
+            final_agent_state['last_message'] = message_content
+            final_agent_state['last_message_recipient'] = message_recipient_id
+        else:
+            logger.info(f"Agent {agent_id} broadcasting message to all: '{message_content}'")
+            final_agent_state['last_message'] = message_content
+            final_agent_state['last_message_recipient'] = None
+        
+        # Add to memory history
+        memory_list = final_agent_state.get('memory_history', [])
+        memory_deque = deque(memory_list, maxlen=5)
+        
+        # Record message sent in memory
+        message_type = "targeted" if message_recipient_id else "broadcast"
+        recipient_info = f" to {message_recipient_id}" if message_recipient_id else " to all"
+        memory_deque.append((sim_step, f'message_sent_{message_type}', f"I sent \"{message_content}\"{recipient_info}"))
+        final_agent_state['memory_history'] = list(memory_deque)
     else:
-         final_agent_state['last_broadcast'] = None
-         logger.debug(f"  Finalizing state: No broadcast sent/stored.")
-
-    final_agent_state['memory_history'] = list(memory_deque)
-
-    # Return only the final state dictionary
-    return {"updated_state": final_agent_state}
+        if current_mood == 'unhappy':
+            logger.info(f"Agent {agent_id} is unhappy and chose not to send message even though content was: '{message_content}'")
+        else:
+            logger.info(f"Agent {agent_id} chose not to send any message")
+        
+        # Make sure to clear any stored messages
+        final_agent_state.pop('last_message', None)
+        final_agent_state.pop('last_message_recipient', None)
+    
+    # Return both the updated agent state and the message info, whether a message was sent or not
+    return {
+        'updated_agent_state': final_agent_state,
+        'message_content': message_content if should_send_message else None,
+        'message_recipient_id': message_recipient_id if should_send_message else None,
+        'action_intent': action_intent
+    }
 
 # Add this new routing function
 def route_relationship_context(state: AgentTurnState) -> str:
@@ -450,7 +503,7 @@ def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
         return state
 
     # Extract the idea content from the structured output broadcast field
-    idea_content = structured_output.broadcast
+    idea_content = structured_output.message_content
     
     # Store it in agent state for reference
     if idea_content:
@@ -505,16 +558,18 @@ def _format_knowledge_board(board_entries):
     
     return "\n".join(lines)
 
-def _format_broadcasts(broadcasts):
-    """Helper function to format perceived broadcasts for the prompt."""
-    if not broadcasts:
-        return "  No messages were broadcast in the previous step."
+def _format_messages(messages):
+    """Helper function to format perceived messages for the prompt."""
+    if not messages:
+        return "  No messages were perceived in the previous step."
     
     lines = []
-    for msg in broadcasts:
+    for msg in messages:
         sender = msg.get('sender_id', 'unknown')
-        message = msg.get('message', '')
-        lines.append(f"  - {sender} said: \"{message}\"")
+        content = msg.get('content', '')
+        recipient = msg.get('recipient_id')
+        message_type = "(Private to you)" if recipient else "(Broadcast)"
+        lines.append(f"  - {sender} {message_type}: \"{content}\"")
     
     return "\n".join(lines)
 
@@ -540,17 +595,25 @@ def handle_idle_node(state: AgentTurnState) -> Dict[str, Any]:
     # Potentially add slight negative mood decay or relationship decay here later if desired
     return state
 
+def handle_ask_clarification_node(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Handles the 'ask_clarification' intent.
+    Currently a placeholder for future functionality.
+    """
+    agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
+    logger.info(f"Agent {agent_id}: Executing 'ask_clarification' intent handler (currently placeholder).")
+    # Potentially add logic to track what was asked about
+    return state
+
 # Update the route_action_intent function to handle all intents
 def route_action_intent(state: AgentTurnState) -> str:
     """
     Determines the next node based on the agent's action_intent.
-    Routes to the appropriate handler for each intent type.
     """
     structured_output: Optional[AgentActionOutput] = state.get('structured_output')
     intent = structured_output.action_intent if structured_output else "idle"
-    agent_id = state.get('agent_id', 'UNKNOWN')
 
-    logger.debug(f"Agent {agent_id}: Routing based on action_intent '{intent}'...")
+    logger.debug(f"Agent {state['agent_id']}: Routing based on action_intent '{intent}'...")
 
     if intent == "propose_idea":
         return "handle_propose_idea"
@@ -561,8 +624,7 @@ def route_action_intent(state: AgentTurnState) -> str:
     elif intent == "idle":
         return "handle_idle"
     else:
-        # Fallback for unknown intents
-        logger.warning(f"Agent {agent_id}: Unknown action_intent '{intent}'. Routing to update_state directly.")
+        # For unknown intents, go to update_state
         return "update_state"
 
 # --- Graph Definition ---
@@ -570,7 +632,7 @@ def route_action_intent(state: AgentTurnState) -> str:
 def create_basic_agent_graph():
     """
     Builds the agent turn graph with intent routing.
-    Flow: Analyze Sentiment -> Prepare Prompt -> Generate Output -> Route Intent -> [Handle Intent] -> Update State -> END
+    Flow: Analyze Sentiment -> Prepare Prompt -> Generate Output -> Route Intent -> [Handle Intent] -> Update State -> Finalize Message -> END
     """
     workflow = StateGraph(AgentTurnState)
 
@@ -579,41 +641,41 @@ def create_basic_agent_graph():
     workflow.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
     workflow.add_node("generate_action_output", generate_thought_and_message_node)
     workflow.add_node("handle_propose_idea", handle_propose_idea_node) # Specific intent handler
-    workflow.add_node("handle_ask_clarification", handle_propose_idea_node) # Temporarily reuse propose_idea handler
-    workflow.add_node("handle_continue_collaboration", handle_continue_collaboration_node) # New handler
-    workflow.add_node("handle_idle", handle_idle_node) # New handler
+    workflow.add_node("handle_continue_collaboration", handle_continue_collaboration_node) # Specific intent handler
+    workflow.add_node("handle_idle", handle_idle_node) # Specific intent handler
+    workflow.add_node("handle_ask_clarification", handle_ask_clarification_node) # Specific intent handler
     workflow.add_node("update_state", update_state_node) # Unified state update
+    workflow.add_node("finalize_message", finalize_message_agent_node) # Final decision on message sending
 
     # Define edges
     workflow.set_entry_point("analyze_sentiment")
     workflow.add_edge("analyze_sentiment", "prepare_relationship_prompt")
     workflow.add_edge("prepare_relationship_prompt", "generate_action_output")
-
-    # Conditional edge based on Action Intent
+    
+    # Use a conditional edge to route based on action intent
     workflow.add_conditional_edges(
-        "generate_action_output", # Source node after LLM output
-        route_action_intent,      # Function checking structured_output.action_intent
+        "generate_action_output",
+        route_action_intent,
         {
             "handle_propose_idea": "handle_propose_idea",
-            "handle_ask_clarification": "handle_ask_clarification",
             "handle_continue_collaboration": "handle_continue_collaboration",
             "handle_idle": "handle_idle",
-            "update_state": "update_state" # Direct fallback for unknown intents
+            "handle_ask_clarification": "handle_ask_clarification",
+            "update_state": "update_state" # Default fallback
         }
     )
-
-    # Edges from intent handlers to the final update node
+    
+    # All intent handlers go to update_state
     workflow.add_edge("handle_propose_idea", "update_state")
-    workflow.add_edge("handle_ask_clarification", "update_state")
     workflow.add_edge("handle_continue_collaboration", "update_state")
     workflow.add_edge("handle_idle", "update_state")
+    workflow.add_edge("handle_ask_clarification", "update_state")
+    
+    # Final state update and message decision
+    workflow.add_edge("update_state", "finalize_message")
+    workflow.add_edge("finalize_message", END)
 
-    # Final update node goes to END
-    workflow.add_edge("update_state", END)
-
-    graph = workflow.compile()
-    logger.info("Agent graph with comprehensive intent routing compiled successfully.")
-    return graph
+    return workflow.compile()
 
 # Compile the graph
 basic_agent_graph_compiled = create_basic_agent_graph() 

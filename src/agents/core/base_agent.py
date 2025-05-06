@@ -153,6 +153,11 @@ class Agent:
         logger.debug(f"  Retrieved simulation scenario: '{scenario_description}'")
         # --- End Extract Simulation Scenario ---
 
+        # --- Extract Perceived Messages ---
+        perceived_messages = environment_perception.get('perceived_messages', [])
+        logger.debug(f"  Retrieved {len(perceived_messages)} perceived messages")
+        # --- End Extract Perceived Messages ---
+
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
@@ -160,6 +165,7 @@ class Agent:
             "simulation_step": simulation_step,
             "previous_thought": previous_thought, # Pass previous thought into graph state
             "environment_perception": environment_perception, # Pass environment perception data
+            "perceived_messages": perceived_messages, # Pass perceived messages list
             "memory_history_list": current_memory_list, # Pass history list
             "turn_sentiment_score": 0, # Initialize sentiment score for this turn
             "prompt_modifier": "", # Initialize prompt modifier
@@ -177,19 +183,33 @@ class Agent:
             # Invoke the graph with the initial state for the turn
             final_turn_state = self.graph.invoke(initial_turn_state)
 
-            # Update the agent's main state with the result from the graph
-            # (This includes the 'last_thought' generated THIS turn, ready for the NEXT turn)
-            if "updated_state" in final_turn_state and final_turn_state["updated_state"]:
-                self.state = final_turn_state["updated_state"]
-                logger.debug(f"Agent {self.agent_id} main state updated from graph result.")
-                return True
+            # --- Process Graph Output ---
+            # Extract the final agent state from the graph result
+            # Ensure we have a valid final state dictionary
+            if final_turn_state is None:
+                logger.error(f"Agent {self.agent_id} graph execution returned None")
+                return {'message_content': None, 'message_recipient_id': None, 'action_intent': 'idle'}
+                
+            if 'updated_agent_state' in final_turn_state:
+                # Update the agent's current state
+                self.state = final_turn_state['updated_agent_state'].copy()
+                logger.debug(f"Agent {self.agent_id} state updated with graph output for step {simulation_step}")
+                
+                # Return turn output dict (messages, etc.)
+                turn_output = {
+                    'message_content': final_turn_state.get('message_content'),
+                    'message_recipient_id': final_turn_state.get('message_recipient_id'),
+                    'action_intent': final_turn_state.get('action_intent', 'idle')
+                }
+                
+                return turn_output
             else:
-                logger.warning(f"Agent {self.agent_id} graph turn finished but 'updated_state' was missing or empty.")
-                return False
+                logger.warning(f"Agent {self.agent_id} graph turn finished but 'updated_agent_state' was missing or empty.")
+                return {'message_content': None, 'message_recipient_id': None, 'action_intent': 'idle'}
 
         except Exception as e:
-            logger.error(f"Exception during agent {self.agent_id} graph turn: {e}", exc_info=True)
-            return False
+            logger.error(f"Error running turn for agent {self.agent_id} at step {simulation_step}: {e}", exc_info=True)
+            return {'message_content': None, 'message_recipient_id': None, 'action_intent': 'idle'}
 
     def __str__(self) -> str:
         """Returns a string representation of the agent."""
