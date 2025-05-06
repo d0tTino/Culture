@@ -5,9 +5,14 @@ Defines the base class for all agents in the Culture simulation.
 
 import uuid
 import logging
-from typing import Dict, Any, List, Tuple, Deque
+from typing import Dict, Any, List, Tuple, Deque, Optional, TYPE_CHECKING
 from collections import deque
 from src.agents.graphs.basic_agent_graph import basic_agent_graph_compiled, AgentTurnState
+
+# Use TYPE_CHECKING to avoid circular import issues
+if TYPE_CHECKING:
+    from src.infra.memory.vector_store import ChromaVectorStoreManager
+    from src.sim.knowledge_board import KnowledgeBoard
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,14 @@ class Agent:
         # Copy the initial state
         self.state: Dict[str, Any] = initial_state.copy()
 
+        # --- Initialize Relationships Structure ---
+        if 'relationships' not in self.state:
+            self.state['relationships'] = {}  # Maps agent_id -> score (e.g., float)
+        # Ensure memory_history is also initialized correctly
+        if 'memory_history' not in self.state:
+            self.state['memory_history'] = []  # Initialize if missing from initial_state
+        # --- End Initialize Relationships ---
+
         # --- Initialize Memory History ---
         # Store recent events: (step, type, content)
         # type can be 'thought', 'broadcast_sent', 'broadcast_perceived'
@@ -61,7 +74,7 @@ class Agent:
 
         # Initialize the agent's Lang Graph
         self.graph = basic_agent_graph_compiled
-        logger.info(f"Agent {self.agent_id} initialized with basic LangGraph and memory (maxlen=5), mood: {self.state['mood']}")
+        logger.info(f"Agent {self.agent_id} initialized with basic LangGraph and memory (maxlen=5), mood: {self.state['mood']}, including relationships dict.")
 
     def get_id(self) -> str:
         """Returns the agent's unique ID."""
@@ -86,7 +99,8 @@ class Agent:
         # Potentially add logging here for state changes if needed for debugging
         # logger.debug(f"Agent {self.agent_id} state updated: {key} = {value}")
         
-    def run_turn(self, simulation_step: int, environment_perception: Dict[str, Any] = None) -> bool:
+    def run_turn(self, simulation_step: int, environment_perception: Dict[str, Any] = None, 
+                vector_store_manager: Optional[Any] = None, knowledge_board: Optional['KnowledgeBoard'] = None) -> bool:
         """
         Executes the agent's internal graph for one turn, passing the previous thought.
 
@@ -94,6 +108,10 @@ class Agent:
             simulation_step (int): The current step number from the simulation.
             environment_perception (Dict[str, Any], optional): Perception data from the environment.
                 Defaults to an empty dict if not provided.
+            vector_store_manager (Optional[Any], optional): Manager for vector-based memory
+                storage and retrieval. Used to persist memory events.
+            knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
+                that agents can read from and write to.
 
         Returns:
             bool: True if the turn executed successfully, False otherwise.
@@ -119,6 +137,21 @@ class Agent:
         current_memory_list = self.state.get('memory_history', [])
         logger.debug(f"  Retrieved memory history (length {len(current_memory_list)}): {current_memory_list}")
         # --- End Retrieve ---
+        
+        # --- Retrieve agent goal ---
+        agent_goal = self.state.get('goal', "Contribute to the simulation as effectively as possible.")
+        logger.debug(f"  Retrieved agent goal: '{agent_goal}'")
+        # --- End Retrieve ---
+        
+        # --- Extract Knowledge Board Content ---
+        knowledge_board_content = environment_perception.get('knowledge_board_content', [])
+        logger.debug(f"  Retrieved knowledge board content (entries: {len(knowledge_board_content)})")
+        # --- End Extract Knowledge Board ---
+
+        # --- Extract Simulation Scenario ---
+        scenario_description = environment_perception.get('scenario_description', "")
+        logger.debug(f"  Retrieved simulation scenario: '{scenario_description}'")
+        # --- End Extract Simulation Scenario ---
 
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
@@ -129,9 +162,15 @@ class Agent:
             "environment_perception": environment_perception, # Pass environment perception data
             "memory_history_list": current_memory_list, # Pass history list
             "turn_sentiment_score": 0, # Initialize sentiment score for this turn
-            "llm_thought": None, # Initialize as None for this turn
-            "broadcast_message": None, # Initialize broadcast for this turn
-            "updated_state": {} # Initialize empty
+            "prompt_modifier": "", # Initialize prompt modifier
+            "structured_output": None, # Initialize as None for this turn
+            "agent_goal": agent_goal, # Pass the agent's goal
+            "updated_state": {}, # Initialize empty
+            "vector_store_manager": vector_store_manager, # Pass the vector store manager
+            "rag_summary": "(No memory summary available yet)", # Initialize with default summary
+            "knowledge_board_content": knowledge_board_content, # Pass the knowledge board content
+            "knowledge_board": knowledge_board, # Pass the knowledge board instance
+            "scenario_description": scenario_description # Pass the simulation scenario
         }
 
         try:

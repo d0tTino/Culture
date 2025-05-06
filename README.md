@@ -11,6 +11,8 @@ Culture.ai creates a virtual environment where multiple AI agents can interact, 
 - Sentiment analysis capabilities
 - Dynamic mood states
 - The ability to broadcast messages to other agents
+- The ability to post ideas to a shared Knowledge Board
+- Action intents that determine behavior (propose_idea, ask_clarification, continue_collaboration, idle)
 
 This framework allows for the study of emergent social behaviors, agent cooperation, and cultural development in a controlled environment.
 
@@ -19,8 +21,11 @@ This framework allows for the study of emergent social behaviors, agent cooperat
 - **Agent Architecture**: Modular agent design using LangGraph for thought generation and decision-making
 - **Memory System**: Short-term memory allowing agents to recall recent events, thoughts, and interactions
 - **Broadcast System**: Communication mechanism allowing agents to share messages with others
+- **Knowledge Board**: Shared repository for important ideas and proposals
+- **Intent-Based Actions**: Framework for different types of agent interactions
 - **Sentiment Analysis**: Ability to analyze emotional tone of messages and adjust agent mood accordingly
 - **Simulation Engine**: Customizable simulation environment with round-robin agent activation
+- **Scenario Framework**: Support for focused, goal-oriented simulation scenarios
 
 ## Requirements
 
@@ -32,8 +37,8 @@ This framework allows for the study of emergent social behaviors, agent cooperat
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/Culture.ai.git
-   cd Culture.ai
+   git clone https://github.com/d0tTino/Culture.git
+   cd Culture
    ```
 
 2. Create and activate a virtual environment (optional but recommended):
@@ -62,6 +67,14 @@ Run a simulation with the default parameters:
 python -m src.app
 ```
 
+### Configuring a Simulation Scenario
+
+You can modify the `SIMULATION_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
+
+```python
+SIMULATION_SCENARIO = "The team's objective is to collaboratively design a specification for a decentralized communication protocol suitable for autonomous AI agents operating in a resource-constrained environment. Key considerations are efficiency, security, and scalability."
+```
+
 ## Project Structure
 
 ```
@@ -83,7 +96,8 @@ Culture.ai/
     │   └── llm_client.py      # LLM client for Ollama
     └── sim/                   # Simulation environment
         ├── __init__.py
-        └── simulation.py      # Simulation engine
+        ├── simulation.py      # Simulation engine
+        └── knowledge_board.py # Shared repository for agent ideas
 ```
 
 ## Architecture
@@ -100,15 +114,26 @@ Each agent in Culture.ai is implemented as an instance of the `Agent` class, con
 
 Agent thought processes use a graph workflow:
 1. **Sentiment Analysis**: Analyze perceived broadcasts and update mood
-2. **Thought Generation**: Generate internal thoughts based on context
-3. **State Update**: Update internal state and memory
+2. **Prepare Relationship Prompt**: Adjust communication based on agent relationships
+3. **Generate Action Output**: Generate thoughts, broadcasts, and select an action intent
+4. **Handle Intent**: Process the selected intent (propose_idea, ask_clarification, etc.)
+5. **Update State**: Update internal state and memory
+
+### Action Intents
+
+Agents can select from different action intents:
+- **propose_idea**: Suggest a formal idea to be added to the Knowledge Board
+- **ask_clarification**: Request more information about something unclear
+- **continue_collaboration**: Standard contribution to ongoing discussion
+- **idle**: No specific action, continue monitoring
 
 ### Simulation Loop
 
 The simulation proceeds in discrete steps:
-1. Agents perceive broadcasts from the previous step
-2. Each agent takes a turn to process perceptions, generate thoughts, and broadcast
-3. Broadcasts are collected for the next step
+1. Agents perceive broadcasts from the previous step and the current Knowledge Board
+2. Each agent takes a turn to process perceptions, generate thoughts, and select an action intent
+3. The Knowledge Board is updated with new entries
+4. Broadcasts are collected for the next step
 
 ## Customization
 
@@ -118,6 +143,7 @@ To customize the simulation:
 - Modify the agent's cognitive process in `src/agents/graphs/basic_agent_graph.py`
 - Change initialization parameters in `src/app.py`
 - Add new agent capabilities by extending the base classes
+- Define a specific simulation scenario in `src/app.py`
 
 ## Development
 
@@ -126,6 +152,7 @@ To customize the simulation:
 1. **Enhanced Agent Capabilities**: Extend the `Agent` class or modify the cognition graph
 2. **New Environment Features**: Add to the `Simulation` class in `src/sim/simulation.py`
 3. **Better LLM Integration**: Enhance the `llm_client.py` for more sophisticated interactions
+4. **New Action Intents**: Add new intent types and handlers to expand agent behaviors
 
 ### Future Directions
 
@@ -134,6 +161,7 @@ To customize the simulation:
 - Visualization tools for agent interactions
 - Advanced emotional models
 - Goal-oriented agent behaviors
+- Extended Knowledge Board functionality
 
 ## License
 
