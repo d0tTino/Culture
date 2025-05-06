@@ -102,6 +102,55 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> Dict[str, Any]:
     # Return the calculated score to be added to the graph state
     return {"turn_sentiment_score": total_sentiment_score}
 
+def prepare_relationship_prompt_node(state: AgentTurnState) -> Dict[str, str]:
+    """
+    Prepares a sentiment-based prompt modifier based on the agent's relationship scores
+    with other agents.
+    """
+    agent_id = state['agent_id']
+    current_agent_state = state['current_state']
+    relationships = current_agent_state.get('relationships', {})
+    
+    # Default neutral modifier
+    modifier = "Maintain a neutral stance in your messages."
+    
+    # Only generate relationship-based prompts if we have relationships
+    if relationships:
+        # Find most positive and most negative relationships
+        most_positive_score = -1.1
+        most_positive_agent = None
+        most_negative_score = 1.1
+        most_negative_agent = None
+        
+        for other_id, score in relationships.items():
+            if score > most_positive_score:
+                most_positive_score = score
+                most_positive_agent = other_id
+            if score < most_negative_score:
+                most_negative_score = score
+                most_negative_agent = other_id
+        
+        # Use these values to craft the prompt modifier
+        if most_positive_agent and most_positive_score > 0.3:
+            if most_negative_agent and most_negative_score < -0.3:
+                # Have both strong positive and negative relationships
+                modifier = f"Be especially friendly and supportive toward {most_positive_agent} (relationship: {most_positive_score:.1f}) while being more cautious and measured in interactions with {most_negative_agent} (relationship: {most_negative_score:.1f})."
+                logger.debug(f"Agent {agent_id}: Applying 'mixed' prompt modifier.")
+            else:
+                # Only have strong positive relationship
+                modifier = f"Be especially friendly and supportive toward {most_positive_agent} (relationship: {most_positive_score:.1f}). Show enthusiasm and consider their ideas with extra interest."
+                logger.debug(f"Agent {agent_id}: Applying 'positive' prompt modifier.")
+        elif most_negative_agent and most_negative_score < -0.3:
+            # Only have strong negative relationship
+            modifier = f"Be cautious and formal in interactions with {most_negative_agent} (relationship: {most_negative_score:.1f}). Focus on facts rather than opinions in your responses."
+            logger.debug(f"Agent {agent_id}: Applying 'negative' prompt modifier.")
+        else:
+            logger.debug(f"Agent {agent_id}: Applying 'neutral' prompt modifier (no agents with scores).")
+    else:
+        logger.debug(f"Agent {agent_id}: Applying 'neutral' prompt modifier (alone).")
+
+    return {"prompt_modifier": modifier}
+
 def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Optional[AgentActionOutput]]:
     """
     Node that calls the LLM to generate structured output (thought, message_content, message_recipient_id, intent)
@@ -257,102 +306,101 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     logger.debug(f"  Processing thought from structured output: '{thought}'")
 
     current_agent_state = state['current_state'].copy()
-    try:
-        # Increment step counter
-        current_count = current_agent_state.get('step_counter', 0)
-        new_count = current_count + 1
-        current_agent_state['step_counter'] = new_count
+    
+    # Increment step counter
+    current_count = current_agent_state.get('step_counter', 0)
+    new_count = current_count + 1
+    current_agent_state['step_counter'] = new_count
 
-        # Update Mood Based on Overall Sentiment
-        current_mood = current_agent_state.get('mood', 'neutral')
-        new_mood = current_mood
-        if sentiment_score > 0: 
-            new_mood = 'happy'
-        elif sentiment_score < 0: 
-            new_mood = 'unhappy' # Add unhappy possibility
-        else: 
-            new_mood = 'neutral'
-            
-        if new_mood != current_mood:
-            logger.info(f"Agent {agent_id} mood changed from '{current_mood}' to '{new_mood}' based on overall sentiment score {sentiment_score}.")
-            current_agent_state['mood'] = new_mood
-        else: 
-            logger.debug(f"Agent {agent_id} mood remains '{current_mood}'.")
+    # Update Mood Based on Overall Sentiment
+    current_mood = current_agent_state.get('mood', 'neutral')
+    new_mood = current_mood
+    if sentiment_score > 0: 
+        new_mood = 'happy'
+    elif sentiment_score < 0: 
+        new_mood = 'unhappy' # Add unhappy possibility
+    else: 
+        new_mood = 'neutral'
+        
+    if new_mood != current_mood:
+        logger.info(f"Agent {agent_id} mood changed from '{current_mood}' to '{new_mood}' based on overall sentiment score {sentiment_score}.")
+        current_agent_state['mood'] = new_mood
+    else: 
+        logger.debug(f"Agent {agent_id} mood remains '{current_mood}'.")
 
-        # Update Relationships Based on Individual Message Sentiment
-        relationships = current_agent_state.get('relationships', {}).copy()
-        if perceived_messages:
-            logger.debug(f"  Updating relationships based on {len(perceived_messages)} perceived messages...")
-            for msg in perceived_messages:
-                sender_id = msg.get('sender_id')
-                content = msg.get('content')
-                if sender_id and content and sender_id != agent_id:
-                    msg_sentiment = analyze_sentiment(content)
-                    current_relationship_score = relationships.get(sender_id, 0.0)
-                    new_relationship_score = current_relationship_score
-                    sentiment_delta = 0.0
-                    if msg_sentiment == 'positive': 
-                        sentiment_delta = 0.1
-                    elif msg_sentiment == 'negative': 
-                        sentiment_delta = -0.1
-                        
-                    if sentiment_delta != 0.0:
-                        new_relationship_score += sentiment_delta
-                        new_relationship_score = max(-1.0, min(1.0, new_relationship_score)) # Clamp
-                        if new_relationship_score != current_relationship_score:
-                             relationships[sender_id] = new_relationship_score
-                             logger.info(f"Agent {agent_id} relationship with {sender_id} updated to {new_relationship_score:.2f} (sentiment: {msg_sentiment})")
-            current_agent_state['relationships'] = relationships
+    # Update Relationships Based on Individual Message Sentiment
+    relationships = current_agent_state.get('relationships', {}).copy()
+    if perceived_messages:
+        logger.debug(f"  Updating relationships based on {len(perceived_messages)} perceived messages...")
+        for msg in perceived_messages:
+            sender_id = msg.get('sender_id')
+            content = msg.get('content')
+            if sender_id and content and sender_id != agent_id:
+                msg_sentiment = analyze_sentiment(content)
+                current_relationship_score = relationships.get(sender_id, 0.0)
+                new_relationship_score = current_relationship_score
+                sentiment_delta = 0.0
+                if msg_sentiment == 'positive': 
+                    sentiment_delta = 0.1
+                elif msg_sentiment == 'negative': 
+                    sentiment_delta = -0.1
+                    
+                if sentiment_delta != 0.0:
+                    new_relationship_score += sentiment_delta
+                    new_relationship_score = max(-1.0, min(1.0, new_relationship_score)) # Clamp
+                    if new_relationship_score != current_relationship_score:
+                         relationships[sender_id] = new_relationship_score
+                         logger.info(f"Agent {agent_id} relationship with {sender_id} updated to {new_relationship_score:.2f} (sentiment: {msg_sentiment})")
+        current_agent_state['relationships'] = relationships
 
-        # Store latest thought (message stored later based on decision)
-        current_agent_state['last_thought'] = thought
+    # Store latest thought (message stored later based on decision)
+    current_agent_state['last_thought'] = thought
 
-        # Update Memory History (including perceived messages, thought, but NOT sent message yet)
-        memory_list = current_agent_state.get('memory_history', [])
-        memory_deque = deque(memory_list, maxlen=5)
-        if perceived_messages:
-            for msg in perceived_messages:
-                sender = msg.get('sender_id', 'unknown')
-                content = msg.get('content', '')
-                recipient = msg.get('recipient_id')
-                message_type = "private" if recipient else "broadcast"
-                memory_deque.append((sim_step, f'message_perceived_{message_type}', f"{sender}: \"{content}\""))
-        if thought:
-            memory_deque.append((sim_step, 'thought', thought))
-        # DO NOT add message_sent here
+    # Update Memory History (including perceived messages, thought, but NOT sent message yet)
+    memory_list = current_agent_state.get('memory_history', [])
+    memory_deque = deque(memory_list, maxlen=5)
+    if perceived_messages:
+        for msg in perceived_messages:
+            sender = msg.get('sender_id', 'unknown')
+            content = msg.get('content', '')
+            recipient = msg.get('recipient_id')
+            message_type = "private" if recipient else "broadcast"
+            memory_deque.append((sim_step, f'message_perceived_{message_type}', f"{sender}: \"{content}\""))
+    if thought:
+        memory_deque.append((sim_step, 'thought', thought))
+    # DO NOT add message_sent here
 
-        current_agent_state['memory_history'] = list(memory_deque)
-        logger.debug(f"  Updated memory history (pre-message decision): {list(memory_deque)}")
-
-    except Exception as e:
-        logger.error(f"Error in update_state_node for agent {agent_id}: {e}", exc_info=True)
-        return {"updated_state": state['current_state'], "structured_output": structured_output} # Return original on error
+    current_agent_state['memory_history'] = list(memory_deque)
+    logger.debug(f"  Updated memory history (pre-message decision): {list(memory_deque)}")
 
     # Return the updated state dictionary and pass along structured_output for the routing decision
-    return {"updated_state": current_agent_state, "structured_output": structured_output}
+    state_to_return = {"updated_state": current_agent_state, "structured_output": structured_output, "updated_agent_state": current_agent_state}
+    logger.debug(f"UPDATER_RETURN :: Agent {agent_id}: Returning state from update_state_node: {state_to_return}")
+    return state_to_return
 
-# Add this routing function
 def route_broadcast_decision(state: AgentTurnState) -> str:
     """
-    Determines whether to broadcast based on mood and if a message exists
-    in the structured output.
+    Determines whether to broadcast a message or exit the graph.
+    The decision is based on the agent's mood and whether a message was generated.
     """
-    agent_id = state['agent_id']
-    # Get the mood from the *updated* state dictionary
-    current_mood = state.get('updated_state', {}).get('mood', 'neutral')
+    agent_id = state.get('agent_id')
+    updated_state = state.get('updated_state', {})
+    current_mood = updated_state.get('mood', 'neutral')
     structured_output = state.get('structured_output')
-    potential_broadcast = structured_output.message_content if structured_output else None
+    has_message = structured_output and structured_output.message_content is not None
 
-    # Simple logic: Only broadcast if mood is not 'unhappy' AND there's a message
-    if current_mood != 'unhappy' and potential_broadcast:
-        logger.debug(f"Agent {agent_id}: Mood is '{current_mood}', deciding to broadcast.")
+    logger.debug(f"Agent {agent_id} in mood '{current_mood}' deciding on broadcasting message...")
+    
+    # Only broadcast if:
+    # 1. There is a message to broadcast (structured_output.broadcast is not None)
+    # 2. And the agent is not unhappy
+    if has_message and current_mood != 'unhappy':
         return "broadcast"
     else:
-        reason = "unhappy mood" if current_mood == 'unhappy' else "no broadcast message"
-        logger.debug(f"Agent {agent_id}: Deciding to skip broadcast due to {reason}.")
-        return "skip"
+        if has_message:
+            logger.info(f"Agent {agent_id} suppressing message due to unhappy mood")
+        return "exit"  # No message to broadcast or agent is unhappy
 
-# Add this final update node
 def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     """
     Makes the final decision on whether or not to send the message based on
@@ -373,118 +421,68 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     # Create a clone to avoid altering the original dictionary
     final_agent_state = state.get('updated_state', state.get('current_state', {})).copy()
     
-    if should_send_message:
-        # Store message in agent's state for reference
-        if message_recipient_id:
-            logger.info(f"Agent {agent_id} sending targeted message to {message_recipient_id}: '{message_content}'")
+    # Only log about messaging if there was a message generated
+    if message_content:
+        if should_send_message:
+            logger.info(f"Agent {agent_id} decides to send message: \"{message_content}\"")
+            
+            # Update memory with sent message
+            memory_list = final_agent_state.get('memory_history', [])
+            memory_deque = deque(memory_list, maxlen=5)
+            
+            # Add message sent entry to memory
+            message_type = "private" if message_recipient_id else "broadcast"
+            memory_deque.append((sim_step, f'message_sent_{message_type}', f"Me: \"{message_content}\""))
+            final_agent_state['memory_history'] = list(memory_deque)
+            
+            # Store the last message in agent state
             final_agent_state['last_message'] = message_content
-            final_agent_state['last_message_recipient'] = message_recipient_id
+            
+            # Setup return values for successful message
+            return_values = {
+                'message_content': message_content,
+                'message_recipient_id': message_recipient_id,
+                'action_intent': action_intent,
+                'updated_agent_state': final_agent_state
+            }
         else:
-            logger.info(f"Agent {agent_id} broadcasting message to all: '{message_content}'")
-            final_agent_state['last_message'] = message_content
-            final_agent_state['last_message_recipient'] = None
-        
-        # Add to memory history
-        memory_list = final_agent_state.get('memory_history', [])
-        memory_deque = deque(memory_list, maxlen=5)
-        
-        # Record message sent in memory
-        message_type = "targeted" if message_recipient_id else "broadcast"
-        recipient_info = f" to {message_recipient_id}" if message_recipient_id else " to all"
-        memory_deque.append((sim_step, f'message_sent_{message_type}', f"I sent \"{message_content}\"{recipient_info}"))
-        final_agent_state['memory_history'] = list(memory_deque)
+            # Message suppressed due to unhappy mood
+            logger.info(f"Agent {agent_id} (mood: {current_mood}) suppresses message: \"{message_content}\"")
+            return_values = {
+                'message_content': None,  # Suppressed
+                'message_recipient_id': None,
+                'action_intent': 'idle',  # Force idle when suppressing
+                'updated_agent_state': final_agent_state
+            }
     else:
-        if current_mood == 'unhappy':
-            logger.info(f"Agent {agent_id} is unhappy and chose not to send message even though content was: '{message_content}'")
-        else:
-            logger.info(f"Agent {agent_id} chose not to send any message")
-        
-        # Make sure to clear any stored messages
-        final_agent_state.pop('last_message', None)
-        final_agent_state.pop('last_message_recipient', None)
+        # No message was generated
+        logger.debug(f"Agent {agent_id} has no message to send.")
+        return_values = {
+            'message_content': None,
+            'message_recipient_id': None,
+            'action_intent': action_intent,  # Maintain original intent
+            'updated_agent_state': final_agent_state
+        }
     
-    # Return both the updated agent state and the message info, whether a message was sent or not
-    return {
-        'updated_agent_state': final_agent_state,
-        'message_content': message_content if should_send_message else None,
-        'message_recipient_id': message_recipient_id if should_send_message else None,
-        'action_intent': action_intent
-    }
+    logger.debug(f"FINALIZE_RETURN :: Agent {agent_id}: Returning final state with updated_agent_state included")
+    return return_values
 
-# Add this new routing function
 def route_relationship_context(state: AgentTurnState) -> str:
     """
-    Determines the relationship context (e.g., friendly, neutral, wary)
-    based on average relationship score with present agents.
+    Routes to relationship prompt modifier generation based on whether the agent has any
+    relationships established yet.
     """
-    agent_id = state['agent_id']
-    perception = state.get('environment_perception', {})
-    other_agents_info = perception.get('other_agents_state', [])
-    relationships = state['current_state'].get('relationships', {})
-
-    if not other_agents_info:
-        return "neutral" # No one else present
-
-    total_score = 0.0
-    count = 0
-    for agent_info in other_agents_info:
-        other_id = agent_info.get('id')
-        if other_id:
-            total_score += relationships.get(other_id, 0.0) # Default to 0 if no score yet
-            count += 1
-
-    if count == 0:
-        return "neutral"
-
-    average_score = total_score / count
-    logger.debug(f"Agent {agent_id}: Average relationship score with present agents: {average_score:.2f}")
-
-    # Define thresholds for routing
-    if average_score > 0.3:
-        return "friendly"
-    elif average_score < -0.3:
-        return "wary" # Example threshold for negative relationships
+    agent_id = state.get('agent_id')
+    current_agent_state = state.get('current_state', {})
+    relationships = current_agent_state.get('relationships', {})
+    
+    logger.debug(f"Agent {agent_id} relationship router checking for relationships...")
+    if relationships:
+        logger.debug(f"Agent {agent_id} has {len(relationships)} relationships established.")
+        return "has_relationships"
     else:
-        return "neutral"
-
-# Add this new node function
-def prepare_relationship_prompt_node(state: AgentTurnState) -> Dict[str, str]:
-    """
-    Generates a prompt modifier string based on the relationship context route.
-    """
-    agent_id = state['agent_id']
-    perception = state.get('environment_perception', {})
-    other_agents_info = perception.get('other_agents_state', [])
-    relationships = state['current_state'].get('relationships', {})
-
-    modifier = "" # Default empty modifier
-
-    if other_agents_info:
-        total_score = 0.0
-        count = 0
-        for agent_info in other_agents_info:
-            other_id = agent_info.get('id')
-            if other_id:
-                total_score += relationships.get(other_id, 0.0)
-                count += 1
-
-        if count > 0:
-            average_score = total_score / count
-            if average_score > 0.3:
-                modifier = "You generally have a friendly relationship with the agents present. Be warm and collaborative."
-                logger.debug(f"Agent {agent_id}: Applying 'friendly' prompt modifier.")
-            elif average_score < -0.3:
-                modifier = "You generally have a wary or negative relationship with the agents present. Be cautious and reserved."
-                logger.debug(f"Agent {agent_id}: Applying 'wary' prompt modifier.")
-            else:
-                modifier = "You have a neutral relationship with the agents present. Be professional and balanced."
-                logger.debug(f"Agent {agent_id}: Applying 'neutral' prompt modifier.")
-        else:
-            logger.debug(f"Agent {agent_id}: Applying 'neutral' prompt modifier (no agents with scores).")
-    else:
-        logger.debug(f"Agent {agent_id}: Applying 'neutral' prompt modifier (alone).")
-
-    return {"prompt_modifier": modifier}
+        logger.debug(f"Agent {agent_id} has no relationships established yet.")
+        return "no_relationships"
 
 def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
     """

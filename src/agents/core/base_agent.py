@@ -181,30 +181,46 @@ class Agent:
 
         try:
             # Invoke the graph with the initial state for the turn
-            final_turn_state = self.graph.invoke(initial_turn_state)
-
+            final_result_state = self.graph.invoke(initial_turn_state)
+            
+            # Add debug logging to inspect the graph.invoke result
+            logger.debug(f"RUN_TURN_GRAPH_RESULT :: Agent {self.agent_id}: Full result from graph.invoke: {final_result_state}")
+            
             # --- Process Graph Output ---
             # Extract the final agent state from the graph result
             # Ensure we have a valid final state dictionary
-            if final_turn_state is None:
+            if final_result_state is None:
                 logger.error(f"Agent {self.agent_id} graph execution returned None")
                 return {'message_content': None, 'message_recipient_id': None, 'action_intent': 'idle'}
-                
-            if 'updated_agent_state' in final_turn_state:
+            
+            # Log dictionary keys to help debug
+            logger.debug(f"RUN_TURN_KEYS :: Agent {self.agent_id}: Available keys in graph result: {list(final_result_state.keys())}")    
+            
+            # Try the updated_agent_state key first
+            updated_state_dict = final_result_state.get('updated_agent_state')
+            
+            # If not found, try the updated_state key
+            if not updated_state_dict and 'updated_state' in final_result_state:
+                updated_state_dict = final_result_state.get('updated_state')
+                logger.debug(f"RUN_TURN_FALLBACK :: Agent {self.agent_id}: Using 'updated_state' key instead of 'updated_agent_state'")
+            
+            logger.debug(f"RUN_TURN_PRE_UPDATE :: Agent {self.agent_id}: Attempting to update self.state with: {updated_state_dict}")
+            
+            if updated_state_dict:
                 # Update the agent's current state
-                self.state = final_turn_state['updated_agent_state'].copy()
-                logger.debug(f"Agent {self.agent_id} state updated with graph output for step {simulation_step}")
+                self.state.update(updated_state_dict)
+                logger.debug(f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self.state updated.")
                 
                 # Return turn output dict (messages, etc.)
                 turn_output = {
-                    'message_content': final_turn_state.get('message_content'),
-                    'message_recipient_id': final_turn_state.get('message_recipient_id'),
-                    'action_intent': final_turn_state.get('action_intent', 'idle')
+                    'message_content': final_result_state.get('message_content'),
+                    'message_recipient_id': final_result_state.get('message_recipient_id'),
+                    'action_intent': final_result_state.get('action_intent', 'idle')
                 }
                 
                 return turn_output
             else:
-                logger.warning(f"Agent {self.agent_id} graph turn finished but 'updated_agent_state' was missing or empty.")
+                logger.warning(f"RUN_TURN_UPDATE_FAIL :: Agent {self.agent_id}: No updated state found in graph result (checked both 'updated_agent_state' and 'updated_state' keys). self.state NOT updated.")
                 return {'message_content': None, 'message_recipient_id': None, 'action_intent': 'idle'}
 
         except Exception as e:
