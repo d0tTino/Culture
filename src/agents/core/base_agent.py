@@ -28,7 +28,7 @@ class Agent:
         graph: The compiled LangGraph for processing agent turns.
     """
 
-    def __init__(self, agent_id: str = None, initial_state: Dict[str, Any] = None):
+    def __init__(self, agent_id: str = None, initial_state: Dict[str, Any] = None, name: str = None):
         """
         Initializes a new agent with a unique ID and default state.
 
@@ -37,6 +37,8 @@ class Agent:
                 If None is provided, a random UUID will be generated.
             initial_state (Dict[str, Any], optional): Initial state for the agent.
                 If None is provided, default values will be used.
+            name (str, optional): A name for the agent. If None is provided,
+                a default name based on agent_id will be used.
         """
         # Generate a unique ID if none provided
         self.agent_id = agent_id if agent_id else str(uuid.uuid4())
@@ -46,10 +48,11 @@ class Agent:
             initial_state = {}
         
         # Get necessary values from initial_state or use defaults
-        name = initial_state.get('name', f"Agent-{self.agent_id[:8]}")
+        name = name or initial_state.get('name', f"Agent-{self.agent_id[:8]}")
         role = initial_state.get('current_role', "Default Contributor")
         steps_in_role = initial_state.get('steps_in_current_role', 0)
         mood = initial_state.get('mood', 'neutral')
+        agent_goal = initial_state.get('agent_goal', "Contribute to the simulation as effectively as possible.")
         
         # Get values from config or use defaults
         ip = initial_state.get('influence_points', config.INITIAL_INFLUENCE_POINTS if hasattr(config, 'INITIAL_INFLUENCE_POINTS') else 10.0)
@@ -93,6 +96,7 @@ class Agent:
             relationships=initial_state.get('relationships', {}),
             short_term_memory=deque(initial_state.get('memory_history', []), maxlen=max_short_term_memory),
             goals=goals,  # Use the processed goals from above
+            agent_goal=agent_goal,  # Set the agent_goal field
             current_project_id=current_project,
             current_project_affiliation=current_project,  # Keep these two fields in sync
             messages_sent_count=initial_state.get('messages_sent_count', 0),
@@ -114,11 +118,11 @@ class Agent:
             role_change_ip_cost=role_change_ip_cost,
             # New relationship dynamics parameters
             positive_relationship_learning_rate=initial_state.get('positive_relationship_learning_rate', 
-                                               config.POSITIVE_RELATIONSHIP_LEARNING_RATE),
+                                               config.POSITIVE_RELATIONSHIP_LEARNING_RATE if hasattr(config, 'POSITIVE_RELATIONSHIP_LEARNING_RATE') else 0.3),
             negative_relationship_learning_rate=initial_state.get('negative_relationship_learning_rate', 
-                                               config.NEGATIVE_RELATIONSHIP_LEARNING_RATE),
+                                               config.NEGATIVE_RELATIONSHIP_LEARNING_RATE if hasattr(config, 'NEGATIVE_RELATIONSHIP_LEARNING_RATE') else 0.4),
             targeted_message_multiplier=initial_state.get('targeted_message_multiplier', 
-                                       config.TARGETED_MESSAGE_MULTIPLIER)
+                                       config.TARGETED_MESSAGE_MULTIPLIER if hasattr(config, 'TARGETED_MESSAGE_MULTIPLIER') else 3.0)
         )
 
         # Initialize the agent's Lang Graph
@@ -171,30 +175,28 @@ class Agent:
         """
         current_score = self._state.relationships.get(other_agent_id, 0.0)
         
-        # Apply targeted message multiplier if applicable
-        effective_delta = delta
+        # Apply targeted message multiplier directly to delta
         if is_targeted:
-            effective_delta = delta * self._state.targeted_message_multiplier
-            logger.debug(f"Targeted message multiplier applied: {delta} -> {effective_delta}")
+            delta = delta * self._state.targeted_message_multiplier
         
-        # Calculate change amount using non-linear formula
-        if effective_delta > 0:
-            # Positive sentiment: diminishing returns as relationship approaches max
-            # Higher current relationships see smaller increases from positive interactions
-            change_amount = effective_delta * (self._state.max_relationship_score - current_score) * self._state.positive_relationship_learning_rate
-        elif effective_delta < 0:
-            # Negative sentiment: diminishing returns as relationship approaches min
-            # Lower current relationships see smaller decreases from negative interactions
-            change_amount = effective_delta * (current_score - self._state.min_relationship_score) * self._state.negative_relationship_learning_rate
+        # Different learning rates for positive and negative updates
+        if delta > 0:
+            learning_rate = self._state.positive_relationship_learning_rate
         else:
-            change_amount = 0
+            learning_rate = self._state.negative_relationship_learning_rate
+            
+        # Calculate the change amount - non-linear formula that considers current relationship
+        # This creates diminishing returns as relationships approach extremes
+        change_amount = delta * learning_rate * (1.0 - abs(current_score))
         
-        # Apply change and clamp to min/max bounds
-        new_score = max(self._state.min_relationship_score, min(self._state.max_relationship_score, current_score + change_amount))
+        # Apply the change
+        new_score = current_score + change_amount
+        
+        # Clamp to valid range
+        new_score = max(self._state.min_relationship_score, min(self._state.max_relationship_score, new_score))
+        
+        # Update the relationship score in the state
         self._state.relationships[other_agent_id] = new_score
-        
-        logger.debug(f"Updated relationship for agent {self.agent_id} with {other_agent_id}: {current_score:.2f} -> {new_score:.2f} (delta={effective_delta:.2f}, change={change_amount:.2f})")
-        return new_score
         
     def update_mood(self, sentiment_score: float):
         """
