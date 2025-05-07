@@ -143,7 +143,8 @@ async def main():
             'relationships': {},
             'memory_history': collections.deque(maxlen=20),  # Use direct value instead of config.get
             'last_proposed_idea': None,
-            'last_clarification_question': None
+            'last_clarification_question': None,
+            'current_project_affiliation': None  # Initialize with no project affiliation
         }
         agent = Agent(initial_state=initial_state)
         agents.append(agent)

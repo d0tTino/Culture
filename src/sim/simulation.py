@@ -6,6 +6,7 @@ import logging
 import time
 import asyncio
 from typing import List, Dict, Any, TYPE_CHECKING, Optional
+import discord
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from src.infra.memory.vector_store import ChromaVectorStoreManager
     from src.interfaces.discord_bot import SimulationDiscordBot
 
+from src.agents.core.agent_state import AgentState
 from src.sim.knowledge_board import KnowledgeBoard
 
 # Configure the logger for this module
@@ -51,6 +53,10 @@ class Simulation:
         self.knowledge_board = KnowledgeBoard()
         logger.info("Simulation initialized with Knowledge Board.")
         
+        # --- NEW: Initialize Project Tracking ---
+        self.projects = {}  # Structure: {project_id: {name, creator_id, members}}
+        logger.info("Simulation initialized with project tracking system.")
+        
         # --- Store the vector store manager ---
         self.vector_store_manager = vector_store_manager
         if vector_store_manager:
@@ -77,16 +83,17 @@ class Simulation:
             for agent in self.agents:
                 logger.info(f"  - {agent.get_id()}")
 
-    async def send_discord_update(self, message: str):
+    async def send_discord_update(self, message: Optional[str] = None, embed: Optional[discord.Embed] = None):
         """
         Send an update to Discord if the discord_bot is available.
         
         Args:
-            message (str): The message to send to Discord
+            message (Optional[str]): The text message to send to Discord
+            embed (Optional[discord.Embed]): The embed object to send to Discord
         """
         if self.discord_bot:
             # Use asyncio.create_task to avoid blocking the simulation
-            asyncio.create_task(self.discord_bot.send_simulation_update(message))
+            asyncio.create_task(self.discord_bot.send_simulation_update(content=message, embed=embed))
         
     def run_step(self, max_turns: int = 1) -> int:
         """
@@ -107,19 +114,22 @@ class Simulation:
             
             # Send step start update to Discord
             if self.discord_bot:
-                asyncio.create_task(self.discord_bot.send_simulation_update(
-                    f"📊 **Starting Simulation Step {current_step}**"
-                ))
+                step_start_embed = self.discord_bot.create_step_start_embed(current_step)
+                asyncio.create_task(self.discord_bot.send_simulation_update(embed=step_start_embed))
 
             # Get state from all agents for shared perceptions
             other_agents_state = []
             for agent in self.agents:
-                # Basic state - ID, mood, step counter only for now
+                # Get key information from the agent's state for perception
+                agent_state = agent.state
                 agent_public_state = {
                     "agent_id": agent.agent_id,
-                    "mood": agent.state.get('mood', 'neutral'),
-                    "descriptive_mood": agent.state.get('descriptive_mood', 'neutral'),
-                    "step_counter": agent.state.get('step_counter', 0)
+                    "name": agent_state.name,
+                    "role": agent_state.role,
+                    "mood": agent_state.mood,
+                    "descriptive_mood": getattr(agent_state, 'descriptive_mood', 'neutral'),
+                    "step_counter": getattr(agent_state, 'actions_taken_count', 0),
+                    "current_project_id": agent_state.current_project_id
                 }
                 other_agents_state.append(agent_public_state)
 
@@ -143,13 +153,14 @@ class Simulation:
             
             for agent in self.agents:
                 agent_id = agent.agent_id
+                agent_state = agent.state
                 logger.info(f"Running turn for Agent {agent_id} at step {current_step}...")
                 
                 # Check and report agent's current state before turn
-                current_role = agent.state.get('current_role', 'Unknown')
-                current_ip = agent.state.get('influence_points', 0)
-                current_du = agent.state.get('data_units', 0)
-                current_mood = agent.state.get('descriptive_mood', 'neutral')
+                current_role = agent_state.role
+                current_ip = agent_state.ip
+                current_du = agent_state.du
+                current_mood = agent_state.mood
                 
                 # Prepare the perception dictionary
                 perception_data = {
@@ -165,7 +176,11 @@ class Simulation:
                     # --- Add Knowledge Board content ---
                     "knowledge_board_content": board_state, # Pass the current board state
                     # --- Add simulation scenario ---
-                    "scenario_description": self.scenario # Pass the simulation scenario
+                    "scenario_description": self.scenario, # Pass the simulation scenario
+                    # --- Add available projects ---
+                    "available_projects": self.get_project_details(), # Pass all projects for perception
+                    # --- Add simulation reference for project actions ---
+                    "simulation": self # Pass the simulation instance for project operations
                     # --- End ADD ---
                 }
 
@@ -189,132 +204,245 @@ class Simulation:
                     
                     # Store the message for the next step's perception
                     this_step_messages.append({
+                        'step': current_step,
                         'sender_id': agent_id,
+                        'recipient_id': message_recipient_id,
                         'content': message_content,
-                        'recipient_id': message_recipient_id
+                        'action_intent': action_intent
                     })
                     
-                    # Send message update to Discord
-                    if self.discord_bot and message_recipient_id is None:  # Only send broadcast messages
-                        asyncio.create_task(self.discord_bot.send_simulation_update(
-                            f"💬 **Agent {agent_id}** ({current_role}): \"{message_content}\""
-                        ))
+                    # Send message to Discord if integration enabled
+                    if self.discord_bot:
+                        message_embed = self.discord_bot.create_agent_message_embed(
+                            agent_id=agent_id, 
+                            message_content=message_content,
+                            recipient_id=message_recipient_id,
+                            action_intent=action_intent,
+                            agent_role=current_role,
+                            mood=current_mood
+                        )
+                        asyncio.create_task(self.discord_bot.send_simulation_update(embed=message_embed))
                 
-                # Check for role changes
-                new_role = agent.state.get('current_role')
-                if new_role != current_role:
-                    logger.info(f"Agent {agent_id} changed role from {current_role} to {new_role}")
+                # Process action intent if any
+                if action_intent and action_intent != 'idle':
+                    logger.info(f"Agent {agent_id} performed action intent: {action_intent}")
                     
-                    # Send role change update to Discord
-                    if self.discord_bot:
-                        asyncio.create_task(self.discord_bot.send_simulation_update(
-                            f"🔄 **Role Change**: Agent {agent_id} changed from **{current_role}** to **{new_role}**"
-                        ))
+                    # Send intent action to Discord if integration enabled
+                    if self.discord_bot and not message_content:  # Only if no message was sent
+                        action_embed = self.discord_bot.create_agent_action_embed(
+                            agent_id=agent_id, 
+                            action_intent=action_intent,
+                            agent_role=current_role,
+                            mood=current_mood
+                        )
+                        asyncio.create_task(self.discord_bot.send_simulation_update(embed=action_embed))
                 
-                # Check for significant IP changes
-                new_ip = agent.state.get('influence_points', 0)
-                ip_change = new_ip - current_ip
-                if abs(ip_change) >= 5:  # Only report significant IP changes
-                    ip_change_str = f"+{ip_change}" if ip_change > 0 else f"{ip_change}"
-                    logger.info(f"Agent {agent_id} had significant IP change: {ip_change_str} (now {new_ip})")
-                    
-                    # Send IP change update to Discord
-                    if self.discord_bot:
-                        emoji = "📈" if ip_change > 0 else "📉"
-                        asyncio.create_task(self.discord_bot.send_simulation_update(
-                            f"{emoji} **IP Change**: Agent {agent_id} ({new_role}): {ip_change_str} IP (now {new_ip} IP)"
-                        ))
-                
-                # Check for significant DU changes
-                new_du = agent.state.get('data_units', 0)
-                du_change = new_du - current_du
-                if abs(du_change) >= 3:  # Only report significant DU changes
-                    du_change_str = f"+{du_change}" if du_change > 0 else f"{du_change}"
-                    logger.info(f"Agent {agent_id} had significant DU change: {du_change_str} (now {new_du})")
-                    
-                    # Send DU change update to Discord
-                    if self.discord_bot:
-                        emoji = "⬆️" if du_change > 0 else "⬇️"
-                        asyncio.create_task(self.discord_bot.send_simulation_update(
-                            f"{emoji} **DU Change**: Agent {agent_id} ({new_role}): {du_change_str} DU (now {new_du} DU)"
-                        ))
-                
-                # Check for Knowledge Board posts
-                if action_intent == 'propose_idea' and message_content:
-                    # Send Knowledge Board update to Discord
-                    if self.discord_bot:
-                        # Truncate long messages
-                        content_preview = message_content[:150] + ("..." if len(message_content) > 150 else "")
-                        asyncio.create_task(self.discord_bot.send_simulation_update(
-                            f"📝 **Knowledge Board**: Agent {agent_id} ({new_role}) posted:\n> {content_preview}"
-                        ))
-                # --- End Process Agent Output ---
-
-            # --- End of Step Processing ---
-            # Save the messages for the next step's perception
+                # Update agent counters and report
+                logger.info(f"Agent {agent_id} completed turn {current_step}:")
+                logger.info(f"  - Role: {current_role} (steps in role: {agent_state.steps_in_current_role})")
+                logger.info(f"  - Mood: {current_mood}")
+                logger.info(f"  - IP: {agent_state.ip:.1f} (from {current_ip:.1f})")
+                logger.info(f"  - DU: {agent_state.du:.1f} (from {current_du:.1f})")
+            
+            # Store the messages for the next step
             self.last_step_messages = this_step_messages
-            logger.info(f"Collected {len(this_step_messages)} messages for next step's perception")
-            logger.info(f"--- Completed Simulation Step {current_step} ---\n")
+            
+            logger.info(f"--- Completed Simulation Step {current_step} ---")
             
             # Send step end update to Discord
             if self.discord_bot:
-                # Create a summary message with agent states
-                agent_summaries = []
-                for agent in self.agents:
-                    agent_id = agent.agent_id
-                    role = agent.state.get('current_role', 'Unknown')
-                    ip = agent.state.get('influence_points', 0)
-                    du = agent.state.get('data_units', 0)
-                    mood = agent.state.get('descriptive_mood', 'neutral')
-                    agent_summaries.append(f"• **Agent {agent_id}** ({role}): {ip} IP, {du} DU, Mood: {mood}")
-                
-                summary = "\n".join(agent_summaries)
-                asyncio.create_task(self.discord_bot.send_simulation_update(
-                    f"✅ **Completed Simulation Step {current_step}**\n\n**Agent Status:**\n{summary}"
-                ))
+                step_end_embed = self.discord_bot.create_step_end_embed(current_step)
+                asyncio.create_task(self.discord_bot.send_simulation_update(embed=step_end_embed))
             
             steps_executed += 1
-            # --- End of Step Processing ---
 
         return steps_executed
-
 
     def run(self, num_steps: int):
         """
         Runs the simulation for a specified number of steps.
 
         Args:
-            num_steps (int): The total number of steps to simulate.
+            num_steps (int): Number of steps to run.
         """
-        logger.info(f"Starting simulation run for {num_steps} steps.")
-        if num_steps <= 0:
-            logger.warning("Number of steps must be positive.")
-            return
-
-        # Send simulation start update to Discord
-        if self.discord_bot:
-            asyncio.create_task(self.discord_bot.send_simulation_update(
-                f"🚀 **Starting Culture Simulation Run**\n"
-                f"Steps: {num_steps}\n"
-                f"Agents: {len(self.agents)}\n"
-                f"Scenario: {self.scenario[:150]}..."
-            ))
-
+        logger.info(f"Starting simulation run for {num_steps} steps")
+        
+        total_steps_executed = 0
+        start_time = time.time()
+        
         for step in range(num_steps):
-            self.run_step()
-            time.sleep(0.2)  # Small delay between steps for clearer logging
-            # Add condition checks here to stop early if needed
-            # (e.g., all agents inactive, goal achieved)
+            steps = self.run_step(1)
+            total_steps_executed += steps
+            
+            # Optional: Add a small delay between steps
+            time.sleep(0.1)
+        
+        elapsed_time = time.time() - start_time
+        logger.info(f"Simulation completed {total_steps_executed} steps in {elapsed_time:.2f} seconds")
 
-        # Send simulation end update to Discord
-        if self.discord_bot:
-            asyncio.create_task(self.discord_bot.send_simulation_update(
-                f"🏁 **Simulation Run Completed**\n"
-                f"Completed {self.current_step} steps."
-            ))
+    def create_project(self, project_name: str, creator_agent_id: str, project_description: str = None) -> Optional[str]:
+        """
+        Creates a new project with the given name, initiated by the specified agent.
+        
+        Args:
+            project_name (str): The name of the new project
+            creator_agent_id (str): The ID of the agent creating the project
+            project_description (str, optional): A description of the project's purpose
+            
+        Returns:
+            Optional[str]: The ID of the newly created project, or None if creation failed
+        """
+        if not project_name or not creator_agent_id:
+            logger.warning("Cannot create project: missing name or creator ID")
+            return None
+            
+        # Create a unique project ID
+        project_id = f"proj_{len(self.projects) + 1}_{int(time.time())}"
+        
+        # Check if a project with this name already exists
+        for existing_id, existing_proj in self.projects.items():
+            if existing_proj.get('name') == project_name:
+                logger.warning(f"Cannot create project: a project named '{project_name}' already exists (ID: {existing_id})")
+                return None
+                
+        # Find the creator agent
+        creator_agent = None
+        for agent in self.agents:
+            if agent.agent_id == creator_agent_id:
+                creator_agent = agent
+                break
+                
+        if not creator_agent:
+            logger.warning(f"Cannot create project: creator agent '{creator_agent_id}' not found")
+            return None
+            
+        # Create the project
+        self.projects[project_id] = {
+            'id': project_id,
+            'name': project_name,
+            'description': project_description or f"Project created by {creator_agent_id}",
+            'creator_id': creator_agent_id,
+            'created_step': self.current_step,
+            'members': [creator_agent_id],  # Creator is automatically a member
+            'status': 'active'
+        }
+        
+        logger.info(f"Project '{project_name}' (ID: {project_id}) created by Agent {creator_agent_id}")
+        
+        # Add to Knowledge Board
+        if self.knowledge_board:
+            project_info = f"New Project Created: {project_name}\nID: {project_id}\nCreator: {creator_agent_id}"
+            if project_description:
+                project_info += f"\nDescription: {project_description}"
+            self.knowledge_board.add_entry(project_info, creator_agent_id, self.current_step)
+        
+        return project_id
 
-        logger.info(f"Simulation run finished after {self.current_step} steps.")
+    def join_project(self, project_id: str, agent_id: str) -> bool:
+        """
+        Adds an agent to an existing project as a member.
+        
+        Args:
+            project_id (str): The ID of the project to join
+            agent_id (str): The ID of the agent joining the project
+            
+        Returns:
+            bool: True if successfully joined, False otherwise
+        """
+        # Ensure the project exists
+        if project_id not in self.projects:
+            logger.warning(f"Cannot join project: project ID '{project_id}' does not exist")
+            return False
+            
+        project = self.projects[project_id]
+        
+        # Ensure the project is active
+        if project.get('status') != 'active':
+            logger.warning(f"Cannot join project: project '{project['name']}' is not active (status: {project.get('status')})")
+            return False
+            
+        # Check if agent is already a member
+        if agent_id in project['members']:
+            logger.info(f"Agent {agent_id} is already a member of project '{project['name']}'")
+            return True
+            
+        # Find the agent
+        agent_obj = None
+        for agent in self.agents:
+            if agent.agent_id == agent_id:
+                agent_obj = agent
+                break
+                
+        if not agent_obj:
+            logger.warning(f"Cannot join project: agent '{agent_id}' not found")
+            return False
+            
+        # Add the agent to the project
+        project['members'].append(agent_id)
+        
+        logger.info(f"Agent {agent_id} joined project '{project['name']}' (ID: {project_id})")
+        
+        # Record the event in the Knowledge Board
+        if self.knowledge_board:
+            join_info = f"Agent {agent_id} joined Project: {project['name']} (ID: {project_id})"
+            self.knowledge_board.add_entry(join_info, agent_id, self.current_step)
+            
+        return True
 
+    def leave_project(self, project_id: str, agent_id: str) -> bool:
+        """
+        Removes an agent from a project they are currently a member of.
+        
+        Args:
+            project_id (str): The ID of the project to leave
+            agent_id (str): The ID of the agent leaving the project
+            
+        Returns:
+            bool: True if successfully left, False otherwise
+        """
+        # Ensure the project exists
+        if project_id not in self.projects:
+            logger.warning(f"Cannot leave project: project ID '{project_id}' does not exist")
+            return False
+            
+        project = self.projects[project_id]
+        
+        # Check if agent is a member
+        if agent_id not in project['members']:
+            logger.warning(f"Agent {agent_id} is not a member of project '{project['name']}'")
+            return False
+            
+        # Find the agent
+        agent_obj = None
+        for agent in self.agents:
+            if agent.agent_id == agent_id:
+                agent_obj = agent
+                break
+                
+        if not agent_obj:
+            logger.warning(f"Cannot leave project: agent '{agent_id}' not found")
+            return False
+            
+        # Remove the agent from the project
+        project['members'].remove(agent_id)
+        
+        logger.info(f"Agent {agent_id} left project '{project['name']}' (ID: {project_id})")
+        
+        # Record the event in the Knowledge Board
+        if self.knowledge_board:
+            leave_info = f"Agent {agent_id} left Project: {project['name']} (ID: {project_id})"
+            self.knowledge_board.add_entry(leave_info, agent_id, self.current_step)
+            
+        return True
+
+    def get_project_details(self) -> dict:
+        """
+        Returns a dictionary containing details of all projects for agent perception.
+        
+        Returns:
+            dict: Dictionary mapping project IDs to project details
+        """
+        return self.projects.copy()
 
     # --- Optional helper methods for future use ---
     # def get_environment_view(self, agent: 'Agent'):

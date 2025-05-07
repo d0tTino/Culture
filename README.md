@@ -199,4 +199,25 @@ To customize the simulation:
 
 - [LangGraph](https://github.com/langchain-ai/langgraph) for agent cognition framework
 - [Ollama](https://ollama.ai/) for local LLM inference
-- [Discord.py](https://discordpy.readthedocs.io/) for Discord integration 
+- [Discord.py](https://discordpy.readthedocs.io/) for Discord integration
+
+## Recent Updates
+
+### Agent State Refactoring
+
+The agent state management was refactored to use Pydantic models instead of plain dictionaries. This provides:
+
+- Type checking and validation
+- Better code readability and maintainability
+- Structured history tracking of various agent metrics
+- Clearer interface between modules
+
+The `AgentState` class in `src/agents/core/agent_state.py` now manages all agent state and provides proper typing for all agent attributes.
+
+## Running Tests
+
+To verify the agent state refactoring works correctly:
+
+```
+python -m src.test_agent_state
+``` 

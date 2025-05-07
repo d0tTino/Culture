@@ -14,6 +14,7 @@ from collections import deque
 from pydantic import BaseModel, Field, create_model
 from src.agents.core.roles import ROLE_PROMPT_SNIPPETS, ROLE_DESCRIPTIONS, ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
 from src.infra import config  # Import config for role change parameters
+from src.agents.core.agent_state import AgentState  # Import the AgentState model
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
@@ -42,6 +43,11 @@ ROLE_DU_GENERATION = config.ROLE_DU_GENERATION if hasattr(config, 'ROLE_DU_GENER
     "Default Contributor": 0
 }
 PROPOSE_DETAILED_IDEA_DU_COST = config.PROPOSE_DETAILED_IDEA_DU_COST if hasattr(config, 'PROPOSE_DETAILED_IDEA_DU_COST') else 5
+DU_AWARD_IDEA_ACKNOWLEDGED = config.DU_AWARD_IDEA_ACKNOWLEDGED if hasattr(config, 'DU_AWARD_IDEA_ACKNOWLEDGED') else 3
+DU_AWARD_SUCCESSFUL_ANALYSIS = config.DU_AWARD_SUCCESSFUL_ANALYSIS if hasattr(config, 'DU_AWARD_SUCCESSFUL_ANALYSIS') else 4
+DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = config.DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE if hasattr(config, 'DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE') else 1
+DU_COST_DEEP_ANALYSIS = config.DU_COST_DEEP_ANALYSIS if hasattr(config, 'DU_COST_DEEP_ANALYSIS') else 3
+DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFICATION if hasattr(config, 'DU_COST_REQUEST_DETAILED_CLARIFICATION') else 2
 
 # List of valid roles
 VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
@@ -52,27 +58,30 @@ class AgentActionOutput(BaseModel):
     thought: str = Field(..., description="The agent's internal thought or reasoning for the turn.")
     message_content: Optional[str] = Field(None, description="The message to send to other agents, or None if choosing not to send a message.")
     message_recipient_id: Optional[str] = Field(None, description="The ID of the agent this message is directed to. None means broadcast to all agents.")
-    action_intent: Literal["idle", "continue_collaboration", "propose_idea", "ask_clarification"] = Field(
+    action_intent: Literal["idle", "continue_collaboration", "propose_idea", "ask_clarification", "perform_deep_analysis", "create_project", "join_project", "leave_project"] = Field(
         default="idle", # Default intent
         description="The agent's primary intent for this turn."
     )
     requested_role_change: Optional[str] = Field(None, description="Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.")
+    project_name_to_create: Optional[str] = Field(None, description="Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent.")
+    project_description_for_creation: Optional[str] = Field(None, description="Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent.")
+    project_id_to_join_or_leave: Optional[str] = Field(None, description="Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents.")
 
 # Define the state the graph will operate on during a single agent turn
 class AgentTurnState(TypedDict):
     """Represents the state passed into and modified by the agent's graph turn."""
     agent_id: str
-    current_state: Dict[str, Any] # The agent's full state dictionary
+    current_state: Dict[str, Any] # The agent's full state dictionary (for backward compatibility)
     simulation_step: int          # The current step number from the simulation
     previous_thought: str | None  # The thought from the *last* turn
     environment_perception: Dict[str, Any] # Perception data from the environment
     perceived_messages: List[Dict[str, Any]] # Messages perceived from last step (broadcasts and targeted)
-    memory_history_list: List[Tuple[int, str, str]] # Field for history list
+    memory_history_list: List[Dict[str, Any]] # Field for memory history list
     turn_sentiment_score: int     # Field for aggregated sentiment score
     prompt_modifier: str          # Field for relationship-based prompt adjustments
     structured_output: Optional[AgentActionOutput] # Holds the parsed LLM output object
     agent_goal: str               # The agent's goal for the simulation
-    updated_state: Dict[str, Any] # Output field: The updated state after the turn
+    updated_state: Dict[str, Any] # Output field: The updated state after the turn (for backward compatibility)
     vector_store_manager: Optional[Any] # For persisting memories to vector store
     rag_summary: str              # Summarized memories from vector store
     knowledge_board_content: List[str]  # Current entries on the knowledge board
@@ -82,6 +91,9 @@ class AgentTurnState(TypedDict):
     influence_points: int         # The agent's current Influence Points
     steps_in_current_role: int    # Steps taken in the current role
     data_units: int               # The agent's current Data Units
+    current_project_affiliation: Optional[str] # The agent's current project ID (if any)
+    available_projects: Dict[str, Any] # Dictionary of available projects
+    state: AgentState             # The agent's structured state object (new Pydantic model)
 
 # --- Node Functions ---
 
@@ -136,8 +148,8 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> Dict[str, str]:
     with other agents.
     """
     agent_id = state['agent_id']
-    current_agent_state = state['current_state']
-    relationships = current_agent_state.get('relationships', {})
+    agent_state = state['state']
+    relationships = agent_state.relationships
     
     # Default neutral modifier
     modifier = "Maintain a neutral stance in your messages."
@@ -197,22 +209,22 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     scenario_description = state.get('scenario_description', "")
     
     # Get the current agent state
-    current_agent_state = state['current_state']
-    relationships = current_agent_state.get('relationships', {})
+    agent_state = state['state']
+    relationships = agent_state.relationships
     
     # Get the raw current role string
-    raw_role_name = state.get('current_role', ROLE_ANALYZER)  # Default to Analyzer if not found
+    raw_role_name = agent_state.role
     
     # Get role description and role-specific guidance
     role_description = ROLE_DESCRIPTIONS.get(raw_role_name, f"{raw_role_name}: Contribute effectively based on your role.")
     role_specific_guidance = ROLE_PROMPT_SNIPPETS.get(raw_role_name, "Consider how your role might influence your perspective and contributions.")
     
     # Get steps in current role and influence points
-    steps_in_current_role = current_agent_state.get('steps_in_current_role', 0)
-    influence_points = current_agent_state.get('influence_points', 0)
+    steps_in_current_role = agent_state.steps_in_current_role
+    influence_points = agent_state.ip
     
     # Get data units
-    data_units = current_agent_state.get('data_units', 0)
+    data_units = agent_state.du
     
     logger.debug(f"Node 'generate_thought_and_message_node' executing for agent {agent_id} at step {sim_step}")
     logger.debug(f"  Overall sentiment score from perceived messages: {sentiment_score}")
@@ -243,13 +255,50 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     prompt_parts = []
     prompt_parts.append(f"You are Agent_{agent_id}, an AI agent in a simulation.")
     prompt_parts.append(f"Current simulation step: {sim_step}.")
-    prompt_parts.append(f"Your current mood is: {current_agent_state.get('mood', 'neutral')}.")
-    prompt_parts.append(f"Your current descriptive mood is: {current_agent_state.get('descriptive_mood', 'neutral')}.")
-    prompt_parts.append(f"You have taken {current_agent_state.get('step_counter', 0)} steps so far.")
+    prompt_parts.append(f"Your current mood is: {agent_state.mood}.")
+    prompt_parts.append(f"Your current descriptive mood is: {agent_state.descriptive_mood}.")
+    prompt_parts.append(f"You have taken {agent_state.step_counter} steps so far.")
     prompt_parts.append(f"Your current Influence Points (IP): {influence_points}.")
     prompt_parts.append(f"Your current Data Units (DU): {data_units}.")
     prompt_parts.append(f"Your current role: {raw_role_name}.")
     prompt_parts.append(f"Steps in current role: {steps_in_current_role}.")
+    
+    # Add project affiliation information
+    current_project_id = agent_state.current_project_affiliation
+    if current_project_id:
+        # Get project details
+        available_projects = state.get('available_projects', {})
+        project_info = available_projects.get(current_project_id, {})
+        project_name = project_info.get('name', 'Unknown Project')
+        project_members = project_info.get('members', [])
+        member_count = len(project_members)
+        
+        # Format other members (excluding this agent)
+        other_members = [member for member in project_members if member != agent_id]
+        other_members_str = ", ".join(other_members) if other_members else "none"
+        
+        prompt_parts.append(f"\nYour Current Project Affiliation:")
+        prompt_parts.append(f"You are a member of project '{project_name}' (ID: {current_project_id}).")
+        prompt_parts.append(f"Project has {member_count} member(s). Other members: {other_members_str}.")
+    else:
+        prompt_parts.append(f"\nYour Current Project Affiliation: None (You are not a member of any project)")
+    
+    # Add available projects information
+    available_projects = state.get('available_projects', {})
+    if available_projects:
+        prompt_parts.append(f"\nAvailable Projects:")
+        for proj_id, proj_info in available_projects.items():
+            proj_name = proj_info.get('name', 'Unknown')
+            proj_creator = proj_info.get('creator_id', 'Unknown')
+            proj_members = proj_info.get('members', [])
+            members_str = ", ".join(proj_members)
+            member_count = len(proj_members)
+            is_member = agent_id in proj_members
+            status = "You are a member" if is_member else "You are not a member"
+            
+            prompt_parts.append(f"- Project '{proj_name}' (ID: {proj_id}, Creator: {proj_creator}, Members: {members_str}, {member_count}/{config.MAX_PROJECT_MEMBERS} slots filled). {status}.")
+    else:
+        prompt_parts.append(f"\nAvailable Projects: None (No projects have been created yet)")
     
     prompt_parts.append(f"\nCurrent Simulation Scenario:")
     prompt_parts.append(f"{scenario_description}")
@@ -282,6 +331,15 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     prompt_parts.append(f"- Posting a new idea to the Knowledge Board costs {IP_COST_TO_POST_IDEA} IP but earns {IP_AWARD_FOR_PROPOSAL} IP if successful.")
     prompt_parts.append(f"- Posting a detailed idea to the Knowledge Board also costs {PROPOSE_DETAILED_IDEA_DU_COST} Data Units (DU).")
     prompt_parts.append(f"- You passively generate DU each turn based on your role (Innovator: {ROLE_DU_GENERATION.get('Innovator', 0)}, Analyzer: {ROLE_DU_GENERATION.get('Analyzer', 0)}, Facilitator: {ROLE_DU_GENERATION.get('Facilitator', 0)}).")
+    prompt_parts.append(f"- Constructively building on existing Knowledge Board ideas might earn you a small DU bonus.")
+    prompt_parts.append(f"- Analyzers can earn DU by identifying flaws or suggesting significant improvements.")
+    prompt_parts.append(f"- Performing a 'deep_analysis' (especially for Analyzers) costs {DU_COST_DEEP_ANALYSIS} DU.")
+    prompt_parts.append(f"- Asking for very detailed clarifications might cost {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU.")
+    prompt_parts.append(f"- Creating a new project costs {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU.")
+    prompt_parts.append(f"- Joining an existing project costs {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU.")
+    prompt_parts.append(f"- Projects can have a maximum of {config.MAX_PROJECT_MEMBERS} members.")
+    prompt_parts.append(f"- Leaving projects is free.")
+    prompt_parts.append(f"- Being part of a project allows for closer collaboration with other agents.")
     prompt_parts.append(f"- Changing your role costs {ROLE_CHANGE_IP_COST} IP and requires you to have spent at least {ROLE_CHANGE_COOLDOWN} steps in your current role.")
     prompt_parts.append(f"- Consider your current Influence Points (IP: {influence_points}) and Data Units (DU: {data_units}) when deciding actions.")
     prompt_parts.append(f"- Your goal and current role should guide your use of IP, DU, and potential role change decisions.")
@@ -297,7 +355,11 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     prompt_parts.append(f"1. 'idle' - No specific action, continue monitoring.")
     prompt_parts.append(f"2. 'continue_collaboration' - Standard contribution to ongoing discussion.")
     prompt_parts.append(f"3. 'propose_idea' - Suggest a formal idea to be added to the Knowledge Board for permanent reference (costs {PROPOSE_DETAILED_IDEA_DU_COST} DU and {IP_COST_TO_POST_IDEA} IP).")
-    prompt_parts.append(f"4. 'ask_clarification' - Request more information about something unclear.")
+    prompt_parts.append(f"4. 'ask_clarification' - Request more information about something unclear (may cost {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for detailed requests).")
+    prompt_parts.append(f"5. 'perform_deep_analysis' - Perform a deep analysis (costs {DU_COST_DEEP_ANALYSIS} DU) - As an Analyzer, use this to signal you are conducting a thorough investigation of a proposal or situation. Your broadcast message should reflect your findings or critical questions.")
+    prompt_parts.append(f"6. 'create_project' - Create a new project (costs {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU). Specify the project name in the project_name_to_create field and an optional description in project_description_for_creation.")
+    prompt_parts.append(f"7. 'join_project' - Join an existing project (costs {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU). Specify the project ID in the project_id_to_join_or_leave field.")
+    prompt_parts.append(f"8. 'leave_project' - Leave your current project. You can specify the project ID in the project_id_to_join_or_leave field, or leave it empty to leave your current project.")
     
     prompt_parts.append(f"\nROLE CHANGE:")
     prompt_parts.append(f"- If you wish to change your role, specify the requested role in the requested_role_change field.")
@@ -347,6 +409,42 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
   "action_intent": "continue_collaboration",
   "requested_role_change": "Innovator"
 }}""")
+    prompt_parts.append(f"Example with deep analysis:")
+    prompt_parts.append(f"""{{
+  "thought": "I should thoroughly analyze this proposal to identify potential issues...",
+  "message_content": "After careful analysis, I've identified the following strengths and weaknesses in the proposed solution...",
+  "message_recipient_id": null,
+  "action_intent": "perform_deep_analysis",
+  "requested_role_change": null
+}}""")
+    prompt_parts.append(f"Example with creating a project:")
+    prompt_parts.append(f"""{{
+  "thought": "I think we need more structure for our collaboration...",
+  "message_content": "I'm creating a new project called 'Algorithm Optimization' to focus our efforts on improving efficiency...",
+  "message_recipient_id": null,
+  "action_intent": "create_project",
+  "requested_role_change": null,
+  "project_name_to_create": "Algorithm Optimization",
+  "project_description_for_creation": "A project focused on optimizing algorithms for better performance and resource usage."
+}}""")
+    prompt_parts.append(f"Example with joining a project:")
+    prompt_parts.append(f"""{{
+  "thought": "The Algorithm Optimization project aligns with my skills...",
+  "message_content": "I'd like to join the Algorithm Optimization project to contribute my expertise...",
+  "message_recipient_id": null,
+  "action_intent": "join_project",
+  "requested_role_change": null,
+  "project_id_to_join_or_leave": "proj_abc123"
+}}""")
+    prompt_parts.append(f"Example with leaving a project:")
+    prompt_parts.append(f"""{{
+  "thought": "I've contributed what I can to this project and want to focus elsewhere...",
+  "message_content": "I've decided to leave the project to explore other areas where I can contribute more effectively...",
+  "message_recipient_id": null,
+  "action_intent": "leave_project",
+  "requested_role_change": null,
+  "project_id_to_join_or_leave": "proj_abc123"
+}}""")
 
     # Join all prompt parts with newlines
     prompt = "\n".join(prompt_parts)
@@ -378,192 +476,188 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     Note: This is the main "actions" processor. If the agent requested to perform
     an action via one of the structured intents, this is where that would be processed.
     """
+    # Import role constants
+    from src.agents.core.roles import ROLE_ANALYZER
+    
     structured_output = state['structured_output']
     agent_id = state['agent_id']
+    sim_step = state['simulation_step']
     
-    # Get current state
-    current_agent_state = state['current_state'].copy()
-    current_role = current_agent_state.get('current_role', 'Default Contributor')
+    # Get current agent state
+    agent_state = state['state']
+    current_role = agent_state.role
     
     # Process passive Data Units generation based on role
-    current_du = current_agent_state.get('data_units', 0)
     du_generated = ROLE_DU_GENERATION.get(current_role, 0)
-    new_du = current_du + du_generated
-    current_agent_state['data_units'] = new_du
-    logger.debug(f"Agent {agent_id} (Role: {current_role}) passively generated {du_generated} DU. New DU: {new_du}.")
+    agent_state.du += du_generated
+    logger.debug(f"Agent {agent_id} (Role: {current_role}) passively generated {du_generated} DU. New DU: {agent_state.du}.")
     
     # Process intents
     # If we added more action types, they'd be routed here
     action_intent = structured_output.action_intent
+    message_content = structured_output.message_content if structured_output else None
+    thought = structured_output.thought if structured_output else ""
+    
+    # Check for constructive references to board entries (simplified approach)
+    if message_content or thought:
+        text_to_check = f"{thought} {message_content if message_content else ''}"
+        reference_keywords = [
+            "building on", "extending", "refining idea from", "referencing", 
+            "regarding step", "based on the idea", "inspired by", "following up on"
+        ]
+        
+        has_reference = False
+        for keyword in reference_keywords:
+            if keyword.lower() in text_to_check.lower():
+                has_reference = True
+                break
+        
+        if has_reference:
+            # Award DU bonus for constructively referencing board entries
+            agent_state.du += DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE
+            logger.info(f"Agent {agent_id} earned {DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE} DU for constructively referencing a board entry. New DU: {agent_state.du}")
+    
+    # Check for successful analysis (for Analyzer role)
+    if current_role == ROLE_ANALYZER and (message_content or thought):
+        text_to_check = f"{thought} {message_content if message_content else ''}"
+        analysis_keywords = [
+            "potential flaw", "risk identified", "improvement could be", 
+            "vulnerability found", "issue detected", "concern about", 
+            "critical analysis", "weak point", "limitation", "problematic assumption"
+        ]
+        
+        has_analysis = False
+        for keyword in analysis_keywords:
+            if keyword.lower() in text_to_check.lower():
+                has_analysis = True
+                break
+        
+        # Check if the message sentiment is not negative (constructive criticism)
+        message_sentiment = 'neutral'
+        if message_content:
+            message_sentiment = analyze_sentiment(message_content) or 'neutral'
+        
+        if has_analysis and message_sentiment != 'negative':
+            # Award DU for successful analysis
+            agent_state.du += DU_AWARD_SUCCESSFUL_ANALYSIS
+            logger.info(f"Agent {agent_id} (Analyzer) earned {DU_AWARD_SUCCESSFUL_ANALYSIS} DU for successful analysis. New DU: {agent_state.du}")
     
     if action_intent == 'propose_idea':
         # This intent creates a new entry on the Knowledge Board
         # Typically this would be a new proposal, solution, or important insight
-        message_content = structured_output.message_content
         if message_content:
             # First check if agent has enough DU to post an idea
-            current_du = current_agent_state.get('data_units', 0)
             du_cost = PROPOSE_DETAILED_IDEA_DU_COST
             
-            if current_du >= du_cost:
+            if agent_state.du >= du_cost:
                 # Have enough DU to post the idea - deduct DU cost
-                new_du = current_du - du_cost
-                current_agent_state['data_units'] = new_du
-                logger.info(f"Agent {agent_id} spent {du_cost} DU to post a detailed idea. Remaining DU: {new_du}")
+                agent_state.du -= du_cost
+                logger.info(f"Agent {agent_id} spent {du_cost} DU to post a detailed idea. Remaining DU: {agent_state.du}")
                 
                 # Now check for IP cost
-                current_ip = current_agent_state.get('influence_points', 0)
                 ip_cost = IP_COST_TO_POST_IDEA
                 
-                if current_ip >= ip_cost:
+                if agent_state.ip >= ip_cost:
                     # Have enough IP to post the idea
-                    new_ip = current_ip - ip_cost
-                    current_agent_state['influence_points'] = new_ip
-                    logger.info(f"Agent {agent_id} spent {ip_cost} IP to post an idea. Remaining IP: {new_ip}")
+                    agent_state.ip -= ip_cost
+                    logger.info(f"Agent {agent_id} spent {ip_cost} IP to post an idea. Remaining IP: {agent_state.ip}")
                     
                     # Add to knowledge board
                     knowledge_board = state.get('knowledge_board')
                     if knowledge_board:
-                        knowledge_board.add_entry(agent_id, state['simulation_step'], message_content)
+                        knowledge_board.add_entry(message_content, agent_id, state['simulation_step'])
                     
                     # Award IP for successful proposal
                     award_ip = IP_AWARD_FOR_PROPOSAL
-                    final_ip = new_ip + award_ip
-                    current_agent_state['influence_points'] = final_ip
-                    logger.info(f"Agent {agent_id} earned {award_ip} IP for proposing an idea. New IP: {final_ip}")
-                    
-                    # Update the last_proposed_idea field
-                    current_agent_state['last_proposed_idea'] = message_content
+                    agent_state.ip += award_ip
+                    logger.info(f"Agent {agent_id} earned {award_ip} IP for proposing an idea. New IP: {agent_state.ip}")
                 else:
                     # Not enough IP to post the idea
-                    logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient IP ({current_ip} IP) for the cost of {ip_cost} IP. Idea not posted.")
-                    # Still update last_proposed_idea even though it wasn't posted
-                    current_agent_state['last_proposed_idea'] = message_content
+                    logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient IP ({agent_state.ip} IP) for the cost of {ip_cost} IP. Idea not posted.")
                     
                     # Refund the DU since the idea wasn't posted
-                    current_agent_state['data_units'] = current_du
+                    agent_state.du += du_cost
                     logger.info(f"Agent {agent_id} was refunded {du_cost} DU since the idea wasn't posted due to insufficient IP.")
             else:
                 # Not enough DU to post the idea
-                logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient DU ({current_du} DU) for the cost of {du_cost} DU. Idea not posted.")
-                # Still update last_proposed_idea even though it wasn't posted
-                current_agent_state['last_proposed_idea'] = message_content
-    
-    elif action_intent == 'ask_clarification':
-        # This intent asks a clarification question
-        # This would typically be a request for more information about something
-        question_content = structured_output.message_content
-        if question_content:
-            current_agent_state['last_clarification_question'] = question_content
+                logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient DU ({agent_state.du} DU) for the cost of {du_cost} DU. Idea not posted.")
     
     # Process mood and emotional state based on perception analysis
     # This uses the sentiment score calculated earlier
     sentiment_score = state.get('turn_sentiment_score', 0)
     
     # Process the thought from the structured output
-    thought = structured_output.thought
     if thought:
         logger.debug(f"  Processing thought from structured output: '{thought}'")
         # Store the thought in memory
-        sim_step = state['simulation_step']
-        memory_history = current_agent_state.get('memory_history', [])
-        memory_history.append((sim_step, 'thought', thought))
-        current_agent_state['memory_history'] = memory_history
-        current_agent_state['last_thought'] = thought
+        memory_entry = {"step": sim_step, "type": "thought", "content": thought}
+        agent_state.short_term_memory.append(memory_entry)
     
     # Update mood (very simple for now)
-    current_mood_value = current_agent_state.get('mood_value', 0.0)
-    current_mood = current_agent_state.get('mood', 'neutral')
-    
     # Simple: mood is slightly shifted by sentiment, but mostly stays the same for stability
     # Mood changes by 20% of the sentiment score
     logger.debug(f"  Using overall sentiment score {sentiment_score} to update mood.")
-    new_mood_value = current_mood_value * 0.8 + sentiment_score * 0.2
+    new_mood_value = agent_state.mood_decay_rate * 0.8 + sentiment_score * 0.2
     new_mood_value = max(-1.0, min(1.0, new_mood_value))  # Keep within [-1, 1]
     
     # Only change mood descriptor if it's a meaningful change
     mood_level = get_mood_level(new_mood_value)
-    if current_mood != mood_level:
-        logger.debug(f"Agent {agent_id} mood changed from '{current_mood}' to '{mood_level}'.")
-    else:
-        logger.debug(f"Agent {agent_id} mood remains '{current_mood}'.")
+    if agent_state.mood != mood_level:
+        logger.debug(f"Agent {agent_id} mood changed from '{agent_state.mood}' to '{mood_level}'.")
     
     descriptive_mood = get_descriptive_mood(new_mood_value)
-    current_descriptive_mood = current_agent_state.get('descriptive_mood', 'neutral')
-    if current_descriptive_mood != descriptive_mood:
-        logger.debug(f"Agent {agent_id} descriptive mood changed from '{current_descriptive_mood}' to '{descriptive_mood}'.")
-    else:
-        logger.debug(f"Agent {agent_id} descriptive mood remains '{descriptive_mood}'.")
     
-    # Update state with new values
-    current_agent_state['mood_value'] = new_mood_value
-    current_agent_state['mood'] = mood_level
-    current_agent_state['descriptive_mood'] = descriptive_mood
-    
-    # Update memory with the just-added thought (for better logs)
-    logger.debug(f"  Updated memory history (pre-message decision): {current_agent_state.get('memory_history', [])}")
+    # Update mood and add to history
+    agent_state.mood = mood_level
+    agent_state.mood_history.append((sim_step, mood_level))
     
     # Process requested role change if any
     requested_role = structured_output.requested_role_change
-    from src.agents.core.roles import ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
-    VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
     
-    # Constants for role change
-    ROLE_CHANGE_IP_COST = 5
-    ROLE_CHANGE_COOLDOWN = 3
-    
-    if requested_role:
-        current_role = current_agent_state.get('current_role', 'N/A')
-        current_ip = current_agent_state.get('influence_points', 0)
-        steps_in_role = current_agent_state.get('steps_in_current_role', 0)
-        
-        logger.info(f"Agent {agent_id} requested role change from {current_role} to {requested_role}.")
-        
-        # Check if the role is valid and different from current role
-        if requested_role not in VALID_ROLES:
-            logger.warning(f"Agent {agent_id} requested role change to '{requested_role}', which is not a valid role. Valid roles are: {VALID_ROLES}")
-            # No action taken
-        elif requested_role == current_role:
-            logger.warning(f"Agent {agent_id} requested role change to '{requested_role}', which is their current role. No change needed.")
-            # No action taken
-        else:
-            # Now check if they meet requirements
-            can_change_role = True
-            reason = ""
-            
-            if current_ip < ROLE_CHANGE_IP_COST:
-                can_change_role = False
-                reason = f"insufficient IP (needs {ROLE_CHANGE_IP_COST}, has {current_ip})"
-            elif steps_in_role < ROLE_CHANGE_COOLDOWN:
-                can_change_role = False
-                reason = f"hasn't spent enough steps in current role (needs {ROLE_CHANGE_COOLDOWN}, has {steps_in_role})"
-            
-            if can_change_role:
-                # Apply the change
-                logger.info(f"Agent {agent_id} role change from {current_role} to {requested_role} approved!")
-                
-                # Deduct IP cost
-                new_ip = current_ip - ROLE_CHANGE_IP_COST
-                current_agent_state['influence_points'] = new_ip
-                logger.info(f"Agent {agent_id} spent {ROLE_CHANGE_IP_COST} IP for role change. New IP: {new_ip}")
-                
-                # Update role
-                current_agent_state['current_role'] = requested_role
-                current_agent_state['steps_in_current_role'] = 0  # Reset counter for new role
-                logger.info(f"Agent {agent_id} is now a {requested_role}.")
+    if requested_role and requested_role in VALID_ROLES:
+        if requested_role != agent_state.role:
+            # Check if the cooldown period has passed
+            if agent_state.steps_in_current_role >= agent_state.role_change_cooldown:
+                # Check if the agent has enough IP
+                if agent_state.ip >= agent_state.role_change_ip_cost:
+                    # Deduct IP cost
+                    agent_state.ip -= agent_state.role_change_ip_cost
+                    
+                    # Update role
+                    old_role = agent_state.role
+                    agent_state.role = requested_role
+                    agent_state.steps_in_current_role = 0
+                    agent_state.role_history.append((sim_step, requested_role))
+                    
+                    logger.info(f"Agent {agent_id} changed role from {old_role} to {requested_role}. Spent {agent_state.role_change_ip_cost} IP. Remaining IP: {agent_state.ip}")
+                else:
+                    logger.warning(f"Agent {agent_id} requested role change to {requested_role} but had insufficient IP (needed {agent_state.role_change_ip_cost}, had {agent_state.ip}).")
             else:
-                logger.warning(f"Agent {agent_id} role change to {requested_role} rejected: {reason}")
+                logger.warning(f"Agent {agent_id} requested role change to {requested_role} but cooldown period not satisfied (needs {agent_state.role_change_cooldown} steps, current: {agent_state.steps_in_current_role}).")
     
-    # Always increment counter of steps in current role
-    current_agent_state['steps_in_current_role'] = current_agent_state.get('steps_in_current_role', 0) + 1
+    # Increment steps in current role
+    agent_state.steps_in_current_role += 1
     
-    # Always increment step counter
-    current_agent_state['step_counter'] = current_agent_state.get('step_counter', 0) + 1
+    # Update track of actions taken
+    agent_state.actions_taken_count += 1
+    agent_state.last_action_step = sim_step
     
+    # If a message was sent, update message tracking
+    if message_content:
+        agent_state.messages_sent_count += 1
+        agent_state.last_message_step = sim_step
+    
+    # Update history fields for various state parameters
+    agent_state.ip_history.append((sim_step, agent_state.ip))
+    agent_state.du_history.append((sim_step, agent_state.du))
+    agent_state.relationship_history.append((sim_step, agent_state.relationships.copy()))
+    
+    # Return the updated state
     return {
-        'updated_state': current_agent_state,  # The actual agent state that will persist
-        'structured_output': structured_output,   # The parsed output from the LLM
-        'updated_agent_state': current_agent_state  # (Redundant, both keys used by different parts of code)
+        "state": agent_state,
+        "action_intent": structured_output.action_intent,
+        "message_content": structured_output.message_content,
+        "message_recipient_id": structured_output.message_recipient_id
     }
 
 def route_broadcast_decision(state: AgentTurnState) -> str:
@@ -635,7 +729,7 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
                 'message_content': message_content,
                 'message_recipient_id': message_recipient_id,
                 'action_intent': action_intent,
-                'updated_agent_state': final_agent_state
+                'updated_state': final_agent_state
             }
         else:
             # Message suppressed due to mood
@@ -644,7 +738,7 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
                 'message_content': None,  # Suppressed
                 'message_recipient_id': None,
                 'action_intent': 'idle',  # Force idle when suppressing
-                'updated_agent_state': final_agent_state
+                'updated_state': final_agent_state
             }
     else:
         # No message was generated
@@ -653,10 +747,10 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
             'message_content': None,
             'message_recipient_id': None,
             'action_intent': action_intent,  # Maintain original intent
-            'updated_agent_state': final_agent_state
+            'updated_state': final_agent_state
         }
     
-    logger.debug(f"FINALIZE_RETURN :: Agent {agent_id}: Returning final state with updated_agent_state included")
+    logger.debug(f"FINALIZE_RETURN :: Agent {agent_id}: Returning final state with updated_state included")
     return return_values
 
 def route_relationship_context(state: AgentTurnState) -> str:
@@ -665,8 +759,8 @@ def route_relationship_context(state: AgentTurnState) -> str:
     relationships established yet.
     """
     agent_id = state.get('agent_id')
-    current_agent_state = state.get('current_state', {})
-    relationships = current_agent_state.get('relationships', {})
+    current_agent_state = state.get('state')
+    relationships = current_agent_state.relationships
     
     logger.debug(f"Agent {agent_id} relationship router checking for relationships...")
     if relationships:
@@ -700,9 +794,9 @@ def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
     award_ip = False
     
     # Access agent's persistent state to get current IP count and Data Units
-    agent_persistent_state = state.get('current_state', {})
-    current_ip = agent_persistent_state.get('influence_points', 0)
-    current_du = agent_persistent_state.get('data_units', 0)
+    agent_persistent_state = state.get('state')
+    current_ip = agent_persistent_state.ip
+    current_du = agent_persistent_state.du
     
     # Log the current IP and DU amounts for debugging
     logging.debug(f"Agent {agent_id} current IP: {current_ip}, current DU: {current_du}, attempting to propose idea")
@@ -711,36 +805,36 @@ def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
         # First check if agent has enough DU to post to the Knowledge Board
         if current_du >= PROPOSE_DETAILED_IDEA_DU_COST:
             # Deduct the DU cost for the detailed idea
-            agent_persistent_state['data_units'] = current_du - PROPOSE_DETAILED_IDEA_DU_COST
-            updated_du = agent_persistent_state['data_units']
+            agent_persistent_state.du -= PROPOSE_DETAILED_IDEA_DU_COST
+            updated_du = agent_persistent_state.du
             logging.info(f"Agent {agent_id} spent {PROPOSE_DETAILED_IDEA_DU_COST} DU to post a detailed idea. Remaining DU: {updated_du}.")
             
             # Now check if agent has enough IP to post to the Knowledge Board
             if current_ip >= IP_COST_TO_POST_IDEA:
                 # Deduct the cost to post the idea
-                agent_persistent_state['influence_points'] = current_ip - IP_COST_TO_POST_IDEA
-                updated_ip = agent_persistent_state['influence_points']
+                agent_persistent_state.ip -= IP_COST_TO_POST_IDEA
+                updated_ip = agent_persistent_state.ip
                 logging.info(f"Agent {agent_id} spent {IP_COST_TO_POST_IDEA} IP to post an idea. Remaining IP: {updated_ip}.")
                 
                 # Add the proposed idea to the Knowledge Board
                 if knowledge_board:
                     entry = f"{idea_content}"
-                    knowledge_board.add_entry(agent_id=agent_id, entry=entry, step=sim_step)
+                    knowledge_board.add_entry(entry, agent_id, sim_step)
                     logging.info(f"KnowledgeBoard: Added entry from Agent {agent_id} at step {sim_step}")
                     award_ip = True
                 
                 # If the idea was successfully posted, award IP
                 if award_ip:
                     # Award the IP for a successful proposal
-                    agent_persistent_state['influence_points'] += IP_AWARD_FOR_PROPOSAL
-                    final_ip = agent_persistent_state['influence_points']
+                    agent_persistent_state.ip += IP_AWARD_FOR_PROPOSAL
+                    final_ip = agent_persistent_state.ip
                     logging.info(f"Agent {agent_id} earned {IP_AWARD_FOR_PROPOSAL} IP for proposing an idea. New IP: {final_ip}.")
             else:
                 # Agent doesn't have enough IP to post to the Knowledge Board
                 logging.warning(f"Agent {agent_id} attempted to post idea '{idea_content[:30]}...' but had insufficient IP ({current_ip} IP) for the cost of {IP_COST_TO_POST_IDEA} IP. Idea not posted.")
                 
                 # Refund the DU since the idea wasn't posted
-                agent_persistent_state['data_units'] = current_du
+                agent_persistent_state.du += PROPOSE_DETAILED_IDEA_DU_COST
                 logging.info(f"Agent {agent_id} was refunded {PROPOSE_DETAILED_IDEA_DU_COST} DU since the idea wasn't posted due to insufficient IP.")
         else:
             # Agent doesn't have enough DU to post the detailed idea
@@ -748,7 +842,7 @@ def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
     
     # Store the proposed idea content and updated agent state in the return state
     ret_state['proposed_idea_content'] = idea_content
-    ret_state['current_state'] = agent_persistent_state
+    ret_state['state'] = agent_persistent_state
     
     return ret_state
 
@@ -777,6 +871,7 @@ def _format_knowledge_board(board_entries):
         return "  (Board is currently empty)"
     
     lines = []
+    lines.append("  You can reference a board entry by its Step and original Agent ID (e.g., 'Regarding Step 3's idea by Agent_XYZ...').")
     for i, entry in enumerate(board_entries):
         lines.append(f"  - {entry}")
     
@@ -864,11 +959,284 @@ def handle_idle_node(state: AgentTurnState) -> Dict[str, Any]:
 def handle_ask_clarification_node(state: AgentTurnState) -> Dict[str, Any]:
     """
     Handles the 'ask_clarification' intent.
-    Currently a placeholder for future functionality.
+    Simple clarifications are free, but detailed ones cost DU.
     """
     agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
-    logger.info(f"Agent {agent_id}: Executing 'ask_clarification' intent handler (currently placeholder).")
-    # Potentially add logic to track what was asked about
+    structured_output = state.get('structured_output')
+    agent_persistent_state = state.get('state')
+    
+    # Only process if there's actual message content
+    if structured_output and structured_output.message_content:
+        message_content = structured_output.message_content
+        
+        # Determine if this is a "detailed" clarification request that should cost DU
+        is_detailed = False
+        
+        # Check based on length (more than 100 characters is considered detailed)
+        if len(message_content) > 100:
+            is_detailed = True
+            logger.debug(f"Agent {agent_id} clarification considered detailed due to length: {len(message_content)} chars")
+            
+        # Check for multiple question marks (indicating multiple questions)
+        if message_content.count('?') > 1:
+            is_detailed = True
+            logger.debug(f"Agent {agent_id} clarification considered detailed due to multiple questions: {message_content.count('?')} questions")
+            
+        # Check for keywords indicating a detailed request
+        detailed_keywords = [
+            "elaborate", "explain in detail", "comprehensive", "specific details",
+            "thorough explanation", "step by step", "multiple aspects", "breakdown"
+        ]
+        
+        for keyword in detailed_keywords:
+            if keyword.lower() in message_content.lower():
+                is_detailed = True
+                logger.debug(f"Agent {agent_id} clarification considered detailed due to keyword: '{keyword}'")
+                break
+        
+        # If it's a detailed clarification, check and deduct DU
+        if is_detailed:
+            current_du = agent_persistent_state.du
+            
+            if current_du >= DU_COST_REQUEST_DETAILED_CLARIFICATION:
+                # Deduct the DU cost
+                new_du = current_du - DU_COST_REQUEST_DETAILED_CLARIFICATION
+                agent_persistent_state.du = new_du
+                
+                # Log the DU deduction
+                logger.info(f"Agent {agent_id} spent {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for a detailed clarification request. Remaining DU: {new_du}.")
+            else:
+                # Not enough DU for a detailed clarification
+                logger.warning(f"Agent {agent_id} attempted a detailed clarification but had insufficient DU ({current_du} < {DU_COST_REQUEST_DETAILED_CLARIFICATION}). Request may be treated as a simple clarification.")
+                # The message still gets sent, but it's treated as a "simple" clarification
+                
+                # Optionally: Add a note to the agent about this for their internal state awareness
+                agent_persistent_state.last_clarification_downgraded = True
+        else:
+            # Simple clarification, no DU cost
+            logger.debug(f"Agent {agent_id} issued a simple clarification request (no DU cost).")
+            
+        # Store the clarification question in agent state
+        agent_persistent_state.last_clarification_question = message_content
+    
+    # Update the state with the potentially modified agent state
+    state['state'] = agent_persistent_state
+    return state
+
+def handle_deep_analysis_node(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Handles the 'perform_deep_analysis' intent.
+    Deducts the DU cost for performing a deep analysis, especially for Analyzers.
+    """
+    agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
+    agent_persistent_state = state.get('state')
+    current_role = agent_persistent_state.role
+    current_du = agent_persistent_state.du
+    
+    # Check if the agent is an Analyzer (they should get the most benefit from this action)
+    is_analyzer = current_role == ROLE_ANALYZER
+    
+    # If not an analyzer, log a warning but still allow it (with the same cost for now)
+    if not is_analyzer:
+        logger.warning(f"Agent {agent_id} (Role: {current_role}) is attempting a deep analysis, which is more suited for Analyzers.")
+    
+    # Check if the agent has enough DU for the deep analysis
+    if current_du >= DU_COST_DEEP_ANALYSIS:
+        # Deduct the DU cost
+        new_du = current_du - DU_COST_DEEP_ANALYSIS
+        agent_persistent_state.du = new_du
+        
+        # Log the DU deduction
+        logger.info(f"Agent {agent_id} (Role: {current_role}) spent {DU_COST_DEEP_ANALYSIS} DU to perform deep analysis. Remaining DU: {new_du}.")
+        
+        # Note: The outcome of this analysis might lead to DU earning through the 
+        # "successful analysis" or "constructive reference" mechanisms in update_state_node
+    else:
+        # Not enough DU to perform the deep analysis
+        logger.warning(f"Agent {agent_id} attempted deep analysis but had insufficient DU ({current_du} < {DU_COST_DEEP_ANALYSIS}). Action may be less effective or not fully registered.")
+        # We don't modify the agent state here as they don't have enough DU to spend
+    
+    # Update the state with the potentially modified agent state
+    state['state'] = agent_persistent_state
+    return state
+
+def handle_create_project_node(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Handles the 'create_project' intent.
+    Allows an agent to create a new project, with a cost in both IP and DU.
+    """
+    from src.infra import config
+    
+    agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
+    structured_output = state.get('structured_output')
+    agent_persistent_state = state.get('state')
+    
+    # Extract the project name and description to create
+    project_name = structured_output.project_name_to_create if structured_output else None
+    project_description = structured_output.project_description_for_creation if structured_output else None
+    
+    if not project_name:
+        logger.warning(f"Agent {agent_id} attempted to create a project but didn't specify a project name")
+        return state
+    
+    # Check if the agent has enough IP and DU to create a project
+    current_ip = agent_persistent_state.ip
+    current_du = agent_persistent_state.du
+    
+    if current_ip < config.IP_COST_CREATE_PROJECT:
+        logger.warning(f"Agent {agent_id} attempted to create project '{project_name}' but had insufficient IP ({current_ip} < {config.IP_COST_CREATE_PROJECT})")
+        return state
+    
+    if current_du < config.DU_COST_CREATE_PROJECT:
+        logger.warning(f"Agent {agent_id} attempted to create project '{project_name}' but had insufficient DU ({current_du} < {config.DU_COST_CREATE_PROJECT})")
+        return state
+    
+    # Get the simulation from the environment perception
+    # This requires the simulation instance to be passed via run_turn to environment_perception
+    simulation = state.get('environment_perception', {}).get('simulation')
+    
+    if not simulation:
+        logger.error(f"Agent {agent_id} couldn't create project '{project_name}' because simulation reference is missing")
+        return state
+    
+    # Create the project
+    project_id = simulation.create_project(project_name, agent_id, project_description)
+    
+    if project_id:
+        # Project created successfully, deduct costs
+        agent_persistent_state.ip -= config.IP_COST_CREATE_PROJECT
+        agent_persistent_state.du -= config.DU_COST_CREATE_PROJECT
+        
+        # Set the agent's current project affiliation in both fields to keep them in sync
+        agent_persistent_state.current_project_id = project_id
+        agent_persistent_state.current_project_affiliation = project_id
+        
+        # Update project history
+        agent_persistent_state.project_history.append((state.get('simulation_step', 0), project_id))
+        
+        desc_info = f" with description: '{project_description}'" if project_description else ""
+        logger.info(f"Agent {agent_id} created project '{project_name}'{desc_info} (ID: {project_id}) at a cost of {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU")
+    else:
+        logger.warning(f"Agent {agent_id} failed to create project '{project_name}'")
+    
+    # Update the state with the potentially modified agent state
+    state['state'] = agent_persistent_state
+    return state
+
+def handle_join_project_node(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Handles the 'join_project' intent.
+    Allows an agent to join an existing project, with a cost in both IP and DU.
+    """
+    from src.infra import config
+    
+    agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
+    structured_output = state.get('structured_output')
+    agent_persistent_state = state.get('state')
+    
+    # Extract the project ID to join
+    project_id = structured_output.project_id_to_join_or_leave if structured_output else None
+    
+    if not project_id:
+        logger.warning(f"Agent {agent_id} attempted to join a project but didn't specify a project ID")
+        return state
+    
+    # Check if the agent is already in a project
+    current_project = agent_persistent_state.current_project_id
+    if current_project:
+        logger.warning(f"Agent {agent_id} attempted to join project '{project_id}' but is already a member of project '{current_project}'")
+        return state
+    
+    # Check if the agent has enough IP and DU to join a project
+    current_ip = agent_persistent_state.ip
+    current_du = agent_persistent_state.du
+    
+    if current_ip < config.IP_COST_JOIN_PROJECT:
+        logger.warning(f"Agent {agent_id} attempted to join project '{project_id}' but had insufficient IP ({current_ip} < {config.IP_COST_JOIN_PROJECT})")
+        return state
+    
+    if current_du < config.DU_COST_JOIN_PROJECT:
+        logger.warning(f"Agent {agent_id} attempted to join project '{project_id}' but had insufficient DU ({current_du} < {config.DU_COST_JOIN_PROJECT})")
+        return state
+    
+    # Get the simulation from the environment perception
+    simulation = state.get('environment_perception', {}).get('simulation')
+    
+    if not simulation:
+        logger.error(f"Agent {agent_id} couldn't join project '{project_id}' because simulation reference is missing")
+        return state
+    
+    # Attempt to join the project
+    success = simulation.join_project(project_id, agent_id)
+    
+    if success:
+        # Project joined successfully, deduct costs
+        agent_persistent_state.ip -= config.IP_COST_JOIN_PROJECT
+        agent_persistent_state.du -= config.DU_COST_JOIN_PROJECT
+        
+        # Set the agent's current project affiliation in both fields to keep them in sync
+        agent_persistent_state.current_project_id = project_id
+        agent_persistent_state.current_project_affiliation = project_id
+        
+        # Update project history
+        agent_persistent_state.project_history.append((state.get('simulation_step', 0), project_id))
+        
+        # Get project details for logging
+        project_name = simulation.projects.get(project_id, {}).get('name', 'Unknown Project')
+        logger.info(f"Agent {agent_id} joined project '{project_name}' (ID: {project_id}) at a cost of {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU")
+    else:
+        logger.warning(f"Agent {agent_id} failed to join project with ID '{project_id}'")
+    
+    # Update the state with the potentially modified agent state
+    state['state'] = agent_persistent_state
+    return state
+
+def handle_leave_project_node(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Handles the 'leave_project' intent.
+    Allows an agent to leave a project they are currently a member of.
+    """
+    agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
+    structured_output = state.get('structured_output')
+    agent_persistent_state = state.get('state')
+    
+    # Extract the project ID to leave
+    project_id = structured_output.project_id_to_join_or_leave if structured_output else None
+    
+    # If no project ID specified, use the agent's current project
+    if not project_id:
+        project_id = agent_persistent_state.current_project_id
+        if not project_id:
+            logger.warning(f"Agent {agent_id} attempted to leave a project but is not a member of any project")
+            return state
+    
+    # Get the simulation from the environment perception
+    simulation = state.get('environment_perception', {}).get('simulation')
+    
+    if not simulation:
+        logger.error(f"Agent {agent_id} couldn't leave project '{project_id}' because simulation reference is missing")
+        return state
+    
+    # Get project details for logging before leaving
+    project_name = simulation.projects.get(project_id, {}).get('name', 'Unknown Project')
+    
+    # Attempt to leave the project
+    success = simulation.leave_project(project_id, agent_id)
+    
+    if success:
+        # Clear the agent's current project affiliation in both fields to keep them in sync
+        agent_persistent_state.current_project_id = None
+        agent_persistent_state.current_project_affiliation = None
+        
+        # Update project history
+        agent_persistent_state.project_history.append((state.get('simulation_step', 0), None))
+        
+        logger.info(f"Agent {agent_id} left project '{project_name}' (ID: {project_id})")
+    else:
+        logger.warning(f"Agent {agent_id} failed to leave project with ID '{project_id}'")
+    
+    # Update the state with the potentially modified agent state
+    state['state'] = agent_persistent_state
     return state
 
 # Update the route_action_intent function to handle all intents
@@ -889,6 +1257,14 @@ def route_action_intent(state: AgentTurnState) -> str:
         return "handle_continue_collaboration"
     elif intent == "idle":
         return "handle_idle"
+    elif intent == "perform_deep_analysis":
+        return "handle_deep_analysis"
+    elif intent == "create_project":
+        return "handle_create_project"
+    elif intent == "join_project":
+        return "handle_join_project"
+    elif intent == "leave_project":
+        return "handle_leave_project"
     else:
         # For unknown intents, go to update_state
         return "update_state"
@@ -910,6 +1286,10 @@ def create_basic_agent_graph():
     workflow.add_node("handle_continue_collaboration", handle_continue_collaboration_node) # Specific intent handler
     workflow.add_node("handle_idle", handle_idle_node) # Specific intent handler
     workflow.add_node("handle_ask_clarification", handle_ask_clarification_node) # Specific intent handler
+    workflow.add_node("handle_deep_analysis", handle_deep_analysis_node) # Specific intent handler
+    workflow.add_node("handle_create_project", handle_create_project_node) # Specific intent handler
+    workflow.add_node("handle_join_project", handle_join_project_node) # Specific intent handler
+    workflow.add_node("handle_leave_project", handle_leave_project_node) # Specific intent handler
     workflow.add_node("update_state", update_state_node) # Unified state update
     workflow.add_node("finalize_message", finalize_message_agent_node) # Final decision on message sending
 
@@ -927,6 +1307,10 @@ def create_basic_agent_graph():
             "handle_continue_collaboration": "handle_continue_collaboration",
             "handle_idle": "handle_idle",
             "handle_ask_clarification": "handle_ask_clarification",
+            "handle_deep_analysis": "handle_deep_analysis",
+            "handle_create_project": "handle_create_project",
+            "handle_join_project": "handle_join_project",
+            "handle_leave_project": "handle_leave_project",
             "update_state": "update_state" # Default fallback
         }
     )
@@ -936,6 +1320,10 @@ def create_basic_agent_graph():
     workflow.add_edge("handle_continue_collaboration", "update_state")
     workflow.add_edge("handle_idle", "update_state")
     workflow.add_edge("handle_ask_clarification", "update_state")
+    workflow.add_edge("handle_deep_analysis", "update_state")
+    workflow.add_edge("handle_create_project", "update_state")
+    workflow.add_edge("handle_join_project", "update_state")
+    workflow.add_edge("handle_leave_project", "update_state")
     
     # Final state update and message decision
     workflow.add_edge("update_state", "finalize_message")

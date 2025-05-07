@@ -39,6 +39,18 @@ ROLE_DU_GENERATION = {
     "Default Contributor": 0  # Default if role not found
 }
 PROPOSE_DETAILED_IDEA_DU_COST = 5  # DU cost for posting a detailed idea
+DU_AWARD_IDEA_ACKNOWLEDGED = 3  # DU awarded to original proposer if their idea is positively referenced
+DU_AWARD_SUCCESSFUL_ANALYSIS = 4  # DU awarded to Analyzer for a useful critique
+DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = 1  # DU bonus for constructively referencing a board entry
+DU_COST_DEEP_ANALYSIS = 3  # Cost for an Analyzer to perform a "deep analysis"
+DU_COST_REQUEST_DETAILED_CLARIFICATION = 2  # Cost to ask a very specific, detailed clarification
+
+# --- Project Affiliation Settings ---
+MAX_PROJECT_MEMBERS = 3  # Maximum number of members in a project
+IP_COST_CREATE_PROJECT = 10  # Cost in IP to create a new project
+DU_COST_CREATE_PROJECT = 10  # Cost in DU to create a new project
+IP_COST_JOIN_PROJECT = 1  # Cost in IP to join an existing project
+DU_COST_JOIN_PROJECT = 1  # Cost in DU to join an existing project
 
 # --- Discord Bot Settings ---
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
