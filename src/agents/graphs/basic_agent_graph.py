@@ -58,7 +58,7 @@ class AgentActionOutput(BaseModel):
     thought: str = Field(..., description="The agent's internal thought or reasoning for the turn.")
     message_content: Optional[str] = Field(None, description="The message to send to other agents, or None if choosing not to send a message.")
     message_recipient_id: Optional[str] = Field(None, description="The ID of the agent this message is directed to. None means broadcast to all agents.")
-    action_intent: Literal["idle", "continue_collaboration", "propose_idea", "ask_clarification", "perform_deep_analysis", "create_project", "join_project", "leave_project"] = Field(
+    action_intent: Literal["idle", "continue_collaboration", "propose_idea", "ask_clarification", "perform_deep_analysis", "create_project", "join_project", "leave_project", "send_direct_message"] = Field(
         default="idle", # Default intent
         description="The agent's primary intent for this turn."
     )
@@ -94,6 +94,8 @@ class AgentTurnState(TypedDict):
     current_project_affiliation: Optional[str] # The agent's current project ID (if any)
     available_projects: Dict[str, Any] # Dictionary of available projects
     state: AgentState             # The agent's structured state object (new Pydantic model)
+    collective_ip: Optional[float] # Total IP across all agents in the simulation
+    collective_du: Optional[float] # Total DU across all agents in the simulation
 
 # --- Node Functions ---
 
@@ -144,93 +146,173 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> Dict[str, Any]:
 
 def prepare_relationship_prompt_node(state: AgentTurnState) -> Dict[str, str]:
     """
-    Prepares a sentiment-based prompt modifier based on the agent's relationship scores
-    with other agents. Now provides more nuanced guidance based on relationship intensity.
+    Prepares a detailed relationship prompt modifier with specific guidance on how
+    relationships should influence the agent's decisions, message tone, target selection,
+    and action intent.
     """
+    from src.infra.config import get_relationship_label
+    
     agent_id = state['agent_id']
     agent_state = state['state']
     relationships = agent_state.relationships
     
     # Default neutral modifier
-    modifier = "Maintain a neutral stance in your messages."
+    modifier = "You have neutral relationships with all agents. Maintain a balanced approach in your interactions."
     
     # Only generate relationship-based prompts if we have relationships
     if relationships:
-        # Find most positive and most negative relationships
-        most_positive_score = -1.1
-        most_positive_agent = None
-        most_negative_score = 1.1
-        most_negative_agent = None
-        
-        # Identify strong relationships (both positive and negative)
-        strong_positive_relationships = []
-        strong_negative_relationships = []
+        # Get descriptive labels for all relationships
+        relationship_descriptions = []
+        strong_positive_relations = []
+        strong_negative_relations = []
         
         for other_id, score in relationships.items():
-            # Track strongest overall positive and negative
-            if score > most_positive_score:
-                most_positive_score = score
-                most_positive_agent = other_id
-            if score < most_negative_score:
-                most_negative_score = score
-                most_negative_agent = other_id
-                
-            # Track all strong relationships
-            if score > 0.5:  # Strong positive threshold
-                strong_positive_relationships.append((other_id, score))
-            elif score < -0.5:  # Strong negative threshold
-                strong_negative_relationships.append((other_id, score))
-        
-        # Sort relationships by intensity (absolute value)
-        strong_positive_relationships.sort(key=lambda x: x[1], reverse=True)
-        strong_negative_relationships.sort(key=lambda x: x[1])
-        
-        # Generate a more nuanced prompt modifier
-        prompt_parts = []
-        
-        # Handle overall relationship stance
-        if most_positive_agent and most_positive_score > 0.7:
-            prompt_parts.append(f"You have a very strong positive relationship with Agent_{most_positive_agent} ({most_positive_score:.2f}).")
-            prompt_parts.append(f"You should actively seek opportunities to collaborate with and support them.")
-        elif most_positive_agent and most_positive_score > 0.3:
-            prompt_parts.append(f"You have a good relationship with Agent_{most_positive_agent} ({most_positive_score:.2f}).")
-            prompt_parts.append(f"You value their input and generally trust their judgment.")
-
-        if most_negative_agent and most_negative_score < -0.7:
-            prompt_parts.append(f"You have a very negative relationship with Agent_{most_negative_agent} ({most_negative_score:.2f}).")
-            prompt_parts.append(f"You should be extremely cautious and skeptical of their suggestions.")
-        elif most_negative_agent and most_negative_score < -0.3:
-            prompt_parts.append(f"You have some concerns about Agent_{most_negative_agent} ({most_negative_score:.2f}).")
-            prompt_parts.append(f"You tend to scrutinize their contributions more carefully.")
+            label = get_relationship_label(score)
+            relationship_descriptions.append(f"- Relationship with Agent_{other_id}: {label} (Score: {score:.2f})")
             
-        # Add specific guidance based on relationship intensities
-        if strong_positive_relationships:
-            # List up to 3 strong positive relationships
-            agents_str = ", ".join([f"Agent_{agent_id}" for agent_id, _ in strong_positive_relationships[:3]])
-            if len(strong_positive_relationships) > 3:
-                agents_str += f", and {len(strong_positive_relationships) - 3} others"
-            prompt_parts.append(f"You generally favor ideas and suggestions from {agents_str}.")
-            
-        if strong_negative_relationships:
-            # List up to 3 strong negative relationships
-            agents_str = ", ".join([f"Agent_{agent_id}" for agent_id, _ in strong_negative_relationships[:3]])
-            if len(strong_negative_relationships) > 3:
-                agents_str += f", and {len(strong_negative_relationships) - 3} others"
-            prompt_parts.append(f"You tend to be more critical of ideas from {agents_str}.")
+            # Track strongly positive/negative relationships for targeted guidance
+            if score > 0.5:
+                strong_positive_relations.append(other_id)
+            elif score < -0.5:
+                strong_negative_relations.append(other_id)
         
-        # Influence on decision making
-        if strong_positive_relationships and strong_negative_relationships:
-            prompt_parts.append("Your relationship dynamics significantly influence your decisions - you're more likely to align with those you have positive relationships with and oppose those you have negative relationships with.")
-        elif strong_positive_relationships:
-            prompt_parts.append("Your positive relationships are a significant factor in your decision-making process.")
-        elif strong_negative_relationships:
-            prompt_parts.append("Your cautious approach to certain agents strongly influences your decisions.")
-            
-        # Generate final modifier
-        if prompt_parts:
-            modifier = " ".join(prompt_parts)
+        # Generate primary relationship summary
+        relationship_summary = "RELATIONSHIPS:\n" + "\n".join(relationship_descriptions)
+        
+        # Generate explicit guidance for the LLM
+        guidance_parts = [
+            "RELATIONSHIP INFLUENCE GUIDANCE:"
+        ]
+        
+        # Target selection guidance
+        target_guidance = "When choosing a target for messages or actions:"
+        if strong_positive_relations:
+            agents_str = ", ".join([f"Agent_{aid}" for aid in strong_positive_relations[:3]])
+            target_guidance += f" Prefer to target {agents_str} for collaboration since you have positive relationships with them."
+        if strong_negative_relations:
+            agents_str = ", ".join([f"Agent_{aid}" for aid in strong_negative_relations[:3]])
+            if strong_positive_relations:
+                target_guidance += f" Be more cautious when engaging with {agents_str} due to your negative relationships."
+            else:
+                target_guidance += f" Be cautious when engaging with {agents_str} due to your negative relationships."
+        guidance_parts.append(target_guidance)
+        
+        # Message tone guidance
+        tone_guidance = "Adjust your communication tone based on relationships:"
+        tone_guidance += " Use warm, friendly language with allies; neutral, professional tone with neutral relationships; cautious, formal tone with negative relationships."
+        guidance_parts.append(tone_guidance)
+        
+        # Action intent guidance
+        intent_guidance = "Let relationships influence your action intentions:"
+        intent_guidance += " Consider 'continue_collaboration' or 'propose_idea' with positive relationships;"
+        intent_guidance += " 'ask_clarification' for neutral relationships;"
+        intent_guidance += " 'idle' or careful 'ask_clarification' with negative relationships."
+        guidance_parts.append(intent_guidance)
+        
+        # Decision making influence
+        decision_guidance = "When making decisions:"
+        decision_guidance += " Give more weight to input from agents you have positive relationships with;"
+        decision_guidance += " Critically evaluate suggestions from agents with whom you have negative relationships;"
+        decision_guidance += " When opinions differ, prioritize input from your closest allies."
+        guidance_parts.append(decision_guidance)
+        
+        # Combine all parts for the final modifier
+        new_line = '\n'
+        modifier = f"{relationship_summary}{new_line}{new_line}{new_line.join(guidance_parts)}"
     
     return {"prompt_modifier": modifier}
+
+def retrieve_and_summarize_memories_node(state: AgentTurnState) -> Dict[str, str]:
+    """
+    Retrieves relevant memories from the vector store based on the agent's current context,
+    summarizes them, and updates the rag_summary field in the state.
+    
+    This node is a critical part of the RAG (Retrieval Augmented Generation) process,
+    connecting the agent's long-term memory with its current decision-making.
+    
+    Args:
+        state (AgentTurnState): The current agent graph state
+        
+    Returns:
+        Dict[str, str]: Updated state with the rag_summary field containing memory summary
+    """
+    agent_id = state['agent_id']
+    agent_goal = state.get('agent_goal', "Contribute to the simulation effectively.")
+    vector_store_manager = state.get('vector_store_manager')
+    sim_step = state['simulation_step']
+    
+    # Get the most recent thought for context (if available)
+    recent_thought = state.get('previous_thought', "")
+    
+    # Get the most recent message for additional context
+    recent_message = ""
+    perceived_messages = state.get('perceived_messages', [])
+    if perceived_messages and len(perceived_messages) > 0:
+        # Get the most recent message
+        recent_message = perceived_messages[-1].get('content', "")
+    
+    # Check if vector store manager is available
+    if not vector_store_manager:
+        logger.warning(f"Agent {agent_id}: No vector store manager available for memory retrieval.")
+        result = {"rag_summary": "(No memory retrieval available: vector store missing)"}
+        logger.info(f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}")
+        return result
+    
+    # Create query string based on agent's goal and recent context
+    query_text = f"Memories relevant to: Goal '{agent_goal}'"
+    
+    if recent_thought:
+        query_text += f" Recent thought: {recent_thought}"
+    
+    if recent_message:
+        query_text += f" Recent message: {recent_message}"
+    
+    # Log the query being sent
+    logger.debug(f"Agent {agent_id} at step {sim_step}: Retrieving memories with query: '{query_text}'")
+    
+    try:
+        # Retrieve relevant memories from vector store
+        # The top_k parameter controls how many memories to retrieve
+        retrieved_memories = vector_store_manager.retrieve_relevant_memories(agent_id, query_text, k=5)
+        
+        if not retrieved_memories or len(retrieved_memories) == 0:
+            logger.info(f"Agent {agent_id}: No relevant memories found for query.")
+            result = {"rag_summary": "(No relevant past memories found via RAG)"}
+            logger.info(f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}")
+            return result
+        
+        logger.info(f"Agent {agent_id}: Retrieved {len(retrieved_memories)} memories.")
+        logger.info(f"[RAG VERIFICATION] Agent {agent_id} Retrieved memories: {retrieved_memories}")
+        
+        # Get context from current conversation and agent's current role
+        current_role = state.get('current_role', 'unknown')
+        current_context = f"Current role: {current_role}. Step: {sim_step}."
+        
+        if recent_thought:
+            current_context += f" Recent thought: {recent_thought}"
+        
+        # Summarize the retrieved memories
+        summary = summarize_memory_context(
+            memories=retrieved_memories,
+            goal=agent_goal,
+            current_context=current_context
+        )
+        
+        logger.info(f"Agent {agent_id}: Memory summarization complete. Summary length: {len(summary)}")
+        logger.debug(f"Agent {agent_id}: Memory summary: '{summary}'")
+        
+        # Return the summarized memories to be added to the state
+        result = {"rag_summary": summary}
+        
+        # Add verification logging
+        logger.info(f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Agent {agent_id}: Error during memory retrieval and summarization: {e}", exc_info=True)
+        result = {"rag_summary": "(Memory retrieval failed due to an error)"}
+        logger.info(f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}")
+        return result
 
 def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Optional[AgentActionOutput]]:
     """
@@ -248,6 +330,9 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     rag_summary = state.get('rag_summary', "(No relevant past memories found via RAG)")
     knowledge_board_content = state.get('knowledge_board_content', [])
     scenario_description = state.get('scenario_description', "")
+    
+    # Add verification logging
+    logger.info(f"[RAG VERIFICATION] Agent {agent_id} RAG Summary received in generate_thought_node: {rag_summary}")
     
     # Get the current agent state
     agent_state = state['state']
@@ -267,6 +352,10 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     # Get data units
     data_units = agent_state.du
     
+    # Get collective metrics
+    collective_ip = agent_state.collective_ip if hasattr(agent_state, 'collective_ip') else perception.get('collective_ip', None)
+    collective_du = agent_state.collective_du if hasattr(agent_state, 'collective_du') else perception.get('collective_du', None)
+    
     logger.debug(f"Node 'generate_thought_and_message_node' executing for agent {agent_id} at step {sim_step}")
     logger.debug(f"  Overall sentiment score from perceived messages: {sentiment_score}")
     logger.debug(f"  Current Relationships: {relationships}")
@@ -281,6 +370,8 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     logger.debug(f"  Steps in current role: {steps_in_current_role}")
     logger.debug(f"  Current influence points: {influence_points}")
     logger.debug(f"  Current data units: {data_units}")
+    logger.debug(f"  Collective IP: {collective_ip}")
+    logger.debug(f"  Collective DU: {collective_du}")
 
     # Format other agents' information
     other_agents_info = perception.get('other_agents_state', [])
@@ -313,6 +404,15 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     prompt_parts.append(f"Your current Data Units (DU): {data_units}.")
     prompt_parts.append(f"Your current role: {raw_role_name}.")
     prompt_parts.append(f"Steps in current role: {steps_in_current_role}.")
+    
+    # Add collective metrics section
+    if collective_ip is not None and collective_du is not None:
+        prompt_parts.append(f"\nCollective Simulation Metrics:")
+        prompt_parts.append(f"Total Influence Points (IP) across all agents: {collective_ip:.1f}")
+        prompt_parts.append(f"Total Data Units (DU) across all agents: {collective_du:.1f}")
+        
+        # Calculate and include the agent's contribution percentages
+        # (These percentages will now be calculated once in the enhanced decision-making section below)
     
     # Add project affiliation information
     current_project_id = agent_state.current_project_affiliation
@@ -395,6 +495,90 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     prompt_parts.append(f"- Consider your current Influence Points (IP: {influence_points}) and Data Units (DU: {data_units}) when deciding actions.")
     prompt_parts.append(f"- Your goal and current role should guide your use of IP, DU, and potential role change decisions.")
     
+    # Add collective metrics considerations with enhanced decision-making guidance
+    if collective_ip is not None and collective_du is not None:
+        # Calculate the agent's contribution percentages
+        ip_contribution_percentage = (influence_points / collective_ip) * 100 if collective_ip > 0 else 0
+        du_contribution_percentage = (data_units / collective_du) * 100 if collective_du > 0 else 0
+        
+        # Add a header for collective metrics section
+        prompt_parts.append(f"\nCOLLECTIVE METRICS AWARENESS:")
+        prompt_parts.append(f"- The collective IP ({collective_ip:.1f}) and DU ({collective_du:.1f}) represent our simulation's total resources.")
+        prompt_parts.append(f"- Your contribution: {ip_contribution_percentage:.1f}% of total IP and {du_contribution_percentage:.1f}% of total DU.")
+        
+        # Enhanced guidance on resource utilization and impact
+        prompt_parts.append(f"- RESOURCE EVALUATION: You currently have {influence_points:.1f} IP and {data_units:.1f} DU available.")
+        
+        # Add explicit resource sufficiency check guidance
+        if (influence_points >= IP_COST_TO_POST_IDEA and data_units >= PROPOSE_DETAILED_IDEA_DU_COST):
+            prompt_parts.append(f"- You have sufficient resources to propose a formal idea ({IP_COST_TO_POST_IDEA} IP + {PROPOSE_DETAILED_IDEA_DU_COST} DU) which could earn you {IP_AWARD_FOR_PROPOSAL} IP if successful and benefit the collective.")
+        if (data_units >= DU_COST_DEEP_ANALYSIS):
+            prompt_parts.append(f"- You have sufficient resources to perform a deep analysis ({DU_COST_DEEP_ANALYSIS} DU), which could refine ideas and increase their collective value.")
+        if (influence_points >= config.IP_COST_CREATE_PROJECT and data_units >= config.DU_COST_CREATE_PROJECT):
+            prompt_parts.append(f"- You have sufficient resources to create a new project ({config.IP_COST_CREATE_PROJECT} IP + {config.DU_COST_CREATE_PROJECT} DU), which could enable more efficient group collaboration.")
+        
+        # Add consequence awareness for being idle vs active
+        prompt_parts.append(f"\nCONSEQUENCE AWARENESS:")
+        prompt_parts.append(f"- Choosing 'idle' when you have resources to contribute may maintain your individual IP/DU, but misses opportunities to increase collective metrics.")
+        prompt_parts.append(f"- Each turn you are idle, you still gain passive role-based DU ({ROLE_DU_GENERATION.get(raw_role_name, 0)}), but the collective IP potential remains untapped.")
+        prompt_parts.append(f"- The simulation's success depends on active participation - individual hoarding of resources does not lead to optimal collective outcomes.")
+        
+        # Basic guidance for all agents
+        prompt_parts.append(f"\nSTRATEGIC RESOURCE ALLOCATION:")
+        prompt_parts.append(f"- Consider how your actions affect both your individual resources AND the collective metrics.")
+        prompt_parts.append(f"- Resource investments that benefit both you and others create more value for the simulation.")
+        prompt_parts.append(f"- Your contributions compound over time - early investments in collective value may yield greater returns in later steps.")
+        
+        # Role-specific collective guidance - enhanced with specific metrics impact
+        if raw_role_name == ROLE_FACILITATOR:
+            prompt_parts.append(f"\nFACILITATOR COLLECTIVE-IMPACT:")
+            prompt_parts.append(f"- Use 'send_direct_message' to connect agents with complementary skills → This increases collective efficiency by ensuring the right people collaborate on the right tasks")
+            prompt_parts.append(f"- Use 'create_project' to organize agents around a promising idea → This establishes a framework that multiplies the impact of individual contributors")
+            prompt_parts.append(f"- Use 'continue_collaboration' to synthesize different viewpoints → This creates shared understanding that prevents wasted resources on misaligned efforts")
+            prompt_parts.append(f"- Remaining 'idle' as a Facilitator is particularly detrimental to collective outcomes since your role is specifically designed to coordinate others' contributions")
+        elif raw_role_name == ROLE_INNOVATOR:
+            prompt_parts.append(f"\nINNOVATOR COLLECTIVE-IMPACT:")
+            prompt_parts.append(f"- Use 'propose_idea' when you have a novel concept → This directly adds to collective IP and provides a foundation for others to build upon")
+            prompt_parts.append(f"- Build on existing knowledge board entries rather than starting fresh → This creates a cumulative knowledge advantage that increases total collective value")
+            prompt_parts.append(f"- Partner with Analyzers who can help refine your ideas → This pairing maximizes the collective return on your creative investment")
+            prompt_parts.append(f"- Choosing 'idle' when you could be innovating limits the entire simulation's creative potential and collective IP growth")
+        elif raw_role_name == ROLE_ANALYZER:
+            prompt_parts.append(f"\nANALYZER COLLECTIVE-IMPACT:")
+            prompt_parts.append(f"- Use 'perform_deep_analysis' on promising ideas → This transforms good ideas into exceptional ones, multiplying their collective value")
+            prompt_parts.append(f"- Provide constructive feedback that builds upon others' work → This prevents resource waste on flawed approaches while preserving valuable core concepts")
+            prompt_parts.append(f"- Identify connections between seemingly unrelated ideas → This creates synergistic effects that yield greater returns than the sum of individual contributions")
+            prompt_parts.append(f"- Remaining 'idle' when ideas need analysis prevents the quality improvements that maximize collective benefit from others' contributions")
+        
+        # Adaptive guidance based on resource distribution - enhanced with action suggestions
+        if ip_contribution_percentage > 30:  # Agent has significantly more IP than others
+            prompt_parts.append(f"\nHIGH IP STRATEGY:")
+            prompt_parts.append(f"- You control a substantial portion ({ip_contribution_percentage:.1f}%) of the simulation's IP. Consider using this influence to initiate high-value collaborative activities.")
+            prompt_parts.append(f"- RECOMMENDED ACTIONS: 'create_project', 'propose_idea', or helping others by analyzing their proposals.")
+            prompt_parts.append(f"- Your leadership in resource allocation can significantly impact overall simulation success - 'idle' is rarely optimal with your resource advantage.")
+        elif ip_contribution_percentage < 15:  # Agent has significantly less IP than others
+            prompt_parts.append(f"\nLOW IP STRATEGY:")
+            prompt_parts.append(f"- You currently have a smaller share ({ip_contribution_percentage:.1f}%) of the simulation's IP. Consider actions that might increase your contribution while benefiting the collective.")
+            prompt_parts.append(f"- RECOMMENDED ACTIONS: 'ask_clarification', 'perform_deep_analysis', or 'join_project' to gain more influence through collaboration.")
+            prompt_parts.append(f"- Staying 'idle' will likely maintain your low IP contribution percentage.")
+        
+        if du_contribution_percentage > 30:  # Agent has significantly more DU than others
+            prompt_parts.append(f"\nHIGH DU STRATEGY:")
+            prompt_parts.append(f"- With your substantial data resources ({du_contribution_percentage:.1f}% of total), you're positioned to perform deeper analysis and propose more detailed ideas.")
+            prompt_parts.append(f"- RECOMMENDED ACTIONS: 'perform_deep_analysis', 'propose_idea' (with detailed content), or helping others refine their ideas.")
+            prompt_parts.append(f"- Investing your DU now rather than remaining 'idle' can generate collective value that benefits everyone.")
+        elif du_contribution_percentage < 15:  # Agent has significantly less DU than others
+            prompt_parts.append(f"\nLOW DU STRATEGY:")
+            prompt_parts.append(f"- With your limited DU ({du_contribution_percentage:.1f}% of total), prioritize actions with the highest return-on-investment for both you and the collective.")
+            prompt_parts.append(f"- RECOMMENDED ACTIONS: Focus on your role's strengths or 'join_project' to benefit from others' DU investments.")
+            prompt_parts.append(f"- Your role's passive DU generation of {ROLE_DU_GENERATION.get(raw_role_name, 0)} per turn will help you contribute more over time if used strategically rather than remaining 'idle'.")
+        
+        # Add higher purpose to collective resource accumulation
+        prompt_parts.append(f"\nCOLLECTIVE PURPOSE:")
+        prompt_parts.append(f"- The simulation's overall success is measured by total collective resources and their effective utilization.")
+        prompt_parts.append(f"- Every increase in collective IP and DU represents progress toward more effective problem-solving capability.")
+        prompt_parts.append(f"- Individual contributions to collective resources are valued not just for their immediate impact, but for how they enable future innovation and analysis.")
+        prompt_parts.append(f"- The goal is not just to accumulate resources, but to create a self-reinforcing cycle of contribution where everyone benefits from collaborative investment.")
+    
     prompt_parts.append(f"\nTask: Based on all the context, generate your internal thought, decide if you want to send a message, and choose your primary action intent for this turn.")
     
     prompt_parts.append(f"\nMESSAGING OPTIONS:")
@@ -403,14 +587,15 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     prompt_parts.append(f"- Choose not to send any message by setting message_content to null")
     
     prompt_parts.append(f"\nIMPORTANT ACTION CHOICES:")
-    prompt_parts.append(f"1. 'idle' - No specific action, continue monitoring.")
-    prompt_parts.append(f"2. 'continue_collaboration' - Standard contribution to ongoing discussion.")
-    prompt_parts.append(f"3. 'propose_idea' - Suggest a formal idea to be added to the Knowledge Board for permanent reference (costs {PROPOSE_DETAILED_IDEA_DU_COST} DU and {IP_COST_TO_POST_IDEA} IP).")
-    prompt_parts.append(f"4. 'ask_clarification' - Request more information about something unclear (may cost {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for detailed requests).")
-    prompt_parts.append(f"5. 'perform_deep_analysis' - Perform a deep analysis (costs {DU_COST_DEEP_ANALYSIS} DU) - As an Analyzer, use this to signal you are conducting a thorough investigation of a proposal or situation. Your broadcast message should reflect your findings or critical questions.")
-    prompt_parts.append(f"6. 'create_project' - Create a new project (costs {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU). Specify the project name in the project_name_to_create field and an optional description in project_description_for_creation.")
-    prompt_parts.append(f"7. 'join_project' - Join an existing project (costs {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU). Specify the project ID in the project_id_to_join_or_leave field.")
-    prompt_parts.append(f"8. 'leave_project' - Leave your current project. You can specify the project ID in the project_id_to_join_or_leave field, or leave it empty to leave your current project.")
+    prompt_parts.append(f"1. 'idle' - No specific action, continue monitoring. NOTE: While this preserves your resources, it does not actively contribute to collective progress. Consider this option carefully if you have sufficient resources for other actions.")
+    prompt_parts.append(f"2. 'continue_collaboration' - Standard contribution to ongoing discussion. A minimal active contribution that slightly benefits collective understanding.")
+    prompt_parts.append(f"3. 'propose_idea' - Suggest a formal idea to be added to the Knowledge Board (costs {PROPOSE_DETAILED_IDEA_DU_COST} DU and {IP_COST_TO_POST_IDEA} IP). This investment can yield {IP_AWARD_FOR_PROPOSAL} IP if successful and substantially increases collective knowledge.")
+    prompt_parts.append(f"4. 'ask_clarification' - Request more information (may cost {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for detailed requests). This can improve collective understanding and prevent resource waste on misunderstood concepts.")
+    prompt_parts.append(f"5. 'perform_deep_analysis' - Perform a deep analysis (costs {DU_COST_DEEP_ANALYSIS} DU). As an Analyzer, this significantly improves idea quality and increases collective value of proposals. Your broadcast message should reflect your findings or critical questions.")
+    prompt_parts.append(f"6. 'create_project' - Create a new project (costs {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU). This establishes infrastructure for more efficient collective collaboration, potentially multiplying the value of individual contributions.")
+    prompt_parts.append(f"7. 'join_project' - Join an existing project (costs {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU). This allows you to contribute to focused collective efforts and benefit from shared resources.")
+    prompt_parts.append(f"8. 'leave_project' - Leave your current project. This frees you to explore other collaborative opportunities if your current project isn't maximizing collective benefit.")
+    prompt_parts.append(f"9. 'send_direct_message' - Send a targeted message to a specific agent. This creates stronger relationship impact than regular messages and can be used to coordinate specific collective actions.")
     
     prompt_parts.append(f"\nROLE CHANGE:")
     prompt_parts.append(f"- If you wish to change your role, specify the requested role in the requested_role_change field.")
@@ -442,6 +627,14 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
   "message_content": "This is a private message just for you.",
   "message_recipient_id": "agent_id_xyz",
   "action_intent": "continue_collaboration",
+  "requested_role_change": null
+}}""")
+    prompt_parts.append(f"Example with direct message to build relationship:")
+    prompt_parts.append(f"""{{
+  "thought": "I want to strengthen my relationship with Agent_2...",
+  "message_content": "I appreciate your valuable contributions. Your perspective is insightful and helpful.",
+  "message_recipient_id": "agent_2",
+  "action_intent": "send_direct_message",
   "requested_role_change": null
 }}""")
     prompt_parts.append(f"Example with proposal for Knowledge Board:")
@@ -534,36 +727,42 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
 
 def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Updates the agent state based on perception, structured output, and simulation context.
-    This node prepares the state before the final decision on sending messages.
+    Updates the agent's internal state at the end of the turn.
+    Manages mood, relationship decay, messaging, memory, and state updates.
+    Returns the updated agent state for persistence.
     """
     agent_id = state['agent_id']
     sim_step = state['simulation_step']
+    agent_state = state['state']
+    thought = state['structured_output'].thought if state['structured_output'] else None
+    message_content = state['structured_output'].message_content if state['structured_output'] else None
+    message_recipient_id = state['structured_output'].message_recipient_id if state['structured_output'] else None
+    action_intent = state['structured_output'].action_intent if state['structured_output'] else "idle"
+    perceived_messages = state['perceived_messages']
+    sentiment_score = state['turn_sentiment_score']
     
-    # --- Get Structured Output ---
-    structured_output = state.get('structured_output')
-    thought = structured_output.thought if structured_output else "[thought generation failed]"
-    message_content = structured_output.message_content if structured_output else None
-    message_recipient_id = structured_output.message_recipient_id if structured_output else None
-    action_intent = structured_output.action_intent if structured_output else "idle"
-    requested_role_change = structured_output.requested_role_change if structured_output and hasattr(structured_output, 'requested_role_change') else None
+    logger.debug(f"Node 'update_state_node' executing for agent {agent_id} at step {sim_step}")
     
-    # Project-related fields (if present in structured output)
-    project_name_to_create = getattr(structured_output, 'project_name_to_create', None) if structured_output else None
-    project_description_for_creation = getattr(structured_output, 'project_description_for_creation', None) if structured_output else None
-    project_id_to_join_or_leave = getattr(structured_output, 'project_id_to_join_or_leave', None) if structured_output else None
-    # --- End Get Structured Output ---
+    # Update the agent's step counter
+    agent_state.last_action_step = sim_step
     
-    perceived_messages = state.get('perceived_messages', [])
-    sentiment_score = state.get('turn_sentiment_score', 0)
-    agent_state = state.get('state')
-
-    logger.debug(f"Node 'update_state_node' executing for agent {agent_id}")
-    logger.debug(f"  Using overall sentiment score {sentiment_score} to update mood.")
-    logger.debug(f"  Processing thought from structured output: '{thought}'")
-
-    # Update agent's mood based on overall sentiment score
+    # Increment steps_in_current_role counter
+    agent_state.steps_in_current_role += 1
+    
+    # Update agent mood (affects tone of messages)
     agent_state.update_mood(sentiment_score)
+    
+    # Apply natural decay to all relationships
+    for other_id in list(agent_state.relationships.keys()):
+        current_score = agent_state.relationships.get(other_id, 0.0)
+        if abs(current_score) > 0.01:  # Only apply decay if not already very close to neutral
+            # Apply decay toward neutral (0.0)
+            decay_amount = current_score * agent_state.relationship_decay_rate
+            new_score = current_score - decay_amount
+            
+            # Update the relationship with the decayed value
+            agent_state.relationships[other_id] = new_score
+            logger.debug(f"Applied relationship decay for {agent_id} -> {other_id}: {current_score:.2f} -> {new_score:.2f}")
     
     # Update relationships based on individual message sentiment
     # More nuanced approach - stronger impact for targeted messages
@@ -578,136 +777,54 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
                 # Analyze the sentiment of the message content
                 msg_sentiment = analyze_sentiment(content)
                 
-                # Convert textual sentiment to numeric value for relationship update
-                sentiment_value = 0.0
-                if msg_sentiment == 'positive':
-                    sentiment_value = 0.3
-                elif msg_sentiment == 'negative':
-                    sentiment_value = -0.4  # Negative interactions have slightly stronger impact
-                elif msg_sentiment == 'neutral':
-                    sentiment_value = 0.05  # Even neutral interactions can slightly improve relationships
-                
-                # Update relationship with sender - pass is_targeted flag to apply multiplier
-                if sentiment_value != 0:
-                    agent_state.update_relationship(sender_id, sentiment_value, is_targeted)
+                # Update relationship with sender - pass sentiment string and is_targeted flag
+                if msg_sentiment:
+                    agent_state.update_relationship(sender_id, msg_sentiment, is_targeted)
     
-    # Apply relationship decay toward neutral (separate from sentiment-based updates)
-    for other_id, score in list(agent_state.relationships.items()):
-        if score != 0:  # Only decay non-neutral relationships
-            decay_amount = score * agent_state.relationship_decay_rate
-            new_score = score - decay_amount
-            # If decay would cross zero, stop at zero (prevent oscillation)
-            if (score > 0 and new_score < 0) or (score < 0 and new_score > 0):
-                new_score = 0
-            agent_state.relationships[other_id] = new_score
-            logger.debug(f"Applied relationship decay for {agent_id}->{other_id}: {score:.2f} -> {new_score:.2f}")
+    # Store the thought from this turn
+    if thought:
+        agent_state.last_thought = thought
+        agent_state.add_memory(sim_step, "thought", thought)
     
-    # Store latest thought and increment counters
-    agent_state.add_memory(sim_step, "thought", thought)
-    agent_state.steps_in_current_role += 1
-    agent_state.actions_taken_count += 1
-    agent_state.last_action_step = sim_step
-    
-    # If a message was sent, update message tracking
+    # Process outgoing message (if any)
     if message_content:
-        agent_state.messages_sent_count += 1
-        agent_state.last_message_step = sim_step
-    
-    # Process passive Data Units generation based on role
-    du_generated = ROLE_DU_GENERATION.get(agent_state.role, 0)
-    agent_state.du += du_generated
-    logger.debug(f"Agent {agent_id} (Role: {agent_state.role}) passively generated {du_generated} DU. New DU: {agent_state.du}.")
-    
-    # Check for constructive references to board entries (simplified approach)
-    if message_content and "knowledge board" in message_content.lower():
-        # Simple heuristic: references to knowledge board + positive sentiment = constructive engagement
-        message_sentiment = analyze_sentiment(message_content)
-        if message_sentiment == 'positive':
-            du_award = DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE
-            agent_state.du += du_award
-            logger.info(f"Agent {agent_id} earned {du_award} DU for constructive knowledge board engagement. New DU: {agent_state.du}")
-    
-    # Check for successful analysis (for Analyzer role)
-    if agent_state.role == ROLE_ANALYZER and (message_content or thought):
-        text_to_check = f"{thought} {message_content if message_content else ''}"
-        analysis_keywords = [
-            "analysis shows", "critical evaluation", "strengths and weaknesses", 
-            "potential issues", "trade-offs", "after careful analysis",
-            "considering all factors", "systematic assessment", "evaluation reveals"
-        ]
+        # Add the broadcast to memory
+        memory_type = "targeted_message_sent" if message_recipient_id else "broadcast_sent"
+        recipient_info = f" to {message_recipient_id}" if message_recipient_id else ""
+        memory_content = f"Sent: {message_content}{recipient_info}"
+        agent_state.add_memory(sim_step, memory_type, memory_content)
         
-        if any(keyword in text_to_check.lower() for keyword in analysis_keywords):
-            # The analyzer appears to be doing actual analysis work
-            du_award = DU_AWARD_SUCCESSFUL_ANALYSIS
-            agent_state.du += du_award
-            logger.info(f"Agent {agent_id} (Analyzer) earned {DU_AWARD_SUCCESSFUL_ANALYSIS} DU for successful analysis. New DU: {agent_state.du}")
+        logger.debug(f"Agent {agent_id} has outgoing message: '{message_content}' to recipient '{message_recipient_id}'")
+    else:
+        logger.debug(f"Agent {agent_id} has no outgoing message.")
     
-    # Handle propose_idea action intent
-    if action_intent == 'propose_idea':
-        # This intent creates a new entry on the Knowledge Board
-        if message_content:
-            # Check if agent has enough DU to post an idea
-            du_cost = PROPOSE_DETAILED_IDEA_DU_COST
-            
-            if agent_state.du >= du_cost:
-                # Have enough DU to post the idea - deduct DU cost
-                agent_state.du -= du_cost
-                logger.info(f"Agent {agent_id} spent {du_cost} DU to post a detailed idea. Remaining DU: {agent_state.du}")
-                
-                # Now check for IP cost
-                ip_cost = IP_COST_TO_POST_IDEA
-                
-                if agent_state.ip >= ip_cost:
-                    # Have enough IP to post the idea
-                    agent_state.ip -= ip_cost
-                    logger.info(f"Agent {agent_id} spent {ip_cost} IP to post an idea. Remaining IP: {agent_state.ip}")
-                    
-                    # Add to knowledge board
-                    knowledge_board = state.get('knowledge_board')
-                    if knowledge_board:
-                        knowledge_board.add_entry(message_content, agent_id, state['simulation_step'])
-                    
-                    # Award IP for successful proposal
-                    award_ip = IP_AWARD_FOR_PROPOSAL
-                    agent_state.ip += award_ip
-                    logger.info(f"Agent {agent_id} earned {award_ip} IP for proposing an idea. New IP: {agent_state.ip}")
-                else:
-                    # Not enough IP to post the idea
-                    logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient IP ({agent_state.ip} IP) for the cost of {ip_cost} IP. Idea not posted.")
-                    
-                    # Refund the DU since the idea wasn't posted
-                    agent_state.du += du_cost
-                    logger.info(f"Agent {agent_id} was refunded {du_cost} DU since the idea wasn't posted due to insufficient IP.")
-            else:
-                # Not enough DU to post the idea
-                logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient DU ({agent_state.du} DU) for the cost of {du_cost} DU. Idea not posted.")
+    # Get the agent's current projects for context
+    project_affiliations = list(agent_state.projects.keys())
     
-    # Process requested role change if any
-    if requested_role_change and requested_role_change in VALID_ROLES:
-        if requested_role_change != agent_state.role:
-            # Check if the cooldown period has passed
-            if agent_state.steps_in_current_role >= agent_state.role_change_cooldown:
-                # Check if agent has enough IP for the role change
-                if agent_state.ip >= agent_state.role_change_ip_cost:
-                    # Deduct the cost
-                    agent_state.ip -= agent_state.role_change_ip_cost
-                    
-                    # Update role
-                    old_role = agent_state.role
-                    agent_state.role = requested_role_change
-                    agent_state.steps_in_current_role = 0
-                    agent_state.role_history.append((sim_step, requested_role_change))
-                    
-                    logger.info(f"Agent {agent_id} changed role from {old_role} to {requested_role_change}. Spent {agent_state.role_change_ip_cost} IP. Remaining IP: {agent_state.ip}")
-                else:
-                    logger.warning(f"Agent {agent_id} requested role change to {requested_role_change} but had insufficient IP (needed {agent_state.role_change_ip_cost}, had {agent_state.ip}).")
-            else:
-                logger.warning(f"Agent {agent_id} requested role change to {requested_role_change} but cooldown period not satisfied (needs {agent_state.role_change_cooldown} steps, current: {agent_state.steps_in_current_role}).")
+    # Update the agent's Influence Points (IP) based on actions
+    # For example, award IP for active participation
+    if action_intent != "idle":
+        # Simple reward for active participation
+        agent_state.ip += 1
+        logger.debug(f"Agent {agent_id} earned 1 IP for active participation with intent: {action_intent}")
     
-    # Update history fields for various state parameters
-    agent_state.ip_history.append((sim_step, agent_state.ip))
-    agent_state.du_history.append((sim_step, agent_state.du))
+    # Award additional IP for specific high-value actions
+    if action_intent == "propose_idea":
+        # Extra points for proposing an idea (will be deducted if submission fails)
+        agent_state.ip += 2
+        logger.debug(f"Agent {agent_id} earned 2 additional IP for proposing an idea")
+    
+    # Add relationship history record for tracking over time
     agent_state.relationship_history.append((sim_step, agent_state.relationships.copy()))
+    
+    # Apply passive role-based DU generation
+    role_name = agent_state.role if agent_state.role else "Default Contributor"
+    generated_du = ROLE_DU_GENERATION.get(role_name, ROLE_DU_GENERATION.get("Default Contributor", 0))
+    
+    if generated_du > 0:
+        previous_du = agent_state.du
+        agent_state.du += generated_du
+        logger.info(f"Agent {agent_id}: Generated {generated_du} DU passively based on role '{role_name}'. DU: {previous_du:.1f} → {agent_state.du:.1f}")
     
     # Return the updated state
     return {
@@ -719,109 +836,88 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
 
 def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Makes the final decision on whether to send the message.
-    Modifiers include: mood, message content, relationships.
-    
-    This node ensures agent behavior is responsive to emotional state,
-    and adds a layer of relationship-influenced decision making.
+    Finalizes the message preparation based on the agent's state and selected intent.
+    Returns the complete message package (or None if no message is to be sent).
+    Also handles knowledge board updates for propose_idea intent.
     """
     agent_id = state['agent_id']
-    agent_state = state['state']
-    current_mood = agent_state.mood
-    
-    # Get data from the updated state
+    sim_step = state['simulation_step']
     message_content = state.get('message_content')
     message_recipient_id = state.get('message_recipient_id')
     action_intent = state.get('action_intent', 'idle')
-    updated_agent_state = state.get('state')
+    final_agent_state = state.get('state')
+    knowledge_board = state.get('knowledge_board')
     
-    logger.debug(f"Node 'finalize_message_agent_node' executing for agent {agent_id}. Current mood: {current_mood}.")
+    logger.debug(f"Node 'finalize_message_agent_node' executing for agent {agent_id}")
     
-    # Always create a copy of the final state to avoid reference issues
-    # This ensures we're not modifying the original state
-    final_agent_state = updated_agent_state
-    
-    return_values = {}
-    
-    # First check: Is there a message to send?
-    if message_content:
-        logger.debug(f"Agent {agent_id} has message to send: \"{message_content}\"")
+    # Special handling based on action intent
+    if action_intent == 'propose_idea' and message_content and knowledge_board:
+        # This intent creates a new entry on the Knowledge Board
+        logger.info(f"Agent {agent_id} is proposing an idea to the knowledge board: {message_content[:50]}...")
         
-        # Relationship influence on message sending
-        # Check if this is a targeted message and how the relationship affects it
-        relationship_modifier = 1.0  # Default: no modification
-        if message_recipient_id:
-            # This is a targeted message - check relationship
-            relationship_score = agent_state.relationships.get(message_recipient_id, 0.0)
-            
-            # Very negative relationships might cause message suppression or modification
-            if relationship_score < -0.7:
-                # 30% chance to suppress message to someone the agent strongly dislikes
-                if random.random() < 0.3:
-                    logger.info(f"Agent {agent_id} suppressed message to {message_recipient_id} due to strongly negative relationship ({relationship_score:.2f})")
-                    return {
-                        'message_content': None,  # Suppressed
-                        'message_recipient_id': None,
-                        'action_intent': 'idle',  # Force idle when suppressing
-                        'updated_agent_state': final_agent_state
-                    }
-                # Otherwise, make message more terse 
-                message_content = shorten_message(message_content)
-                logger.info(f"Agent {agent_id} shortened message to {message_recipient_id} due to negative relationship ({relationship_score:.2f})")
-            
-            # Very positive relationships might lead to more elaborate messages
-            elif relationship_score > 0.7:
-                # Messages to close allies might be longer and more detailed
-                message_sentiment = analyze_sentiment(message_content)
-                if message_sentiment == "positive":
-                    # For positive messages to allies, increase the chance of sending
-                    relationship_modifier = 1.2  # 20% boost to send probability
+        # Check if agent has enough resources
+        du_cost = PROPOSE_DETAILED_IDEA_DU_COST
+        ip_cost = IP_COST_TO_POST_IDEA
         
-        # Second check: Is the agent in a mood to send this message?
-        # Complex mood-based logic for message sending
-        if current_mood == 'unhappy':
-            # Unhappy agents are less likely to send messages
-            # But might still send negative ones
-            message_sentiment = analyze_sentiment(message_content)
+        if final_agent_state.du >= du_cost and final_agent_state.ip >= ip_cost:
+            # Deduct costs
+            final_agent_state.du -= du_cost
+            final_agent_state.ip -= ip_cost
             
-            if message_sentiment == 'negative':
-                # Still fairly likely to send negative messages when unhappy
-                send_probability = 0.7 * relationship_modifier
-            else:
-                # Much less likely to send positive/neutral messages when unhappy
-                send_probability = 0.3 * relationship_modifier
-                
-            # Make the decision
-            if random.random() > send_probability:
-                # Message suppressed
-                logger.info(f"Agent {agent_id} (mood: {current_mood}) suppressed {message_sentiment} message: \"{message_content}\"")
-                return_values = {
-                    'message_content': None,  # Suppressed
-                    'message_recipient_id': None,
-                    'action_intent': 'idle',  # Force idle when suppressing
-                    'updated_agent_state': final_agent_state
-                }
-            else:
-                # Message sent with tag indicating it's a targeted message
-                is_targeted = message_recipient_id is not None
-                return_values = {
-                    'message_content': message_content,
-                    'message_recipient_id': message_recipient_id,
-                    'action_intent': action_intent,
-                    'updated_agent_state': final_agent_state,
-                    'is_targeted': is_targeted  # Add this flag for relationship impact calculation
-                }
+            # Add to knowledge board
+            entry_id = knowledge_board.add_entry(message_content, agent_id, sim_step)
+            
+            # Award IP for successful proposal
+            final_agent_state.ip += IP_AWARD_FOR_PROPOSAL
+            logger.info(f"Agent {agent_id} successfully posted idea to knowledge board and earned {IP_AWARD_FOR_PROPOSAL} IP (net: {IP_AWARD_FOR_PROPOSAL - ip_cost} IP). Entry ID: {entry_id}")
+            
+            # No message broadcast needed - the idea post is the communication
+            return_values = {
+                'message_content': None,  # No broadcast needed
+                'message_recipient_id': None,
+                'action_intent': action_intent,
+                'updated_agent_state': final_agent_state
+            }
         else:
-            # Happy or neutral mood - normal message sending
-            # Message sent with tag indicating if it's a targeted message
+            # Not enough resources
+            if final_agent_state.du < du_cost:
+                logger.warning(f"Agent {agent_id} cannot post idea: insufficient DU (needed {du_cost}, has {final_agent_state.du}).")
+            if final_agent_state.ip < ip_cost:
+                logger.warning(f"Agent {agent_id} cannot post idea: insufficient IP (needed {ip_cost}, has {final_agent_state.ip}).")
+            
+            # Since we can't post the idea, broadcast the message as a normal contribution
+            logger.info(f"Agent {agent_id} will broadcast the idea as a normal message instead.")
+            action_intent = "continue_collaboration"  # Downgrade the intent
+            
+            # Still broadcast the message
             is_targeted = message_recipient_id is not None
             return_values = {
                 'message_content': message_content,
                 'message_recipient_id': message_recipient_id,
                 'action_intent': action_intent,
                 'updated_agent_state': final_agent_state,
-                'is_targeted': is_targeted  # Add this flag for relationship impact calculation
+                'is_targeted': is_targeted
             }
+    elif message_content:
+        # For target messages, analyze sentiment and update sender's relationship with target
+        is_targeted = message_recipient_id is not None
+        
+        # Analyze sentiment of the outgoing message
+        outgoing_sentiment = analyze_sentiment(message_content)
+        
+        # If this is a targeted message, update the sender's relationship with the target
+        if is_targeted and outgoing_sentiment and message_recipient_id != agent_id:
+            logger.debug(f"Updating relationship for sender {agent_id} with target {message_recipient_id} based on outgoing message sentiment: {outgoing_sentiment}")
+            final_agent_state.update_relationship(message_recipient_id, outgoing_sentiment, True)
+        
+        # Regular message sending
+        return_values = {
+            'message_content': message_content,
+            'message_recipient_id': message_recipient_id,
+            'action_intent': action_intent,
+            'updated_agent_state': final_agent_state,
+            'is_targeted': is_targeted  # Add this flag for relationship impact calculation
+        }
     else:
         # No message was generated
         logger.debug(f"Agent {agent_id} has no message to send.")
@@ -986,6 +1082,8 @@ def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
 # Add formatting helper functions
 def _format_other_agents(other_agents_info, relationships):
     """Helper function to format other agents information for the prompt."""
+    from src.infra.config import get_relationship_label
+    
     if not other_agents_info:
         return "  You are currently alone."
     
@@ -996,9 +1094,13 @@ def _format_other_agents(other_agents_info, relationships):
         other_name = agent_info.get('name', other_id[:8])
         other_mood = agent_info.get('mood', 'unknown')
         other_descriptive_mood = agent_info.get('descriptive_mood', 'unknown')
+        
+        # Get relationship score and label
         relationship_score = relationships.get(other_id, 0.0)
+        relationship_label = get_relationship_label(relationship_score)
+        
         # Include the full agent_id for clear targeting
-        lines.append(f"  - {other_name} (Agent ID for targeting: '{other_id}', Mood: {other_mood}, Relationship: {relationship_score:.1f})")
+        lines.append(f"  - {other_name} (Agent ID: '{other_id}', Mood: {other_mood}, Relationship: {relationship_label} ({relationship_score:.1f}))")
     
     return "\n".join(lines)
 
@@ -1377,6 +1479,30 @@ def handle_leave_project_node(state: AgentTurnState) -> Dict[str, Any]:
     state['state'] = agent_persistent_state
     return state
 
+def handle_send_direct_message_node(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Handles the 'send_direct_message' intent.
+    Processes a targeted message to a specific agent.
+    """
+    agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
+    structured_output = state.get('structured_output')
+    
+    # Extract message details
+    message_content = structured_output.message_content if structured_output else None
+    message_recipient_id = structured_output.message_recipient_id if structured_output else None
+    
+    if not message_recipient_id:
+        logger.warning(f"Agent {agent_id} attempted to send direct message but didn't specify a recipient")
+        # Fallback to a broadcast message
+        return state
+    
+    logger.info(f"Agent {agent_id} sending direct message to {message_recipient_id}: '{message_content[:30]}...'")
+    
+    # Set flag to ensure this is processed as a targeted message
+    state['is_targeted'] = True
+    
+    return state
+
 # Update the route_action_intent function to handle all intents
 def route_action_intent(state: AgentTurnState) -> str:
     """
@@ -1403,6 +1529,8 @@ def route_action_intent(state: AgentTurnState) -> str:
         return "handle_join_project"
     elif intent == "leave_project":
         return "handle_leave_project"
+    elif intent == "send_direct_message":
+        return "handle_send_direct_message"
     else:
         # For unknown intents, go to update_state
         return "update_state"
@@ -1412,13 +1540,15 @@ def route_action_intent(state: AgentTurnState) -> str:
 def create_basic_agent_graph():
     """
     Builds the agent turn graph with intent routing.
-    Flow: Analyze Sentiment -> Prepare Prompt -> Generate Output -> Route Intent -> [Handle Intent] -> Update State -> Finalize Message -> END
+    Flow: Analyze Sentiment -> Prepare Prompt -> Retrieve Memories -> Generate Output -> Route Intent -> [Handle Intent] -> Update State -> Finalize Message -> END
     """
     workflow = StateGraph(AgentTurnState)
 
     # Add the nodes
     workflow.add_node("analyze_sentiment", analyze_perception_sentiment_node)
     workflow.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
+    # Add new RAG node for memory retrieval and summarization
+    workflow.add_node("retrieve_memories", retrieve_and_summarize_memories_node)
     workflow.add_node("generate_action_output", generate_thought_and_message_node)
     workflow.add_node("handle_propose_idea", handle_propose_idea_node) # Specific intent handler
     workflow.add_node("handle_continue_collaboration", handle_continue_collaboration_node) # Specific intent handler
@@ -1428,13 +1558,16 @@ def create_basic_agent_graph():
     workflow.add_node("handle_create_project", handle_create_project_node) # Specific intent handler
     workflow.add_node("handle_join_project", handle_join_project_node) # Specific intent handler
     workflow.add_node("handle_leave_project", handle_leave_project_node) # Specific intent handler
+    workflow.add_node("handle_send_direct_message", handle_send_direct_message_node) # New intent handler
     workflow.add_node("update_state", update_state_node) # Unified state update
     workflow.add_node("finalize_message", finalize_message_agent_node) # Final decision on message sending
 
     # Define edges
     workflow.set_entry_point("analyze_sentiment")
     workflow.add_edge("analyze_sentiment", "prepare_relationship_prompt")
-    workflow.add_edge("prepare_relationship_prompt", "generate_action_output")
+    # Modify the flow to include the retrieve_memories node between relationship prompt and action generation
+    workflow.add_edge("prepare_relationship_prompt", "retrieve_memories") # Update this edge
+    workflow.add_edge("retrieve_memories", "generate_action_output") # Add new edge for RAG
     
     # Use a conditional edge to route based on action intent
     workflow.add_conditional_edges(
@@ -1449,6 +1582,7 @@ def create_basic_agent_graph():
             "handle_create_project": "handle_create_project",
             "handle_join_project": "handle_join_project",
             "handle_leave_project": "handle_leave_project",
+            "handle_send_direct_message": "handle_send_direct_message",
             "update_state": "update_state" # Default fallback
         }
     )
@@ -1462,6 +1596,7 @@ def create_basic_agent_graph():
     workflow.add_edge("handle_create_project", "update_state")
     workflow.add_edge("handle_join_project", "update_state")
     workflow.add_edge("handle_leave_project", "update_state")
+    workflow.add_edge("handle_send_direct_message", "update_state")
     
     # Final state update and message decision
     workflow.add_edge("update_state", "finalize_message")
