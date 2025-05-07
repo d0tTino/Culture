@@ -203,6 +203,18 @@ To customize the simulation:
 
 ## Recent Updates
 
+### Relationship Dynamics Refinement
+
+The relationship dynamics system has been significantly enhanced with the following improvements:
+
+- **Non-Linear Relationship Updates**: Implemented a sophisticated formula that considers both sentiment and current relationship score
+- **Targeted vs. Broadcast Messages**: Direct messages now have stronger impact on relationships than broadcasts
+- **Relationship-Based Decision Making**: Agents' behaviors are now influenced by their relationships with others
+- **Natural Relationship Decay**: Relationships gradually decay toward neutral, requiring active maintenance
+- **Enhanced Prompting**: More nuanced guidance based on relationship intensity
+
+For detailed information, see the `src/relationship_dynamics_verification.md` report.
+
 ### Agent State Refactoring
 
 The agent state management was refactored to use Pydantic models instead of plain dictionaries. This provides:
@@ -214,10 +226,30 @@ The agent state management was refactored to use Pydantic models instead of plai
 
 The `AgentState` class in `src/agents/core/agent_state.py` now manages all agent state and provides proper typing for all agent attributes.
 
+### Role Change System
+
+The role change system now allows agents to:
+
+- Request a role change after spending a minimum number of steps in their current role
+- Pay an Influence Points cost to change roles
+- Switch between Facilitator, Innovator, and Analyzer roles based on strategic considerations
+
 ## Running Tests
 
 To verify the agent state refactoring works correctly:
 
 ```
 python -m src.test_agent_state
+```
+
+To test the role change system:
+
+```
+python -m src.test_role_change
+```
+
+To test the project mechanics:
+
+```
+python -m src.test_project_mechanics
 ``` 

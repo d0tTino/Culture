@@ -69,6 +69,15 @@ class Agent:
         # Get project id and ensure current_project_id and current_project_affiliation are in sync
         current_project = initial_state.get('current_project_id', None)
         
+        # Check for goal in initial_state - handle the case where it's a string instead of dict list
+        goals = []
+        if 'goals' in initial_state:
+            goals = initial_state['goals']
+        elif 'goal' in initial_state:
+            # Convert single goal string to the proper dictionary format expected by AgentState
+            goal_text = initial_state['goal']
+            goals = [{"description": goal_text, "priority": "high"}]
+        
         # Create the AgentState object
         self._state = AgentState(
             agent_id=self.agent_id,
@@ -83,7 +92,7 @@ class Agent:
             # Import specific values from initial_state if provided
             relationships=initial_state.get('relationships', {}),
             short_term_memory=deque(initial_state.get('memory_history', []), maxlen=max_short_term_memory),
-            goals=initial_state.get('goals', []),
+            goals=goals,  # Use the processed goals from above
             current_project_id=current_project,
             current_project_affiliation=current_project,  # Keep these two fields in sync
             messages_sent_count=initial_state.get('messages_sent_count', 0),
@@ -102,7 +111,14 @@ class Agent:
             ip_cost_per_message=ip_cost_per_message,
             du_cost_per_action=du_cost_per_action,
             role_change_cooldown=role_change_cooldown,
-            role_change_ip_cost=role_change_ip_cost
+            role_change_ip_cost=role_change_ip_cost,
+            # New relationship dynamics parameters
+            positive_relationship_learning_rate=initial_state.get('positive_relationship_learning_rate', 
+                                               config.POSITIVE_RELATIONSHIP_LEARNING_RATE),
+            negative_relationship_learning_rate=initial_state.get('negative_relationship_learning_rate', 
+                                               config.NEGATIVE_RELATIONSHIP_LEARNING_RATE),
+            targeted_message_multiplier=initial_state.get('targeted_message_multiplier', 
+                                       config.TARGETED_MESSAGE_MULTIPLIER)
         )
 
         # Initialize the agent's Lang Graph
@@ -143,18 +159,42 @@ class Agent:
         self._state.short_term_memory.append(memory_entry)
         logger.debug(f"Added {memory_type} memory for agent {self.agent_id}")
         
-    def update_relationship(self, other_agent_id: str, delta: float):
+    def update_relationship(self, other_agent_id: str, delta: float, is_targeted: bool = False):
         """
-        Updates the relationship score with another agent.
+        Updates the relationship score with another agent using a non-linear formula that considers
+        both the sentiment (delta) and the current relationship score.
         
         Args:
             other_agent_id (str): ID of the other agent
-            delta (float): Change in relationship score (positive or negative)
+            delta (float): Change in relationship score (positive or negative) based on sentiment
+            is_targeted (bool): Whether this update is from a targeted message (True) or broadcast (False)
         """
         current_score = self._state.relationships.get(other_agent_id, 0.0)
-        new_score = max(self._state.min_relationship_score, min(self._state.max_relationship_score, current_score + delta))
+        
+        # Apply targeted message multiplier if applicable
+        effective_delta = delta
+        if is_targeted:
+            effective_delta = delta * self._state.targeted_message_multiplier
+            logger.debug(f"Targeted message multiplier applied: {delta} -> {effective_delta}")
+        
+        # Calculate change amount using non-linear formula
+        if effective_delta > 0:
+            # Positive sentiment: diminishing returns as relationship approaches max
+            # Higher current relationships see smaller increases from positive interactions
+            change_amount = effective_delta * (self._state.max_relationship_score - current_score) * self._state.positive_relationship_learning_rate
+        elif effective_delta < 0:
+            # Negative sentiment: diminishing returns as relationship approaches min
+            # Lower current relationships see smaller decreases from negative interactions
+            change_amount = effective_delta * (current_score - self._state.min_relationship_score) * self._state.negative_relationship_learning_rate
+        else:
+            change_amount = 0
+        
+        # Apply change and clamp to min/max bounds
+        new_score = max(self._state.min_relationship_score, min(self._state.max_relationship_score, current_score + change_amount))
         self._state.relationships[other_agent_id] = new_score
-        logger.debug(f"Updated relationship for agent {self.agent_id} with {other_agent_id}: {current_score} -> {new_score}")
+        
+        logger.debug(f"Updated relationship for agent {self.agent_id} with {other_agent_id}: {current_score:.2f} -> {new_score:.2f} (delta={effective_delta:.2f}, change={change_amount:.2f})")
+        return new_score
         
     def update_mood(self, sentiment_score: float):
         """
@@ -237,6 +277,21 @@ class Agent:
         # Convert the state to dictionary for compatibility with the existing graph
         state_dict = self._state.model_dump()
 
+        # Extract agent goal - handle goals which may be in different formats:
+        # 1. From the AgentState goals list (which might be empty)
+        # 2. From a flat 'goal' in the state_dict (legacy format)
+        # 3. Default to "Contribute to the simulation" if neither is found
+        agent_goal = "Contribute to the simulation"
+        
+        # First check goals list - if it has entries, use the first one's description
+        if state_dict.get("goals") and len(state_dict["goals"]) > 0:
+            agent_goal = state_dict["goals"][0].get("description", agent_goal)
+        # Otherwise, check if there's a single 'goal' string in the state
+        elif state_dict.get("goal"):
+            agent_goal = state_dict["goal"]
+        
+        logger.debug(f"  Using agent goal: '{agent_goal}'")
+
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
@@ -249,7 +304,7 @@ class Agent:
             "turn_sentiment_score": 0, # Initialize sentiment score for this turn
             "prompt_modifier": "", # Initialize prompt modifier
             "structured_output": None, # Initialize as None for this turn
-            "agent_goal": state_dict.get("goals", ["Contribute to the simulation"])[0], # Pass the agent's goal
+            "agent_goal": agent_goal, # Use the extracted agent goal
             "updated_state": {}, # Initialize empty
             "vector_store_manager": vector_store_manager, # Pass the vector store manager
             "rag_summary": "(No memory summary available yet)", # Initialize with default summary

@@ -30,6 +30,12 @@ DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
 ROLE_CHANGE_IP_COST = 5  # Cost in IP to request/confirm a role change
 ROLE_CHANGE_COOLDOWN = 3 # Minimum number of steps an agent must stay in a role before requesting another change
 
+# --- Relationship Settings ---
+POSITIVE_RELATIONSHIP_LEARNING_RATE = 0.2  # Learning rate for positive sentiment interactions
+NEGATIVE_RELATIONSHIP_LEARNING_RATE = 0.3  # Learning rate for negative sentiment interactions (slightly higher for more impact)
+TARGETED_MESSAGE_MULTIPLIER = 2.0  # Multiplier for relationship changes from targeted messages vs broadcasts
+RELATIONSHIP_DECAY_RATE = 0.01  # Rate at which relationships decay toward neutral each turn
+
 # --- Data Units (DU) Settings ---
 INITIAL_DATA_UNITS = 20  # Starting DU for new agents
 ROLE_DU_GENERATION = {
