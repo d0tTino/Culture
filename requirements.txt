@@ -4,8 +4,17 @@ redis
 langchain
 langgraph
 ollama
+pydantic
+
+# Vector Database and Embeddings for Memory
+langchain-community
+chromadb
+sentence-transformers
 
 # Ollama Python Client (Add the specific package name if known, otherwise keep as comment)
 # ollama
+
+# Discord Bot
+discord.py
 
 # Add other dependencies as needed 

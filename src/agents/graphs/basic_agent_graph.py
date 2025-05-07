@@ -9,9 +9,11 @@ import uuid
 from typing import Dict, Any, TypedDict, Annotated, List, Tuple, Optional, Deque, Literal, TYPE_CHECKING, Union
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages # Although not used yet, good practice
-from src.infra.llm_client import generate_structured_output, analyze_sentiment, generate_text, summarize_memory_context # Updated import
+from src.infra.llm_client import generate_structured_output, analyze_sentiment, generate_text, summarize_memory_context # Updated import structure to match function name
 from collections import deque
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
+from src.agents.core.roles import ROLE_PROMPT_SNIPPETS, ROLE_DESCRIPTIONS, ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
+from src.infra import config  # Import config for role change parameters
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
@@ -23,6 +25,27 @@ logger = logging.getLogger(__name__)
 MOOD_DECAY_FACTOR = 0.02  # Mood decays towards neutral by 2% each turn
 RELATIONSHIP_DECAY_FACTOR = 0.01  # Relationships decay towards neutral by 1% each turn
 
+# IP award constants
+IP_AWARD_FOR_PROPOSAL = 5  # Amount of IP awarded for successfully proposing an idea to the knowledge board
+IP_COST_TO_POST_IDEA = 2   # Cost in IP to post an idea to the knowledge board
+
+# Role change constants (loaded from config)
+ROLE_CHANGE_IP_COST = config.ROLE_CHANGE_IP_COST if hasattr(config, 'ROLE_CHANGE_IP_COST') else 5
+ROLE_CHANGE_COOLDOWN = config.ROLE_CHANGE_COOLDOWN if hasattr(config, 'ROLE_CHANGE_COOLDOWN') else 3
+
+# Data Units constants (loaded from config)
+INITIAL_DATA_UNITS = config.INITIAL_DATA_UNITS if hasattr(config, 'INITIAL_DATA_UNITS') else 20
+ROLE_DU_GENERATION = config.ROLE_DU_GENERATION if hasattr(config, 'ROLE_DU_GENERATION') else {
+    "Innovator": 2,
+    "Analyzer": 1,
+    "Facilitator": 1,
+    "Default Contributor": 0
+}
+PROPOSE_DETAILED_IDEA_DU_COST = config.PROPOSE_DETAILED_IDEA_DU_COST if hasattr(config, 'PROPOSE_DETAILED_IDEA_DU_COST') else 5
+
+# List of valid roles
+VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
+
 # Define the Pydantic model for structured LLM output
 class AgentActionOutput(BaseModel):
     """Defines the expected structured output from the LLM."""
@@ -33,6 +56,7 @@ class AgentActionOutput(BaseModel):
         default="idle", # Default intent
         description="The agent's primary intent for this turn."
     )
+    requested_role_change: Optional[str] = Field(None, description="Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.")
 
 # Define the state the graph will operate on during a single agent turn
 class AgentTurnState(TypedDict):
@@ -54,6 +78,10 @@ class AgentTurnState(TypedDict):
     knowledge_board_content: List[str]  # Current entries on the knowledge board
     knowledge_board: Optional[Any] # The knowledge board instance for posting entries
     scenario_description: str     # Description of the simulation scenario
+    current_role: str             # The agent's current role in the simulation
+    influence_points: int         # The agent's current Influence Points
+    steps_in_current_role: int    # Steps taken in the current role
+    data_units: int               # The agent's current Data Units
 
 # --- Node Functions ---
 
@@ -172,6 +200,20 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     current_agent_state = state['current_state']
     relationships = current_agent_state.get('relationships', {})
     
+    # Get the raw current role string
+    raw_role_name = state.get('current_role', ROLE_ANALYZER)  # Default to Analyzer if not found
+    
+    # Get role description and role-specific guidance
+    role_description = ROLE_DESCRIPTIONS.get(raw_role_name, f"{raw_role_name}: Contribute effectively based on your role.")
+    role_specific_guidance = ROLE_PROMPT_SNIPPETS.get(raw_role_name, "Consider how your role might influence your perspective and contributions.")
+    
+    # Get steps in current role and influence points
+    steps_in_current_role = current_agent_state.get('steps_in_current_role', 0)
+    influence_points = current_agent_state.get('influence_points', 0)
+    
+    # Get data units
+    data_units = current_agent_state.get('data_units', 0)
+    
     logger.debug(f"Node 'generate_thought_and_message_node' executing for agent {agent_id} at step {sim_step}")
     logger.debug(f"  Overall sentiment score from perceived messages: {sentiment_score}")
     logger.debug(f"  Current Relationships: {relationships}")
@@ -181,6 +223,11 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     logger.debug(f"  Knowledge board has {len(knowledge_board_content)} entries")
     logger.debug(f"  Using simulation scenario: '{scenario_description}'")
     logger.debug(f"  Perceived {len(perceived_messages)} messages")
+    logger.debug(f"  Current role: {raw_role_name}")
+    logger.debug(f"  Using role-specific guidance: '{role_specific_guidance}'")
+    logger.debug(f"  Steps in current role: {steps_in_current_role}")
+    logger.debug(f"  Current influence points: {influence_points}")
+    logger.debug(f"  Current data units: {data_units}")
 
     # Format other agents' information
     other_agents_info = perception.get('other_agents_state', [])
@@ -193,77 +240,116 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     formatted_messages = _format_messages(perceived_messages)
     
     # Build the prompt with the agent's persona, context, and task
-    prompt = f"""You are Agent_{agent_id}, an AI agent in a simulation.
-Current simulation step: {sim_step}.
-Your current mood is: {current_agent_state.get('mood', 'neutral')}.
-You have taken {current_agent_state.get('step_counter', 0)} steps so far.
-
-Current Simulation Scenario:
-{scenario_description}
-
-Your primary goal for this simulation is: {agent_goal}
-Keep this goal in mind when deciding your thoughts and actions.
-
-Other Agents Present:
-{formatted_other_agents}
-
-Relevant Memory Context (Summarized):
-{rag_summary}
-
-Current Knowledge Board Content (Last 10 Entries):
-{formatted_board}
-  
-Messages from Previous Step:
-{formatted_messages}
-  The overall sentiment of messages you perceived last step was: {sentiment_score} (positive > 0, negative < 0, neutral = 0). 
-
-Guidance based on relationships: {prompt_modifier}
-                            
-Task: Based on all the context, generate your internal thought, decide if you want to send a message, and choose your primary action intent for this turn.
-
-MESSAGING OPTIONS:
-- Send a message to all agents (broadcast) by leaving message_recipient_id as null
-- Send a targeted message to a specific agent by setting message_recipient_id to their agent ID (as shown in "Other Agents Present")
-- Choose not to send any message by setting message_content to null
-                            
-IMPORTANT ACTION CHOICES:
-1. 'idle' - No specific action, continue monitoring.
-2. 'continue_collaboration' - Standard contribution to ongoing discussion.
-3. 'propose_idea' - Suggest a formal idea to be added to the Knowledge Board for permanent reference.
-4. 'ask_clarification' - Request more information about something unclear.
-
-If you have a significant insight or proposal you'd like to be added to the shared Knowledge Board, use 'propose_idea'.
-
-You MUST respond ONLY with a valid JSON object matching the specified schema.
-Example for no message:
-{{
+    prompt_parts = []
+    prompt_parts.append(f"You are Agent_{agent_id}, an AI agent in a simulation.")
+    prompt_parts.append(f"Current simulation step: {sim_step}.")
+    prompt_parts.append(f"Your current mood is: {current_agent_state.get('mood', 'neutral')}.")
+    prompt_parts.append(f"Your current descriptive mood is: {current_agent_state.get('descriptive_mood', 'neutral')}.")
+    prompt_parts.append(f"You have taken {current_agent_state.get('step_counter', 0)} steps so far.")
+    prompt_parts.append(f"Your current Influence Points (IP): {influence_points}.")
+    prompt_parts.append(f"Your current Data Units (DU): {data_units}.")
+    prompt_parts.append(f"Your current role: {raw_role_name}.")
+    prompt_parts.append(f"Steps in current role: {steps_in_current_role}.")
+    
+    prompt_parts.append(f"\nCurrent Simulation Scenario:")
+    prompt_parts.append(f"{scenario_description}")
+    
+    prompt_parts.append(f"\nYour primary goal for this simulation is: {agent_goal}")
+    prompt_parts.append(f"Keep this goal in mind when deciding your thoughts and actions.")
+    
+    prompt_parts.append(f"\nYour Current Role Description:")
+    prompt_parts.append(f"{role_description}")
+    
+    prompt_parts.append(f"\nRole-Specific Guidance:")
+    prompt_parts.append(f"{role_specific_guidance}")
+    
+    prompt_parts.append(f"\nOther Agents Present:")
+    prompt_parts.append(f"{formatted_other_agents}")
+    
+    prompt_parts.append(f"\nRelevant Memory Context (Summarized):")
+    prompt_parts.append(f"{rag_summary}")
+    
+    prompt_parts.append(f"\nCurrent Knowledge Board Content (Last 10 Entries):")
+    prompt_parts.append(f"{formatted_board}")
+    
+    prompt_parts.append(f"\nMessages from Previous Step:")
+    prompt_parts.append(f"{formatted_messages}")
+    prompt_parts.append(f"  The overall sentiment of messages you perceived last step was: {sentiment_score} (positive > 0, negative < 0, neutral = 0).")
+    
+    prompt_parts.append(f"\nGuidance based on relationships: {prompt_modifier}")
+    
+    prompt_parts.append(f"\nStrategic Considerations:")
+    prompt_parts.append(f"- Posting a new idea to the Knowledge Board costs {IP_COST_TO_POST_IDEA} IP but earns {IP_AWARD_FOR_PROPOSAL} IP if successful.")
+    prompt_parts.append(f"- Posting a detailed idea to the Knowledge Board also costs {PROPOSE_DETAILED_IDEA_DU_COST} Data Units (DU).")
+    prompt_parts.append(f"- You passively generate DU each turn based on your role (Innovator: {ROLE_DU_GENERATION.get('Innovator', 0)}, Analyzer: {ROLE_DU_GENERATION.get('Analyzer', 0)}, Facilitator: {ROLE_DU_GENERATION.get('Facilitator', 0)}).")
+    prompt_parts.append(f"- Changing your role costs {ROLE_CHANGE_IP_COST} IP and requires you to have spent at least {ROLE_CHANGE_COOLDOWN} steps in your current role.")
+    prompt_parts.append(f"- Consider your current Influence Points (IP: {influence_points}) and Data Units (DU: {data_units}) when deciding actions.")
+    prompt_parts.append(f"- Your goal and current role should guide your use of IP, DU, and potential role change decisions.")
+    
+    prompt_parts.append(f"\nTask: Based on all the context, generate your internal thought, decide if you want to send a message, and choose your primary action intent for this turn.")
+    
+    prompt_parts.append(f"\nMESSAGING OPTIONS:")
+    prompt_parts.append(f"- Send a message to all agents (broadcast) by leaving message_recipient_id as null")
+    prompt_parts.append(f"- Send a targeted message to a specific agent by setting message_recipient_id to their agent ID (as shown in 'Other Agents Present')")
+    prompt_parts.append(f"- Choose not to send any message by setting message_content to null")
+    
+    prompt_parts.append(f"\nIMPORTANT ACTION CHOICES:")
+    prompt_parts.append(f"1. 'idle' - No specific action, continue monitoring.")
+    prompt_parts.append(f"2. 'continue_collaboration' - Standard contribution to ongoing discussion.")
+    prompt_parts.append(f"3. 'propose_idea' - Suggest a formal idea to be added to the Knowledge Board for permanent reference (costs {PROPOSE_DETAILED_IDEA_DU_COST} DU and {IP_COST_TO_POST_IDEA} IP).")
+    prompt_parts.append(f"4. 'ask_clarification' - Request more information about something unclear.")
+    
+    prompt_parts.append(f"\nROLE CHANGE:")
+    prompt_parts.append(f"- If you wish to change your role, specify the requested role in the requested_role_change field.")
+    prompt_parts.append(f"- Valid roles: 'Facilitator', 'Innovator', 'Analyzer'")
+    prompt_parts.append(f"- Role changes cost {ROLE_CHANGE_IP_COST} IP and require {ROLE_CHANGE_COOLDOWN} steps in your current role.")
+    
+    prompt_parts.append(f"\nIf you have a significant insight or proposal you'd like to be added to the shared Knowledge Board, use 'propose_idea'.")
+    
+    prompt_parts.append(f"\nYou MUST respond ONLY with a valid JSON object matching the specified schema.")
+    prompt_parts.append(f"Example for no message:")
+    prompt_parts.append(f"""{{
   "thought": "My internal reasoning...",
   "message_content": null,
   "message_recipient_id": null,
-  "action_intent": "idle"
-}}
-Example with broadcast message:
-{{
+  "action_intent": "idle",
+  "requested_role_change": null
+}}""")
+    prompt_parts.append(f"Example with broadcast message:")
+    prompt_parts.append(f"""{{
   "thought": "My internal reasoning...",
   "message_content": "My message to everyone.",
   "message_recipient_id": null,
-  "action_intent": "continue_collaboration"
-}}
-Example with targeted message:
-{{
+  "action_intent": "continue_collaboration",
+  "requested_role_change": null
+}}""")
+    prompt_parts.append(f"Example with targeted message:")
+    prompt_parts.append(f"""{{
   "thought": "My internal reasoning...",
   "message_content": "This is a private message just for you.",
   "message_recipient_id": "agent_id_xyz",
-  "action_intent": "continue_collaboration"
-}}
-Example with proposal for Knowledge Board:
-{{
+  "action_intent": "continue_collaboration",
+  "requested_role_change": null
+}}""")
+    prompt_parts.append(f"Example with proposal for Knowledge Board:")
+    prompt_parts.append(f"""{{
   "thought": "I have a valuable idea to share...",
   "message_content": "I propose we consider implementing X to solve Y...",
   "message_recipient_id": null,
-  "action_intent": "propose_idea"
-}}
-"""
+  "action_intent": "propose_idea",
+  "requested_role_change": null
+}}""")
+    prompt_parts.append(f"Example with role change request:")
+    prompt_parts.append(f"""{{
+  "thought": "I think I could contribute better as a different role...",
+  "message_content": "I'd like to shift my focus to become an Innovator...",
+  "message_recipient_id": null,
+  "action_intent": "continue_collaboration",
+  "requested_role_change": "Innovator"
+}}""")
+
+    # Join all prompt parts with newlines
+    prompt = "\n".join(prompt_parts)
     
     # Call the LLM for structured output
     structured_output = generate_structured_output(
@@ -277,7 +363,8 @@ Example with proposal for Knowledge Board:
         logger.info(f"Agent {agent_id} structured output received: "
                     f"Thought='{structured_output.thought}', "
                     f"Broadcast='{structured_output.message_content}', "
-                    f"Intent='{structured_output.action_intent}'")
+                    f"Intent='{structured_output.action_intent}', "
+                    f"RequestedRoleChange='{structured_output.requested_role_change}'")
     else:
         logger.warning(f"Agent {agent_id} failed to generate or parse structured output.")
 
@@ -285,98 +372,199 @@ Example with proposal for Knowledge Board:
 
 def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Updates mood based on sentiment, updates relationships based on
-    perceived message sentiment, stores the latest thought, and updates memory history.
-    This node prepares the state *before* the final decision on sending messages.
+    Node that takes the output from the LLM and updates agent state.
+    Returns the updated state dictionary.
+    
+    Note: This is the main "actions" processor. If the agent requested to perform
+    an action via one of the structured intents, this is where that would be processed.
     """
+    structured_output = state['structured_output']
     agent_id = state['agent_id']
-    sim_step = state['simulation_step']
     
-    # --- Get Structured Output ---
-    structured_output = state.get('structured_output')
-    thought = structured_output.thought if structured_output else "[thought generation failed]"
-    # Message will be handled by the routing/finalization steps
-    # --- End Get Structured Output ---
-    
-    perceived_messages = state.get('perceived_messages', [])
-    sentiment_score = state.get('turn_sentiment_score', 0)
-
-    logger.debug(f"Node 'update_state_node' executing for agent {agent_id}")
-    logger.debug(f"  Using overall sentiment score {sentiment_score} to update mood.")
-    logger.debug(f"  Processing thought from structured output: '{thought}'")
-
+    # Get current state
     current_agent_state = state['current_state'].copy()
+    current_role = current_agent_state.get('current_role', 'Default Contributor')
     
-    # Increment step counter
-    current_count = current_agent_state.get('step_counter', 0)
-    new_count = current_count + 1
-    current_agent_state['step_counter'] = new_count
-
-    # Update Mood Based on Overall Sentiment
-    current_mood = current_agent_state.get('mood', 'neutral')
-    new_mood = current_mood
-    if sentiment_score > 0: 
-        new_mood = 'happy'
-    elif sentiment_score < 0: 
-        new_mood = 'unhappy' # Add unhappy possibility
-    else: 
-        new_mood = 'neutral'
-        
-    if new_mood != current_mood:
-        logger.info(f"Agent {agent_id} mood changed from '{current_mood}' to '{new_mood}' based on overall sentiment score {sentiment_score}.")
-        current_agent_state['mood'] = new_mood
-    else: 
-        logger.debug(f"Agent {agent_id} mood remains '{current_mood}'.")
-
-    # Update Relationships Based on Individual Message Sentiment
-    relationships = current_agent_state.get('relationships', {}).copy()
-    if perceived_messages:
-        logger.debug(f"  Updating relationships based on {len(perceived_messages)} perceived messages...")
-        for msg in perceived_messages:
-            sender_id = msg.get('sender_id')
-            content = msg.get('content')
-            if sender_id and content and sender_id != agent_id:
-                msg_sentiment = analyze_sentiment(content)
-                current_relationship_score = relationships.get(sender_id, 0.0)
-                new_relationship_score = current_relationship_score
-                sentiment_delta = 0.0
-                if msg_sentiment == 'positive': 
-                    sentiment_delta = 0.1
-                elif msg_sentiment == 'negative': 
-                    sentiment_delta = -0.1
+    # Process passive Data Units generation based on role
+    current_du = current_agent_state.get('data_units', 0)
+    du_generated = ROLE_DU_GENERATION.get(current_role, 0)
+    new_du = current_du + du_generated
+    current_agent_state['data_units'] = new_du
+    logger.debug(f"Agent {agent_id} (Role: {current_role}) passively generated {du_generated} DU. New DU: {new_du}.")
+    
+    # Process intents
+    # If we added more action types, they'd be routed here
+    action_intent = structured_output.action_intent
+    
+    if action_intent == 'propose_idea':
+        # This intent creates a new entry on the Knowledge Board
+        # Typically this would be a new proposal, solution, or important insight
+        message_content = structured_output.message_content
+        if message_content:
+            # First check if agent has enough DU to post an idea
+            current_du = current_agent_state.get('data_units', 0)
+            du_cost = PROPOSE_DETAILED_IDEA_DU_COST
+            
+            if current_du >= du_cost:
+                # Have enough DU to post the idea - deduct DU cost
+                new_du = current_du - du_cost
+                current_agent_state['data_units'] = new_du
+                logger.info(f"Agent {agent_id} spent {du_cost} DU to post a detailed idea. Remaining DU: {new_du}")
+                
+                # Now check for IP cost
+                current_ip = current_agent_state.get('influence_points', 0)
+                ip_cost = IP_COST_TO_POST_IDEA
+                
+                if current_ip >= ip_cost:
+                    # Have enough IP to post the idea
+                    new_ip = current_ip - ip_cost
+                    current_agent_state['influence_points'] = new_ip
+                    logger.info(f"Agent {agent_id} spent {ip_cost} IP to post an idea. Remaining IP: {new_ip}")
                     
-                if sentiment_delta != 0.0:
-                    new_relationship_score += sentiment_delta
-                    new_relationship_score = max(-1.0, min(1.0, new_relationship_score)) # Clamp
-                    if new_relationship_score != current_relationship_score:
-                         relationships[sender_id] = new_relationship_score
-                         logger.info(f"Agent {agent_id} relationship with {sender_id} updated to {new_relationship_score:.2f} (sentiment: {msg_sentiment})")
-        current_agent_state['relationships'] = relationships
-
-    # Store latest thought (message stored later based on decision)
-    current_agent_state['last_thought'] = thought
-
-    # Update Memory History (including perceived messages, thought, but NOT sent message yet)
-    memory_list = current_agent_state.get('memory_history', [])
-    memory_deque = deque(memory_list, maxlen=5)
-    if perceived_messages:
-        for msg in perceived_messages:
-            sender = msg.get('sender_id', 'unknown')
-            content = msg.get('content', '')
-            recipient = msg.get('recipient_id')
-            message_type = "private" if recipient else "broadcast"
-            memory_deque.append((sim_step, f'message_perceived_{message_type}', f"{sender}: \"{content}\""))
+                    # Add to knowledge board
+                    knowledge_board = state.get('knowledge_board')
+                    if knowledge_board:
+                        knowledge_board.add_entry(agent_id, state['simulation_step'], message_content)
+                    
+                    # Award IP for successful proposal
+                    award_ip = IP_AWARD_FOR_PROPOSAL
+                    final_ip = new_ip + award_ip
+                    current_agent_state['influence_points'] = final_ip
+                    logger.info(f"Agent {agent_id} earned {award_ip} IP for proposing an idea. New IP: {final_ip}")
+                    
+                    # Update the last_proposed_idea field
+                    current_agent_state['last_proposed_idea'] = message_content
+                else:
+                    # Not enough IP to post the idea
+                    logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient IP ({current_ip} IP) for the cost of {ip_cost} IP. Idea not posted.")
+                    # Still update last_proposed_idea even though it wasn't posted
+                    current_agent_state['last_proposed_idea'] = message_content
+                    
+                    # Refund the DU since the idea wasn't posted
+                    current_agent_state['data_units'] = current_du
+                    logger.info(f"Agent {agent_id} was refunded {du_cost} DU since the idea wasn't posted due to insufficient IP.")
+            else:
+                # Not enough DU to post the idea
+                logger.warning(f"Agent {agent_id} attempted to post an idea but had insufficient DU ({current_du} DU) for the cost of {du_cost} DU. Idea not posted.")
+                # Still update last_proposed_idea even though it wasn't posted
+                current_agent_state['last_proposed_idea'] = message_content
+    
+    elif action_intent == 'ask_clarification':
+        # This intent asks a clarification question
+        # This would typically be a request for more information about something
+        question_content = structured_output.message_content
+        if question_content:
+            current_agent_state['last_clarification_question'] = question_content
+    
+    # Process mood and emotional state based on perception analysis
+    # This uses the sentiment score calculated earlier
+    sentiment_score = state.get('turn_sentiment_score', 0)
+    
+    # Process the thought from the structured output
+    thought = structured_output.thought
     if thought:
-        memory_deque.append((sim_step, 'thought', thought))
-    # DO NOT add message_sent here
-
-    current_agent_state['memory_history'] = list(memory_deque)
-    logger.debug(f"  Updated memory history (pre-message decision): {list(memory_deque)}")
-
-    # Return the updated state dictionary and pass along structured_output for the routing decision
-    state_to_return = {"updated_state": current_agent_state, "structured_output": structured_output, "updated_agent_state": current_agent_state}
-    logger.debug(f"UPDATER_RETURN :: Agent {agent_id}: Returning state from update_state_node: {state_to_return}")
-    return state_to_return
+        logger.debug(f"  Processing thought from structured output: '{thought}'")
+        # Store the thought in memory
+        sim_step = state['simulation_step']
+        memory_history = current_agent_state.get('memory_history', [])
+        memory_history.append((sim_step, 'thought', thought))
+        current_agent_state['memory_history'] = memory_history
+        current_agent_state['last_thought'] = thought
+    
+    # Update mood (very simple for now)
+    current_mood_value = current_agent_state.get('mood_value', 0.0)
+    current_mood = current_agent_state.get('mood', 'neutral')
+    
+    # Simple: mood is slightly shifted by sentiment, but mostly stays the same for stability
+    # Mood changes by 20% of the sentiment score
+    logger.debug(f"  Using overall sentiment score {sentiment_score} to update mood.")
+    new_mood_value = current_mood_value * 0.8 + sentiment_score * 0.2
+    new_mood_value = max(-1.0, min(1.0, new_mood_value))  # Keep within [-1, 1]
+    
+    # Only change mood descriptor if it's a meaningful change
+    mood_level = get_mood_level(new_mood_value)
+    if current_mood != mood_level:
+        logger.debug(f"Agent {agent_id} mood changed from '{current_mood}' to '{mood_level}'.")
+    else:
+        logger.debug(f"Agent {agent_id} mood remains '{current_mood}'.")
+    
+    descriptive_mood = get_descriptive_mood(new_mood_value)
+    current_descriptive_mood = current_agent_state.get('descriptive_mood', 'neutral')
+    if current_descriptive_mood != descriptive_mood:
+        logger.debug(f"Agent {agent_id} descriptive mood changed from '{current_descriptive_mood}' to '{descriptive_mood}'.")
+    else:
+        logger.debug(f"Agent {agent_id} descriptive mood remains '{descriptive_mood}'.")
+    
+    # Update state with new values
+    current_agent_state['mood_value'] = new_mood_value
+    current_agent_state['mood'] = mood_level
+    current_agent_state['descriptive_mood'] = descriptive_mood
+    
+    # Update memory with the just-added thought (for better logs)
+    logger.debug(f"  Updated memory history (pre-message decision): {current_agent_state.get('memory_history', [])}")
+    
+    # Process requested role change if any
+    requested_role = structured_output.requested_role_change
+    from src.agents.core.roles import ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
+    VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
+    
+    # Constants for role change
+    ROLE_CHANGE_IP_COST = 5
+    ROLE_CHANGE_COOLDOWN = 3
+    
+    if requested_role:
+        current_role = current_agent_state.get('current_role', 'N/A')
+        current_ip = current_agent_state.get('influence_points', 0)
+        steps_in_role = current_agent_state.get('steps_in_current_role', 0)
+        
+        logger.info(f"Agent {agent_id} requested role change from {current_role} to {requested_role}.")
+        
+        # Check if the role is valid and different from current role
+        if requested_role not in VALID_ROLES:
+            logger.warning(f"Agent {agent_id} requested role change to '{requested_role}', which is not a valid role. Valid roles are: {VALID_ROLES}")
+            # No action taken
+        elif requested_role == current_role:
+            logger.warning(f"Agent {agent_id} requested role change to '{requested_role}', which is their current role. No change needed.")
+            # No action taken
+        else:
+            # Now check if they meet requirements
+            can_change_role = True
+            reason = ""
+            
+            if current_ip < ROLE_CHANGE_IP_COST:
+                can_change_role = False
+                reason = f"insufficient IP (needs {ROLE_CHANGE_IP_COST}, has {current_ip})"
+            elif steps_in_role < ROLE_CHANGE_COOLDOWN:
+                can_change_role = False
+                reason = f"hasn't spent enough steps in current role (needs {ROLE_CHANGE_COOLDOWN}, has {steps_in_role})"
+            
+            if can_change_role:
+                # Apply the change
+                logger.info(f"Agent {agent_id} role change from {current_role} to {requested_role} approved!")
+                
+                # Deduct IP cost
+                new_ip = current_ip - ROLE_CHANGE_IP_COST
+                current_agent_state['influence_points'] = new_ip
+                logger.info(f"Agent {agent_id} spent {ROLE_CHANGE_IP_COST} IP for role change. New IP: {new_ip}")
+                
+                # Update role
+                current_agent_state['current_role'] = requested_role
+                current_agent_state['steps_in_current_role'] = 0  # Reset counter for new role
+                logger.info(f"Agent {agent_id} is now a {requested_role}.")
+            else:
+                logger.warning(f"Agent {agent_id} role change to {requested_role} rejected: {reason}")
+    
+    # Always increment counter of steps in current role
+    current_agent_state['steps_in_current_role'] = current_agent_state.get('steps_in_current_role', 0) + 1
+    
+    # Always increment step counter
+    current_agent_state['step_counter'] = current_agent_state.get('step_counter', 0) + 1
+    
+    return {
+        'updated_state': current_agent_state,  # The actual agent state that will persist
+        'structured_output': structured_output,   # The parsed output from the LLM
+        'updated_agent_state': current_agent_state  # (Redundant, both keys used by different parts of code)
+    }
 
 def route_broadcast_decision(state: AgentTurnState) -> str:
     """
@@ -386,19 +574,20 @@ def route_broadcast_decision(state: AgentTurnState) -> str:
     agent_id = state.get('agent_id')
     updated_state = state.get('updated_state', {})
     current_mood = updated_state.get('mood', 'neutral')
+    descriptive_mood = updated_state.get('descriptive_mood', 'neutral')
     structured_output = state.get('structured_output')
     has_message = structured_output and structured_output.message_content is not None
 
-    logger.debug(f"Agent {agent_id} in mood '{current_mood}' deciding on broadcasting message...")
+    logger.debug(f"Agent {agent_id} in mood '{current_mood}' (descriptive: '{descriptive_mood}') deciding on broadcasting message...")
     
     # Only broadcast if:
     # 1. There is a message to broadcast (structured_output.broadcast is not None)
-    # 2. And the agent is not unhappy
-    if has_message and current_mood != 'unhappy':
+    # 2. And the agent is not unhappy or in a negative/very_negative descriptive mood
+    if has_message and current_mood != 'unhappy' and descriptive_mood not in ['negative', 'very_negative']:
         return "broadcast"
     else:
         if has_message:
-            logger.info(f"Agent {agent_id} suppressing message due to unhappy mood")
+            logger.info(f"Agent {agent_id} suppressing message due to mood: '{current_mood}', descriptive mood: '{descriptive_mood}'")
         return "exit"  # No message to broadcast or agent is unhappy
 
 def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
@@ -410,13 +599,16 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     agent_id = state['agent_id']
     sim_step = state.get('simulation_step', 0)
     current_mood = state.get('updated_state', {}).get('mood', 'neutral')
+    descriptive_mood = state.get('updated_state', {}).get('descriptive_mood', 'neutral')
     structured_output = state.get('structured_output')
     message_content = structured_output.message_content if structured_output else None
     message_recipient_id = structured_output.message_recipient_id if structured_output else None
     action_intent = structured_output.action_intent if structured_output else 'idle'
   
-    # Simple logic: Only send message if mood is not 'unhappy' AND there's a message
-    should_send_message = current_mood != 'unhappy' and message_content is not None
+    # Enhanced logic: Only send message if mood is appropriate AND there's a message
+    should_send_message = (current_mood != 'unhappy' and 
+                          descriptive_mood not in ['negative', 'very_negative'] and 
+                          message_content is not None)
     
     # Create a clone to avoid altering the original dictionary
     final_agent_state = state.get('updated_state', state.get('current_state', {})).copy()
@@ -424,7 +616,7 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     # Only log about messaging if there was a message generated
     if message_content:
         if should_send_message:
-            logger.info(f"Agent {agent_id} decides to send message: \"{message_content}\"")
+            logger.info(f"Agent {agent_id} (mood: {current_mood}, descriptive: {descriptive_mood}) decides to send message: \"{message_content}\"")
             
             # Update memory with sent message
             memory_list = final_agent_state.get('memory_history', [])
@@ -446,8 +638,8 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
                 'updated_agent_state': final_agent_state
             }
         else:
-            # Message suppressed due to unhappy mood
-            logger.info(f"Agent {agent_id} (mood: {current_mood}) suppresses message: \"{message_content}\"")
+            # Message suppressed due to mood
+            logger.info(f"Agent {agent_id} (mood: {current_mood}, descriptive: {descriptive_mood}) suppresses message: \"{message_content}\"")
             return_values = {
                 'message_content': None,  # Suppressed
                 'message_recipient_id': None,
@@ -456,7 +648,7 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
             }
     else:
         # No message was generated
-        logger.debug(f"Agent {agent_id} has no message to send.")
+        logger.debug(f"Agent {agent_id} (descriptive mood: {descriptive_mood}) has no message to send.")
         return_values = {
             'message_content': None,
             'message_recipient_id': None,
@@ -487,47 +679,78 @@ def route_relationship_context(state: AgentTurnState) -> str:
 def handle_propose_idea_node(state: AgentTurnState) -> Dict[str, Any]:
     """
     Handles the 'propose_idea' intent by extracting the proposed idea
-    and adding it to the agent's state and to the Knowledge Board.
+    and adding it to the Knowledge Board if the idea is valid.
+    Also awards IP for successful Knowledge Board posts.
     """
-    agent_id = state.get('agent_id')
+    agent_id = state['agent_id']
+    sim_step = state['simulation_step']
     structured_output = state.get('structured_output')
-    current_step = state.get('simulation_step')
     knowledge_board = state.get('knowledge_board')
-
-    logger.debug(f"Node 'handle_propose_idea_node' executing for agent {agent_id}")
-
-    if not structured_output:
-        logger.warning(f"Agent {agent_id} has no structured output to process for propose_idea")
-        return state
-
-    # Extract the idea content from the structured output broadcast field
-    idea_content = structured_output.message_content
     
-    # Store it in agent state for reference
+    # Initialize the variable for idea content
+    idea_content = None
+    
+    if structured_output and structured_output.message_content:
+        idea_content = structured_output.message_content
+    
+    # Default return is the unchanged state
+    ret_state = {**state}
+    
+    # Track if we should award IP (only if idea is valid and successfully posted)
+    award_ip = False
+    
+    # Access agent's persistent state to get current IP count and Data Units
+    agent_persistent_state = state.get('current_state', {})
+    current_ip = agent_persistent_state.get('influence_points', 0)
+    current_du = agent_persistent_state.get('data_units', 0)
+    
+    # Log the current IP and DU amounts for debugging
+    logging.debug(f"Agent {agent_id} current IP: {current_ip}, current DU: {current_du}, attempting to propose idea")
+    
     if idea_content:
-        updated_state = dict(state)
-        if 'current_state' not in updated_state:
-            updated_state['current_state'] = {}
-        
-        if 'last_proposed_idea' not in updated_state['current_state']:
-            updated_state['current_state']['last_proposed_idea'] = idea_content
-        
-        # Post to knowledge board if available
-        if knowledge_board and current_step is not None:
-            try:
-                knowledge_board.add_entry(
-                    entry=idea_content, 
-                    agent_id=agent_id, 
-                    step=current_step
-                )
-                logger.info(f"Agent {agent_id} posted idea to knowledge board: '{idea_content}'")
-            except Exception as e:
-                logger.error(f"Agent {agent_id} failed to post idea to knowledge board: {e}")
-    else:
-        logger.warning(f"Agent {agent_id} has no valid broadcast content for the proposed idea")
-        updated_state = state
-
-    return updated_state
+        # First check if agent has enough DU to post to the Knowledge Board
+        if current_du >= PROPOSE_DETAILED_IDEA_DU_COST:
+            # Deduct the DU cost for the detailed idea
+            agent_persistent_state['data_units'] = current_du - PROPOSE_DETAILED_IDEA_DU_COST
+            updated_du = agent_persistent_state['data_units']
+            logging.info(f"Agent {agent_id} spent {PROPOSE_DETAILED_IDEA_DU_COST} DU to post a detailed idea. Remaining DU: {updated_du}.")
+            
+            # Now check if agent has enough IP to post to the Knowledge Board
+            if current_ip >= IP_COST_TO_POST_IDEA:
+                # Deduct the cost to post the idea
+                agent_persistent_state['influence_points'] = current_ip - IP_COST_TO_POST_IDEA
+                updated_ip = agent_persistent_state['influence_points']
+                logging.info(f"Agent {agent_id} spent {IP_COST_TO_POST_IDEA} IP to post an idea. Remaining IP: {updated_ip}.")
+                
+                # Add the proposed idea to the Knowledge Board
+                if knowledge_board:
+                    entry = f"{idea_content}"
+                    knowledge_board.add_entry(agent_id=agent_id, entry=entry, step=sim_step)
+                    logging.info(f"KnowledgeBoard: Added entry from Agent {agent_id} at step {sim_step}")
+                    award_ip = True
+                
+                # If the idea was successfully posted, award IP
+                if award_ip:
+                    # Award the IP for a successful proposal
+                    agent_persistent_state['influence_points'] += IP_AWARD_FOR_PROPOSAL
+                    final_ip = agent_persistent_state['influence_points']
+                    logging.info(f"Agent {agent_id} earned {IP_AWARD_FOR_PROPOSAL} IP for proposing an idea. New IP: {final_ip}.")
+            else:
+                # Agent doesn't have enough IP to post to the Knowledge Board
+                logging.warning(f"Agent {agent_id} attempted to post idea '{idea_content[:30]}...' but had insufficient IP ({current_ip} IP) for the cost of {IP_COST_TO_POST_IDEA} IP. Idea not posted.")
+                
+                # Refund the DU since the idea wasn't posted
+                agent_persistent_state['data_units'] = current_du
+                logging.info(f"Agent {agent_id} was refunded {PROPOSE_DETAILED_IDEA_DU_COST} DU since the idea wasn't posted due to insufficient IP.")
+        else:
+            # Agent doesn't have enough DU to post the detailed idea
+            logging.warning(f"Agent {agent_id} attempted to post idea '{idea_content[:30]}...' but had insufficient DU ({current_du} DU) for the cost of {PROPOSE_DETAILED_IDEA_DU_COST} DU. Idea not posted.")
+    
+    # Store the proposed idea content and updated agent state in the return state
+    ret_state['proposed_idea_content'] = idea_content
+    ret_state['current_state'] = agent_persistent_state
+    
+    return ret_state
 
 # Add formatting helper functions
 def _format_other_agents(other_agents_info, relationships):
@@ -536,12 +759,15 @@ def _format_other_agents(other_agents_info, relationships):
         return "  You are currently alone."
     
     lines = []
+    lines.append("  Other agents you can interact with (use their ID when sending targeted messages):")
     for agent_info in other_agents_info:
-        other_id = agent_info.get('id', 'unknown')
-        other_name = agent_info.get('name', other_id)
+        other_id = agent_info.get('agent_id', 'unknown')
+        other_name = agent_info.get('name', other_id[:8])
         other_mood = agent_info.get('mood', 'unknown')
+        other_descriptive_mood = agent_info.get('descriptive_mood', 'unknown')
         relationship_score = relationships.get(other_id, 0.0)
-        lines.append(f"  - {other_name} (Mood: {other_mood}, Relationship: {relationship_score:.1f})")
+        # Include the full agent_id for clear targeting
+        lines.append(f"  - {other_name} (Agent ID for targeting: '{other_id}', Mood: {other_mood}, Relationship: {relationship_score:.1f})")
     
     return "\n".join(lines)
 
@@ -570,6 +796,48 @@ def _format_messages(messages):
         lines.append(f"  - {sender} {message_type}: \"{content}\"")
     
     return "\n".join(lines)
+
+def get_mood_level(mood_value: float) -> str:
+    """
+    Gets a textual mood level based on a numerical mood value.
+    
+    Args:
+        mood_value: Float value between -1.0 and 1.0 representing mood
+        
+    Returns:
+        A string representing the mood level
+    """
+    if mood_value < -0.3:
+        return "unhappy"
+    elif mood_value > 0.3:
+        return "happy"
+    else:
+        return "neutral"
+
+def get_descriptive_mood(mood_value: float) -> str:
+    """
+    Gets a more detailed descriptive mood based on a numerical mood value.
+    
+    Args:
+        mood_value: Float value between -1.0 and 1.0 representing mood
+        
+    Returns:
+        A string with a more detailed mood description
+    """
+    if mood_value < -0.7:
+        return "very unhappy"
+    elif mood_value < -0.3:
+        return "unhappy"
+    elif mood_value < -0.1:
+        return "slightly unhappy"
+    elif mood_value <= 0.1:
+        return "neutral"
+    elif mood_value <= 0.3:
+        return "slightly happy"
+    elif mood_value <= 0.7:
+        return "happy"
+    else:
+        return "very happy"
 
 # Add these new handler functions after the other handler functions
 

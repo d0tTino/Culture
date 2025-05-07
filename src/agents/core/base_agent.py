@@ -176,7 +176,11 @@ class Agent:
             "rag_summary": "(No memory summary available yet)", # Initialize with default summary
             "knowledge_board_content": knowledge_board_content, # Pass the knowledge board content
             "knowledge_board": knowledge_board, # Pass the knowledge board instance
-            "scenario_description": scenario_description # Pass the simulation scenario
+            "scenario_description": scenario_description, # Pass the simulation scenario
+            "current_role": self.state.get('current_role', "Default Contributor"), # Pass the agent's current role
+            "influence_points": self.state.get('influence_points', 0), # Pass the agent's influence points
+            "steps_in_current_role": self.state.get('steps_in_current_role', 0), # Pass the agent's steps in current role
+            "data_units": self.state.get('data_units', 0) # Pass the agent's data units
         }
 
         try:
