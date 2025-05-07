@@ -13,6 +13,7 @@ Culture.ai creates a virtual environment where multiple AI agents can interact, 
 - The ability to broadcast messages to other agents
 - The ability to post ideas to a shared Knowledge Board
 - Action intents that determine behavior (propose_idea, ask_clarification, continue_collaboration, idle)
+- Project affiliation capabilities for collaborative group work
 
 This framework allows for the study of emergent social behaviors, agent cooperation, and cultural development in a controlled environment.
 
@@ -24,8 +25,10 @@ This framework allows for the study of emergent social behaviors, agent cooperat
 - **Knowledge Board**: Shared repository for important ideas and proposals
 - **Intent-Based Actions**: Framework for different types of agent interactions
 - **Sentiment Analysis**: Ability to analyze emotional tone of messages and adjust agent mood accordingly
+- **Project Affiliation**: System for agents to create, join, and leave collaborative projects
 - **Simulation Engine**: Customizable simulation environment with round-robin agent activation
 - **Scenario Framework**: Support for focused, goal-oriented simulation scenarios
+- **Discord Integration**: Enhanced message formatting for Discord with embeds for different event types
 
 ## Requirements
 
@@ -67,6 +70,12 @@ Run a simulation with the default parameters:
 python -m src.app
 ```
 
+Run a simulation with Discord integration:
+
+```
+python -m src.app --discord
+```
+
 ### Configuring a Simulation Scenario
 
 You can modify the `SIMULATION_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
@@ -94,6 +103,9 @@ Culture.ai/
     │   ├── __init__.py
     │   ├── config.py          # Application configuration
     │   └── llm_client.py      # LLM client for Ollama
+    ├── interfaces/            # External interface implementations
+    │   ├── __init__.py
+    │   └── discord_bot.py     # Discord bot integration
     └── sim/                   # Simulation environment
         ├── __init__.py
         ├── simulation.py      # Simulation engine
@@ -109,6 +121,7 @@ Each agent in Culture.ai is implemented as an instance of the `Agent` class, con
 - A unique ID
 - An internal state dictionary (including mood, memory, etc.)
 - A LangGraph-based cognitive system
+- Project affiliations
 
 ### Agent Cognition
 
@@ -126,6 +139,19 @@ Agents can select from different action intents:
 - **ask_clarification**: Request more information about something unclear
 - **continue_collaboration**: Standard contribution to ongoing discussion
 - **idle**: No specific action, continue monitoring
+- **perform_deep_analysis**: Conduct thorough analysis of a proposal or situation
+- **create_project**: Create a new project for collaboration
+- **join_project**: Join an existing project
+- **leave_project**: Leave a project
+
+### Project Affiliation System
+
+The project affiliation system allows agents to:
+- Create new projects with custom names and descriptions (costs IP and DU)
+- Join existing projects created by other agents (costs IP and DU)
+- Leave projects they are currently affiliated with (free)
+- See all available projects and their current members
+- Collaborate more closely with project members
 
 ### Simulation Loop
 
@@ -144,6 +170,7 @@ To customize the simulation:
 - Change initialization parameters in `src/app.py`
 - Add new agent capabilities by extending the base classes
 - Define a specific simulation scenario in `src/app.py`
+- Configure project system parameters in `src/infra/config.py`
 
 ## Development
 
@@ -162,6 +189,7 @@ To customize the simulation:
 - Advanced emotional models
 - Goal-oriented agent behaviors
 - Extended Knowledge Board functionality
+- Enhanced project collaboration mechanics
 
 ## License
 
@@ -170,4 +198,5 @@ To customize the simulation:
 ## Acknowledgements
 
 - [LangGraph](https://github.com/langchain-ai/langgraph) for agent cognition framework
-- [Ollama](https://ollama.ai/) for local LLM inference 
+- [Ollama](https://ollama.ai/) for local LLM inference
+- [Discord.py](https://discordpy.readthedocs.io/) for Discord integration 
