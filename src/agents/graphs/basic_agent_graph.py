@@ -725,6 +725,54 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
 
     return {"structured_output": structured_output} # Return the object (or None)
 
+def process_role_change(agent_state, requested_role):
+    """
+    Process a role change request for an agent.
+    Checks if the agent has sufficient resources (influence points) and meets cooldown requirements.
+    
+    Args:
+        agent_state (AgentState): The agent's state object
+        requested_role (str): The role the agent is requesting to change to
+        
+    Returns:
+        bool: True if the role change was successful, False otherwise
+    """
+    # Check if the requested role is valid
+    if requested_role not in [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]:
+        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
+        return False
+        
+    # Check if it's already the current role
+    if requested_role == agent_state.role:
+        logger.info(f"Agent {agent_state.agent_id} already has role {requested_role}, no change needed.")
+        return False
+        
+    # Check if cooldown period has passed
+    if agent_state.steps_in_current_role < agent_state.role_change_cooldown:
+        logger.warning(f"Agent {agent_state.agent_id} requested role change to {requested_role} but cooldown period not satisfied (needs {agent_state.role_change_cooldown} steps, current: {agent_state.steps_in_current_role}).")
+        return False
+        
+    # Check if the agent has enough IP
+    if agent_state.ip < agent_state.role_change_ip_cost:
+        logger.warning(f"Agent {agent_state.agent_id} requested role change to {requested_role} but had insufficient IP (needed {agent_state.role_change_ip_cost}, had {agent_state.ip}).")
+        return False
+        
+    # All checks passed, proceed with role change
+    old_role = agent_state.role
+    
+    # Deduct IP cost
+    agent_state.ip -= agent_state.role_change_ip_cost
+    
+    # Update role
+    agent_state.role = requested_role
+    agent_state.steps_in_current_role = 0
+    
+    # Add to role history
+    agent_state.role_history.append((agent_state.last_action_step, requested_role))
+    
+    logger.info(f"Agent {agent_state.agent_id} changed role from {old_role} to {requested_role}. Spent {agent_state.role_change_ip_cost} IP. Remaining IP: {agent_state.ip}")
+    return True
+
 def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     """
     Updates the agent's internal state at the end of the turn.
@@ -738,16 +786,23 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     message_content = state['structured_output'].message_content if state['structured_output'] else None
     message_recipient_id = state['structured_output'].message_recipient_id if state['structured_output'] else None
     action_intent = state['structured_output'].action_intent if state['structured_output'] else "idle"
+    # Extract role change request if any
+    requested_role_change = state['structured_output'].requested_role_change if state['structured_output'] else None
     perceived_messages = state['perceived_messages']
     sentiment_score = state['turn_sentiment_score']
     
     logger.debug(f"Node 'update_state_node' executing for agent {agent_id} at step {sim_step}")
     
+    # Process role change request if present
+    if requested_role_change:
+        process_role_change(agent_state, requested_role_change)
+    
     # Update the agent's step counter
     agent_state.last_action_step = sim_step
     
-    # Increment steps_in_current_role counter
-    agent_state.steps_in_current_role += 1
+    # Increment steps_in_current_role counter if no role change happened
+    if not requested_role_change:
+        agent_state.steps_in_current_role += 1
     
     # Update agent mood (affects tone of messages)
     agent_state.update_mood(sentiment_score)
@@ -1032,6 +1087,10 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
             final_agent_state.ip += IP_AWARD_FOR_PROPOSAL
             logger.info(f"Agent {agent_id} successfully posted idea to knowledge board and earned {IP_AWARD_FOR_PROPOSAL} IP (net: {IP_AWARD_FOR_PROPOSAL - ip_cost} IP). Entry ID: {entry_id}")
             
+            # Add memory entry for successful post
+            memory_content = f"Successfully posted idea to knowledge board: '{message_content[:50]}...'"
+            final_agent_state.add_memory(sim_step, "knowledge_board_post", memory_content)
+            
             # No message broadcast needed - the idea post is the communication
             return_values = {
                 'message_content': None,  # No broadcast needed
@@ -1040,20 +1099,33 @@ def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
                 'updated_agent_state': final_agent_state
             }
         else:
-            # Not enough resources
+            # Not enough resources - record specific issue
+            resource_issue = []
             if final_agent_state.du < du_cost:
                 logger.warning(f"Agent {agent_id} cannot post idea: insufficient DU (needed {du_cost}, has {final_agent_state.du}).")
+                resource_issue.append(f"insufficient DU (needed {du_cost}, has {final_agent_state.du})")
             if final_agent_state.ip < ip_cost:
                 logger.warning(f"Agent {agent_id} cannot post idea: insufficient IP (needed {ip_cost}, has {final_agent_state.ip}).")
+                resource_issue.append(f"insufficient IP (needed {ip_cost}, has {final_agent_state.ip})")
             
-            # Since we can't post the idea, broadcast the message as a normal contribution
-            logger.info(f"Agent {agent_id} will broadcast the idea as a normal message instead.")
+            # Create a memory entry for the failed attempt
+            memory_content = f"Attempted to post idea to knowledge board: '{message_content[:50]}...' but had {', '.join(resource_issue)}"
+            final_agent_state.add_memory(sim_step, "resource_constraint", memory_content)
+            
+            # Modify the message content to indicate resource constraint
+            # Try to preserve core idea but add disclaimer about resources
+            modified_message = f"I had a proposal for the knowledge board, but I don't have enough resources at the moment. Here's what I was thinking: {message_content}"
+            if len(modified_message) > 280:
+                modified_message = f"I wanted to propose an idea to the knowledge board, but I don't have enough {', '.join(resource_issue)}. I'll try again later."
+            
+            # Since we can't post the idea, broadcast the modified message as a normal contribution
+            logger.info(f"Agent {agent_id} will broadcast a modified message instead due to resource constraints.")
             action_intent = "continue_collaboration"  # Downgrade the intent
             
-            # Still broadcast the message
+            # Still broadcast the modified message
             is_targeted = message_recipient_id is not None
             return_values = {
-                'message_content': message_content,
+                'message_content': modified_message,
                 'message_recipient_id': message_recipient_id,
                 'action_intent': action_intent,
                 'updated_agent_state': final_agent_state,
@@ -1360,6 +1432,7 @@ def handle_ask_clarification_node(state: AgentTurnState) -> Dict[str, Any]:
     """
     Handles the 'ask_clarification' intent.
     Simple clarifications are free, but detailed ones cost DU.
+    Checks if the agent has sufficient resources before allowing a detailed clarification.
     """
     agent_id = state.get('agent_id', 'UNKNOWN_HANDLER')
     structured_output = state.get('structured_output')
@@ -1368,6 +1441,7 @@ def handle_ask_clarification_node(state: AgentTurnState) -> Dict[str, Any]:
     # Only process if there's actual message content
     if structured_output and structured_output.message_content:
         message_content = structured_output.message_content
+        original_message = message_content
         
         # Determine if this is a "detailed" clarification request that should cost DU
         is_detailed = False
@@ -1405,19 +1479,33 @@ def handle_ask_clarification_node(state: AgentTurnState) -> Dict[str, Any]:
                 
                 # Log the DU deduction
                 logger.info(f"Agent {agent_id} spent {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for a detailed clarification request. Remaining DU: {new_du}.")
+                
+                # Store the clarification question in agent state
+                agent_persistent_state.last_clarification_question = message_content
             else:
                 # Not enough DU for a detailed clarification
-                logger.warning(f"Agent {agent_id} attempted a detailed clarification but had insufficient DU ({current_du} < {DU_COST_REQUEST_DETAILED_CLARIFICATION}). Request may be treated as a simple clarification.")
-                # The message still gets sent, but it's treated as a "simple" clarification
+                logger.warning(f"Agent {agent_id} attempted a detailed clarification but had insufficient DU ({current_du} < {DU_COST_REQUEST_DETAILED_CLARIFICATION}). Request blocked.")
                 
-                # Optionally: Add a note to the agent about this for their internal state awareness
+                # Modify the message content to indicate that the request was blocked
+                simplified_message = "I wanted to ask a detailed question, but I don't have enough data units (DU) at the moment. Could you provide some basic information instead?"
+                
+                # Update the message in the structured output
+                structured_output.message_content = simplified_message
+                state['structured_output'] = structured_output
+                
+                # Store the simplified question
+                agent_persistent_state.last_clarification_question = simplified_message
                 agent_persistent_state.last_clarification_downgraded = True
+                
+                # Add a memory entry about the failed attempt
+                memory_content = f"Attempted to ask a detailed clarification: '{original_message[:50]}...' but had insufficient DU ({current_du}/{DU_COST_REQUEST_DETAILED_CLARIFICATION})"
+                agent_persistent_state.add_memory(state.get('simulation_step', 0), "resource_constraint", memory_content)
         else:
             # Simple clarification, no DU cost
             logger.debug(f"Agent {agent_id} issued a simple clarification request (no DU cost).")
             
-        # Store the clarification question in agent state
-        agent_persistent_state.last_clarification_question = message_content
+            # Store the clarification question in agent state
+            agent_persistent_state.last_clarification_question = message_content
     
     # Update the state with the potentially modified agent state
     state['state'] = agent_persistent_state

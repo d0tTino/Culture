@@ -247,6 +247,20 @@ The hierarchical memory system enhances agent continuity across long simulations
 
 For detailed information, see the `hierarchical_memory_README.md` document.
 
+### Resource Constraint Error Handling
+
+The agent action system now includes robust resource constraint checking for any actions that have associated costs:
+
+- **Pre-action Resource Verification**: Checks for sufficient Influence Points (IP) and Data Units (DU) before executing costly actions
+- **Role Change Constraints**: Requires sufficient IP and cooldown period before allowing role changes
+- **Knowledge Board Posting Constraints**: Requires sufficient IP and DU to post ideas to the Knowledge Board
+- **Detailed Clarification Constraints**: Requires sufficient DU for detailed clarification requests
+- **Memory Recording**: Failed actions due to resource constraints are recorded in the agent's memory
+- **Message Modification**: When an action is blocked due to insufficient resources, the agent's message is automatically modified to acknowledge the constraint
+- **Action Downgrading**: When appropriate, actions are downgraded to less resource-intensive alternatives rather than being completely blocked
+
+This system ensures that agents operate within their resource limits while providing appropriate feedback through the simulation.
+
 ## Running Tests
 
 To verify the agent state refactoring works correctly:
@@ -295,4 +309,10 @@ To test data unit generation by role:
 
 ```
 python test_role_du_generation.py
+```
+
+To test resource constraint handling:
+
+```
+python test_resource_constraints.py
 ``` 
