@@ -90,25 +90,40 @@ SIMULATION_SCENARIO = "The team's objective is to collaboratively design a speci
 Culture.ai/
 ├── requirements.txt           # Project dependencies
 ├── README.md                  # This file
-└── src/                       # Source code
-    ├── app.py                 # Main application entry point
-    │   ├── core/              # Core agent functionality
-    │   │   ├── __init__.py
-    │   │   └── base_agent.py  # Base agent class
-    │   ├── graphs/            # Agent cognitive graphs
-    │   │   └── basic_agent_graph.py  # LangGraph implementation
-    │   └── __init__.py
-    ├── infra/                 # Infrastructure code
-    │   ├── __init__.py
-    │   ├── config.py          # Application configuration
-    │   └── llm_client.py      # LLM client for Ollama
-    ├── interfaces/            # External interface implementations
-    │   ├── __init__.py
-    │   └── discord_bot.py     # Discord bot integration
-    └── sim/                   # Simulation environment
-        ├── __init__.py
-        ├── simulation.py      # Simulation engine
-        └── knowledge_board.py # Shared repository for agent ideas
+├── data/                      # Data files and logs
+│   └── logs/                  # Log files from app and tests
+├── docs/                      # Documentation files
+│   └── hierarchical_memory_README.md  # Documentation for the hierarchical memory system
+├── scripts/                   # Utility scripts for project management
+│   └── cleanup_temp_db.py     # Script to clean up temporary ChromaDB directories
+├── src/                       # Source code
+│   ├── app.py                 # Main application entry point
+│   ├── agents/                # Agent implementation
+│   │   ├── core/              # Core agent functionality
+│   │   │   ├── __init__.py
+│   │   │   └── base_agent.py  # Base agent class
+│   │   ├── graphs/            # Agent cognitive graphs
+│   │   │   └── basic_agent_graph.py  # LangGraph implementation
+│   │   └── __init__.py
+│   ├── infra/                 # Infrastructure code
+│   │   ├── __init__.py
+│   │   ├── config.py          # Application configuration
+│   │   └── llm_client.py      # LLM client for Ollama
+│   ├── interfaces/            # External interface implementations
+│   │   ├── __init__.py
+│   │   └── discord_bot.py     # Discord bot integration
+│   └── sim/                   # Simulation environment
+│       ├── __init__.py
+│       ├── simulation.py      # Simulation engine
+│       └── knowledge_board.py # Shared repository for agent ideas
+└── tests/                     # Tests for the project
+    ├── data/                  # Test data and fixtures
+    ├── integration/           # Integration tests
+    │   ├── test_hierarchical_memory_persistence.py  # Tests for hierarchical memory persistence
+    │   ├── test_memory_consolidation.py            # Tests for memory consolidation
+    │   ├── test_resource_constraints.py            # Tests for resource constraints
+    │   └── ... (other test files)
+    └── unit/                  # Unit tests
 ```
 
 ## Architecture
@@ -245,7 +260,7 @@ The simulation now includes a sophisticated hierarchical memory system that allo
 
 The hierarchical memory system enhances agent continuity across long simulations and enables more coherent reasoning based on past experiences.
 
-For detailed information, see the `hierarchical_memory_README.md` document.
+For detailed information, see the `docs/hierarchical_memory_README.md` document.
 
 ### Resource Constraint Error Handling
 
@@ -263,56 +278,26 @@ This system ensures that agents operate within their resource limits while provi
 
 ## Running Tests
 
-To verify the agent state refactoring works correctly:
+Run tests using the Python module format:
 
 ```
-python -m src.test_agent_state
+# Run hierarchical memory persistence test
+python -m tests.integration.test_hierarchical_memory_persistence
+
+# Run memory consolidation test
+python -m tests.integration.test_memory_consolidation
+
+# Run level 2 memory consolidation test
+python -m tests.integration.run_level2_memory_test
+
+# Run resource constraint test
+python -m tests.integration.test_resource_constraints
+
+# Run RAG functionality test
+python -m tests.integration.test_rag
+
+# Run data unit generation by role test
+python -m tests.integration.test_role_du_generation
 ```
 
-To test the role change system:
-
-```
-python -m src.test_role_change
-```
-
-To test project mechanics:
-
-```
-python -m src.test_project_mechanics
-```
-
-To test hierarchical memory persistence:
-
-```
-python test_hierarchical_memory_persistence.py
-```
-
-To test basic memory consolidation:
-
-```
-python test_memory_consolidation.py
-```
-
-To test level 2 memory consolidation:
-
-```
-python run_level2_memory_test.py
-```
-
-To test RAG functionality:
-
-```
-python test_rag.py
-```
-
-To test data unit generation by role:
-
-```
-python test_role_du_generation.py
-```
-
-To test resource constraint handling:
-
-```
-python test_resource_constraints.py
-``` 
+Test logs are stored in the `data/logs/` directory. 
