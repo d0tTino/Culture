@@ -7,6 +7,7 @@ import time
 import asyncio
 from typing import List, Dict, Any, TYPE_CHECKING, Optional
 import discord
+from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
@@ -57,6 +58,11 @@ class Simulation:
         self.projects = {}  # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
         
+        # --- NEW: Initialize Collective Metrics ---
+        self.collective_ip: float = 0.0
+        self.collective_du: float = 0.0
+        logger.info("Simulation initialized with collective IP/DU tracking.")
+        
         # --- Store the vector store manager ---
         self.vector_store_manager = vector_store_manager
         if vector_store_manager:
@@ -82,6 +88,26 @@ class Simulation:
             logger.info(f"Simulation initialized with {len(self.agents)} agents:")
             for agent in self.agents:
                 logger.info(f"  - {agent.get_id()}")
+            
+            # Initialize collective metrics based on starting agent states
+            self._update_collective_metrics()
+            logger.info(f"Initial collective metrics - IP: {self.collective_ip:.1f}, DU: {self.collective_du:.1f}")
+
+    # Add method to update collective metrics
+    def _update_collective_metrics(self):
+        """
+        Updates the collective IP and DU metrics by summing across all agents.
+        """
+        total_ip = 0.0
+        total_du = 0.0
+        
+        for agent in self.agents:
+            agent_state = agent.state
+            total_ip += agent_state.ip
+            total_du += agent_state.du
+        
+        self.collective_ip = total_ip
+        self.collective_du = total_du
 
     async def send_discord_update(self, message: Optional[str] = None, embed: Optional[discord.Embed] = None):
         """
@@ -162,6 +188,13 @@ class Simulation:
                 current_du = agent_state.du
                 current_mood = agent_state.mood
                 
+                # Update agent's perception of collective metrics
+                agent_state.update_collective_metrics(self.collective_ip, self.collective_du)
+                
+                # Ensure agent has access to llm_client for memory operations
+                if hasattr(self, 'llm_client') and self.llm_client:
+                    agent_state.llm_client = self.llm_client
+                
                 # Prepare the perception dictionary
                 perception_data = {
                     # Add other perception data here if needed in the future
@@ -180,7 +213,10 @@ class Simulation:
                     # --- Add available projects ---
                     "available_projects": self.get_project_details(), # Pass all projects for perception
                     # --- Add simulation reference for project actions ---
-                    "simulation": self # Pass the simulation instance for project operations
+                    "simulation": self, # Pass the simulation instance for project operations
+                    # --- Add collective metrics ---
+                    "collective_ip": self.collective_ip,
+                    "collective_du": self.collective_du
                     # --- End ADD ---
                 }
 
@@ -219,7 +255,8 @@ class Simulation:
                             recipient_id=message_recipient_id,
                             action_intent=action_intent,
                             agent_role=current_role,
-                            mood=current_mood
+                            mood=current_mood,
+                            step=current_step
                         )
                         asyncio.create_task(self.discord_bot.send_simulation_update(embed=message_embed))
                 
@@ -233,7 +270,8 @@ class Simulation:
                             agent_id=agent_id, 
                             action_intent=action_intent,
                             agent_role=current_role,
-                            mood=current_mood
+                            mood=current_mood,
+                            step=current_step
                         )
                         asyncio.create_task(self.discord_bot.send_simulation_update(embed=action_embed))
                 
@@ -243,19 +281,25 @@ class Simulation:
                 logger.info(f"  - Mood: {current_mood}")
                 logger.info(f"  - IP: {agent_state.ip:.1f} (from {current_ip:.1f})")
                 logger.info(f"  - DU: {agent_state.du:.1f} (from {current_du:.1f})")
-            
-            # Store the messages for the next step
+                
+            # Store the messages from this step for next step's perception
             self.last_step_messages = this_step_messages
             
-            logger.info(f"--- Completed Simulation Step {current_step} ---")
+            # Update collective metrics after all agents have taken their turns
+            self._update_collective_metrics()
+            logger.info(f"Step {current_step} collective metrics - IP: {self.collective_ip:.1f}, DU: {self.collective_du:.1f}")
             
             # Send step end update to Discord
             if self.discord_bot:
-                step_end_embed = self.discord_bot.create_step_end_embed(current_step)
+                step_end_embed = self.discord_bot.create_step_end_embed(
+                    step=current_step, 
+                    collective_ip=self.collective_ip,
+                    collective_du=self.collective_du
+                )
                 asyncio.create_task(self.discord_bot.send_simulation_update(embed=step_end_embed))
             
             steps_executed += 1
-
+        
         return steps_executed
 
     def run(self, num_steps: int):
@@ -336,6 +380,17 @@ class Simulation:
                 project_info += f"\nDescription: {project_description}"
             self.knowledge_board.add_entry(project_info, creator_agent_id, self.current_step)
         
+        # Send Discord notification if bot is available
+        if self.discord_bot:
+            embed = self.discord_bot.create_project_embed(
+                action="create", 
+                project_name=project_name, 
+                project_id=project_id, 
+                agent_id=creator_agent_id,
+                step=self.current_step
+            )
+            asyncio.create_task(self.discord_bot.send_simulation_update(embed=embed))
+        
         return project_id
 
     def join_project(self, project_id: str, agent_id: str) -> bool:
@@ -349,6 +404,8 @@ class Simulation:
         Returns:
             bool: True if successfully joined, False otherwise
         """
+        from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
+
         # Ensure the project exists
         if project_id not in self.projects:
             logger.warning(f"Cannot join project: project ID '{project_id}' does not exist")
@@ -365,6 +422,11 @@ class Simulation:
         if agent_id in project['members']:
             logger.info(f"Agent {agent_id} is already a member of project '{project['name']}'")
             return True
+            
+        # Check if the project has reached the maximum number of members
+        if len(project['members']) >= config.MAX_PROJECT_MEMBERS:
+            logger.warning(f"Agent {agent_id} cannot join project '{project['name']}': maximum member limit ({config.MAX_PROJECT_MEMBERS}) reached")
+            return False
             
         # Find the agent
         agent_obj = None
@@ -387,6 +449,17 @@ class Simulation:
             join_info = f"Agent {agent_id} joined Project: {project['name']} (ID: {project_id})"
             self.knowledge_board.add_entry(join_info, agent_id, self.current_step)
             
+        # Send Discord notification if bot is available
+        if self.discord_bot:
+            embed = self.discord_bot.create_project_embed(
+                action="join", 
+                project_name=project['name'], 
+                project_id=project_id, 
+                agent_id=agent_id,
+                step=self.current_step
+            )
+            asyncio.create_task(self.discord_bot.send_simulation_update(embed=embed))
+        
         return True
 
     def leave_project(self, project_id: str, agent_id: str) -> bool:
@@ -433,6 +506,17 @@ class Simulation:
             leave_info = f"Agent {agent_id} left Project: {project['name']} (ID: {project_id})"
             self.knowledge_board.add_entry(leave_info, agent_id, self.current_step)
             
+        # Send Discord notification if bot is available
+        if self.discord_bot:
+            embed = self.discord_bot.create_project_embed(
+                action="leave", 
+                project_name=project['name'], 
+                project_id=project_id, 
+                agent_id=agent_id,
+                step=self.current_step
+            )
+            asyncio.create_task(self.discord_bot.send_simulation_update(embed=embed))
+        
         return True
 
     def get_project_details(self) -> dict:

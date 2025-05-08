@@ -58,7 +58,7 @@ class ChromaVectorStoreManager:
         
         logger.info(f"Chroma collections '{collection_name}' and '{role_collection_name}' loaded/created from '{persist_directory}'.")
     
-    def add_memory(self, agent_id: str, step: int, event_type: str, content: str) -> str:
+    def add_memory(self, agent_id: str, step: int, event_type: str, content: str, memory_type: str = None, metadata: Dict[str, Any] = None) -> str:
         """
         Add a memory event to the vector store with appropriate metadata.
         
@@ -67,12 +67,15 @@ class ChromaVectorStoreManager:
             step (int): The simulation step when this memory occurred
             event_type (str): Type of memory (thought, broadcast_sent, broadcast_perceived)
             content (str): The content of the memory
+            memory_type (str, optional): Additional type information (e.g., 'consolidated_summary')
+            metadata (Dict[str, Any], optional): Additional metadata to store with the memory
             
         Returns:
             str: The unique ID of the stored memory
         """
         # Create a formatted document text that includes context
-        document_text = f"Step {step} [{event_type.upper()}]: {content}"
+        display_type = memory_type if memory_type else event_type
+        document_text = f"Step {step} [{display_type.upper()}]: {content}"
         
         # Create metadata dictionary with essential indexing fields
         metadata_dict = {
@@ -81,6 +84,14 @@ class ChromaVectorStoreManager:
             'event_type': event_type,
             'timestamp': str(uuid.uuid4())  # Add a unique timestamp-like field
         }
+        
+        # Add memory_type to metadata if provided
+        if memory_type:
+            metadata_dict['memory_type'] = memory_type
+        
+        # Add any additional metadata if provided
+        if metadata:
+            metadata_dict.update(metadata)
         
         # Generate a unique ID for this memory entry
         unique_id = f"{agent_id}_{step}_{event_type}_{uuid.uuid4()}"
@@ -92,7 +103,7 @@ class ChromaVectorStoreManager:
                 metadatas=[metadata_dict],  # Metadata for filtering
                 ids=[unique_id]             # Unique identifier
             )
-            logger.debug(f"Added memory to Chroma: ID={unique_id}, Agent={agent_id}, Step={step}, Type={event_type}")
+            logger.debug(f"Added memory to Chroma: ID={unique_id}, Agent={agent_id}, Step={step}, Type={event_type}, MemoryType={memory_type}")
             return unique_id
         except Exception as e:
             logger.error(f"Failed to add memory to Chroma: {e}")
@@ -140,7 +151,7 @@ class ChromaVectorStoreManager:
             logger.error(f"Failed to add role change to Chroma: {e}")
             return ""
     
-    def retrieve_relevant_memories(self, agent_id: str, query_text: str, k: int = 3) -> List[str]:
+    def retrieve_relevant_memories(self, agent_id: str, query_text: str, k: int = 3) -> List[Dict[str, Any]]:
         """
         Retrieve memories relevant to the query text, filtered to only include the specified agent's memories.
         
@@ -150,7 +161,7 @@ class ChromaVectorStoreManager:
             k (int): Maximum number of results to return
             
         Returns:
-            List[str]: List of formatted memory strings
+            List[Dict[str, Any]]: List of formatted memory objects with content and metadata
         """
         logger.debug(f"Retrieving relevant memories for agent={agent_id}, query='{query_text}', k={k}")
         
@@ -160,20 +171,102 @@ class ChromaVectorStoreManager:
                 query_texts=[query_text],
                 n_results=k,
                 where={"agent_id": agent_id},  # Critical: only retrieve this agent's memories
-                include=["documents"]  # Only need document text
+                include=["documents", "metadatas"]  # Include both document text and metadata
             )
             
-            # Extract and return just the document strings
+            # Extract and format the results - similar to retrieve_filtered_memories
+            formatted_results = []
             if results and "documents" in results and results["documents"]:
                 documents = results["documents"][0]  # First (only) query result
-                logger.debug(f"Retrieved {len(documents)} relevant memories for agent {agent_id}")
-                return documents
+                metadatas = results["metadatas"][0] if "metadatas" in results and results["metadatas"] else [{}] * len(documents)
+                
+                # Combine documents and metadata
+                for i, doc in enumerate(documents):
+                    if i < len(metadatas):
+                        # Start with a complete copy of all metadata fields
+                        memory_entry = metadatas[i].copy()
+                        # Add the content field
+                        memory_entry["content"] = doc
+                        formatted_results.append(memory_entry)
+                
+                logger.debug(f"Retrieved {len(formatted_results)} relevant memories for agent {agent_id}")
+                return formatted_results
             
             logger.debug(f"No relevant memories found for agent {agent_id}")
             return []
             
         except Exception as e:
             logger.error(f"Error retrieving memories for agent {agent_id}: {e}")
+            return []
+    
+    def retrieve_filtered_memories(self, agent_id: str, query_text: str, filters: Dict[str, Any], k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Retrieve memories that match specific filter criteria and are semantically relevant to the query.
+        
+        This method is particularly useful for hierarchical memory consolidation, where we need
+        to retrieve memories of a specific type (e.g., 'consolidated_summary' for level 1 summaries).
+        
+        Args:
+            agent_id (str): The unique ID of the agent whose memories to search
+            query_text (str): The text to find semantically similar memories to
+            filters (Dict[str, Any]): Additional filters to apply (e.g., {"memory_type": "consolidated_summary"})
+            k (int): Maximum number of results to return
+            
+        Returns:
+            List[Dict[str, Any]]: List of memory entries with content and metadata
+        """
+        logger.debug(f"Retrieving filtered memories for agent={agent_id}, query='{query_text}', filters={filters}, k={k}")
+        
+        try:
+            # Build a proper filter following ChromaDB's format
+            # Always include agent_id filter and then add any additional filters
+            where_conditions = []
+            
+            # Add the agent_id filter
+            where_conditions.append({"agent_id": agent_id})
+            
+            # Add any additional filters
+            for key, value in filters.items():
+                where_conditions.append({key: value})
+            
+            # Format the filter with the $and operator if we have multiple conditions
+            where_clause = {}
+            if len(where_conditions) == 1:
+                where_clause = where_conditions[0]
+            else:
+                where_clause = {"$and": where_conditions}
+            
+            # Query with the properly formatted where clause
+            results = self.collection.query(
+                query_texts=[query_text],
+                n_results=k,
+                where=where_clause,
+                include=["documents", "metadatas"]  # Include both document text and metadata
+            )
+            
+            # Extract and format the results
+            formatted_results = []
+            if results and "documents" in results and results["documents"]:
+                documents = results["documents"][0]  # First (only) query result
+                metadatas = results["metadatas"][0] if "metadatas" in results and results["metadatas"] else [{}] * len(documents)
+                
+                # Combine documents and metadata
+                for i, doc in enumerate(documents):
+                    if i < len(metadatas):
+                        # Start with a complete copy of all metadata fields
+                        memory_entry = metadatas[i].copy()
+                        # Add the content field
+                        memory_entry["content"] = doc
+                        formatted_results.append(memory_entry)
+                
+                logger.debug(f"Retrieved {len(formatted_results)} filtered memories for agent {agent_id}")
+                return formatted_results
+            
+            logger.debug(f"No filtered memories found for agent {agent_id} with filters {filters}")
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error retrieving filtered memories for agent {agent_id}: {e}", exc_info=True)
             return []
     
     def retrieve_role_history(self, agent_id: str) -> List[Tuple[int, str, str]]:
@@ -209,7 +302,7 @@ class ChromaVectorStoreManager:
             logger.error(f"Error retrieving role history for agent {agent_id}: {e}")
             return []
     
-    def retrieve_role_specific_memories(self, agent_id: str, role: str, query_text: str, k: int = 3) -> List[str]:
+    def retrieve_role_specific_memories(self, agent_id: str, role: str, query_text: str, k: int = 3) -> List[Dict[str, Any]]:
         """
         Retrieves memories from periods when the agent had a specific role.
         First determines the step ranges when the agent had the specified role,
@@ -222,7 +315,7 @@ class ChromaVectorStoreManager:
             k (int): Maximum number of results to return
             
         Returns:
-            List[str]: List of formatted memory strings from when the agent had the specified role
+            List[Dict[str, Any]]: List of formatted memory objects from when the agent had the specified role
         """
         # First, get the role history to determine when the agent had this role
         role_history = self.retrieve_role_history(agent_id)
@@ -277,17 +370,32 @@ class ChromaVectorStoreManager:
                     query_texts=[query_text],
                     n_results=k,
                     where=where_clause,
-                    include=["documents"]
+                    include=["documents", "metadatas"]
                 )
                 
                 if results and "documents" in results and results["documents"]:
-                    all_memories.extend(results["documents"][0])
+                    documents = results["documents"][0]
+                    metadatas = results["metadatas"][0] if "metadatas" in results and results["metadatas"] else [{}] * len(documents)
+                    
+                    # Process results similarly to other retrieval methods
+                    for i, doc in enumerate(documents):
+                        if i < len(metadatas):
+                            memory_entry = metadatas[i].copy()
+                            memory_entry["content"] = doc
+                            all_memories.append(memory_entry)
             
             except Exception as e:
                 logger.error(f"Error querying memories for agent {agent_id} in step range {start}-{end}: {e}")
         
-        # Deduplicate and limit results
-        unique_memories = list(dict.fromkeys(all_memories))
+        # Deduplicate and limit results - more complex with dictionaries
+        # Use content field as the key for deduplication
+        unique_dict = {}
+        for memory in all_memories:
+            content = memory.get("content", "")
+            if content not in unique_dict:
+                unique_dict[content] = memory
+                
+        unique_memories = list(unique_dict.values())
         return unique_memories[:k]
     
     def query_memories(self, 

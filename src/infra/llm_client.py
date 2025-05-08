@@ -8,6 +8,7 @@ import json
 from .config import OLLAMA_API_BASE # Import base URL from config
 from pydantic import BaseModel, Field, ValidationError
 from typing import Type, TypeVar, Optional, List
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +45,13 @@ def get_ollama_client():
         # Depending on requirements, could try to re-initialize here or just return None
     return client
 
-def generate_text(prompt: str, model: str = "llama3:latest", temperature: float = 0.7) -> str | None:
+def generate_text(prompt: str, model: str = "mistral:latest", temperature: float = 0.7) -> str | None:
     """
     Generates text using the configured Ollama client.
 
     Args:
         prompt (str): The input prompt for the LLM.
-        model (str): The Ollama model to use (e.g., "llama3:latest", "mistral:latest").
+        model (str): The Ollama model to use (e.g., "mistral:latest", "llama2:latest").
                      Ensure this model is pulled in your Ollama instance (`ollama pull model_name`).
         temperature (float): The generation temperature (creativity).
 
@@ -250,42 +251,77 @@ def generate_structured_output(
     )
 
     try:
-        logger.debug(f"Sending structured prompt to Ollama model '{model}':\n---PROMPT START---\n{structured_prompt}\n---PROMPT END---")
-        response = ollama_client.chat(
-            model=model,
-            messages=[{'role': 'user', 'content': structured_prompt}],
-            format='json', # Request JSON format directly from Ollama
-            options={'temperature': temperature}
-        )
+        logger.debug(f"Sending structured prompt to Ollama model '{model}':")
+        logger.debug(f"---PROMPT START---\n{structured_prompt}\n---PROMPT END---")
 
-        if 'message' in response and 'content' in response['message']:
-            json_string = response['message']['content']
-            logger.debug(f"Received potential JSON response from Ollama: {json_string}")
-            # Attempt to parse the JSON string into the Pydantic model
-            try:
-                # Clean potential markdown code blocks if present
-                if "```json" in json_string:
-                    json_string = json_string.split("```json", 1)[1]
-                if "```" in json_string:
-                    json_string = json_string.split("```", 1)[0]
-                
-                # Strip any leading/trailing whitespace
-                json_string = json_string.strip()
-                
-                # Try to parse and validate
-                parsed_output = response_model.model_validate_json(json_string)
+        # Call to Ollama's API
+        response = requests.post(
+            f"http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": structured_prompt,
+                "format": "json",
+                "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "top_p": 0.95,
+                    "num_predict": 400
+                }
+            }
+        )
+        response.raise_for_status()
+        result = response.json()
+        response_text = result.get("response", "")
+        
+        # Log the full raw response
+        logger.debug(f"FULL RAW LLM RESPONSE: {response_text}")
+        
+        # Try to parse the JSON from the response text
+        try:
+            # First try to directly extract JSON (cleaner approach if possible)
+            logger.debug(f"Received potential JSON response from Ollama: {response_text}")
+            
+            # If we have a Pydantic model, use it to validate the structure
+            if response_model:
+                json_data = json.loads(response_text)
+                parsed_output = response_model(**json_data)
                 logger.debug(f"Successfully parsed structured output: {parsed_output}")
                 return parsed_output
-            except (json.JSONDecodeError, ValidationError) as e:
-                logger.error(f"Failed to parse or validate JSON response from Ollama: {e}\nRaw response: {json_string}", exc_info=True)
-                return None
-            except Exception as e_inner: # Catch other potential errors during parsing
-                logger.error(f"Unexpected error during JSON parsing: {e_inner}\nRaw response: {json_string}", exc_info=True)
-                return None
-        else:
-            logger.error(f"Unexpected response structure from Ollama (structured): {response}")
+            else:
+                # Just return the raw JSON object if no model provided
+                return json.loads(response_text)
+                
+        except (json.JSONDecodeError, Exception) as e:
+            # If direct JSON parsing failed, try to find a JSON object in the text
+            logger.warning(f"Failed to parse JSON from Ollama response: {e}")
+            logger.warning(f"Raw response: {response_text}")
             return None
-
-    except Exception as e_outer: # Catch errors during the API call itself
-        logger.error(f"Error during Ollama structured API call to model '{model}': {e_outer}", exc_info=True)
+            
+    except Exception as e:
+        logger.error(f"Error in generate_structured_output: {e}")
         return None 
+
+def get_default_llm_client():
+    """
+    Creates and returns a default LLM client instance for use in simulations.
+    This function is a convenience wrapper that returns the global client.
+    
+    Returns:
+        The initialized Ollama client instance
+    """
+    return get_ollama_client()
+
+def generate_response(prompt: str, model: str = "mistral:latest", temperature: float = 0.7) -> str | None:
+    """
+    Generates a text response for a given prompt using the LLM.
+    This function is a wrapper around generate_text for backward compatibility.
+    
+    Args:
+        prompt (str): The prompt to send to the LLM
+        model (str): The model to use
+        temperature (float): The temperature parameter for generation
+        
+    Returns:
+        str | None: The generated response or None if an error occurred
+    """
+    return generate_text(prompt, model, temperature) 

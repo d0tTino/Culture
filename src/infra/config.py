@@ -31,10 +31,29 @@ ROLE_CHANGE_IP_COST = 5  # Cost in IP to request/confirm a role change
 ROLE_CHANGE_COOLDOWN = 3 # Minimum number of steps an agent must stay in a role before requesting another change
 
 # --- Relationship Settings ---
-POSITIVE_RELATIONSHIP_LEARNING_RATE = 0.2  # Learning rate for positive sentiment interactions
-NEGATIVE_RELATIONSHIP_LEARNING_RATE = 0.3  # Learning rate for negative sentiment interactions (slightly higher for more impact)
-TARGETED_MESSAGE_MULTIPLIER = 2.0  # Multiplier for relationship changes from targeted messages vs broadcasts
+POSITIVE_RELATIONSHIP_LEARNING_RATE = 0.3  # Learning rate for positive sentiment interactions
+NEGATIVE_RELATIONSHIP_LEARNING_RATE = 0.4  # Learning rate for negative sentiment interactions (slightly higher for more impact)
+NEUTRAL_RELATIONSHIP_LEARNING_RATE = 0.1  # Learning rate for neutral sentiment interactions
+TARGETED_MESSAGE_MULTIPLIER = 3.0  # Multiplier for relationship changes from targeted messages vs broadcasts
 RELATIONSHIP_DECAY_RATE = 0.01  # Rate at which relationships decay toward neutral each turn
+
+# --- Relationship Label Mapping ---
+RELATIONSHIP_LABELS = {
+    (-1.0, -0.7): "Hostile",
+    (-0.7, -0.4): "Negative",
+    (-0.4, -0.1): "Cautious",
+    (-0.1, 0.1): "Neutral",
+    (0.1, 0.4): "Cordial",
+    (0.4, 0.7): "Positive", 
+    (0.7, 1.0): "Allied"
+}
+
+# --- Sentiment Numeric Mapping ---
+SENTIMENT_TO_NUMERIC = {
+    "positive": 1.0,
+    "neutral": 0.0,
+    "negative": -1.0
+}
 
 # --- Data Units (DU) Settings ---
 INITIAL_DATA_UNITS = 20  # Starting DU for new agents
@@ -145,4 +164,19 @@ def get_redis_config():
         "port": REDIS_PORT,
         "db": REDIS_DB,
         "password": REDIS_PASSWORD
-    } 
+    }
+
+def get_relationship_label(score: float) -> str:
+    """
+    Returns a descriptive relationship label based on a relationship score.
+    
+    Args:
+        score (float): The relationship score (-1.0 to 1.0)
+        
+    Returns:
+        str: A descriptive relationship label
+    """
+    for (min_val, max_val), label in RELATIONSHIP_LABELS.items():
+        if min_val <= score <= max_val:
+            return label
+    return "Neutral"  # Default fallback 

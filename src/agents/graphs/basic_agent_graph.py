@@ -9,7 +9,7 @@ import uuid
 from typing import Dict, Any, TypedDict, Annotated, List, Tuple, Optional, Deque, Literal, TYPE_CHECKING, Union
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages # Although not used yet, good practice
-from src.infra.llm_client import generate_structured_output, analyze_sentiment, generate_text, summarize_memory_context # Updated import structure to match function name
+from src.infra.llm_client import generate_structured_output, analyze_sentiment, generate_text, summarize_memory_context, generate_response # Updated import structure to match function name
 from collections import deque
 from pydantic import BaseModel, Field, create_model
 from src.agents.core.roles import ROLE_PROMPT_SNIPPETS, ROLE_DESCRIPTIONS, ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
@@ -825,6 +825,167 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
         previous_du = agent_state.du
         agent_state.du += generated_du
         logger.info(f"Agent {agent_id}: Generated {generated_du} DU passively based on role '{role_name}'. DU: {previous_du:.1f} → {agent_state.du:.1f}")
+    
+    # MEMORY CONSOLIDATION: First-level hierarchical memory summarization
+    # Check if there's enough content in short-term memory to warrant a summary
+    if len(agent_state.short_term_memory) >= 3:  # Only summarize if we have at least 3 memory entries
+        try:
+            # Make sure we have an LLM client available for generating the summary
+            if agent_state.llm_client:
+                # Build the summary prompt
+                summary_prompt = f"As Agent {agent_state.name} with role {agent_state.role}, summarize your key thoughts, actions, and observations from your most recent interactions:\n\n"
+                
+                # Extract the most recent memories to summarize (last 10 or all if less)
+                recent_memories = list(agent_state.short_term_memory)[-10:]
+                
+                # Add each memory to the prompt
+                for memory in recent_memories:
+                    # Format depends on the memory type
+                    memory_step = memory.get('step', 'unknown')
+                    memory_type = memory.get('type', 'unknown')
+                    memory_content = memory.get('content', 'No content')
+                    
+                    # Add formatted memory to the prompt
+                    summary_prompt += f"- Step {memory_step}, {memory_type.replace('_', ' ').title()}: {memory_content}\n"
+                
+                # Add instruction for summarizing
+                summary_prompt += "\nProvide a concise, first-person summary that captures the essential interactions and your internal state."
+                
+                # Generate the summary using the LLM
+                memory_summary = generate_response(summary_prompt)
+                
+                if memory_summary:
+                    # Create metadata for the consolidated memory
+                    consolidated_memory = {
+                        "step": sim_step,
+                        "type": "consolidated_summary",
+                        "level": 1,
+                        "content": memory_summary,
+                        "source": "short_term_memory",
+                        "consolidated_entries": len(recent_memories)
+                    }
+                    
+                    # Add the consolidated memory to the agent's memory
+                    agent_state.add_memory(sim_step, "consolidated_summary", memory_summary)
+                    
+                    # If we have a vector store manager, persist this consolidated memory
+                    if state.get('vector_store_manager'):
+                        try:
+                            # Store in vector store for long-term retention and retrieval
+                            vector_store = state['vector_store_manager']
+                            vector_store.add_memory(
+                                agent_id=agent_id,
+                                step=sim_step,
+                                event_type="consolidated_summary",
+                                content=memory_summary,
+                                memory_type="consolidated_summary"
+                            )
+                            logger.info(f"Agent {agent_id}: Successfully stored consolidated memory in vector store")
+                        except Exception as e:
+                            logger.error(f"Agent {agent_id}: Failed to store consolidated memory in vector store: {e}")
+                    
+                    logger.info(f"Agent {agent_id}: Generated a level-1 memory consolidation summary at step {sim_step}")
+                    logger.debug(f"Agent {agent_id}: Memory consolidation summary: {memory_summary[:100]}...")
+                else:
+                    logger.warning(f"Agent {agent_id}: Failed to generate memory consolidation summary - empty result")
+            else:
+                logger.warning(f"Agent {agent_id}: Cannot generate memory consolidation - no LLM client available")
+        except Exception as e:
+            logger.error(f"Agent {agent_id}: Error during memory consolidation: {e}")
+    
+    # LEVEL 2 MEMORY CONSOLIDATION: Chapter summaries from level 1 summaries
+    # Check if it's time for a level 2 consolidation (every 10 steps)
+    steps_since_last_l2_consolidation = sim_step - agent_state.last_level_2_consolidation_step
+    if steps_since_last_l2_consolidation >= 10 and state.get('vector_store_manager'):
+        try:
+            logger.info(f"Agent {agent_id}: Triggering level-2 memory consolidation at step {sim_step} (last at step {agent_state.last_level_2_consolidation_step})")
+            
+            # Retrieve recent level 1 summaries from vector store
+            query = f"Recent memory summaries for Agent {agent_state.name}"
+            level1_summaries = vector_store.retrieve_filtered_memories(
+                agent_id=agent_id,
+                query_text=query,
+                filters={"memory_type": "consolidated_summary"},  # Only retrieve level 1 summaries
+                k=8  # Retrieve up to 8 recent summaries for creating the chapter
+            )
+            
+            # Check if we have enough level 1 summaries to generate a level 2 summary
+            if len(level1_summaries) < 3:
+                logger.info(f"Agent {agent_id}: Not enough level-1 summaries ({len(level1_summaries)}) for level-2 consolidation")
+            else:
+                # Extract the content from each level 1 summary
+                content_list = [item["content"] for item in level1_summaries]
+                combined_text = "\n\n".join(content_list)
+                
+                # Generate a level 2 "chapter" summary using the LLM
+                try:
+                    prompt = f"""
+                    You are reviewing memory summaries from an AI agent named {agent_state.name} with role {agent_state.role}.
+                    Below are several consolidated memory summaries covering different time periods.
+
+                    Your task is to create a higher-level "chapter summary" that captures the key themes, events, and
+                    developments across all of these memory entries. Focus on:
+                    
+                    1. Major recurring themes and patterns
+                    2. Important decisions or insights
+                    3. Evolution of the agent's understanding, relationships, or projects over time
+                    4. Significant accomplishments or challenges
+                    
+                    This higher-level summary should be around 300-500 words and should synthesize information
+                    across all the provided memory summaries rather than just concatenating them.
+                    
+                    Here are the memory summaries to consolidate:
+                    
+                    {combined_text}
+                    """
+                    
+                    if agent_state.llm_client:
+                        level2_summary_response = generate_text(prompt)  # Use the imported generate_text function
+                        
+                        if level2_summary_response is not None:
+                            level2_summary_content = level2_summary_response.strip()
+                            
+                            # Add the level 2 memory to the vector store
+                            summary_id = str(uuid.uuid4())
+                            memory_id = f"{agent_id}_{sim_step}_chapter_summary_{summary_id}"
+                            
+                            memory_entry = {
+                                "id": memory_id,
+                                "agent_id": agent_id,
+                                "step": sim_step,
+                                "event_type": "chapter_summary",
+                                "memory_type": "chapter_summary",  # Special type for level 2 summaries
+                                "content": level2_summary_content
+                            }
+                            
+                            # Store the level 2 chapter summary in the vector store
+                            vector_store.add_memory(
+                                agent_id=agent_id,
+                                step=sim_step,
+                                event_type="chapter_summary",
+                                content=level2_summary_content,
+                                memory_type="chapter_summary",
+                                metadata={"id": memory_id, "is_level_2": True}  # Include additional metadata
+                            )
+                            
+                            # Update the last_level_2_consolidation_step field
+                            agent_state.last_level_2_consolidation_step = sim_step
+                            
+                            logger.info(f"Agent {agent_id}: Successfully generated and stored a level-2 chapter summary at step {sim_step}")
+                            logger.debug(f"Agent {agent_id}: Level-2 chapter summary content: {level2_summary_content[:100]}...")
+                        else:
+                            logger.warning(f"Agent {agent_id}: Failed to generate Level 2 summary at step {sim_step} (LLM call returned None)")
+                    else:
+                        logger.warning(f"Agent {agent_id}: No LLM client available for level-2 memory consolidation")
+                except Exception as e:
+                    logger.error(f"Agent {agent_id}: Error during level-2 memory consolidation generation: {e}", exc_info=True)
+            
+            # Update action stats
+            if state['structured_output'] and state['structured_output'].message_content:
+                agent_state.du += DU_AWARD_SUCCESSFUL_ANALYSIS
+                logger.info(f"Agent {agent_id}: Earned {DU_AWARD_SUCCESSFUL_ANALYSIS} DU for successful analysis")
+        except Exception as e:
+            logger.error(f"Agent {agent_id}: Error during level-2 memory consolidation: {e}", exc_info=True)
     
     # Return the updated state
     return {

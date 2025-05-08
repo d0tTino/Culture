@@ -31,6 +31,7 @@ from src.sim.simulation import Simulation
 from src.sim.knowledge_board import KnowledgeBoard
 from src.infra.llm_client import get_ollama_client
 from src.agents.core.base_agent import Agent
+from src.infra.memory.vector_store import ChromaVectorStoreManager
 
 # Try to import discord bot if present and enabled
 try:
@@ -47,7 +48,8 @@ def create_base_simulation(
     num_agents: int = 3,
     steps: int = 10,
     use_discord: bool = False,
-    use_vector_store: bool = False
+    use_vector_store: bool = False,
+    vector_store_dir: str = "./chroma_db"
 ) -> Simulation:
     """
     Creates a baseline simulation with the specified number of agents.
@@ -58,6 +60,7 @@ def create_base_simulation(
         steps: Number of steps to run
         use_discord: Whether to use Discord for output
         use_vector_store: Whether to use vector store for memory
+        vector_store_dir: Directory path for ChromaDB persistence (default: ./chroma_db)
     
     Returns:
         A configured Simulation instance
@@ -90,7 +93,7 @@ def create_base_simulation(
     # Create the simulation with the agents
     sim = Simulation(
         agents=agents,
-        vector_store_manager=None if not use_vector_store else None,  # Add proper vector store if needed
+        vector_store_manager=None if not use_vector_store else ChromaVectorStoreManager(persist_directory=vector_store_dir),
         scenario=scenario,
         discord_bot=discord_bot
     )

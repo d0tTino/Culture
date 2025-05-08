@@ -105,18 +105,12 @@ class SimulationDiscordBot:
         )
         return embed
     
-    def create_step_end_embed(self, step: int, agent_summaries: list) -> discord.Embed:
-        """Creates an embed for simulation step end with agent summaries"""
+    def create_step_end_embed(self, step: int) -> discord.Embed:
+        """Creates an embed for simulation step end"""
         embed = discord.Embed(
             title=f"✅ Simulation Step {step} Completed",
-            description="Agent Status Summary:",
             color=discord.Color.green()
         )
-        
-        # Add agent summaries as fields
-        for summary in agent_summaries:
-            embed.add_field(name=f"Agent Status", value=summary, inline=False)
-            
         return embed
     
     def create_knowledge_board_embed(self, agent_id: str, content: str, step: int) -> discord.Embed:
@@ -164,15 +158,39 @@ class SimulationDiscordBot:
         )
         return embed
     
-    def create_agent_message_embed(self, sender_id: str, content: str, step: int, recipient_id: Optional[str] = None) -> discord.Embed:
+    def create_agent_message_embed(self, agent_id: str, message_content: str, 
+                                recipient_id: Optional[str] = None, 
+                                action_intent: str = "continue_collaboration",
+                                agent_role: str = "Unknown",
+                                mood: str = "neutral",
+                                step: int = 0) -> discord.Embed:
         """Creates an embed for agent messages (broadcast or targeted)"""
         target_info = f"to Agent {recipient_id[:8]}" if recipient_id else "to All (Broadcast)"
+        
+        # Determine color based on action intent
+        color = discord.Color.blue()  # Default color
+        if action_intent == "propose_idea":
+            color = discord.Color.gold()
+        elif action_intent == "ask_clarification":
+            color = discord.Color.purple()
+        elif action_intent == "perform_deep_analysis":
+            color = discord.Color.dark_teal()
+        elif action_intent == "create_project":
+            color = discord.Color.teal()
+        elif action_intent == "join_project":
+            color = discord.Color.dark_green()
+        elif action_intent == "leave_project":
+            color = discord.Color.dark_orange()
+        
         embed = discord.Embed(
             title=f"💬 Agent Message (Step {step})",
-            description=f"```{content}```",
-            color=discord.Color.blue()
+            description=f"```{message_content}```",
+            color=color
         )
-        embed.set_author(name=f"From Agent {sender_id[:8]} {target_info}")
+        embed.set_author(name=f"From Agent {agent_id[:8]} {target_info}")
+        embed.add_field(name="Role", value=agent_role, inline=True)
+        embed.add_field(name="Mood", value=mood, inline=True)
+        embed.add_field(name="Intent", value=action_intent, inline=True)
         return embed
     
     def create_ip_change_embed(self, agent_id: str, old_ip: int, new_ip: int, reason: str, step: int) -> discord.Embed:
@@ -201,6 +219,42 @@ class SimulationDiscordBot:
             color=color
         )
         embed.add_field(name="Reason", value=reason, inline=False)
+        return embed
+    
+    def create_agent_action_embed(self, agent_id: str, action_intent: str, 
+                               agent_role: str = "Unknown", 
+                               mood: str = "neutral", 
+                               step: int = 0) -> discord.Embed:
+        """Creates an embed for agent actions that don't involve messages"""
+        
+        # Determine action description and color based on intent
+        if action_intent == "idle":
+            action_desc = "is observing"
+            color = discord.Color.light_grey()
+        elif action_intent == "perform_deep_analysis":
+            action_desc = "is performing deep analysis"
+            color = discord.Color.dark_teal()
+        elif action_intent == "create_project":
+            action_desc = "is creating a new project"
+            color = discord.Color.teal()
+        elif action_intent == "join_project":
+            action_desc = "is joining a project"
+            color = discord.Color.dark_green()
+        elif action_intent == "leave_project":
+            action_desc = "is leaving a project"
+            color = discord.Color.dark_orange()
+        else:
+            action_desc = f"is performing action '{action_intent}'"
+            color = discord.Color.blue()
+        
+        embed = discord.Embed(
+            title=f"🔄 Agent Action (Step {step})",
+            description=f"Agent {agent_id[:8]} {action_desc}",
+            color=color
+        )
+        embed.add_field(name="Role", value=agent_role, inline=True)
+        embed.add_field(name="Mood", value=mood, inline=True)
+        embed.add_field(name="Intent", value=action_intent, inline=True)
         return embed
     
     async def run_bot(self):
