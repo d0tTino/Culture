@@ -92,7 +92,6 @@ Culture.ai/
 ├── README.md                  # This file
 └── src/                       # Source code
     ├── app.py                 # Main application entry point
-    ├── agents/                # Agent implementation
     │   ├── core/              # Core agent functionality
     │   │   ├── __init__.py
     │   │   └── base_agent.py  # Base agent class
@@ -234,6 +233,20 @@ The role change system now allows agents to:
 - Pay an Influence Points cost to change roles
 - Switch between Facilitator, Innovator, and Analyzer roles based on strategic considerations
 
+### Hierarchical Memory System
+
+The simulation now includes a sophisticated hierarchical memory system that allows agents to consolidate their experiences at different levels of abstraction:
+
+- **Level 1 - Session Summaries**: Generated from recent short-term memories to capture immediate context and experiences
+- **Level 2 - Chapter Summaries**: Generated every ~10 steps from multiple Level 1 summaries, providing higher-level views of experiences over longer time periods
+- **ChromaDB Integration**: Persists memories to a vector database for long-term storage and semantic retrieval
+- **Memory Filtering**: Enables retrieval of specific memory types based on metadata
+- **RAG (Retrieval-Augmented Generation)**: Allows agents to incorporate relevant past experiences into current thinking
+
+The hierarchical memory system enhances agent continuity across long simulations and enables more coherent reasoning based on past experiences.
+
+For detailed information, see the `hierarchical_memory_README.md` document.
+
 ## Running Tests
 
 To verify the agent state refactoring works correctly:
@@ -248,8 +261,38 @@ To test the role change system:
 python -m src.test_role_change
 ```
 
-To test the project mechanics:
+To test project mechanics:
 
 ```
 python -m src.test_project_mechanics
+```
+
+To test hierarchical memory persistence:
+
+```
+python test_hierarchical_memory_persistence.py
+```
+
+To test basic memory consolidation:
+
+```
+python test_memory_consolidation.py
+```
+
+To test level 2 memory consolidation:
+
+```
+python run_level2_memory_test.py
+```
+
+To test RAG functionality:
+
+```
+python test_rag.py
+```
+
+To test data unit generation by role:
+
+```
+python test_role_du_generation.py
 ``` 
