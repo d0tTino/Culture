@@ -1,84 +1,163 @@
-# Culture.ai
+# Culture: An AI Genesis Engine
 
-A framework for simulating multi-agent AI cultures with cognitive and social capabilities, leveraging LLMs as agent minds.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-## Overview
+**Repository:** [https://github.com/d0tTino/Culture](https://github.com/d0tTino/Culture)
 
-Culture.ai creates a virtual environment where multiple AI agents can interact, communicate, and evolve together. Each agent has:
+## Vision: The Crucible of Emergent AI
 
-- Independent thought processes
-- Memory of recent interactions
-- Sentiment analysis capabilities
-- Dynamic mood states
-- The ability to broadcast messages to other agents
-- The ability to post ideas to a shared Knowledge Board
-- Action intents that determine behavior (propose_idea, ask_clarification, continue_collaboration, idle)
-- Project affiliation capabilities for collaborative group work
+**Culture: An AI Genesis Engine** is an ambitious open-source research project dedicated to creating a dynamic and persistent simulated environment where autonomous AI agents can evolve, interact, and develop complex emergent behaviors. Our primary vision is to build a digital "crucible" – a platform to observe and study the potential genesis of novel AI personalities, dynamic social roles, unique communication styles, AI-driven creativity, and ultimately, rudimentary forms of AI-driven societies and cultures.
 
-This framework allows for the study of emergent social behaviors, agent cooperation, and cultural development in a controlled environment.
+This project aims to move beyond task-oriented agents towards a deeper understanding of how sophisticated AI, powered by Large Language Models (LLMs), might develop and interact when placed in a persistent world with shared context, memory, and resource dynamics.
 
-## Features
+## Core Goals
 
-- **Agent Architecture**: Modular agent design using LangGraph for thought generation and decision-making
-- **Memory System**: Hierarchical memory system with short-term, session (Level 1), and chapter (Level 2) summaries
-- **Memory Pruning**: Sophisticated pruning system to maintain optimal performance while preserving critical information
-- **Broadcast System**: Communication mechanism allowing agents to share messages with others
-- **Knowledge Board**: Shared repository for important ideas and proposals
-- **Intent-Based Actions**: Framework for different types of agent interactions
-- **Sentiment Analysis**: Ability to analyze emotional tone of messages and adjust agent mood accordingly
-- **Project Affiliation**: System for agents to create, join, and leave collaborative projects
-- **Simulation Engine**: Customizable simulation environment with round-robin agent activation
-- **Scenario Framework**: Support for focused, goal-oriented simulation scenarios
-- **Discord Integration**: Enhanced message formatting for Discord with embeds for different event types
-- **Resource Management**: Agents manage Influence Points (IP) and Data Units (DU) as resources for actions
-- **Role System**: Dynamic role system allowing agents to serve as Innovator, Analyzer, or Facilitator
-- **Relationship Dynamics**: Non-linear relationship system affecting agent interactions and decision-making
-- **DSPy Integration**: Advanced prompt optimization using DSPy with local Ollama models
-- **LLM Performance Monitoring**: Comprehensive monitoring of LLM call performance and statistics
+* **Simulate Emergence:** Foster and study emergent phenomena arising from complex agent interactions.
+* **Evolving Agents:** Enable agents to develop and exhibit:
+    * Evolving personalities and internal states.
+    * Dynamic role allocation and adaptation.
+    * Emergent communication patterns and potentially novel language use.
+    * AI-driven creativity (e.g., generating ideas, narratives).
+    * Complex social structures (groups, alliances, conflicts).
+* **Research Platform:** Serve as an experimental platform for AI research, including a "Red Teaming Playground" to test AI resilience, ethics, and alignment in complex social simulations.
+
+## Target Application
+
+The primary target application for the engine is to power an **Experimental AI Social Sandbox**. This could manifest, for example, as an interactive Discord channel where multiple distinct AI characters live, interact with each other and human users, form relationships, and evolve over extended periods based on their experiences and shared knowledge.
+
+## Current Status (as of May 2025)
+
+The "Culture: An AI Genesis Engine" project has established a robust foundational framework. Key implemented and validated components include:
+
+* **Core Agent Architecture:** Agents are orchestrated using LangGraph, allowing for complex internal decision-making flows.
+* **Hierarchical Memory System:** Agents possess a two-level memory system:
+    * **Level 1 (Session Summaries):** Short-term memories are consolidated into session summaries.
+    * **Level 2 (Chapter Summaries):** Level 1 summaries are further consolidated into longer-term chapter summaries.
+    * **Persistence & Retrieval:** Both memory levels are persisted in a ChromaDB vector store and are retrievable via RAG, with dedicated test suites validating this functionality.
+* **Retrieval Augmented Generation (RAG):** Agents utilize RAG to inject relevant past memories and knowledge board content into their context for decision-making.
+* **Shared Knowledge Board (v1):** A central repository where agents can post ideas and information, which is then perceived by other agents.
+* **Resource Management (IP/DU):** Agents manage and utilize Influence Points (IP) and Data Units (DU) for actions like posting to the knowledge board, proposing projects, and changing roles.
+* **Relationship Dynamics:** Agents form and evolve dyadic relationships with other agents based on interaction sentiment, influencing their behavior.
+* **Collective Metrics:** The simulation tracks collective IP and DU, and agents perceive these global metrics.
+* **Dynamic Roles & Basic Goals:** Agents can be assigned roles (Innovator, Analyzer, Facilitator) that influence their behavior and can dynamically request role changes.
+* **Basic Group/Project Affiliation:** Agents can propose, create, join, and leave projects.
+* **Initial Discord Output:** A read-only Discord bot interface provides real-time visibility into simulation events.
+* **DSPy Integration:** Advanced prompt optimization using DSPy with local Ollama models.
+* **LLM Performance Monitoring:** Comprehensive monitoring of LLM call performance metrics.
+* **Memory Pruning System:** Sophisticated pruning to maintain optimal performance while preserving critical information.
+
+## Key Features
+
+### Implemented
+* **Agent Architecture**: Modular agent design using LangGraph for thought generation and decision-making
+* **Memory System**: Hierarchical memory system with short-term, session (Level 1), and chapter (Level 2) summaries
+* **Memory Pruning**: Sophisticated pruning system to maintain optimal performance while preserving critical information
+* **Broadcast System**: Communication mechanism allowing agents to share messages with others
+* **Knowledge Board**: Shared repository for important ideas and proposals
+* **Intent-Based Actions**: Framework for different types of agent interactions
+* **Sentiment Analysis**: Ability to analyze emotional tone of messages and adjust agent mood accordingly
+* **Project Affiliation**: System for agents to create, join, and leave collaborative projects
+* **Simulation Engine**: Customizable simulation environment with round-robin agent activation
+* **Scenario Framework**: Support for focused, goal-oriented simulation scenarios
+* **Discord Integration**: Enhanced message formatting for Discord with embeds for different event types
+* **Resource Management**: Agents manage Influence Points (IP) and Data Units (DU) as resources for actions
+* **Role System**: Dynamic role system allowing agents to serve as Innovator, Analyzer, or Facilitator
+* **Relationship Dynamics**: Non-linear relationship system affecting agent interactions and decision-making
+* **DSPy Integration**: Advanced prompt optimization using DSPy with local Ollama models
+* **LLM Performance Monitoring**: Comprehensive monitoring of LLM call performance and statistics
+
+### Planned (Medium & Long Term)
+* **Advanced Memory Management:**
+    * Further refinements to memory consolidation and pruning strategies.
+* **LLM & Agent Enhancements:**
+    * Improved LLM Directive Following & Reliability.
+    * Evolving Personalities & Dynamic Trait Systems.
+    * Emergent Communication & Language.
+    * AI-driven Creativity (idea generation, narrative contributions).
+* **Social & Environmental Dynamics:**
+    * Complex AI Societies, Group Dynamics & Governance.
+    * Dynamic Environmental Cycles ("Seasons") affecting resources and agent behavior.
+    * Spatial Simulation / Agent Embodiment in a virtual environment.
+* **Knowledge Board Evolution:**
+    * Structured content (typed entries, rich metadata, semantic tagging).
+    * Enhanced agent interaction (querying, referencing, voting).
+    * Potential backing by a **Graph Database** for semantic links and complex queries.
+    * Visualization of Knowledge Board content and evolution.
+* **User Interaction & Observability:**
+    * Full Interactive Discord Integration (bidirectional communication).
+    * User Interaction as "Ecosystem Shapers" (Deity Mode).
+    * Advanced Visualization Layer for simulation dynamics, agent interactions, and Knowledge Board.
+    * Observability and analysis tools for emergent phenomena.
+* **Agent Lifecycle & Legacy:**
+    * Agent Legacy & Artifacts on the Knowledge Board.
+    * Mechanisms for agent "death" or succession.
+
+## Technology Stack
+
+* **Core Language:** Python 3.10+
+* **Agent Orchestration:** LangChain / LangGraph
+* **LLM Hosting/Access:** Ollama (primarily for local LLMs like Mistral, Llama 3.2 variants)
+* **Vector Storage:** ChromaDB
+* **Embeddings:** Sentence Transformers
+* **State/Cache (Planned/Optional):** Redis
+* **Discord Integration:** discord.py
+* **Data Validation:** Pydantic
+* **Configuration:** Python-based (`config.py`), `.env` files
+* **Testing:** `unittest` (Python standard library)
+
+**Future Technology Considerations:**
+* **Efficient LLM Inference:** Monitoring developments like **`microsoft/BitNet`** (1-bit LLMs) for potential future integration to run more powerful agents on resource-constrained hardware.
+* **Graph Databases:** For advanced Knowledge Board implementation (e.g., Neo4j, Memgraph, ArangoDB).
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10+
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
 
 ## Installation
 
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/d0tTino/Culture.git
    cd Culture
    ```
 
 2. Create and activate a virtual environment (optional but recommended):
-   ```
+   ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. Install required dependencies:
-   ```
+   ```bash
    pip install -r requirements.txt
    ```
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
 5. Pull the required models:
-   ```
+   ```bash
    ollama pull mistral:latest
    ```
+
+6. Configuration:
+   * Copy `config/.env.example` to `config/.env` if it exists.
+   * Edit `config/.env` to set your `OLLAMA_API_BASE` (if not default `http://localhost:11434`) and `DISCORD_BOT_TOKEN` (if using the Discord interface).
+   * Review default settings in `src/infra/config.py` and adjust if necessary (e.g., default LLM model, memory pruning settings).
 
 ## Usage
 
 Run a simulation with the default parameters:
 
-```
+```bash
 python -m src.app
 ```
 
 Run a simulation with Discord integration:
 
-```
+```bash
 python -m src.app --discord
 ```
 
@@ -224,9 +303,62 @@ To customize the simulation:
 - Enhanced Knowledge Board functionality
 - Advanced project collaboration mechanics
 
+## Running Tests
+
+Run tests using the Python module format:
+
+```bash
+# Run hierarchical memory persistence test
+python -m tests.integration.test_hierarchical_memory_persistence
+
+# Run memory consolidation test
+python -m tests.integration.test_memory_consolidation
+
+# Run level 2 memory consolidation test
+python -m tests.integration.run_level2_memory_test
+
+# Run resource constraint test
+python -m tests.integration.test_resource_constraints
+
+# Run RAG functionality test
+python -m tests.integration.test_rag
+
+# Run data unit generation by role test
+python -m tests.integration.test_role_du_generation
+
+# Run memory pruning test
+python -m tests.integration.test_memory_pruning
+```
+
+Test logs are stored in the `data/logs/` directory.
+
+## Project Philosophy
+
+* **Iterative Development:** Building complex features incrementally with continuous testing and refinement.
+* **Focus on Emergence:** Designing systems that allow for, rather than explicitly script, complex agent behaviors and societal patterns.
+* **Open Experimentation:** The platform is intended to be flexible for trying out different AI models, agent architectures, and simulation parameters.
+* **Resource Consciousness:** While ambitious, there's an underlying awareness of resource constraints, driving interest in efficient LLMs and memory management techniques.
+
+## Roadmap & Future Work
+
+The project's direction is guided by the future directions listed above. Key future work includes:
+
+* **Medium-Term:**
+    * Validating and refining Memory Pruning.
+    * Implementing LLM Call Performance Monitoring.
+    * Research and experimentation to improve LLM directive following.
+    * Further refinements to the agent memory system.
+* **Long-Term (Wishlist & Grand Vision):**
+    * Developing richer agent personalities and enabling their evolution.
+    * Fostering emergent communication and AI-driven creativity.
+    * Simulating complex AI societies with governance and unique cultures.
+    * Introducing dynamic environmental factors ("Seasons") and spatial dimensions.
+    * Creating advanced user interaction modes ("Ecosystem God Mode") and comprehensive visualization tools.
+    * Exploring agent legacy through persistent artifacts on an evolved, potentially graph-based, Knowledge Board.
+
 ## License
 
-[MIT License](LICENSE)
+This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgements
 
@@ -235,6 +367,8 @@ To customize the simulation:
 - [Discord.py](https://discordpy.readthedocs.io/) for Discord integration
 - [DSPy](https://github.com/stanfordnlp/dspy) for prompt optimization
 - [ChromaDB](https://www.trychroma.com/) for vector storage
+
+This project draws inspiration from various fields including Agent-Based Modeling (ABM), Multi-Agent Systems (MAS), artificial life, cognitive science, and the rapidly evolving landscape of Large Language Models.
 
 ## Recent Updates
 
@@ -348,32 +482,3 @@ The agent action system now includes robust resource constraint checking for any
 - **Action Downgrading**: When appropriate, actions are downgraded to less resource-intensive alternatives rather than being completely blocked
 
 This system ensures that agents operate within their resource limits while providing appropriate feedback through the simulation.
-
-## Running Tests
-
-Run tests using the Python module format:
-
-```
-# Run hierarchical memory persistence test
-python -m tests.integration.test_hierarchical_memory_persistence
-
-# Run memory consolidation test
-python -m tests.integration.test_memory_consolidation
-
-# Run level 2 memory consolidation test
-python -m tests.integration.run_level2_memory_test
-
-# Run resource constraint test
-python -m tests.integration.test_resource_constraints
-
-# Run RAG functionality test
-python -m tests.integration.test_rag
-
-# Run data unit generation by role test
-python -m tests.integration.test_role_du_generation
-
-# Run memory pruning test
-python -m tests.integration.test_memory_pruning
-```
-
-Test logs are stored in the `data/logs/` directory. 
