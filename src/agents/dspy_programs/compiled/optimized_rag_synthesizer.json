@@ -1,0 +1,83 @@
+{
+  "predict": {
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "augmented": true,
+        "query": "How do projects work in the simulation?",
+        "contexts": "Agents can create new projects with custom names and descriptions by spending IP and DU resources.\n\n---\n\nOther agents can join existing projects by also spending IP and DU resources.\n\n---\n\nProjects provide a formalized way for agents to collaborate on specific goals or initiatives.\n\n---\n\nAgents can leave projects at any time without spending resources.\n\n---\n\nThere is a maximum limit of 5 agents per project to maintain focused collaboration.",
+        "reasoning": "]\nIn the simulation, projects are a formalized way for agents to collaborate on specific goals or initiatives. Agents can create new projects by spending Influence Points (IP) and Data Units (DU), while other agents can join existing projects by also spending IP and DU resources. Projects serve as a means of focused collaboration, with a maximum limit of 5 agents per project to maintain effective teamwork.",
+        "synthesized_answer": "]]\nProjects in the simulation allow agents to collaborate on specific goals or initiatives. To create a new project, agents spend IP and DU resources. Other agents can join existing projects by spending the same resources. Projects provide a focused collaboration environment with a maximum of 5 agents per project. Agents are free to leave projects without incurring additional resource costs."
+      },
+      {
+        "augmented": true,
+        "query": "What are collective metrics in the simulation and how are they used?",
+        "contexts": "The simulation tracks collective IP and DU, which represent the total resources across all agents.\n\n---\n\nAgents perceive these global metrics and can factor them into their decision-making.\n\n---\n\nCollective metrics are updated every simulation step based on the current state of all agents.\n\n---\n\nLow collective IP might indicate resource scarcity in the social economy of the simulation.\n\n---\n\nHigh collective DU could suggest that the group has accumulated significant knowledge but might not be utilizing it effectively.",
+        "reasoning": "]\nCollective metrics in this simulation refer to the total Influence Points (IP) and Data Units (DU) across all agents. These metrics are important as they provide a global perspective on the resources available within the system, which can influence decision-making by individual agents.",
+        "synthesized_answer": "]]\nThe simulation tracks two collective metrics: IP and DU. Agents perceive these global values and factor them into their decision-making processes. The collective metrics are updated every simulation step based on the current state of all agents. Low collective IP might indicate resource scarcity in the social economy, while high collective DU could suggest that the group has accumulated significant knowledge but may not be utilizing it effectively."
+      },
+      {
+        "augmented": true,
+        "query": "How does the hierarchical memory system work in the simulation?",
+        "contexts": "Agents possess a two-level memory system with Level 1 (Session Summaries) where short-term memories are consolidated into session summaries.\n\n---\n\nLevel 2 (Chapter Summaries) are created when Level 1 summaries are further consolidated into longer-term chapter summaries, typically every 10 steps.\n\n---\n\nThe hierarchical memory structures are persisted in a ChromaDB vector store and are retrievable via RAG for decision-making.\n\n---\n\nMemory pruning is implemented to maintain optimal performance while preserving critical information. Level 1 summaries are pruned after being consolidated into Level 2 summaries, respecting a configurable delay.",
+        "reasoning": "]\nThe hierarchical memory system in the simulation is designed to help agents consolidate their short-term memories into long-term memories. Agents have a two-level memory system: Level 1 (Session Summaries) and Level 2 (Chapter Summaries). Session Summaries are consolidated into Chapter Summaries every 10 steps, forming the longer-term memories. These summaries are stored in a ChromaDB vector store and can be retrieved via RAG for decision-making purposes. Memory pruning is implemented to maintain optimal performance while preserving critical information. Level 1 summaries are pruned after being consolidated into Level 2 summaries, with a configurable delay.",
+        "synthesized_answer": "]]\nThe hierarchical memory system in the simulation allows agents to consolidate their short-term memories into long-term memories through a two-level structure: Session Summaries (Level 1) and Chapter Summaries (Level 2). These summaries are stored in a ChromaDB vector store and can be retrieved via RAG for decision-making. Memory pruning is implemented to maintain optimal performance while preserving critical information, with Level 1 summaries being pruned after consolidation into Level 2 summaries, subject to a configurable delay."
+      },
+      {
+        "query": "What resources do agents manage and how are they used?",
+        "contexts": "Agents manage two primary resources: Influence Points (IP) and Data Units (DU). IP represents social capital and influence within the simulation.\n\n---\n\nDU represents knowledge and insights an agent has acquired. Different roles generate different amounts of DU per turn, with Innovators producing 2 DU and others producing 1 DU.\n\n---\n\nPosting ideas to the Knowledge Board costs both IP and DU, with detailed proposals costing more than simple ones.\n\n---\n\nRole changes cost 5 IP, and joining or creating projects costs both IP and DU. Every message an agent sends costs 1 IP.",
+        "synthesized_answer": "Agents in the simulation manage two key resources: Influence Points (IP), representing social capital, and Data Units (DU), representing accumulated knowledge. Different roles generate varying amounts of DU per turn (Innovators produce 2, others produce 1). These resources are spent on actions like posting to the Knowledge Board, changing roles (5 IP), joining or creating projects, and sending messages (1 IP per message)."
+      },
+      {
+        "query": "What is the memory pruning system and how does it work?",
+        "contexts": "The memory pruning system automatically removes outdated Level 1 (session) summaries after they've been consolidated into Level 2 (chapter) summaries.\n\n---\n\nIt respects a configurable delay between L2 creation and L1 pruning to ensure information preservation.\n\n---\n\nThe pruning process helps maintain manageable memory sizes as simulations run for extended periods.\n\n---\n\nWithout pruning, the vector store would grow indefinitely, leading to slower retrieval times and decreased performance.\n\n---\n\nThe system includes verification tools like check_pruning.py and analyze_memory_pruning_log.py to monitor pruning operations.",
+        "synthesized_answer": "The memory pruning system automatically removes outdated Level 1 (session) summaries after they have been consolidated into Level 2 (chapter) summaries, following a configurable delay to ensure information preservation. This process prevents indefinite growth of the vector store during extended simulations, which would otherwise lead to slower retrieval times and performance degradation. The system includes specialized verification tools (check_pruning.py and analyze_memory_pruning_log.py) to monitor and validate pruning operations."
+      },
+      {
+        "query": "How do agent relationships work and evolve over time?",
+        "contexts": "Agents form dyadic relationships with other agents that evolve based on interaction sentiment and influence decision-making.\n\n---\n\nThe relationship system uses a sophisticated formula that considers both sentiment and current relationship score for updates.\n\n---\n\nDirect messages have a stronger impact on relationships than broadcasts to all agents.\n\n---\n\nRelationships gradually decay toward neutral over time, requiring active maintenance through positive interactions.\n\n---\n\nThe relationship intensity (from very negative to very positive) affects how agents interact with each other in future encounters.",
+        "synthesized_answer": "Agent relationships in the simulation are dyadic (one-to-one) and evolve based on interaction sentiment. The system uses a sophisticated formula that accounts for both the sentiment of current interactions and the existing relationship score. Direct messages have a stronger impact on relationships than broadcast messages. Importantly, relationships decay naturally toward neutral over time, requiring active positive interactions for maintenance. The intensity of relationships (from very negative to very positive) influences how agents interact with each other in future encounters."
+      },
+      {
+        "query": "What is the Knowledge Board and how do agents interact with it?",
+        "contexts": "The Knowledge Board is a central repository where agents can post ideas and information, which is then perceived by other agents.\n\n---\n\nPosting to the Knowledge Board costs both Influence Points and Data Units, with more detailed ideas costing more resources.\n\n---\n\nAgents can reference and build upon ideas from the Knowledge Board in their discussions.\n\n---\n\nThe Knowledge Board serves as a form of collective memory and shared context for all agents in the simulation.",
+        "synthesized_answer": "The Knowledge Board is a central repository that allows agents to share ideas and information with all other agents in the simulation. Posting to the board requires spending both Influence Points and Data Units, with more detailed contributions costing more resources. Agents can reference and build upon existing Knowledge Board entries in their discussions, effectively creating a collective memory and shared context for the entire simulation."
+      },
+      {
+        "query": "How does the LLM performance monitoring system work?",
+        "contexts": "The LLM performance monitoring system uses a decorator-based approach that can be applied to any function making LLM calls.\n\n---\n\nIt tracks key metrics including request latency, success\/failure status, token usage, and context information.\n\n---\n\nThe system captures detailed error information for failed calls to help diagnose issues.\n\n---\n\nMonitoring data is logged in a structured format that can be analyzed to identify performance bottlenecks.\n\n---\n\nThe implementation adds minimal computational overhead while providing valuable insights for optimization.",
+        "synthesized_answer": "The LLM performance monitoring system employs a decorator-based approach that can be applied to any function making LLM calls. It tracks critical metrics such as request latency, success\/failure status, token usage, and context information (like model name and caller details). For failed calls, it captures detailed error information to aid diagnosis. The system logs this data in a structured format for later analysis of performance bottlenecks, while adding minimal computational overhead to the actual LLM operations."
+      }
+    ],
+    "signature": {
+      "instructions": "Given a query and a list of retrieved context passages, synthesize a concise and relevant\nanswer or insight that addresses the query based strictly on the provided contexts.",
+      "fields": [
+        {
+          "prefix": "Query:",
+          "description": "The original query or question."
+        },
+        {
+          "prefix": "Contexts:",
+          "description": "A list of context passages retrieved from a knowledge source, relevant to the query."
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Synthesized Answer:",
+          "description": "A concise answer or insight synthesized strictly from the provided contexts that directly addresses the query."
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.11",
+      "dspy": "2.6.23",
+      "cloudpickle": "3.1"
+    }
+  }
+} 

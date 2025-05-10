@@ -1,0 +1,55 @@
+{
+  "config": {
+    "name": "ActionIntentSelectionProgram",
+    "version": "1.0",
+    "description": "Optimized action intent selector for agent decision making"
+  },
+  "signature": {
+    "inputs": ["agent_role", "current_situation", "agent_goal", "available_actions"],
+    "outputs": ["chosen_action_intent", "justification_thought"]
+  },
+  "optimized_template": "You need to select the most appropriate action intent for an AI agent based on their role, situation, and goal.\n\nRole: {{agent_role}}\nCurrent Situation: {{current_situation}}\nGoal: {{agent_goal}}\nAvailable Actions: {{available_actions}}\n\nCarefully consider what action best aligns with the agent's role and would be most effective given their current situation and goal.\n\nChosen Action Intent: ",
+  "justification_suffix": "\n\nJustification: ",
+  "default_settings": {
+    "temperature": 0.2,
+    "max_tokens": 200
+  },
+  "examples": [
+    {
+      "inputs": {
+        "agent_role": "Facilitator",
+        "current_situation": "The Knowledge Board has accumulated many ideas, but there's no clear direction. Some agents are getting frustrated.",
+        "agent_goal": "Create structure and focus for the group's efforts.",
+        "available_actions": ["propose_idea", "create_project", "continue_collaboration", "perform_deep_analysis"]
+      },
+      "outputs": {
+        "chosen_action_intent": "create_project",
+        "justification_thought": "Creating a project will help structure the group's efforts, providing focus and direction for the accumulated ideas. This is essential to prevent frustration among agents and move towards achieving the simulation objective."
+      }
+    },
+    {
+      "inputs": {
+        "agent_role": "Analyzer",
+        "current_situation": "A promising new idea was just posted that could solve multiple problems, but it needs verification.",
+        "agent_goal": "Ensure the group's decisions are based on sound analysis.",
+        "available_actions": ["propose_idea", "ask_clarification", "perform_deep_analysis", "continue_collaboration"]
+      },
+      "outputs": {
+        "chosen_action_intent": "perform_deep_analysis",
+        "justification_thought": "By performing deep analysis, I can verify the potential of this promising new idea and provide valuable insights for the group's decision-making process. This action aligns with my role as an Analyzer."
+      }
+    },
+    {
+      "inputs": {
+        "agent_role": "Innovator",
+        "current_situation": "The group is stuck in analysis paralysis. Multiple analyses suggest different approaches.",
+        "agent_goal": "Break through gridlock with creative solutions.",
+        "available_actions": ["propose_idea", "continue_collaboration", "idle", "ask_clarification"]
+      },
+      "outputs": {
+        "chosen_action_intent": "propose_idea",
+        "justification_thought": "By proposing an idea, I can contribute a creative solution to the current impasse, fulfilling my goal of breaking through gridlock with innovative solutions."
+      }
+    }
+  ]
+} 

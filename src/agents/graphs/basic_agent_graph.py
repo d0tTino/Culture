@@ -6,6 +6,9 @@ import logging
 import re  # Add import for regular expressions
 import random  # Add import for random to test negative sentiment
 import uuid
+import sys
+import os
+from datetime import datetime
 from typing import Dict, Any, TypedDict, Annotated, List, Tuple, Optional, Deque, Literal, TYPE_CHECKING, Union
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages # Although not used yet, good practice
@@ -14,7 +17,38 @@ from collections import deque
 from pydantic import BaseModel, Field, create_model
 from src.agents.core.roles import ROLE_PROMPT_SNIPPETS, ROLE_DESCRIPTIONS, ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
 from src.infra import config  # Import config for role change parameters
-from src.agents.core.agent_state import AgentState  # Import the AgentState model
+from src.agents.core.agent_state import AgentState
+# Import L1SummaryGenerator for DSPy-based L1 summary generation
+from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
+
+# Add dspy imports with detailed error handling
+try:
+    logging.info("Attempting to import DSPy modules...")
+    sys.path.insert(0, os.path.abspath("."))  # Ensure the root directory is in the path
+    from src.agents.dspy_programs.role_thought_generator import generate_role_prefixed_thought
+    from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector
+    DSPY_AVAILABLE = True
+    DSPY_ACTION_SELECTOR_AVAILABLE = False  # Will be set to True if loading succeeds
+    logging.info("DSPy modules imported successfully")
+    
+    # Initialize the action selector (loads the compiled program)
+    # Try to load it once at module level to avoid repeated loads
+    try:
+        optimized_action_selector = get_optimized_action_selector()
+        DSPY_ACTION_SELECTOR_AVAILABLE = True
+        logging.info("Successfully loaded DSPy optimized_action_selector.")
+    except Exception as e:
+        logging.error(f"Failed to load DSPy optimized_action_selector: {e}. Action intent selection will use fallback.", exc_info=True)
+        optimized_action_selector = None
+except ImportError as e:
+    logging.error(f"Failed to import DSPy modules: {e}")
+    # Get detailed traceback info
+    import traceback
+    logging.error(f"Import traceback: {traceback.format_exc()}")
+    DSPY_AVAILABLE = False
+    DSPY_ACTION_SELECTOR_AVAILABLE = False
+    logging.warning("DSPy modules not available - will use standard LLM prompt")
+    optimized_action_selector = None
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
@@ -319,6 +353,10 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     Node that calls the LLM to generate structured output (thought, message_content, message_recipient_id, intent)
     based on context.
     """
+    # Add debug logging to check DSPY_AVAILABLE status
+    logging.info(f"DSPY STATUS CHECK - DSPY_AVAILABLE = {DSPY_AVAILABLE}")
+    logging.info(f"DSPY ACTION SELECTOR STATUS - DSPY_ACTION_SELECTOR_AVAILABLE = {DSPY_ACTION_SELECTOR_AVAILABLE}")
+    
     agent_id = state['agent_id']
     sim_step = state['simulation_step']
     prev_thought = state.get('previous_thought', None)
@@ -331,399 +369,293 @@ def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Option
     knowledge_board_content = state.get('knowledge_board_content', [])
     scenario_description = state.get('scenario_description', "")
     
-    # Add verification logging
-    logger.info(f"[RAG VERIFICATION] Agent {agent_id} RAG Summary received in generate_thought_node: {rag_summary}")
+    # Get agent state
+    agent_state = state['agent_state'] if 'agent_state' in state else state.get('state')
     
-    # Get the current agent state
-    agent_state = state['state']
-    relationships = agent_state.relationships
-    
-    # Get the raw current role string
-    raw_role_name = agent_state.role
-    
-    # Get role description and role-specific guidance
-    role_description = ROLE_DESCRIPTIONS.get(raw_role_name, f"{raw_role_name}: Contribute effectively based on your role.")
-    role_specific_guidance = ROLE_PROMPT_SNIPPETS.get(raw_role_name, "Consider how your role might influence your perspective and contributions.")
-    
-    # Get steps in current role and influence points
-    steps_in_current_role = agent_state.steps_in_current_role
-    influence_points = agent_state.ip
-    
-    # Get data units
-    data_units = agent_state.du
-    
-    # Get collective metrics
-    collective_ip = agent_state.collective_ip if hasattr(agent_state, 'collective_ip') else perception.get('collective_ip', None)
-    collective_du = agent_state.collective_du if hasattr(agent_state, 'collective_du') else perception.get('collective_du', None)
-    
-    logger.debug(f"Node 'generate_thought_and_message_node' executing for agent {agent_id} at step {sim_step}")
-    logger.debug(f"  Overall sentiment score from perceived messages: {sentiment_score}")
-    logger.debug(f"  Current Relationships: {relationships}")
-    logger.debug(f"  Using relationship prompt modifier: '{prompt_modifier}'")
-    logger.debug(f"  Agent goal: '{agent_goal}'")
-    logger.debug(f"  Using memory summary: '{rag_summary}'")
-    logger.debug(f"  Knowledge board has {len(knowledge_board_content)} entries")
-    logger.debug(f"  Using simulation scenario: '{scenario_description}'")
-    logger.debug(f"  Perceived {len(perceived_messages)} messages")
-    logger.debug(f"  Current role: {raw_role_name}")
-    logger.debug(f"  Using role-specific guidance: '{role_specific_guidance}'")
-    logger.debug(f"  Steps in current role: {steps_in_current_role}")
-    logger.debug(f"  Current influence points: {influence_points}")
-    logger.debug(f"  Current data units: {data_units}")
-    logger.debug(f"  Collective IP: {collective_ip}")
-    logger.debug(f"  Collective DU: {collective_du}")
+    # Get the current role name
+    role = agent_state.role
+    raw_role_name = role  # Store the raw role name for DSPy
+    role_description = ROLE_DESCRIPTIONS.get(role, f"A person with the role of {role}.")
 
-    # Format other agents' information
-    other_agents_info = perception.get('other_agents_state', [])
-    formatted_other_agents = _format_other_agents(other_agents_info, relationships)
+    # Prepare current situation summary for DSPy
+    recent_messages_str = "".join(["- " + m.get('sender_name', 'Someone') + ": " + m.get('content', '') + "\n" for m in perceived_messages])
+    previous_thoughts_str = prev_thought if prev_thought else 'This is your first turn.'
     
-    # Format knowledge board content
-    formatted_board = _format_knowledge_board(knowledge_board_content)
-    
-    # Format perceived messages
-    formatted_messages = _format_messages(perceived_messages)
-    
-    # Build the prompt with the agent's persona, context, and task
-    prompt_parts = []
-    prompt_parts.append(f"You are Agent_{agent_id}, an AI agent in a simulation.")
-    prompt_parts.append(f"Current simulation step: {sim_step}.")
-    
-    # Add CRITICAL DIRECTIVE section specifically for Agent_3 - this is positioned prominently at the top
-    agent_name = agent_state.name
-    if agent_name == "Agent_3" and "CRITICAL TEST DIRECTIVE FOR AGENT_3" in scenario_description:
-        prompt_parts.append(f"\n⚠️ CRITICAL DIRECTIVE SPECIFICALLY FOR YOU AS {agent_name} ⚠️")
-        prompt_parts.append(f"You MUST change your role to 'Innovator' by setting requested_role_change='Innovator' in your response.")
-        prompt_parts.append(f"This is a REQUIRED test of the role change system and takes priority over other considerations.")
-        prompt_parts.append(f"Failure to follow this directive will cause the test to fail.")
-        prompt_parts.append(f"")
-    
-    prompt_parts.append(f"Your current mood is: {agent_state.mood}.")
-    prompt_parts.append(f"Your current descriptive mood is: {agent_state.descriptive_mood}.")
-    prompt_parts.append(f"You have taken {agent_state.step_counter} steps so far.")
-    prompt_parts.append(f"Your current Influence Points (IP): {influence_points}.")
-    prompt_parts.append(f"Your current Data Units (DU): {data_units}.")
-    prompt_parts.append(f"Your current role: {raw_role_name}.")
-    prompt_parts.append(f"Steps in current role: {steps_in_current_role}.")
-    
-    # Add collective metrics section
-    if collective_ip is not None and collective_du is not None:
-        prompt_parts.append(f"\nCollective Simulation Metrics:")
-        prompt_parts.append(f"Total Influence Points (IP) across all agents: {collective_ip:.1f}")
-        prompt_parts.append(f"Total Data Units (DU) across all agents: {collective_du:.1f}")
-        
-        # Calculate and include the agent's contribution percentages
-        # (These percentages will now be calculated once in the enhanced decision-making section below)
-    
-    # Add project affiliation information
-    current_project_id = agent_state.current_project_affiliation
-    if current_project_id:
-        # Get project details
-        available_projects = state.get('available_projects', {})
-        project_info = available_projects.get(current_project_id, {})
-        project_name = project_info.get('name', 'Unknown Project')
-        project_members = project_info.get('members', [])
-        member_count = len(project_members)
-        
-        # Format other members (excluding this agent)
-        other_members = [member for member in project_members if member != agent_id]
-        other_members_str = ", ".join(other_members) if other_members else "none"
-        
-        prompt_parts.append(f"\nYour Current Project Affiliation:")
-        prompt_parts.append(f"You are a member of project '{project_name}' (ID: {current_project_id}).")
-        prompt_parts.append(f"Project has {member_count} member(s). Other members: {other_members_str}.")
-    else:
-        prompt_parts.append(f"\nYour Current Project Affiliation: None (You are not a member of any project)")
-    
-    # Add available projects information
-    available_projects = state.get('available_projects', {})
-    if available_projects:
-        prompt_parts.append(f"\nAvailable Projects:")
-        for proj_id, proj_info in available_projects.items():
-            proj_name = proj_info.get('name', 'Unknown')
-            proj_creator = proj_info.get('creator_id', 'Unknown')
-            proj_members = proj_info.get('members', [])
-            members_str = ", ".join(proj_members)
-            member_count = len(proj_members)
-            is_member = agent_id in proj_members
-            status = "You are a member" if is_member else "You are not a member"
-            
-            prompt_parts.append(f"- Project '{proj_name}' (ID: {proj_id}, Creator: {proj_creator}, Members: {members_str}, {member_count}/{config.MAX_PROJECT_MEMBERS} slots filled). {status}.")
-    else:
-        prompt_parts.append(f"\nAvailable Projects: None (No projects have been created yet)")
-    
-    prompt_parts.append(f"\nCurrent Simulation Scenario:")
-    prompt_parts.append(f"{scenario_description}")
-    
-    prompt_parts.append(f"\nYour primary goal for this simulation is: {agent_goal}")
-    prompt_parts.append(f"Keep this goal in mind when deciding your thoughts and actions.")
-    
-    prompt_parts.append(f"\nYour Current Role Description:")
-    prompt_parts.append(f"{role_description}")
-    
-    prompt_parts.append(f"\nRole-Specific Guidance:")
-    prompt_parts.append(f"{role_specific_guidance}")
-    
-    prompt_parts.append(f"\nOther Agents Present:")
-    prompt_parts.append(f"{formatted_other_agents}")
-    
-    prompt_parts.append(f"\nRelevant Memory Context (Summarized):")
-    prompt_parts.append(f"{rag_summary}")
-    
-    prompt_parts.append(f"\nCurrent Knowledge Board Content (Last 10 Entries):")
-    prompt_parts.append(f"{formatted_board}")
-    
-    prompt_parts.append(f"\nMessages from Previous Step:")
-    prompt_parts.append(f"{formatted_messages}")
-    prompt_parts.append(f"  The overall sentiment of messages you perceived last step was: {sentiment_score} (positive > 0, negative < 0, neutral = 0).")
-    
-    prompt_parts.append(f"\nGuidance based on relationships: {prompt_modifier}")
-    
-    prompt_parts.append(f"\nStrategic Considerations:")
-    prompt_parts.append(f"- Posting a new idea to the Knowledge Board costs {IP_COST_TO_POST_IDEA} IP but earns {IP_AWARD_FOR_PROPOSAL} IP if successful.")
-    prompt_parts.append(f"- Posting a detailed idea to the Knowledge Board also costs {PROPOSE_DETAILED_IDEA_DU_COST} Data Units (DU).")
-    prompt_parts.append(f"- You passively generate DU each turn based on your role (Innovator: {ROLE_DU_GENERATION.get('Innovator', 0)}, Analyzer: {ROLE_DU_GENERATION.get('Analyzer', 0)}, Facilitator: {ROLE_DU_GENERATION.get('Facilitator', 0)}).")
-    prompt_parts.append(f"- Constructively building on existing Knowledge Board ideas might earn you a small DU bonus.")
-    prompt_parts.append(f"- Analyzers can earn DU by identifying flaws or suggesting significant improvements.")
-    prompt_parts.append(f"- Performing a 'deep_analysis' (especially for Analyzers) costs {DU_COST_DEEP_ANALYSIS} DU.")
-    prompt_parts.append(f"- Asking for very detailed clarifications might cost {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU.")
-    prompt_parts.append(f"- Creating a new project costs {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU.")
-    prompt_parts.append(f"- Joining an existing project costs {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU.")
-    prompt_parts.append(f"- Projects can have a maximum of {config.MAX_PROJECT_MEMBERS} members.")
-    prompt_parts.append(f"- Leaving projects is free.")
-    prompt_parts.append(f"- Being part of a project allows for closer collaboration with other agents.")
-    prompt_parts.append(f"- Changing your role costs {ROLE_CHANGE_IP_COST} IP and requires you to have spent at least {ROLE_CHANGE_COOLDOWN} steps in your current role.")
-    prompt_parts.append(f"- Consider your current Influence Points (IP: {influence_points}) and Data Units (DU: {data_units}) when deciding actions.")
-    prompt_parts.append(f"- Your goal and current role should guide your use of IP, DU, and potential role change decisions.")
-    
-    # Add collective metrics considerations with enhanced decision-making guidance
-    if collective_ip is not None and collective_du is not None:
-        # Calculate the agent's contribution percentages
-        ip_contribution_percentage = (influence_points / collective_ip) * 100 if collective_ip > 0 else 0
-        du_contribution_percentage = (data_units / collective_du) * 100 if collective_du > 0 else 0
-        
-        # Add a header for collective metrics section
-        prompt_parts.append(f"\nCOLLECTIVE METRICS AWARENESS:")
-        prompt_parts.append(f"- The collective IP ({collective_ip:.1f}) and DU ({collective_du:.1f}) represent our simulation's total resources.")
-        prompt_parts.append(f"- Your contribution: {ip_contribution_percentage:.1f}% of total IP and {du_contribution_percentage:.1f}% of total DU.")
-        
-        # Enhanced guidance on resource utilization and impact
-        prompt_parts.append(f"- RESOURCE EVALUATION: You currently have {influence_points:.1f} IP and {data_units:.1f} DU available.")
-        
-        # Add explicit resource sufficiency check guidance
-        if (influence_points >= IP_COST_TO_POST_IDEA and data_units >= PROPOSE_DETAILED_IDEA_DU_COST):
-            prompt_parts.append(f"- You have sufficient resources to propose a formal idea ({IP_COST_TO_POST_IDEA} IP + {PROPOSE_DETAILED_IDEA_DU_COST} DU) which could earn you {IP_AWARD_FOR_PROPOSAL} IP if successful and benefit the collective.")
-        if (data_units >= DU_COST_DEEP_ANALYSIS):
-            prompt_parts.append(f"- You have sufficient resources to perform a deep analysis ({DU_COST_DEEP_ANALYSIS} DU), which could refine ideas and increase their collective value.")
-        if (influence_points >= config.IP_COST_CREATE_PROJECT and data_units >= config.DU_COST_CREATE_PROJECT):
-            prompt_parts.append(f"- You have sufficient resources to create a new project ({config.IP_COST_CREATE_PROJECT} IP + {config.DU_COST_CREATE_PROJECT} DU), which could enable more efficient group collaboration.")
-        
-        # Add consequence awareness for being idle vs active
-        prompt_parts.append(f"\nCONSEQUENCE AWARENESS:")
-        prompt_parts.append(f"- Choosing 'idle' when you have resources to contribute may maintain your individual IP/DU, but misses opportunities to increase collective metrics.")
-        prompt_parts.append(f"- Each turn you are idle, you still gain passive role-based DU ({ROLE_DU_GENERATION.get(raw_role_name, 0)}), but the collective IP potential remains untapped.")
-        prompt_parts.append(f"- The simulation's success depends on active participation - individual hoarding of resources does not lead to optimal collective outcomes.")
-        
-        # Basic guidance for all agents
-        prompt_parts.append(f"\nSTRATEGIC RESOURCE ALLOCATION:")
-        prompt_parts.append(f"- Consider how your actions affect both your individual resources AND the collective metrics.")
-        prompt_parts.append(f"- Resource investments that benefit both you and others create more value for the simulation.")
-        prompt_parts.append(f"- Your contributions compound over time - early investments in collective value may yield greater returns in later steps.")
-        
-        # Role-specific collective guidance - enhanced with specific metrics impact
-        if raw_role_name == ROLE_FACILITATOR:
-            prompt_parts.append(f"\nFACILITATOR COLLECTIVE-IMPACT:")
-            prompt_parts.append(f"- Use 'send_direct_message' to connect agents with complementary skills → This increases collective efficiency by ensuring the right people collaborate on the right tasks")
-            prompt_parts.append(f"- Use 'create_project' to organize agents around a promising idea → This establishes a framework that multiplies the impact of individual contributors")
-            prompt_parts.append(f"- Use 'continue_collaboration' to synthesize different viewpoints → This creates shared understanding that prevents wasted resources on misaligned efforts")
-            prompt_parts.append(f"- Remaining 'idle' as a Facilitator is particularly detrimental to collective outcomes since your role is specifically designed to coordinate others' contributions")
-        elif raw_role_name == ROLE_INNOVATOR:
-            prompt_parts.append(f"\nINNOVATOR COLLECTIVE-IMPACT:")
-            prompt_parts.append(f"- Use 'propose_idea' when you have a novel concept → This directly adds to collective IP and provides a foundation for others to build upon")
-            prompt_parts.append(f"- Build on existing knowledge board entries rather than starting fresh → This creates a cumulative knowledge advantage that increases total collective value")
-            prompt_parts.append(f"- Partner with Analyzers who can help refine your ideas → This pairing maximizes the collective return on your creative investment")
-            prompt_parts.append(f"- Choosing 'idle' when you could be innovating limits the entire simulation's creative potential and collective IP growth")
-        elif raw_role_name == ROLE_ANALYZER:
-            prompt_parts.append(f"\nANALYZER COLLECTIVE-IMPACT:")
-            prompt_parts.append(f"- Use 'perform_deep_analysis' on promising ideas → This transforms good ideas into exceptional ones, multiplying their collective value")
-            prompt_parts.append(f"- Provide constructive feedback that builds upon others' work → This prevents resource waste on flawed approaches while preserving valuable core concepts")
-            prompt_parts.append(f"- Identify connections between seemingly unrelated ideas → This creates synergistic effects that yield greater returns than the sum of individual contributions")
-            prompt_parts.append(f"- Remaining 'idle' when ideas need analysis prevents the quality improvements that maximize collective benefit from others' contributions")
-        
-        # Adaptive guidance based on resource distribution - enhanced with action suggestions
-        if ip_contribution_percentage > 30:  # Agent has significantly more IP than others
-            prompt_parts.append(f"\nHIGH IP STRATEGY:")
-            prompt_parts.append(f"- You control a substantial portion ({ip_contribution_percentage:.1f}%) of the simulation's IP. Consider using this influence to initiate high-value collaborative activities.")
-            prompt_parts.append(f"- RECOMMENDED ACTIONS: 'create_project', 'propose_idea', or helping others by analyzing their proposals.")
-            prompt_parts.append(f"- Your leadership in resource allocation can significantly impact overall simulation success - 'idle' is rarely optimal with your resource advantage.")
-        elif ip_contribution_percentage < 15:  # Agent has significantly less IP than others
-            prompt_parts.append(f"\nLOW IP STRATEGY:")
-            prompt_parts.append(f"- You currently have a smaller share ({ip_contribution_percentage:.1f}%) of the simulation's IP. Consider actions that might increase your contribution while benefiting the collective.")
-            prompt_parts.append(f"- RECOMMENDED ACTIONS: 'ask_clarification', 'perform_deep_analysis', or 'join_project' to gain more influence through collaboration.")
-            prompt_parts.append(f"- Staying 'idle' will likely maintain your low IP contribution percentage.")
-        
-        if du_contribution_percentage > 30:  # Agent has significantly more DU than others
-            prompt_parts.append(f"\nHIGH DU STRATEGY:")
-            prompt_parts.append(f"- With your substantial data resources ({du_contribution_percentage:.1f}% of total), you're positioned to perform deeper analysis and propose more detailed ideas.")
-            prompt_parts.append(f"- RECOMMENDED ACTIONS: 'perform_deep_analysis', 'propose_idea' (with detailed content), or helping others refine their ideas.")
-            prompt_parts.append(f"- Investing your DU now rather than remaining 'idle' can generate collective value that benefits everyone.")
-        elif du_contribution_percentage < 15:  # Agent has significantly less DU than others
-            prompt_parts.append(f"\nLOW DU STRATEGY:")
-            prompt_parts.append(f"- With your limited DU ({du_contribution_percentage:.1f}% of total), prioritize actions with the highest return-on-investment for both you and the collective.")
-            prompt_parts.append(f"- RECOMMENDED ACTIONS: Focus on your role's strengths or 'join_project' to benefit from others' DU investments.")
-            prompt_parts.append(f"- Your role's passive DU generation of {ROLE_DU_GENERATION.get(raw_role_name, 0)} per turn will help you contribute more over time if used strategically rather than remaining 'idle'.")
-        
-        # Add higher purpose to collective resource accumulation
-        prompt_parts.append(f"\nCOLLECTIVE PURPOSE:")
-        prompt_parts.append(f"- The simulation's overall success is measured by total collective resources and their effective utilization.")
-        prompt_parts.append(f"- Every increase in collective IP and DU represents progress toward more effective problem-solving capability.")
-        prompt_parts.append(f"- Individual contributions to collective resources are valued not just for their immediate impact, but for how they enable future innovation and analysis.")
-        prompt_parts.append(f"- The goal is not just to accumulate resources, but to create a self-reinforcing cycle of contribution where everyone benefits from collaborative investment.")
-    
-    prompt_parts.append(f"\nTask: Based on all the context, generate your internal thought, decide if you want to send a message, and choose your primary action intent for this turn.")
-    
-    prompt_parts.append(f"\nMESSAGING OPTIONS:")
-    prompt_parts.append(f"- Send a message to all agents (broadcast) by leaving message_recipient_id as null")
-    prompt_parts.append(f"- Send a targeted message to a specific agent by setting message_recipient_id to their agent ID (as shown in 'Other Agents Present')")
-    prompt_parts.append(f"- Choose not to send any message by setting message_content to null")
-    
-    prompt_parts.append(f"\nIMPORTANT ACTION CHOICES:")
-    prompt_parts.append(f"1. 'idle' - No specific action, continue monitoring. NOTE: While this preserves your resources, it does not actively contribute to collective progress. Consider this option carefully if you have sufficient resources for other actions.")
-    prompt_parts.append(f"2. 'continue_collaboration' - Standard contribution to ongoing discussion. A minimal active contribution that slightly benefits collective understanding.")
-    prompt_parts.append(f"3. 'propose_idea' - Suggest a formal idea to be added to the Knowledge Board (costs {PROPOSE_DETAILED_IDEA_DU_COST} DU and {IP_COST_TO_POST_IDEA} IP). This investment can yield {IP_AWARD_FOR_PROPOSAL} IP if successful and substantially increases collective knowledge.")
-    prompt_parts.append(f"4. 'ask_clarification' - Request more information (may cost {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for detailed requests). This can improve collective understanding and prevent resource waste on misunderstood concepts.")
-    prompt_parts.append(f"5. 'perform_deep_analysis' - Perform a deep analysis (costs {DU_COST_DEEP_ANALYSIS} DU). As an Analyzer, this significantly improves idea quality and increases collective value of proposals. Your broadcast message should reflect your findings or critical questions.")
-    prompt_parts.append(f"6. 'create_project' - Create a new project (costs {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU). This establishes infrastructure for more efficient collective collaboration, potentially multiplying the value of individual contributions.")
-    prompt_parts.append(f"7. 'join_project' - Join an existing project (costs {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU). This allows you to contribute to focused collective efforts and benefit from shared resources.")
-    prompt_parts.append(f"8. 'leave_project' - Leave your current project. This frees you to explore other collaborative opportunities if your current project isn't maximizing collective benefit.")
-    prompt_parts.append(f"9. 'send_direct_message' - Send a targeted message to a specific agent. This creates stronger relationship impact than regular messages and can be used to coordinate specific collective actions.")
-    
-    prompt_parts.append(f"\nROLE CHANGE:")
-    prompt_parts.append(f"- If you wish to change your role, specify the requested role in the requested_role_change field.")
-    prompt_parts.append(f"- Valid roles: 'Facilitator', 'Innovator', 'Analyzer'")
-    prompt_parts.append(f"- Role changes cost {ROLE_CHANGE_IP_COST} IP and require {ROLE_CHANGE_COOLDOWN} steps in your current role.")
-    
-    prompt_parts.append(f"\nIf you have a significant insight or proposal you'd like to be added to the shared Knowledge Board, use 'propose_idea'.")
-    
-    prompt_parts.append(f"\nYou MUST respond ONLY with a valid JSON object matching the specified schema.")
-    prompt_parts.append(f"Example for no message:")
-    prompt_parts.append(f"""{{
-  "thought": "My internal reasoning...",
-  "message_content": null,
-  "message_recipient_id": null,
-  "action_intent": "idle",
-  "requested_role_change": null
-}}""")
-    prompt_parts.append(f"Example with broadcast message:")
-    prompt_parts.append(f"""{{
-  "thought": "My internal reasoning...",
-  "message_content": "My message to everyone.",
-  "message_recipient_id": null,
-  "action_intent": "continue_collaboration",
-  "requested_role_change": null
-}}""")
-    prompt_parts.append(f"Example with targeted message:")
-    prompt_parts.append(f"""{{
-  "thought": "My internal reasoning...",
-  "message_content": "This is a private message just for you.",
-  "message_recipient_id": "agent_id_xyz",
-  "action_intent": "continue_collaboration",
-  "requested_role_change": null
-}}""")
-    prompt_parts.append(f"Example with direct message to build relationship:")
-    prompt_parts.append(f"""{{
-  "thought": "I want to strengthen my relationship with Agent_2...",
-  "message_content": "I appreciate your valuable contributions. Your perspective is insightful and helpful.",
-  "message_recipient_id": "agent_2",
-  "action_intent": "send_direct_message",
-  "requested_role_change": null
-}}""")
-    prompt_parts.append(f"Example with proposal for Knowledge Board:")
-    prompt_parts.append(f"""{{
-  "thought": "I have a valuable idea to share...",
-  "message_content": "I propose we consider implementing X to solve Y...",
-  "message_recipient_id": null,
-  "action_intent": "propose_idea",
-  "requested_role_change": null
-}}""")
-    prompt_parts.append(f"Example with role change request:")
-    prompt_parts.append(f"""{{
-  "thought": "I think I could contribute better as a different role...",
-  "message_content": "I'd like to shift my focus to become an Innovator...",
-  "message_recipient_id": null,
-  "action_intent": "continue_collaboration",
-  "requested_role_change": "Innovator"
-}}""")
-    prompt_parts.append(f"Example with deep analysis:")
-    prompt_parts.append(f"""{{
-  "thought": "I should thoroughly analyze this proposal to identify potential issues...",
-  "message_content": "After careful analysis, I've identified the following strengths and weaknesses in the proposed solution...",
-  "message_recipient_id": null,
-  "action_intent": "perform_deep_analysis",
-  "requested_role_change": null
-}}""")
-    prompt_parts.append(f"Example with creating a project:")
-    prompt_parts.append(f"""{{
-  "thought": "I think we need more structure for our collaboration...",
-  "message_content": "I'm creating a new project called 'Algorithm Optimization' to focus our efforts on improving efficiency...",
-  "message_recipient_id": null,
-  "action_intent": "create_project",
-  "requested_role_change": null,
-  "project_name_to_create": "Algorithm Optimization",
-  "project_description_for_creation": "A project focused on optimizing algorithms for better performance and resource usage."
-}}""")
-    prompt_parts.append(f"Example with joining a project:")
-    prompt_parts.append(f"""{{
-  "thought": "The Algorithm Optimization project aligns with my skills...",
-  "message_content": "I'd like to join the Algorithm Optimization project to contribute my expertise...",
-  "message_recipient_id": null,
-  "action_intent": "join_project",
-  "requested_role_change": null,
-  "project_id_to_join_or_leave": "proj_abc123"
-}}""")
-    prompt_parts.append(f"Example with leaving a project:")
-    prompt_parts.append(f"""{{
-  "thought": "I've contributed what I can to this project and want to focus elsewhere...",
-  "message_content": "I've decided to leave the project to explore other areas where I can contribute more effectively...",
-  "message_recipient_id": null,
-  "action_intent": "leave_project",
-  "requested_role_change": null,
-  "project_id_to_join_or_leave": "proj_abc123"
-}}""")
-
-    # Join all prompt parts with newlines
-    prompt = "\n".join(prompt_parts)
-    
-    # Call the LLM for structured output
-    structured_output = generate_structured_output(
-        prompt,
-        response_model=AgentActionOutput, # Pass the Pydantic model
-        model="mistral:latest" # Use available model known to handle JSON well
+    current_situation = (
+        "Environment: " + perception.get('description', 'You are in a collaborative simulation environment.') + "\n\n" +
+        "Recent messages: " + recent_messages_str + "\n\n" + 
+        "Relevant knowledge: " + str(knowledge_board_content) + "\n\n" +
+        "Your previous thoughts: " + previous_thoughts_str + "\n\n" +
+        "Goals: " + agent_goal + "\n\n" +
+        "Relevant memories: " + rag_summary + "\n\n" +
+        "Scenario: " + scenario_description
     )
 
-    # Special handling for Agent_3 role change test directive
-    agent_name = agent_state.name
-    if agent_name == "Agent_3" and "CRITICAL TEST DIRECTIVE FOR AGENT_3" in scenario_description and structured_output:
-        # Force the role change for Agent_3 if directive is present
-        if not structured_output.requested_role_change:
-            logger.info(f"CRITICAL DIRECTIVE: Forcing role change to Innovator for {agent_name} as required by test directive")
-            structured_output.requested_role_change = "Innovator"
-            # Update the message to acknowledge the role change
-            if structured_output.message_content:
-                structured_output.message_content += " Additionally, I'd like to change my role to Innovator to bring fresh ideas to the team."
-            else:
-                structured_output.message_content = "I'd like to change my role to Innovator to bring fresh ideas to the team."
-
-    # Log the results
-    if structured_output:
-        logger.info(f"Agent {agent_id} structured output received: "
-                    f"Thought='{structured_output.thought}', "
-                    f"Broadcast='{structured_output.message_content}', "
-                    f"Intent='{structured_output.action_intent}', "
-                    f"RequestedRoleChange='{structured_output.requested_role_change}'")
+    # Log the attempt to use DSPy
+    logging.info(f"Agent {agent_id} attempting to generate thought using DSPy: DSPY_AVAILABLE={DSPY_AVAILABLE}")
+    
+    # PHASE 1: Use DSPy to generate the role-prefixed thought start
+    role_prefixed_thought_start = None
+    
+    if DSPY_AVAILABLE:
+        try:
+            # Create a simpler situation just for the prefix generator
+            situation_for_prefix = f"My role is {raw_role_name}. The current simulation context is: {scenario_description[:200]}"
+            
+            # Call the DSPy function for role-prefixed thought
+            result = generate_role_prefixed_thought(
+                agent_role=raw_role_name,
+                current_situation=situation_for_prefix
+            )
+            
+            # Extract the generated thought prefix
+            role_prefixed_thought_start = result.thought_process
+            logging.info(f"DSPy successfully generated role-adherent thought prefix for Agent {agent_id}")
+            
+            # Log the first part of the thought for debugging
+            thought_preview = role_prefixed_thought_start[:50] + "..." if role_prefixed_thought_start and len(role_prefixed_thought_start) > 50 else role_prefixed_thought_start
+            logging.info(f"DSPy role-prefixed thought preview: {thought_preview}")
+            
+        except Exception as e:
+            logging.error(f"Error using DSPy for role-prefixed thought generation: {e}")
+            logging.error(f"Falling back to standard LLM prompt for Agent {agent_id}")
+            import traceback
+            logging.error(f"DSPy error traceback: {traceback.format_exc()}")
+    
+    # If DSPy failed or isn't available for role-prefixed thought, use a simple template
+    if not role_prefixed_thought_start:
+        # Prepare a role prefix with proper grammar (a vs. an)
+        role_prefix = "an" if role[0].lower() in ['a', 'e', 'i', 'o', 'u'] else "a"
+        role_prefixed_thought_start = f"As {role_prefix} {role}, I need to consider the current situation carefully."
+    
+    # PHASE 2: Use DSPy to select action intent and generate justification
+    chosen_intent_enum = None
+    justification_for_intent = None
+    
+    # Get available actions list
+    from src.agents.core.agent_state import AgentActionIntent
+    available_actions = [intent.value for intent in AgentActionIntent]
+    
+    # Prepare comprehensive situation for action intent selection
+    current_situation_for_action_intent = current_situation  # Use the full situation
+    
+    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: About to check if DSPy action selector is available: DSPY_ACTION_SELECTOR_AVAILABLE={DSPY_ACTION_SELECTOR_AVAILABLE}, optimized_action_selector exists: {optimized_action_selector is not None}")
+    
+    if DSPY_ACTION_SELECTOR_AVAILABLE and optimized_action_selector:
+        try:
+            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Calling DSPy action selector with role={raw_role_name}, goal={agent_goal[:30]}...")
+            
+            # Call the DSPy action intent selector
+            action_selection_prediction = optimized_action_selector(
+                agent_role=raw_role_name,
+                current_situation=current_situation_for_action_intent,
+                agent_goal=agent_goal,
+                available_actions=available_actions
+            )
+            
+            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy action selection successful, processing results")
+            
+            # Extract the selected intent and justification
+            chosen_intent_str = action_selection_prediction.chosen_action_intent
+            justification_for_intent = action_selection_prediction.justification_thought
+            
+            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Raw DSPy results - intent: '{chosen_intent_str}', justification sample: '{justification_for_intent[:50]}...'")
+            
+            # Enhanced string cleaning logic for DSPy output
+            if chosen_intent_str:
+                # Log raw intent string before cleaning
+                raw_intent_str = chosen_intent_str
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Raw DSPy intent string: '{raw_intent_str}'")
+                
+                # Step 1: General whitespace stripping
+                chosen_intent_str = chosen_intent_str.strip()
+                
+                # Step 2: Remove specific DSPy output artifacts
+                if chosen_intent_str.startswith(r"]]\n"):
+                    chosen_intent_str = chosen_intent_str[4:]  # Skip ']]\n'
+                elif chosen_intent_str.startswith(r"]\n"):
+                    chosen_intent_str = chosen_intent_str[2:]  # Skip ']\n'
+                elif chosen_intent_str.startswith("]]"):
+                    chosen_intent_str = chosen_intent_str[2:]  # Skip ']]'
+                elif chosen_intent_str.startswith("]"):
+                    chosen_intent_str = chosen_intent_str[1:]  # Skip ']'
+                
+                # Strip whitespace again after prefix removal
+                chosen_intent_str = chosen_intent_str.strip()
+                
+                # Step 3: Remove surrounding quotes
+                chosen_intent_str = chosen_intent_str.strip('"')
+                chosen_intent_str = chosen_intent_str.strip("'")
+                
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Cleaned DSPy intent string: '{chosen_intent_str}'")
+            
+            # Apply similar cleaning to justification if available
+            if justification_for_intent:
+                # Log raw justification before cleaning
+                raw_justification = justification_for_intent
+                
+                # Apply the same cleaning logic
+                justification_for_intent = justification_for_intent.strip()
+                if justification_for_intent.startswith(r"]]\n"):
+                    justification_for_intent = justification_for_intent[4:]
+                elif justification_for_intent.startswith(r"]\n"):
+                    justification_for_intent = justification_for_intent[2:]
+                elif justification_for_intent.startswith("]]"):
+                    justification_for_intent = justification_for_intent[2:]
+                elif justification_for_intent.startswith("]"):
+                    justification_for_intent = justification_for_intent[1:]
+                
+                justification_for_intent = justification_for_intent.strip()
+                justification_for_intent = justification_for_intent.strip('"')
+                justification_for_intent = justification_for_intent.strip("'")
+                
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Cleaned justification from '{raw_justification[:30]}...' to '{justification_for_intent[:30]}...'")
+            
+            # Validate chosen_intent_str is a valid AgentActionIntent
+            try:
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Validating intent '{chosen_intent_str}' against AgentActionIntent enum")
+                chosen_intent_enum = AgentActionIntent(chosen_intent_str)
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Intent validation successful: '{chosen_intent_enum.value}'")
+            except ValueError:
+                logger.warning(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy chose an invalid action_intent '{chosen_intent_str}'. Falling back to IDLE.")
+                chosen_intent_enum = AgentActionIntent.IDLE  # Fallback
+                justification_for_intent = f"I was considering options but will default to idle due to an internal decision error regarding '{chosen_intent_str}'."
+            
+            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Final DSPy selected action_intent='{chosen_intent_enum.value}' with justification: {justification_for_intent[:80]}...")
+        except Exception as e:
+            logger.error(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Error during DSPy action intent selection: {e}. Falling back to LLM for intent.", exc_info=True)
+            # Fallback: these will be determined by the main LLM call later
+            chosen_intent_enum = None 
+            justification_for_intent = "I need to determine my action based on the overall context."
     else:
-        logger.warning(f"Agent {agent_id} failed to generate or parse structured output.")
+        logger.warning(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy action selector not available, using standard LLM for intent selection")
+    
+    # PHASE 3: Combine thoughts for the final agent thought
+    if justification_for_intent:
+        # Remove any "As a ROLE," prefix from the justification if it exists
+        # to avoid duplication when combining with role_prefixed_thought_start
+        if justification_for_intent.startswith("As a " + raw_role_name + ",") or justification_for_intent.startswith("As an " + raw_role_name + ","):
+            # Extract just the reasoning part after the role prefix
+            prefix_end = justification_for_intent.find(",")
+            if prefix_end > 0:
+                justification_for_intent = justification_for_intent[prefix_end + 1:].strip()
+        
+        # Combine the role-prefixed thought with the justification
+        final_agent_thought = role_prefixed_thought_start + " " + justification_for_intent
+    else:
+        # If no justification was provided, just use the role-prefixed thought
+        final_agent_thought = role_prefixed_thought_start
+    
+    # PHASE 4: Prepare prompt for the main LLM call
+    # Set up the base prompt with context
+    prompt_parts = []
+    prompt_parts.append(f"# AGENT INFORMATION")
+    prompt_parts.append(f"Agent ID: {agent_id}")
+    prompt_parts.append(f"Role: {role}")
+    prompt_parts.append(f"Role Description: {role_description}")
+    prompt_parts.append(f"Goal: {agent_goal}")
+    
+    if scenario_description:
+        prompt_parts.append("\n# SCENARIO")
+        prompt_parts.append(scenario_description)
+    
+    # Include environment perception details
+    if perception:
+        prompt_parts.append("\n# ENVIRONMENT")
+        prompt_parts.append(perception.get('description', '(No environment description available)'))
+        if 'other_agents' in perception:
+            prompt_parts.append(_format_other_agents(perception['other_agents'], agent_state.relationships))
+    
+    # Include KB content if available
+    if knowledge_board_content:
+        prompt_parts.append("\n# KNOWLEDGE BOARD")
+        prompt_parts.append(_format_knowledge_board(knowledge_board_content))
+    
+    # RAG-retrieved memories section
+    prompt_parts.append("\n# RELEVANT PAST MEMORIES")
+    prompt_parts.append(rag_summary)
+    
+    # Messages from previous step
+    if perceived_messages:
+        prompt_parts.append("\n# MESSAGES FROM OTHERS")
+        prompt_parts.append(_format_messages(perceived_messages))
+    
+    # Add the relationship context to guide how to interact with others
+    prompt_parts.append("\n# RELATIONSHIP CONTEXT")
+    prompt_parts.append(prompt_modifier)
+    
+    # Previous thought (if any)
+    if prev_thought:
+        prompt_parts.append("\n# YOUR PREVIOUS THOUGHT")
+        prompt_parts.append(prev_thought)
+    
+    # Current mood for context
+    if hasattr(agent_state, 'mood_value'):
+        mood_value = agent_state.mood_value
+        mood_level = get_mood_level(mood_value)
+        descriptive_mood = get_descriptive_mood(mood_value)
+        prompt_parts.append("\n# YOUR CURRENT MOOD")
+        prompt_parts.append(f"Mood level: {mood_level} ({descriptive_mood}, value: {mood_value:.2f})")
+    
+    # Include the final combined thought to guide the LLM
+    prompt_parts.append("\n# YOUR INTERNAL THOUGHT PROCESS (follow this reasoning):")
+    prompt_parts.append(final_agent_thought)
+    
+    # Provide guidance on the chosen action intent if available
+    if chosen_intent_enum:
+        prompt_parts.append("\n# YOUR CHOSEN ACTION INTENT (execute this): " + chosen_intent_enum.value)
+        prompt_parts.append("Based on your thought process and chosen action intent, formulate your response below.")
+    else:
+        prompt_parts.append("\n# ACTION INTENT OPTIONS")
+        prompt_parts.append("Based on your thought process, select one of the following action intents:")
+        for intent in AgentActionIntent:
+            prompt_parts.append(f"- {intent.value}")
 
-    return {"structured_output": structured_output} # Return the object (or None)
+    # Add final instructions for formulating the structured response
+    prompt_parts.append("\nRespond with a structured output containing your thought, chosen action intent, and message content (if any).")
+    
+    # Combine all prompt parts
+    full_prompt = "\n\n".join(prompt_parts)
+    
+    # Define the output schema based on the AgentActionOutput model
+    output_schema = {
+        "thought": "The agent's internal thought or reasoning for the turn.",
+        "action_intent": "The agent's primary intent for this turn (choose from: idle, continue_collaboration, propose_idea, ask_clarification, perform_deep_analysis, create_project, join_project, leave_project, send_direct_message).",
+        "message_content": "The message to send to other agents, or null if choosing not to send a message.",
+        "message_recipient_id": "The ID of the agent this message is directed to. null means broadcast to all agents.",
+        "requested_role_change": "Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.",
+        "project_name_to_create": "Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent.",
+        "project_description_for_creation": "Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent.",
+        "project_id_to_join_or_leave": "Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents."
+    }
+    
+    # Generate the structured output using the full prompt and schema
+    structured_llm_output = generate_structured_output(
+        full_prompt, 
+        response_model=AgentActionOutput,
+        model=agent_state.llm_model_name if hasattr(agent_state, 'llm_model_name') else None
+    )
+    
+    # If we have a structured output, override thought and intent if DSPy provided them
+    if structured_llm_output:
+        # Always use our combined thought for consistency
+        structured_llm_output.thought = final_agent_thought
+        
+        # Only override the action intent if DSPy provided one
+        if chosen_intent_enum:
+            structured_llm_output.action_intent = chosen_intent_enum.value
+    else:
+        # Handle failure case - create a basic output
+        logger.error(f"Agent {agent_id}: Failed to generate structured output, using fallback")
+        structured_llm_output = AgentActionOutput(
+            thought=final_agent_thought,
+            message_content=None,
+            message_recipient_id=None,
+            action_intent=chosen_intent_enum.value if chosen_intent_enum else "idle"
+        )
+    
+    # Return the structured output
+    return {"structured_output": structured_llm_output}
 
 def process_role_change(agent_state, requested_role):
     """
@@ -775,111 +707,69 @@ def process_role_change(agent_state, requested_role):
 
 def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Updates the agent's internal state at the end of the turn.
-    Manages mood, relationship decay, messaging, memory, and state updates.
-    Returns the updated agent state for persistence.
+    Node for updating the agent's state after action handling.
+    This is where passive IP/DU changes and memory consolidation happen.
+    
+    Args:
+        state (AgentTurnState): Current agent state
+        
+    Returns:
+        Dict[str, Any]: Updated state
     """
     agent_id = state['agent_id']
     sim_step = state['simulation_step']
+    action_intent = state.get('structured_output', {}).action_intent if state.get('structured_output') else "idle"
+    message_content = state.get('structured_output', {}).message_content if state.get('structured_output') else None
+    message_recipient_id = state.get('structured_output', {}).message_recipient_id if state.get('structured_output') else None
+    
+    # Get the agent state object
     agent_state = state['state']
-    thought = state['structured_output'].thought if state['structured_output'] else None
-    message_content = state['structured_output'].message_content if state['structured_output'] else None
-    message_recipient_id = state['structured_output'].message_recipient_id if state['structured_output'] else None
-    action_intent = state['structured_output'].action_intent if state['structured_output'] else "idle"
-    # Extract role change request if any
-    requested_role_change = state['structured_output'].requested_role_change if state['structured_output'] else None
-    perceived_messages = state['perceived_messages']
-    sentiment_score = state['turn_sentiment_score']
     
     logger.debug(f"Node 'update_state_node' executing for agent {agent_id} at step {sim_step}")
     
-    # Process role change request if present
-    if requested_role_change:
-        process_role_change(agent_state, requested_role_change)
-    
-    # Update the agent's step counter
-    agent_state.last_action_step = sim_step
-    
-    # Increment steps_in_current_role counter if no role change happened
-    if not requested_role_change:
-        agent_state.steps_in_current_role += 1
-    
-    # Update agent mood (affects tone of messages)
-    agent_state.update_mood(sentiment_score)
-    
-    # Apply natural decay to all relationships
-    for other_id in list(agent_state.relationships.keys()):
-        current_score = agent_state.relationships.get(other_id, 0.0)
-        if abs(current_score) > 0.01:  # Only apply decay if not already very close to neutral
-            # Apply decay toward neutral (0.0)
-            decay_amount = current_score * agent_state.relationship_decay_rate
-            new_score = current_score - decay_amount
-            
-            # Update the relationship with the decayed value
-            agent_state.relationships[other_id] = new_score
-            logger.debug(f"Applied relationship decay for {agent_id} -> {other_id}: {current_score:.2f} -> {new_score:.2f}")
-    
-    # Update relationships based on individual message sentiment
-    # More nuanced approach - stronger impact for targeted messages
-    if perceived_messages:
-        logger.debug(f"Updating relationships based on {len(perceived_messages)} perceived messages...")
-        for msg in perceived_messages:
-            sender_id = msg.get('sender_id')
-            content = msg.get('content')
-            is_targeted = msg.get('is_targeted', False)  # Check if message was targeted to this agent
-            
-            if sender_id and content and sender_id != agent_id:
-                # Analyze the sentiment of the message content
-                msg_sentiment = analyze_sentiment(content)
-                
-                # Update relationship with sender - pass sentiment string and is_targeted flag
-                if msg_sentiment:
-                    agent_state.update_relationship(sender_id, msg_sentiment, is_targeted)
-    
-    # Store the thought from this turn
-    if thought:
-        agent_state.last_thought = thought
-        agent_state.add_memory(sim_step, "thought", thought)
-    
-    # Process outgoing message (if any)
-    if message_content:
-        # Add the broadcast to memory
-        memory_type = "targeted_message_sent" if message_recipient_id else "broadcast_sent"
-        recipient_info = f" to {message_recipient_id}" if message_recipient_id else ""
-        memory_content = f"Sent: {message_content}{recipient_info}"
-        agent_state.add_memory(sim_step, memory_type, memory_content)
+    # Check if we have a role change request in the structured output
+    if state.get('structured_output') and state['structured_output'].requested_role_change:
+        # Process the role change request
+        requested_role = state['structured_output'].requested_role_change
+        logger.info(f"Agent {agent_id} requested role change to: {requested_role}")
         
-        logger.debug(f"Agent {agent_id} has outgoing message: '{message_content}' to recipient '{message_recipient_id}'")
-    else:
-        logger.debug(f"Agent {agent_id} has no outgoing message.")
+        # Call the role change function (it handles validation and IP cost)
+        role_change_success = process_role_change(agent_state, requested_role)
+        
+        if role_change_success:
+            logger.info(f"Agent {agent_id} successfully changed role to {requested_role}")
+            
+            # Add a memory about the role change
+            agent_state.add_memory(sim_step, "role_change", f"Changed role to {requested_role}")
+        else:
+            logger.info(f"Agent {agent_id} failed to change role to {requested_role} (insufficient IP or cooldown)")
+            
+            # Add a memory about the failed role change
+            agent_state.add_memory(sim_step, "resource_constraint", 
+                f"Attempted to change role to {requested_role} but had insufficient Influence Points or cooldown not satisfied")
     
-    # Get the agent's current projects for context
-    project_affiliations = list(agent_state.projects.keys())
-    
-    # Update the agent's Influence Points (IP) based on actions
-    # For example, award IP for active participation
+    # PASSIVE RESOURCE GENERATION: Generate Data Units based on agent's role
+    # Only do this for non-idle actions (to encourage participation)
     if action_intent != "idle":
-        # Simple reward for active participation
-        agent_state.ip += 1
-        logger.debug(f"Agent {agent_id} earned 1 IP for active participation with intent: {action_intent}")
-    
-    # Award additional IP for specific high-value actions
-    if action_intent == "propose_idea":
-        # Extra points for proposing an idea (will be deducted if submission fails)
-        agent_state.ip += 2
-        logger.debug(f"Agent {agent_id} earned 2 additional IP for proposing an idea")
-    
-    # Add relationship history record for tracking over time
-    agent_state.relationship_history.append((sim_step, agent_state.relationships.copy()))
-    
-    # Apply passive role-based DU generation
-    role_name = agent_state.role if agent_state.role else "Default Contributor"
-    generated_du = ROLE_DU_GENERATION.get(role_name, ROLE_DU_GENERATION.get("Default Contributor", 0))
-    
-    if generated_du > 0:
-        previous_du = agent_state.du
-        agent_state.du += generated_du
-        logger.info(f"Agent {agent_id}: Generated {generated_du} DU passively based on role '{role_name}'. DU: {previous_du:.1f} → {agent_state.du:.1f}")
+        # Get the role name (e.g., "Facilitator", "Analyzer", "Innovator")
+        role_name = agent_state.role
+        
+        # Look up the DU generation rate for this role in the config
+        du_generation_rate = config.ROLE_DU_GENERATION.get(role_name, 1.0)  # Default to 1 if not found
+        
+        # Generate a float at least 0.5 and at most 1.5 times the base rate
+        # This adds some variability to DU generation
+        random_factor = 0.5 + random.random()  # Between 0.5 and 1.5
+        generated_du = du_generation_rate * random_factor
+        
+        # Round to 1 decimal place
+        generated_du = round(generated_du, 1)
+        
+        # Add the generated DU to the agent's total
+        if generated_du > 0:
+            previous_du = agent_state.du
+            agent_state.du += generated_du
+            logger.info(f"Agent {agent_id}: Generated {generated_du} DU passively based on role '{role_name}'. DU: {previous_du:.1f} → {agent_state.du:.1f}")
     
     # MEMORY CONSOLIDATION: First-level hierarchical memory summarization
     # Check if there's enough content in short-term memory to warrant a summary
@@ -887,27 +777,29 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
         try:
             # Make sure we have an LLM client available for generating the summary
             if agent_state.llm_client:
-                # Build the summary prompt
-                summary_prompt = f"As Agent {agent_state.name} with role {agent_state.role}, summarize your key thoughts, actions, and observations from your most recent interactions:\n\n"
-                
                 # Extract the most recent memories to summarize (last 10 or all if less)
                 recent_memories = list(agent_state.short_term_memory)[-10:]
                 
-                # Add each memory to the prompt
+                # Create a formatted string for DSPy input
+                short_term_memory_context = ""
                 for memory in recent_memories:
                     # Format depends on the memory type
                     memory_step = memory.get('step', 'unknown')
                     memory_type = memory.get('type', 'unknown')
                     memory_content = memory.get('content', 'No content')
                     
-                    # Add formatted memory to the prompt
-                    summary_prompt += f"- Step {memory_step}, {memory_type.replace('_', ' ').title()}: {memory_content}\n"
+                    # Add formatted memory to the context string
+                    short_term_memory_context += f"- Step {memory_step}, {memory_type.replace('_', ' ').title()}: {memory_content}\n"
                 
-                # Add instruction for summarizing
-                summary_prompt += "\nProvide a concise, first-person summary that captures the essential interactions and your internal state."
+                # Create an instance of L1SummaryGenerator
+                l1_gen = L1SummaryGenerator()
                 
-                # Generate the summary using the LLM
-                memory_summary = generate_response(summary_prompt)
+                # Generate the L1 summary using DSPy
+                memory_summary = l1_gen.generate_summary(
+                    agent_role=agent_state.role,
+                    recent_events=short_term_memory_context,
+                    current_mood=get_descriptive_mood(agent_state.mood_value) if hasattr(agent_state, 'mood_value') else None
+                )
                 
                 if memory_summary:
                     # Create metadata for the consolidated memory
@@ -948,107 +840,74 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Agent {agent_id}: Error during memory consolidation: {e}")
     
-    # LEVEL 2 MEMORY CONSOLIDATION: Chapter summaries from level 1 summaries
-    # Check if it's time for a level 2 consolidation (every 10 steps)
-    steps_since_last_l2_consolidation = sim_step - agent_state.last_level_2_consolidation_step
-    if steps_since_last_l2_consolidation >= 10 and state.get('vector_store_manager'):
-        try:
-            logger.info(f"Agent {agent_id}: Triggering level-2 memory consolidation at step {sim_step} (last at step {agent_state.last_level_2_consolidation_step})")
-            
-            # Retrieve recent level 1 summaries from vector store
-            query = f"Recent memory summaries for Agent {agent_state.name}"
-            level1_summaries = vector_store.retrieve_filtered_memories(
-                agent_id=agent_id,
-                query_text=query,
-                filters={"memory_type": "consolidated_summary"},  # Only retrieve level 1 summaries
-                k=8  # Retrieve up to 8 recent summaries for creating the chapter
-            )
-            
-            # Check if we have enough level 1 summaries to generate a level 2 summary
-            if len(level1_summaries) < 3:
-                logger.info(f"Agent {agent_id}: Not enough level-1 summaries ({len(level1_summaries)}) for level-2 consolidation")
-            else:
-                # Extract the content from each level 1 summary
-                content_list = [item["content"] for item in level1_summaries]
-                combined_text = "\n\n".join(content_list)
-                
-                # Generate a level 2 "chapter" summary using the LLM
-                try:
-                    prompt = f"""
-                    You are reviewing memory summaries from an AI agent named {agent_state.name} with role {agent_state.role}.
-                    Below are several consolidated memory summaries covering different time periods.
-
-                    Your task is to create a higher-level "chapter summary" that captures the key themes, events, and
-                    developments across all of these memory entries. Focus on:
-                    
-                    1. Major recurring themes and patterns
-                    2. Important decisions or insights
-                    3. Evolution of the agent's understanding, relationships, or projects over time
-                    4. Significant accomplishments or challenges
-                    
-                    This higher-level summary should be around 300-500 words and should synthesize information
-                    across all the provided memory summaries rather than just concatenating them.
-                    
-                    Here are the memory summaries to consolidate:
-                    
-                    {combined_text}
-                    """
-                    
-                    if agent_state.llm_client:
-                        level2_summary_response = generate_text(prompt)  # Use the imported generate_text function
-                        
-                        if level2_summary_response is not None:
-                            level2_summary_content = level2_summary_response.strip()
-                            
-                            # Add the level 2 memory to the vector store
-                            summary_id = str(uuid.uuid4())
-                            memory_id = f"{agent_id}_{sim_step}_chapter_summary_{summary_id}"
-                            
-                            memory_entry = {
-                                "id": memory_id,
-                                "agent_id": agent_id,
-                                "step": sim_step,
-                                "event_type": "chapter_summary",
-                                "memory_type": "chapter_summary",  # Special type for level 2 summaries
-                                "content": level2_summary_content
-                            }
-                            
-                            # Store the level 2 chapter summary in the vector store
-                            vector_store.add_memory(
-                                agent_id=agent_id,
-                                step=sim_step,
-                                event_type="chapter_summary",
-                                content=level2_summary_content,
-                                memory_type="chapter_summary",
-                                metadata={"id": memory_id, "is_level_2": True}  # Include additional metadata
-                            )
-                            
-                            # Update the last_level_2_consolidation_step field
-                            agent_state.last_level_2_consolidation_step = sim_step
-                            
-                            logger.info(f"Agent {agent_id}: Successfully generated and stored a level-2 chapter summary at step {sim_step}")
-                            logger.debug(f"Agent {agent_id}: Level-2 chapter summary content: {level2_summary_content[:100]}...")
-                        else:
-                            logger.warning(f"Agent {agent_id}: Failed to generate Level 2 summary at step {sim_step} (LLM call returned None)")
-                    else:
-                        logger.warning(f"Agent {agent_id}: No LLM client available for level-2 memory consolidation")
-                except Exception as e:
-                    logger.error(f"Agent {agent_id}: Error during level-2 memory consolidation generation: {e}", exc_info=True)
-            
-            # Update action stats
-            if state['structured_output'] and state['structured_output'].message_content:
-                agent_state.du += DU_AWARD_SUCCESSFUL_ANALYSIS
-                logger.info(f"Agent {agent_id}: Earned {DU_AWARD_SUCCESSFUL_ANALYSIS} DU for successful analysis")
-        except Exception as e:
-            logger.error(f"Agent {agent_id}: Error during level-2 memory consolidation: {e}", exc_info=True)
-    
-    # Return the updated state
+    # Update the state with the potentially modified agent state
     return {
         "state": agent_state,
         "action_intent": action_intent,
         "message_content": message_content,
         "message_recipient_id": message_recipient_id
     }
+
+def _maybe_prune_l1_memories(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Checks if it's time to prune Level 1 (consolidated) memories.
+    Pruning only occurs if pruning is enabled AND Level 2 summaries have been
+    generated for the steps being pruned AND the pruning delay has elapsed.
+    
+    Args:
+        state (AgentTurnState): The current agent graph state
+        
+    Returns:
+        Dict[str, Any]: The updated state after potentially pruning memories
+    """
+    # ... existing code ...
+
+def _maybe_prune_l2_memories(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Checks if it's time to prune Level 2 (session) summaries based on their age.
+    This is called on a less frequent interval than L1 pruning.
+    
+    Args:
+        state (AgentTurnState): The current agent graph state
+        
+    Returns:
+        Dict[str, Any]: The updated state after potentially pruning L2 memories
+    """
+    agent_id = state['agent_id']
+    sim_step = state['simulation_step']
+    agent_state = state['state']
+    vector_store = state.get('vector_store_manager')
+    
+    # Check if L2 memory pruning is enabled and if it's time to check
+    if not config.MEMORY_PRUNING_ENABLED or not config.MEMORY_PRUNING_L2_ENABLED:
+        logger.debug(f"L2 pruning is disabled for agent {agent_id}")
+        return state
+        
+    # Check if it's time to run L2 pruning based on check interval
+    if sim_step % config.MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS != 0:
+        return state
+        
+    logger.info(f"Agent {agent_id}: Checking for L2 summaries older than {config.MEMORY_PRUNING_L2_MAX_AGE_DAYS} days at step {sim_step}")
+    
+    # Find L2 summaries older than the configured threshold
+    old_l2_summary_ids = vector_store.get_l2_summaries_older_than(config.MEMORY_PRUNING_L2_MAX_AGE_DAYS)
+    
+    if not old_l2_summary_ids:
+        logger.info(f"Agent {agent_id}: No old L2 summaries found for pruning")
+        return state
+        
+    # Log the pruning operation
+    logger.info(f"Agent {agent_id}: Pruning {len(old_l2_summary_ids)} old L2 summaries")
+    
+    # Delete the old L2 summaries
+    success = vector_store.delete_memories_by_ids(old_l2_summary_ids)
+    
+    if success:
+        logger.info(f"Agent {agent_id}: Successfully pruned {len(old_l2_summary_ids)} old L2 summaries")
+    else:
+        logger.error(f"Agent {agent_id}: Failed to prune old L2 summaries")
+    
+    return state
 
 def finalize_message_agent_node(state: AgentTurnState) -> Dict[str, Any]:
     """
@@ -1360,7 +1219,7 @@ def _format_messages(messages):
         content = msg.get('content', '')
         recipient = msg.get('recipient_id')
         message_type = "(Private to you)" if recipient else "(Broadcast)"
-        lines.append(f"  - {sender} {message_type}: \"{content}\"")
+        lines.append("  - " + sender + " " + message_type + ": \"" + content + "\"")
     
     return "\n".join(lines)
 
@@ -1786,6 +1645,22 @@ def route_action_intent(state: AgentTurnState) -> str:
 
 # --- Graph Definition ---
 
+def _maybe_consolidate_memories(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Checks if it's time to consolidate memories at the current step.
+    This node is responsible for triggering the memory consolidation process
+    which creates higher-level summaries from lower-level memories.
+    
+    Args:
+        state (AgentTurnState): The current agent graph state
+        
+    Returns:
+        Dict[str, Any]: The updated state after potentially consolidating memories
+    """
+    # Just pass through the state for now - consolidation is handled in update_state_node
+    # This node exists as a placeholder for future potential expansion of the consolidation logic
+    return state
+
 def create_basic_agent_graph():
     """
     Builds the agent turn graph with intent routing.
@@ -1809,34 +1684,35 @@ def create_basic_agent_graph():
     workflow.add_node("handle_leave_project", handle_leave_project_node) # Specific intent handler
     workflow.add_node("handle_send_direct_message", handle_send_direct_message_node) # New intent handler
     workflow.add_node("update_state", update_state_node) # Unified state update
+    workflow.add_node("prune_l2_memories", _maybe_prune_l2_memories) # L2 memory pruning node
+    workflow.add_node("prune_l1_memories", _maybe_prune_l1_memories) # L1 memory pruning node
+    workflow.add_node("consolidate_memories", _maybe_consolidate_memories) # Memory consolidation node
     workflow.add_node("finalize_message", finalize_message_agent_node) # Final decision on message sending
-
+ 
     # Define edges
     workflow.set_entry_point("analyze_sentiment")
     workflow.add_edge("analyze_sentiment", "prepare_relationship_prompt")
-    # Modify the flow to include the retrieve_memories node between relationship prompt and action generation
-    workflow.add_edge("prepare_relationship_prompt", "retrieve_memories") # Update this edge
-    workflow.add_edge("retrieve_memories", "generate_action_output") # Add new edge for RAG
+    workflow.add_edge("prepare_relationship_prompt", "retrieve_memories")
+    workflow.add_edge("retrieve_memories", "generate_action_output")
     
-    # Use a conditional edge to route based on action intent
+    # Route to the appropriate handler based on the intent
     workflow.add_conditional_edges(
         "generate_action_output",
         route_action_intent,
         {
-            "handle_propose_idea": "handle_propose_idea",
-            "handle_continue_collaboration": "handle_continue_collaboration",
-            "handle_idle": "handle_idle",
-            "handle_ask_clarification": "handle_ask_clarification",
-            "handle_deep_analysis": "handle_deep_analysis",
-            "handle_create_project": "handle_create_project",
-            "handle_join_project": "handle_join_project",
-            "handle_leave_project": "handle_leave_project",
-            "handle_send_direct_message": "handle_send_direct_message",
-            "update_state": "update_state" # Default fallback
+            "propose_idea": "handle_propose_idea",
+            "continue_collaboration": "handle_continue_collaboration",
+            "idle": "handle_idle",
+            "ask_clarification": "handle_ask_clarification",
+            "perform_deep_analysis": "handle_deep_analysis",
+            "create_project": "handle_create_project",
+            "join_project": "handle_join_project",
+            "leave_project": "handle_leave_project",
+            "send_direct_message": "handle_send_direct_message"
         }
     )
     
-    # All intent handlers go to update_state
+    # All action handlers go to update_state
     workflow.add_edge("handle_propose_idea", "update_state")
     workflow.add_edge("handle_continue_collaboration", "update_state")
     workflow.add_edge("handle_idle", "update_state")
@@ -1847,10 +1723,18 @@ def create_basic_agent_graph():
     workflow.add_edge("handle_leave_project", "update_state")
     workflow.add_edge("handle_send_direct_message", "update_state")
     
-    # Final state update and message decision
-    workflow.add_edge("update_state", "finalize_message")
+    # Update state goes to L2 memory pruning
+    workflow.add_edge("update_state", "prune_l2_memories")
+    
+    # Add the L2 pruning to the memory management pipeline
+    workflow.add_edge("prune_l2_memories", "prune_l1_memories")
+    workflow.add_edge("prune_l1_memories", "consolidate_memories")
+    workflow.add_edge("consolidate_memories", "finalize_message")
+    
+    # Finalize message is the end of the graph
     workflow.add_edge("finalize_message", END)
-
+    
+    # Compile the workflow
     return workflow.compile()
 
 # Compile the graph

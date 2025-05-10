@@ -420,7 +420,11 @@ A sophisticated memory pruning system has been implemented to maintain optimal p
 
 - **Hierarchical Pruning**: Implements age-based pruning with different retention policies for each memory hierarchy level
 - **Level 1 Summary Pruning**: Automatically prunes Level 1 (session) summaries after they've been consolidated into Level 2 (chapter) summaries
-- **Configurable Delay**: Respects a configurable delay between L2 creation and L1 pruning to ensure information preservation
+- **Level 2 Summary Pruning**: Prunes older Level 2 summaries based on age to prevent indefinite accumulation
+- **Configurable Parameters**: Provides flexible configuration options including:
+  - Maximum age for L2 summaries before pruning
+  - Check interval frequency to control how often pruning is performed
+  - Enable/disable toggles for each pruning level
 - **Performance Benefits**: Reduces vector store size and improves retrieval performance by removing redundant memories
 - **Verification Tools**: Includes scripts for checking pruning status (`check_pruning.py`) and analyzing pruning logs (`analyze_memory_pruning_log.py`)
 
@@ -482,3 +486,41 @@ The agent action system now includes robust resource constraint checking for any
 - **Action Downgrading**: When appropriate, actions are downgraded to less resource-intensive alternatives rather than being completely blocked
 
 This system ensures that agents operate within their resource limits while providing appropriate feedback through the simulation.
+
+## DSPy Integration for L1 Summary Generation
+
+The project now leverages DSPy for generating Level 1 (L1) summaries in the agent's cognitive cycle. This implementation:
+
+1. Uses the DSPy framework to create more concise, relevant, and high-quality summaries of the agent's short-term memory events
+2. Resides in `src/agents/dspy_programs/l1_summary_generator.py`
+3. Integrates with the agent workflow in `src/agents/graphs/basic_agent_graph.py`
+
+The implementation includes:
+- `GenerateL1SummarySignature` - A DSPy signature defining the input/output contract
+- `L1SummaryGenerator` - The main class that handles the summary generation
+- Support for the agent's role and mood in summary generation
+- Fallback mechanisms if DSPy is unavailable
+
+### Example Usage
+
+```python
+from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
+
+# Create the generator
+generator = L1SummaryGenerator()
+
+# Generate a summary with all parameters
+summary = generator.generate_summary(
+    agent_role="Innovator",
+    recent_events="- Step 5, Thought: I should propose a new idea.\n- Step 6, Broadcast: Message sent to all.",
+    current_mood="curious"
+)
+
+# Generate without mood (optional parameter)
+summary = generator.generate_summary(
+    agent_role="Facilitator",
+    recent_events="- Step 10, Thought: Noticed disagreement.\n- Step 11, Action: Asked for clarification."
+)
+```
+
+For future optimization and testing, example summaries are provided in `src/agents/dspy_programs/l1_summary_examples.py`.
