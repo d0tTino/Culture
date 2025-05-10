@@ -178,7 +178,6 @@ Culture.ai/
 ├── data/                      # Data files and logs
 │   └── logs/                  # Log files from app and tests
 ├── docs/                      # Documentation files
-│   └── hierarchical_memory_README.md  # Documentation for the hierarchical memory system
 ├── experiments/               # Experiment scripts and reports
 │   ├── dspy_action_intent_experiment.py  # DSPy experiment for action intent selection
 │   ├── dspy_action_intent_report.md      # Report on DSPy action intent experiment
@@ -193,6 +192,13 @@ Culture.ai/
 │   │   │   ├── base_agent.py  # Base agent class
 │   │   │   ├── agent_state.py # Pydantic model for agent state
 │   │   │   └── roles.py       # Role definitions and behaviors
+│   │   ├── dspy_programs/     # DSPy-based components
+│   │   │   ├── __init__.py
+│   │   │   ├── l1_summary_generator.py     # DSPy L1 summary generation
+│   │   │   ├── l1_summary_examples.py      # Examples for L1 summary training
+│   │   │   ├── role_thought_generator.py   # Role-based thought generation
+│   │   │   ├── action_intent_selector.py   # Action intent selection
+│   │   │   └── rag_context_synthesizer.py  # RAG context processing
 │   │   ├── graphs/            # Agent cognitive graphs
 │   │   │   └── basic_agent_graph.py  # LangGraph implementation
 │   │   └── __init__.py
@@ -217,10 +223,8 @@ Culture.ai/
 └── tests/                     # Tests for the project
     ├── data/                  # Test data and fixtures
     ├── integration/           # Integration tests
-    │   ├── test_hierarchical_memory_persistence.py  # Tests for hierarchical memory persistence
-    │   ├── test_memory_consolidation.py            # Tests for memory consolidation
-    │   ├── test_resource_constraints.py            # Tests for resource constraints
-    │   ├── test_memory_pruning.py                  # Tests for memory pruning system
+    │   ├── test_memory_pruning.py         # Tests for memory pruning system
+    │   ├── test_collective_metrics.py     # Tests for collective metrics
     │   └── ... (other test files)
     └── unit/                  # Unit tests
 ```
@@ -308,26 +312,14 @@ To customize the simulation:
 Run tests using the Python module format:
 
 ```bash
-# Run hierarchical memory persistence test
-python -m tests.integration.test_hierarchical_memory_persistence
+# Run memory pruning test
+python -m tests.integration.test_memory_pruning
 
-# Run memory consolidation test
-python -m tests.integration.test_memory_consolidation
-
-# Run level 2 memory consolidation test
-python -m tests.integration.run_level2_memory_test
+# Run collective metrics test
+python -m tests.integration.test_collective_metrics
 
 # Run resource constraint test
 python -m tests.integration.test_resource_constraints
-
-# Run RAG functionality test
-python -m tests.integration.test_rag
-
-# Run data unit generation by role test
-python -m tests.integration.test_role_du_generation
-
-# Run memory pruning test
-python -m tests.integration.test_memory_pruning
 ```
 
 Test logs are stored in the `data/logs/` directory.
@@ -371,6 +363,17 @@ This project is licensed under the **Apache License 2.0**. See the [LICENSE](LIC
 This project draws inspiration from various fields including Agent-Based Modeling (ABM), Multi-Agent Systems (MAS), artificial life, cognitive science, and the rapidly evolving landscape of Large Language Models.
 
 ## Recent Updates
+
+### DSPy L1 Summary Generation Integration
+
+The project now leverages DSPy for generating Level 1 (L1) summaries in the agent's cognitive cycle, marking a significant improvement over the previous direct LLM call approach:
+
+- **Enhanced Quality**: Creates more concise, relevant, and coherent summaries by using DSPy's structured approach to prompting
+- **Role and Mood Awareness**: Takes into account the agent's current role and mood to produce contextually appropriate summaries
+- **Robust Implementation**: Includes fallback mechanisms when DSPy is unavailable
+- **Future Optimization Ready**: Contains example infrastructure for future optimization using DSPy's learning capabilities
+
+This implementation significantly improves the quality of memory summarization, which in turn enhances memory retrieval, RAG results, and overall agent behavior coherence. The integration exists in the memory consolidation phase of the agent's cognitive cycle.
 
 ### DSPy Action Intent Selection Experiment
 
@@ -429,98 +432,3 @@ A sophisticated memory pruning system has been implemented to maintain optimal p
 - **Verification Tools**: Includes scripts for checking pruning status (`check_pruning.py`) and analyzing pruning logs (`analyze_memory_pruning_log.py`)
 
 The pruning system helps maintain manageable memory sizes as simulations run for extended periods, preventing performance degradation while ensuring critical information is preserved in higher-level memory structures.
-
-### Relationship Dynamics Refinement
-
-The relationship dynamics system has been significantly enhanced with the following improvements:
-
-- **Non-Linear Relationship Updates**: Implemented a sophisticated formula that considers both sentiment and current relationship score
-- **Targeted vs. Broadcast Messages**: Direct messages now have stronger impact on relationships than broadcasts
-- **Relationship-Based Decision Making**: Agents' behaviors are now influenced by their relationships with others
-- **Natural Relationship Decay**: Relationships gradually decay toward neutral, requiring active maintenance
-- **Enhanced Prompting**: More nuanced guidance based on relationship intensity
-
-For detailed information, see the `src/relationship_dynamics_verification.md` report.
-
-### Agent State Refactoring
-
-The agent state management was refactored to use Pydantic models instead of plain dictionaries. This provides:
-
-- Type checking and validation
-- Better code readability and maintainability
-- Structured history tracking of various agent metrics
-- Clearer interface between modules
-
-The `AgentState` class in `src/agents/core/agent_state.py` now manages all agent state and provides proper typing for all agent attributes.
-
-### Role Change System
-
-The role change system now allows agents to:
-
-- Request a role change after spending a minimum number of steps in their current role
-- Pay an Influence Points cost to change roles
-- Switch between Facilitator, Innovator, and Analyzer roles based on strategic considerations
-
-### Hierarchical Memory System
-
-The simulation now includes a sophisticated hierarchical memory system that allows agents to consolidate their experiences at different levels of abstraction:
-
-- **Level 1 - Session Summaries**: Generated from recent short-term memories to capture immediate context and experiences
-- **Level 2 - Chapter Summaries**: Generated every ~10 steps from multiple Level 1 summaries, providing higher-level views of experiences over longer time periods
-- **ChromaDB Integration**: Persists memories to a vector database for long-term storage and semantic retrieval
-- **Memory Filtering**: Enables retrieval of specific memory types based on metadata
-- **RAG (Retrieval-Augmented Generation)**: Allows agents to incorporate relevant past experiences into current thinking
-
-For detailed information, see the `docs/hierarchical_memory_README.md` document.
-
-### Resource Constraint Error Handling
-
-The agent action system now includes robust resource constraint checking for any actions that have associated costs:
-
-- **Pre-action Resource Verification**: Checks for sufficient Influence Points (IP) and Data Units (DU) before executing costly actions
-- **Role Change Constraints**: Requires sufficient IP and cooldown period before allowing role changes
-- **Knowledge Board Posting Constraints**: Requires sufficient IP and DU to post ideas to the Knowledge Board
-- **Detailed Clarification Constraints**: Requires sufficient DU for detailed clarification requests
-- **Memory Recording**: Failed actions due to resource constraints are recorded in the agent's memory
-- **Message Modification**: When an action is blocked due to insufficient resources, the agent's message is automatically modified to acknowledge the constraint
-- **Action Downgrading**: When appropriate, actions are downgraded to less resource-intensive alternatives rather than being completely blocked
-
-This system ensures that agents operate within their resource limits while providing appropriate feedback through the simulation.
-
-## DSPy Integration for L1 Summary Generation
-
-The project now leverages DSPy for generating Level 1 (L1) summaries in the agent's cognitive cycle. This implementation:
-
-1. Uses the DSPy framework to create more concise, relevant, and high-quality summaries of the agent's short-term memory events
-2. Resides in `src/agents/dspy_programs/l1_summary_generator.py`
-3. Integrates with the agent workflow in `src/agents/graphs/basic_agent_graph.py`
-
-The implementation includes:
-- `GenerateL1SummarySignature` - A DSPy signature defining the input/output contract
-- `L1SummaryGenerator` - The main class that handles the summary generation
-- Support for the agent's role and mood in summary generation
-- Fallback mechanisms if DSPy is unavailable
-
-### Example Usage
-
-```python
-from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
-
-# Create the generator
-generator = L1SummaryGenerator()
-
-# Generate a summary with all parameters
-summary = generator.generate_summary(
-    agent_role="Innovator",
-    recent_events="- Step 5, Thought: I should propose a new idea.\n- Step 6, Broadcast: Message sent to all.",
-    current_mood="curious"
-)
-
-# Generate without mood (optional parameter)
-summary = generator.generate_summary(
-    agent_role="Facilitator",
-    recent_events="- Step 10, Thought: Noticed disagreement.\n- Step 11, Action: Asked for clarification."
-)
-```
-
-For future optimization and testing, example summaries are provided in `src/agents/dspy_programs/l1_summary_examples.py`.
