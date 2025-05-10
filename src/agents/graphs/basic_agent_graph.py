@@ -20,6 +20,8 @@ from src.infra import config  # Import config for role change parameters
 from src.agents.core.agent_state import AgentState
 # Import L1SummaryGenerator for DSPy-based L1 summary generation
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
+# Import L2SummaryGenerator for DSPy-based L2 summary generation
+from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 
 # Add dspy imports with detailed error handling
 try:
@@ -1647,9 +1649,9 @@ def route_action_intent(state: AgentTurnState) -> str:
 
 def _maybe_consolidate_memories(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Checks if it's time to consolidate memories at the current step.
-    This node is responsible for triggering the memory consolidation process
-    which creates higher-level summaries from lower-level memories.
+    Checks if it's time to consolidate L1 summaries into L2 summaries at the current step.
+    This node generates Level 2 (chapter) summaries from Level 1 summaries after a configured
+    number of steps have passed since the last L2 consolidation.
     
     Args:
         state (AgentTurnState): The current agent graph state
@@ -1657,9 +1659,176 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: The updated state after potentially consolidating memories
     """
-    # Just pass through the state for now - consolidation is handled in update_state_node
-    # This node exists as a placeholder for future potential expansion of the consolidation logic
-    return state
+    agent_id = state['agent_id']
+    sim_step = state['simulation_step']
+    agent_state = state['state']
+    vector_store = state.get('vector_store_manager')
+    
+    # Define the L2 consolidation interval (every 10 steps by default)
+    L2_CONSOLIDATION_INTERVAL = 10
+    
+    # Check if we're at a step where L2 consolidation should happen
+    if sim_step % L2_CONSOLIDATION_INTERVAL != 0 or sim_step == 0:
+        return state
+    
+    # Check if we have access to the vector store for retrieving L1 summaries
+    if not vector_store:
+        logger.warning(f"Agent {agent_id}: Cannot perform L2 memory consolidation - no vector store available")
+        return state
+    
+    # Since we're at a consolidation step, we'll create a Level 2 summary from
+    # all Level 1 summaries since the last consolidation
+    
+    # Get the last Level 2 consolidation step (init to 0 if not set)
+    last_l2_step = getattr(agent_state, 'last_level_2_consolidation_step', 0)
+    
+    logger.info(f"Agent {agent_id}: Performing L2 memory consolidation at step {sim_step}. Last L2 consolidation was at step {last_l2_step}")
+    
+    # Retrieve all Level 1 summaries since the last L2 consolidation
+    query = f"recent consolidated summaries for agent {agent_id}"
+    
+    # Define the step range for the L1 summaries we want
+    # We want summaries after the last L2 consolidation up to the current step
+    step_filter = {"$gt": last_l2_step, "$lte": sim_step}
+    
+    # Get the relevant L1 summaries from the vector store
+    l1_summaries = vector_store.retrieve_filtered_memories(
+        agent_id=agent_id,
+        query_text=query,
+        filters={"memory_type": "consolidated_summary", "step": step_filter},
+        k=50  # Get all summaries in the range, up to 50
+    )
+    
+    # If we don't have any L1 summaries to consolidate, return early
+    if not l1_summaries or len(l1_summaries) == 0:
+        logger.info(f"Agent {agent_id}: No Level 1 summaries found for L2 consolidation")
+        return state
+    
+    logger.info(f"Agent {agent_id}: Found {len(l1_summaries)} Level 1 summaries to consolidate into a Level 2 summary")
+    
+    # Prepare the context string from the L1 summaries
+    l1_summaries_context = ""
+    
+    # Sort the summaries by step for chronological order
+    sorted_summaries = sorted(l1_summaries, key=lambda x: x.get('step', 0))
+    
+    for summary in sorted_summaries:
+        step = summary.get('step', 'unknown')
+        content = summary.get('content', 'No content')
+        l1_summaries_context += f"- Step {step}, Consolidated Summary: {content}\n"
+    
+    # Prepare optional inputs for the L2SummaryGenerator
+    
+    # Get descriptive mood if available
+    current_mood = get_descriptive_mood(agent_state.mood_value) if hasattr(agent_state, 'mood_value') else None
+    
+    # Analyze mood trend (simple approach for now)
+    overall_mood_trend = None
+    if hasattr(agent_state, 'mood_history') and len(agent_state.mood_history) >= 2:
+        recent_moods = [mood for step, mood in agent_state.mood_history[-5:]]
+        # Simple trend detection
+        if all(mood == recent_moods[0] for mood in recent_moods):
+            overall_mood_trend = f"Consistently {recent_moods[0]}"
+        elif recent_moods[-1] > recent_moods[0]:
+            overall_mood_trend = f"Improving from {recent_moods[0]} to {recent_moods[-1]}"
+        elif recent_moods[-1] < recent_moods[0]:
+            overall_mood_trend = f"Declining from {recent_moods[0]} to {recent_moods[-1]}"
+        else:
+            overall_mood_trend = f"Fluctuating with recent {recent_moods[-1]}"
+    
+    # Format agent goals
+    agent_goals = None
+    if hasattr(agent_state, 'goals') and agent_state.goals:
+        agent_goals = "Current goals: " + ", ".join([goal.get('description', '') for goal in agent_state.goals if 'description' in goal])
+    
+    # Create an instance of L2SummaryGenerator
+    l2_gen = L2SummaryGenerator()
+    
+    # Generate the L2 summary using DSPy
+    try:
+        l2_summary_text = l2_gen.generate_summary(
+            agent_role=agent_state.role,
+            l1_summaries_context=l1_summaries_context,
+            overall_mood_trend=overall_mood_trend,
+            agent_goals=agent_goals
+        )
+        
+        if not l2_summary_text:
+            # If DSPy generation failed, fallback to direct LLM call (if available)
+            if agent_state.llm_client:
+                logger.warning(f"Agent {agent_id}: DSPy L2 summary generation failed, falling back to direct LLM")
+                
+                # Build a prompt for the LLM
+                prompt = f"""You are helping generate a Level 2 (L2) memory summary for an agent with role {agent_state.role}.
+                
+                Based on the following series of Level 1 summaries, create a comprehensive yet concise Level 2 summary that captures the key insights, themes, and developments across this period.
+                
+                Level 1 Summaries:
+                {l1_summaries_context}
+                
+                """
+                
+                if overall_mood_trend:
+                    prompt += f"Overall mood trend during this period: {overall_mood_trend}\n\n"
+                
+                if agent_goals:
+                    prompt += f"Agent's goals: {agent_goals}\n\n"
+                
+                prompt += "Generate a comprehensive L2 summary that synthesizes these experiences into meaningful insights:"
+                
+                # Call the LLM directly
+                l2_summary_text = generate_text(prompt, model=config.LLM_NAME_SHORT)
+            else:
+                logger.error(f"Agent {agent_id}: Cannot generate L2 summary - DSPy failed and no LLM client available")
+                return state
+    
+    except Exception as e:
+        logger.error(f"Agent {agent_id}: Failed to generate L2 summary: {e}")
+        return state
+    
+    # If we have a valid L2 summary, store it
+    if l2_summary_text:
+        # Create metadata for the L2 summary
+        l2_summary = {
+            "step": sim_step,
+            "type": "chapter_summary",  # This is a Level 2 summary
+            "level": 2,
+            "content": l2_summary_text,
+            "source": "l1_summaries_consolidation",
+            "consolidated_entries": len(l1_summaries),
+            "consolidation_period": f"{last_l2_step+1}-{sim_step}"
+        }
+        
+        # Add the L2 summary to the agent's memory
+        agent_state.add_memory(sim_step, "chapter_summary", l2_summary_text)
+        
+        # Update the last L2 consolidation step
+        agent_state.last_level_2_consolidation_step = sim_step
+        
+        # Store the L2 summary in the vector store
+        try:
+            vector_store.add_memory(
+                agent_id=agent_id,
+                step=sim_step,
+                event_type="chapter_summary",  # Type for filtering
+                content=l2_summary_text,
+                memory_type="chapter_summary",  # Type for filtering
+                level=2,
+                consolidation_period=f"{last_l2_step+1}-{sim_step}",
+                consolidated_entries=len(l1_summaries)
+            )
+            logger.info(f"Agent {agent_id}: Successfully stored Level 2 chapter summary in vector store")
+        except Exception as e:
+            logger.error(f"Agent {agent_id}: Failed to store Level 2 chapter summary in vector store: {e}")
+        
+        logger.info(f"Agent {agent_id}: Generated a Level 2 chapter summary at step {sim_step}, consolidating {len(l1_summaries)} Level 1 summaries")
+        logger.debug(f"Agent {agent_id}: Chapter summary content: {l2_summary_text[:150]}...")
+    else:
+        logger.warning(f"Agent {agent_id}: Failed to generate Level 2 chapter summary - empty result")
+    
+    return {
+        "state": agent_state
+    }
 
 def create_basic_agent_graph():
     """
