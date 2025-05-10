@@ -364,16 +364,25 @@ This project draws inspiration from various fields including Agent-Based Modelin
 
 ## Recent Updates
 
-### DSPy L1 Summary Generation Integration
+### DSPy Memory Summarization Integration
 
-The project now leverages DSPy for generating Level 1 (L1) summaries in the agent's cognitive cycle, marking a significant improvement over the previous direct LLM call approach:
+The project now leverages DSPy for generating both Level 1 (L1) and Level 2 (L2) summaries in the agent's cognitive cycle, marking a significant improvement over the previous direct LLM call approach:
 
-- **Enhanced Quality**: Creates more concise, relevant, and coherent summaries by using DSPy's structured approach to prompting
-- **Role and Mood Awareness**: Takes into account the agent's current role and mood to produce contextually appropriate summaries
+- **Enhanced L1 Summaries**: More concise, relevant, and coherent session-level summaries through DSPy's structured approach to prompting
+- **Enhanced L2 Summaries**: Higher-quality chapter-level summaries that synthesize multiple L1 summaries into comprehensive insights
+- **Context-Aware Processing**: Takes into account the agent's current role, mood trends, and goals to produce contextually appropriate summaries
 - **Robust Implementation**: Includes fallback mechanisms when DSPy is unavailable
 - **Future Optimization Ready**: Contains example infrastructure for future optimization using DSPy's learning capabilities
 
-This implementation significantly improves the quality of memory summarization, which in turn enhances memory retrieval, RAG results, and overall agent behavior coherence. The integration exists in the memory consolidation phase of the agent's cognitive cycle.
+This implementation significantly improves the quality of memory summarization at both levels of the hierarchical memory system, resulting in better long-term memory representation and more relevant information retrieval during agent cognition.
+
+### Memory Pruning Improvements
+
+L2 summary pruning functionality has been implemented to manage long-term growth of the memory system:
+
+- **Automatic Cleanup**: Removes older L2 summaries based on configurable age thresholds
+- **Configurable Parameters**: Added control settings in the configuration system
+- **Preservation of Recent Information**: Ensures only truly outdated information is removed while preserving important recent memory
 
 ### DSPy Action Intent Selection Experiment
 
