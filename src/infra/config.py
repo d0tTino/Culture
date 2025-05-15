@@ -6,16 +6,83 @@ Manages environment variables and configuration settings.
 
 import os
 import logging
-import dotenv
+from typing import Dict, Any, Optional
 
-# Load environment variables from .env file if present
 try:
-    dotenv.load_dotenv()
-    logging.debug("Loaded environment variables from .env file")
+    from dotenv import load_dotenv
+    # Load environment variables from .env file if present
+    load_dotenv()
+except ImportError:
+    logging.warning("python-dotenv not installed, skipping .env file loading")
 except Exception as e:
     logging.warning(f"Failed to load environment variables from .env file: {e}")
 
-# --- Default Configuration Values ---
+# Configure logger
+logger = logging.getLogger(__name__)
+
+# Default values
+DEFAULT_CONFIG = {
+    "OLLAMA_API_BASE": "http://localhost:11434",
+    "DEFAULT_LLM_MODEL": "mistral:latest",
+    "MEMORY_THRESHOLD_L1": 0.2,
+    "MEMORY_THRESHOLD_L2": 0.3,
+    "VECTOR_STORE_DIR": "./chroma_db"
+}
+
+# Global config dictionary
+_CONFIG: Dict[str, Any] = {}
+
+def load_config():
+    """
+    Load configuration from environment variables.
+    """
+    global _CONFIG
+    
+    # Start with default config
+    _CONFIG = DEFAULT_CONFIG.copy()
+    
+    # Override with environment variables
+    for key in DEFAULT_CONFIG:
+        env_value = os.environ.get(key)
+        if env_value:
+            # Convert string values to appropriate types
+            if key in ["MEMORY_THRESHOLD_L1", "MEMORY_THRESHOLD_L2"]:
+                try:
+                    _CONFIG[key] = float(env_value)
+                except ValueError:
+                    logger.warning(f"Could not convert {key}={env_value} to float. Using default {_CONFIG[key]}")
+            else:
+                _CONFIG[key] = env_value
+    
+    logger.info(f"Configuration loaded: {_CONFIG}")
+    return _CONFIG
+
+def get_config(key: str = None) -> Any:
+    """
+    Get a configuration value.
+    
+    Args:
+        key (str, optional): The configuration key to retrieve. If None, returns the entire config dict.
+        
+    Returns:
+        Any: The configuration value or the entire config dict.
+    """
+    if not _CONFIG:
+        load_config()
+    
+    if key is None:
+        return _CONFIG
+    
+    return _CONFIG.get(key, DEFAULT_CONFIG.get(key))
+
+# Initialize the configuration on module import
+OLLAMA_API_BASE = get_config("OLLAMA_API_BASE")
+DEFAULT_LLM_MODEL = get_config("DEFAULT_LLM_MODEL")
+MEMORY_THRESHOLD_L1 = get_config("MEMORY_THRESHOLD_L1")
+MEMORY_THRESHOLD_L2 = get_config("MEMORY_THRESHOLD_L2")
+VECTOR_STORE_DIR = get_config("VECTOR_STORE_DIR")
+
+# --- Basic Configuration ---
 DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # --- API Keys ---
@@ -23,19 +90,56 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # Anthropic API key
 
 # --- LLM Settings ---
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo")
 DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
 
-# --- Role Change Settings ---
-ROLE_CHANGE_IP_COST = 5  # Cost in IP to request/confirm a role change
-ROLE_CHANGE_COOLDOWN = 3 # Minimum number of steps an agent must stay in a role before requesting another change
+# --- Ollama Settings ---
 
-# --- Relationship Settings ---
-POSITIVE_RELATIONSHIP_LEARNING_RATE = 0.3  # Learning rate for positive sentiment interactions
-NEGATIVE_RELATIONSHIP_LEARNING_RATE = 0.4  # Learning rate for negative sentiment interactions (slightly higher for more impact)
-NEUTRAL_RELATIONSHIP_LEARNING_RATE = 0.1  # Learning rate for neutral sentiment interactions
-TARGETED_MESSAGE_MULTIPLIER = 3.0  # Multiplier for relationship changes from targeted messages vs broadcasts
-RELATIONSHIP_DECAY_RATE = 0.01  # Rate at which relationships decay toward neutral each turn
+# --- Redis Settings ---
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+
+# --- Discord Bot Settings ---
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
+DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID", "")
+# Convert channel ID to int if it exists and is numeric
+if DISCORD_CHANNEL_ID and DISCORD_CHANNEL_ID.isdigit():
+    DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID)
+else:
+    DISCORD_CHANNEL_ID = None
+
+# --- Memory Pruning Settings ---
+# Whether to enable automatic memory pruning (default to False for safety)
+MEMORY_PRUNING_ENABLED = os.getenv("MEMORY_PRUNING_ENABLED", "False").lower() == "true"
+# How many steps to wait after a Level 2 summary before pruning the Level 1 summaries
+MEMORY_PRUNING_L1_DELAY_STEPS = int(os.getenv("MEMORY_PRUNING_L1_DELAY_STEPS", "10"))
+# Whether to enable Level 2 summary pruning
+MEMORY_PRUNING_L2_ENABLED = os.getenv("MEMORY_PRUNING_L2_ENABLED", "True").lower() == "true"
+# Maximum age in days for an L2 summary before it's considered for pruning
+MEMORY_PRUNING_L2_MAX_AGE_DAYS = int(os.getenv("MEMORY_PRUNING_L2_MAX_AGE_DAYS", "30"))
+# How many simulation steps occur between L2 pruning checks
+MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS = int(os.getenv("MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS", "100"))
+
+# --- MUS-based L1 Pruning Settings ---
+MEMORY_PRUNING_L1_MUS_ENABLED = os.getenv("MEMORY_PRUNING_L1_MUS_ENABLED", "False").lower() == "true"
+MEMORY_PRUNING_L1_MUS_THRESHOLD = float(os.getenv("MEMORY_PRUNING_L1_MUS_THRESHOLD", "0.3"))
+MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION = int(os.getenv("MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION", "7"))
+MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS = int(os.getenv("MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS", "50"))
+
+# --- MUS-based L2 Pruning Settings ---
+MEMORY_PRUNING_L2_MUS_ENABLED = os.getenv("MEMORY_PRUNING_L2_MUS_ENABLED", "False").lower() == "true"
+MEMORY_PRUNING_L2_MUS_THRESHOLD = float(os.getenv("MEMORY_PRUNING_L2_MUS_THRESHOLD", "0.25"))
+MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION = int(os.getenv("MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION", "14"))
+MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS = int(os.getenv("MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS", "150"))
+
+# --- Mood and Relationship Settings ---
+MOOD_DECAY_FACTOR = float(os.getenv("MOOD_DECAY_FACTOR", "0.02"))  # Mood decays towards neutral by 2% each turn
+RELATIONSHIP_DECAY_FACTOR = float(os.getenv("RELATIONSHIP_DECAY_FACTOR", "0.01"))  # Relationships decay towards neutral by 1% each turn
+POSITIVE_RELATIONSHIP_LEARNING_RATE = float(os.getenv("POSITIVE_RELATIONSHIP_LEARNING_RATE", "0.3"))  # Learning rate for positive sentiment interactions
+NEGATIVE_RELATIONSHIP_LEARNING_RATE = float(os.getenv("NEGATIVE_RELATIONSHIP_LEARNING_RATE", "0.4"))  # Learning rate for negative sentiment interactions
+NEUTRAL_RELATIONSHIP_LEARNING_RATE = float(os.getenv("NEUTRAL_RELATIONSHIP_LEARNING_RATE", "0.1"))  # Learning rate for neutral sentiment interactions
+TARGETED_MESSAGE_MULTIPLIER = float(os.getenv("TARGETED_MESSAGE_MULTIPLIER", "3.0"))  # Multiplier for relationship changes from targeted messages vs broadcasts
 
 # --- Relationship Label Mapping ---
 RELATIONSHIP_LABELS = {
@@ -55,36 +159,36 @@ SENTIMENT_TO_NUMERIC = {
     "negative": -1.0
 }
 
+# --- Influence Points (IP) Settings ---
+INITIAL_INFLUENCE_POINTS = int(os.getenv("INITIAL_INFLUENCE_POINTS", "10"))  # Starting IP for new agents
+IP_AWARD_FOR_PROPOSAL = int(os.getenv("IP_AWARD_FOR_PROPOSAL", "5"))  # Amount of IP awarded for successfully proposing an idea
+IP_COST_TO_POST_IDEA = int(os.getenv("IP_COST_TO_POST_IDEA", "2"))  # Cost in IP to post an idea
+ROLE_CHANGE_IP_COST = int(os.getenv("ROLE_CHANGE_IP_COST", "5"))  # Cost in IP to request/confirm a role change
+IP_COST_CREATE_PROJECT = int(os.getenv("IP_COST_CREATE_PROJECT", "10"))  # Cost in IP to create a new project
+IP_COST_JOIN_PROJECT = int(os.getenv("IP_COST_JOIN_PROJECT", "1"))  # Cost in IP to join an existing project
+
 # --- Data Units (DU) Settings ---
-INITIAL_DATA_UNITS = 20  # Starting DU for new agents
+INITIAL_DATA_UNITS = int(os.getenv("INITIAL_DATA_UNITS", "20"))  # Starting DU for new agents
+PROPOSE_DETAILED_IDEA_DU_COST = int(os.getenv("PROPOSE_DETAILED_IDEA_DU_COST", "5"))  # DU cost for posting a detailed idea
+DU_AWARD_IDEA_ACKNOWLEDGED = int(os.getenv("DU_AWARD_IDEA_ACKNOWLEDGED", "3"))  # DU awarded to original proposer if idea is referenced
+DU_AWARD_SUCCESSFUL_ANALYSIS = int(os.getenv("DU_AWARD_SUCCESSFUL_ANALYSIS", "4"))  # DU awarded to Analyzer for useful critique
+DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = int(os.getenv("DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE", "1"))  # DU bonus for referencing a board entry
+DU_COST_DEEP_ANALYSIS = int(os.getenv("DU_COST_DEEP_ANALYSIS", "3"))  # Cost for an Analyzer to perform a "deep analysis"
+DU_COST_REQUEST_DETAILED_CLARIFICATION = int(os.getenv("DU_COST_REQUEST_DETAILED_CLARIFICATION", "2"))  # Cost to ask detailed clarification
+DU_COST_CREATE_PROJECT = int(os.getenv("DU_COST_CREATE_PROJECT", "10"))  # Cost in DU to create a new project
+DU_COST_JOIN_PROJECT = int(os.getenv("DU_COST_JOIN_PROJECT", "1"))  # Cost in DU to join an existing project
+
+# --- Role Settings ---
 ROLE_DU_GENERATION = {
-    "Innovator": 2,     # Generates more DU per turn
-    "Analyzer": 1,
-    "Facilitator": 1,
-    "Default Contributor": 0  # Default if role not found
+    "Innovator": int(os.getenv("ROLE_DU_GENERATION_INNOVATOR", "2")),
+    "Analyzer": int(os.getenv("ROLE_DU_GENERATION_ANALYZER", "1")),
+    "Facilitator": int(os.getenv("ROLE_DU_GENERATION_FACILITATOR", "1")),
+    "Default Contributor": int(os.getenv("ROLE_DU_GENERATION_DEFAULT", "0"))
 }
-PROPOSE_DETAILED_IDEA_DU_COST = 5  # DU cost for posting a detailed idea
-DU_AWARD_IDEA_ACKNOWLEDGED = 3  # DU awarded to original proposer if their idea is positively referenced
-DU_AWARD_SUCCESSFUL_ANALYSIS = 4  # DU awarded to Analyzer for a useful critique
-DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = 1  # DU bonus for constructively referencing a board entry
-DU_COST_DEEP_ANALYSIS = 3  # Cost for an Analyzer to perform a "deep analysis"
-DU_COST_REQUEST_DETAILED_CLARIFICATION = 2  # Cost to ask a very specific, detailed clarification
+ROLE_CHANGE_COOLDOWN = int(os.getenv("ROLE_CHANGE_COOLDOWN", "3"))  # Min steps an agent must stay in a role
 
-# --- Project Affiliation Settings ---
-MAX_PROJECT_MEMBERS = 3  # Maximum number of members in a project
-IP_COST_CREATE_PROJECT = 10  # Cost in IP to create a new project
-DU_COST_CREATE_PROJECT = 10  # Cost in DU to create a new project
-IP_COST_JOIN_PROJECT = 1  # Cost in IP to join an existing project
-DU_COST_JOIN_PROJECT = 1  # Cost in DU to join an existing project
-
-# --- Discord Bot Settings ---
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
-DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID", "")
-# Convert channel ID to int if it exists and is numeric
-if DISCORD_CHANNEL_ID and DISCORD_CHANNEL_ID.isdigit():
-    DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID)
-else:
-    DISCORD_CHANNEL_ID = None
+# --- Project Settings ---
+MAX_PROJECT_MEMBERS = int(os.getenv("MAX_PROJECT_MEMBERS", "3"))  # Maximum number of members in a project
 
 # --- Helper Functions ---
 def get(setting_name, default=None):
@@ -107,65 +211,6 @@ def get(setting_name, default=None):
     
     return setting
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# Determine the path to the .env file (assuming it's in config/ relative to project root)
-# This assumes the script is run from the project root or src/
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-dotenv_path = os.path.join(project_root, 'config', '.env')
-dotenv_example_path = os.path.join(project_root, 'config', '.env.example')
-
-# Check if .env exists, otherwise try to load from .env.example as a fallback
-if os.path.exists(dotenv_path):
-    logger.info(f"Loading environment variables from: {dotenv_path}")
-    dotenv.load_dotenv(dotenv_path=dotenv_path)
-elif os.path.exists(dotenv_example_path):
-    logger.warning(f".env file not found. Loading default settings from: {dotenv_example_path}")
-    dotenv.load_dotenv(dotenv_path=dotenv_example_path)
-else:
-    logger.error(".env file not found and .env.example is also missing. Configuration may be incomplete.")
-    # Optionally raise an error or exit if config is critical
-    # raise FileNotFoundError("Configuration file (.env or .env.example) not found in config/ directory.")
-
-# --- Accessor Functions or Variables ---
-
-# Ollama Settings
-OLLAMA_API_BASE = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434') # Default if not set
-
-# Redis Settings
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379)) # Ensure port is integer
-REDIS_DB = int(os.getenv('REDIS_DB', 0))       # Ensure db is integer
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None) # Default to None if not set
-
-# --- Add other configuration variables as needed ---
-# EXAMPLE_API_KEY = os.getenv('EXAMPLE_API_KEY')
-
-# --- Log loaded configuration for verification (optional, be careful with sensitive data) ---
-logger.info("Configuration loaded:")
-logger.info(f"  OLLAMA_API_BASE: {OLLAMA_API_BASE}")
-logger.info(f"  REDIS_HOST: {REDIS_HOST}")
-logger.info(f"  REDIS_PORT: {REDIS_PORT}")
-logger.info(f"  REDIS_DB: {REDIS_DB}")
-# Avoid logging passwords directly:
-logger.info(f"  REDIS_PASSWORD: {'Set' if REDIS_PASSWORD else 'Not Set'}")
-# Log Discord settings, but hide the token
-logger.info(f"  DISCORD_BOT_TOKEN: {'Set' if DISCORD_BOT_TOKEN else 'Not Set'}")
-logger.info(f"  DISCORD_CHANNEL_ID: {DISCORD_CHANNEL_ID}")
-
-
-# You can add functions here to validate configuration if needed
-def get_redis_config():
-    """Returns Redis connection details as a dictionary."""
-    return {
-        "host": REDIS_HOST,
-        "port": REDIS_PORT,
-        "db": REDIS_DB,
-        "password": REDIS_PASSWORD
-    }
-
 def get_relationship_label(score: float) -> str:
     """
     Returns a descriptive relationship label based on a relationship score.
@@ -180,3 +225,19 @@ def get_relationship_label(score: float) -> str:
         if min_val <= score <= max_val:
             return label
     return "Neutral"  # Default fallback 
+
+def get_redis_config():
+    """Returns Redis connection details as a dictionary."""
+    return {
+        "host": REDIS_HOST,
+        "port": REDIS_PORT,
+        "db": REDIS_DB,
+        "password": REDIS_PASSWORD
+    }
+
+# Configure basic logging
+logging.basicConfig(level=getattr(logging, DEFAULT_LOG_LEVEL), format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Log loaded configuration for verification (optional, be careful with sensitive data)
+logger.info("Configuration loaded successfully") 

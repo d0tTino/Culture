@@ -1,3 +1,19 @@
+# Hierarchical Memory System Overview
+
+The Culture.ai agent memory system uses a hierarchical structure:
+
+- **L1 Summaries:** Short-term, step/session-level memories. Pruned frequently using both age and MUS (Memory Utility Score).
+- **L2 Summaries:** Long-term, chapter-level summaries synthesized from L1s. Pruned less frequently, with higher MUS threshold.
+
+## MUS Pruning
+
+- **MUS Formula:** (0.4 × Retrieval Frequency Score) + (0.4 × Relevance Score) + (0.2 × Recency Score)
+- **L1 Pruning:** Age-based and MUS < 0.2
+- **L2 Pruning:** Age-based and MUS < 0.3
+- **Thresholds:** L1=0.2, L2=0.3 (l1_low_l2_medium configuration, see benchmarks/mus_threshold_tuning_report.md)
+
+This approach ensures efficient memory management and optimal retrieval-augmented generation (RAG) performance.
+
 # Hierarchical Memory Consolidation
 
 This document describes the hierarchical memory consolidation system implemented for AI agents in our simulation.

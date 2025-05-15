@@ -2,6 +2,22 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any, Deque, Tuple
 from collections import deque
 from dataclasses import field
+from enum import Enum
+
+class AgentActionIntent(str, Enum):
+    """
+    Enumeration of possible agent action intents.
+    These are the various intents an agent can select for their turn.
+    """
+    IDLE = "idle"
+    CONTINUE_COLLABORATION = "continue_collaboration"
+    PROPOSE_IDEA = "propose_idea"
+    ASK_CLARIFICATION = "ask_clarification"
+    PERFORM_DEEP_ANALYSIS = "perform_deep_analysis"
+    CREATE_PROJECT = "create_project"
+    JOIN_PROJECT = "join_project"
+    LEAVE_PROJECT = "leave_project"
+    SEND_DIRECT_MESSAGE = "send_direct_message"
 
 class AgentState(BaseModel):
     """

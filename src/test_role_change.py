@@ -17,7 +17,7 @@ from src.agents.core.base_agent import Agent
 from src.agents.core.agent_state import AgentState
 from src.agents.core.roles import ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
 from src.sim.knowledge_board import KnowledgeBoard
-from src.infra.memory.vector_store import ChromaVectorStoreManager
+from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.infra import config
 
 # Configure logging to show detailed information
@@ -114,7 +114,11 @@ def test_role_change():
         ip_cost_per_message=1.0,
         du_cost_per_action=1.0,
         role_change_cooldown=3,
-        role_change_ip_cost=role_change_ip_cost
+        role_change_ip_cost=role_change_ip_cost,
+        # Add missing required fields
+        positive_relationship_learning_rate=0.3,
+        negative_relationship_learning_rate=0.4,
+        targeted_message_multiplier=3.0
     )
     
     # Create an Agent instance directly with the agent ID

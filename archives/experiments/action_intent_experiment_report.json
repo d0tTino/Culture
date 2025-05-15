@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-05-09 18:59:11",
+  "training_examples": 12,
+  "test_examples": 3,
+  "test_results": [
+    {
+      "example": {
+        "agent_role": "Facilitator",
+        "current_situation": "The Knowledge Board has accumulated many ideas, but there's no clear direction. Some agents are getting frustrated.",
+        "agent_goal": "Create structure and focus for the group's efforts.",
+        "available_actions": [
+          "propose_idea",
+          "create_project",
+          "continue_collaboration",
+          "perform_deep_analysis"
+        ]
+      },
+      "chosen_action_intent": "]]\ncreate_project",
+      "justification_thought": "]]\nBy creating a project, I can help the group move forward in a more structured manner, addressing their current frustration and promoting progress towards the simulation objective.",
+      "processing_time": 1.6702022552490234
+    },
+    {
+      "example": {
+        "agent_role": "Analyzer",
+        "current_situation": "A promising new idea was just posted that could solve multiple problems, but it needs verification.",
+        "agent_goal": "Ensure the group's decisions are based on sound analysis.",
+        "available_actions": [
+          "propose_idea",
+          "ask_clarification",
+          "perform_deep_analysis",
+          "continue_collaboration"
+        ]
+      },
+      "chosen_action_intent": "]]\nperform_deep_analysis",
+      "justification_thought": "]]\nBy performing deep analysis on the promising new idea, I can contribute to the group's decision-making process by providing a thorough evaluation of its potential effectiveness.",
+      "processing_time": 1.5682933330535889
+    },
+    {
+      "example": {
+        "agent_role": "Innovator",
+        "current_situation": "The group is stuck in analysis paralysis. Multiple analyses suggest different approaches.",
+        "agent_goal": "Break through gridlock with creative solutions.",
+        "available_actions": [
+          "propose_idea",
+          "continue_collaboration",
+          "idle",
+          "ask_clarification"
+        ]
+      },
+      "chosen_action_intent": "]]\npropose_idea",
+      "justification_thought": "]]\nBy proposing a creative solution, I can help the group move past analysis paralysis and make progress towards achieving our simulation objective.",
+      "processing_time": 1.6491360664367676
+    }
+  ]
+}

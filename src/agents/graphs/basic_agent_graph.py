@@ -58,32 +58,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Decay factors for mood and relationships
-MOOD_DECAY_FACTOR = 0.02  # Mood decays towards neutral by 2% each turn
-RELATIONSHIP_DECAY_FACTOR = 0.01  # Relationships decay towards neutral by 1% each turn
+# Decay factors for mood and relationships (loaded from config)
+MOOD_DECAY_FACTOR = config.MOOD_DECAY_FACTOR
+RELATIONSHIP_DECAY_FACTOR = config.RELATIONSHIP_DECAY_FACTOR
 
-# IP award constants
-IP_AWARD_FOR_PROPOSAL = 5  # Amount of IP awarded for successfully proposing an idea to the knowledge board
-IP_COST_TO_POST_IDEA = 2   # Cost in IP to post an idea to the knowledge board
+# IP award constants (loaded from config)
+IP_AWARD_FOR_PROPOSAL = config.IP_AWARD_FOR_PROPOSAL
+IP_COST_TO_POST_IDEA = config.IP_COST_TO_POST_IDEA
 
 # Role change constants (loaded from config)
-ROLE_CHANGE_IP_COST = config.ROLE_CHANGE_IP_COST if hasattr(config, 'ROLE_CHANGE_IP_COST') else 5
-ROLE_CHANGE_COOLDOWN = config.ROLE_CHANGE_COOLDOWN if hasattr(config, 'ROLE_CHANGE_COOLDOWN') else 3
+ROLE_CHANGE_IP_COST = config.ROLE_CHANGE_IP_COST
+ROLE_CHANGE_COOLDOWN = config.ROLE_CHANGE_COOLDOWN
 
 # Data Units constants (loaded from config)
-INITIAL_DATA_UNITS = config.INITIAL_DATA_UNITS if hasattr(config, 'INITIAL_DATA_UNITS') else 20
-ROLE_DU_GENERATION = config.ROLE_DU_GENERATION if hasattr(config, 'ROLE_DU_GENERATION') else {
-    "Innovator": 2,
-    "Analyzer": 1,
-    "Facilitator": 1,
-    "Default Contributor": 0
-}
-PROPOSE_DETAILED_IDEA_DU_COST = config.PROPOSE_DETAILED_IDEA_DU_COST if hasattr(config, 'PROPOSE_DETAILED_IDEA_DU_COST') else 5
-DU_AWARD_IDEA_ACKNOWLEDGED = config.DU_AWARD_IDEA_ACKNOWLEDGED if hasattr(config, 'DU_AWARD_IDEA_ACKNOWLEDGED') else 3
-DU_AWARD_SUCCESSFUL_ANALYSIS = config.DU_AWARD_SUCCESSFUL_ANALYSIS if hasattr(config, 'DU_AWARD_SUCCESSFUL_ANALYSIS') else 4
-DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = config.DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE if hasattr(config, 'DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE') else 1
-DU_COST_DEEP_ANALYSIS = config.DU_COST_DEEP_ANALYSIS if hasattr(config, 'DU_COST_DEEP_ANALYSIS') else 3
-DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFICATION if hasattr(config, 'DU_COST_REQUEST_DETAILED_CLARIFICATION') else 2
+INITIAL_DATA_UNITS = config.INITIAL_DATA_UNITS
+ROLE_DU_GENERATION = config.ROLE_DU_GENERATION
+PROPOSE_DETAILED_IDEA_DU_COST = config.PROPOSE_DETAILED_IDEA_DU_COST
+DU_AWARD_IDEA_ACKNOWLEDGED = config.DU_AWARD_IDEA_ACKNOWLEDGED
+DU_AWARD_SUCCESSFUL_ANALYSIS = config.DU_AWARD_SUCCESSFUL_ANALYSIS
+DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = config.DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE
+DU_COST_DEEP_ANALYSIS = config.DU_COST_DEEP_ANALYSIS
+DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFICATION
 
 # List of valid roles
 VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
@@ -91,17 +86,17 @@ VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 # Define the Pydantic model for structured LLM output
 class AgentActionOutput(BaseModel):
     """Defines the expected structured output from the LLM."""
-    thought: str = Field(..., description="The agent's internal thought or reasoning for the turn.")
-    message_content: Optional[str] = Field(None, description="The message to send to other agents, or None if choosing not to send a message.")
-    message_recipient_id: Optional[str] = Field(None, description="The ID of the agent this message is directed to. None means broadcast to all agents.")
+    thought: str = Field(..., json_schema_extra={"description": "The agent's internal thought or reasoning for the turn."})
+    message_content: Optional[str] = Field(None, json_schema_extra={"description": "The message to send to other agents, or None if choosing not to send a message."})
+    message_recipient_id: Optional[str] = Field(None, json_schema_extra={"description": "The ID of the agent this message is directed to. None means broadcast to all agents."})
     action_intent: Literal["idle", "continue_collaboration", "propose_idea", "ask_clarification", "perform_deep_analysis", "create_project", "join_project", "leave_project", "send_direct_message"] = Field(
         default="idle", # Default intent
-        description="The agent's primary intent for this turn."
+        json_schema_extra={"description": "The agent's primary intent for this turn."}
     )
-    requested_role_change: Optional[str] = Field(None, description="Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.")
-    project_name_to_create: Optional[str] = Field(None, description="Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent.")
-    project_description_for_creation: Optional[str] = Field(None, description="Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent.")
-    project_id_to_join_or_leave: Optional[str] = Field(None, description="Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents.")
+    requested_role_change: Optional[str] = Field(None, json_schema_extra={"description": "Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null."})
+    project_name_to_create: Optional[str] = Field(None, json_schema_extra={"description": "Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent."})
+    project_description_for_creation: Optional[str] = Field(None, json_schema_extra={"description": "Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent."})
+    project_id_to_join_or_leave: Optional[str] = Field(None, json_schema_extra={"description": "Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents."})
 
 # Define the state the graph will operate on during a single agent turn
 class AgentTurnState(TypedDict):
@@ -309,7 +304,7 @@ def retrieve_and_summarize_memories_node(state: AgentTurnState) -> Dict[str, str
     try:
         # Retrieve relevant memories from vector store
         # The top_k parameter controls how many memories to retrieve
-        retrieved_memories = vector_store_manager.retrieve_relevant_memories(agent_id, query_text, k=5)
+        retrieved_memories = vector_store_manager.retrieve_relevant_memories(agent_id, query=query_text, k=5)
         
         if not retrieved_memories or len(retrieved_memories) == 0:
             logger.info(f"Agent {agent_id}: No relevant memories found for query.")
@@ -734,7 +729,7 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
         # Process the role change request
         requested_role = state['structured_output'].requested_role_change
         logger.info(f"Agent {agent_id} requested role change to: {requested_role}")
-        
+    
         # Call the role change function (it handles validation and IP cost)
         role_change_success = process_role_change(agent_state, requested_role)
         
@@ -752,6 +747,7 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
     
     # PASSIVE RESOURCE GENERATION: Generate Data Units based on agent's role
     # Only do this for non-idle actions (to encourage participation)
+    generated_du = 0  # Initialize outside the if block
     if action_intent != "idle":
         # Get the role name (e.g., "Facilitator", "Analyzer", "Innovator")
         role_name = agent_state.role
@@ -852,17 +848,47 @@ def update_state_node(state: AgentTurnState) -> Dict[str, Any]:
 
 def _maybe_prune_l1_memories(state: AgentTurnState) -> Dict[str, Any]:
     """
-    Checks if it's time to prune Level 1 (consolidated) memories.
-    Pruning only occurs if pruning is enabled AND Level 2 summaries have been
-    generated for the steps being pruned AND the pruning delay has elapsed.
-    
-    Args:
-        state (AgentTurnState): The current agent graph state
-        
-    Returns:
-        Dict[str, Any]: The updated state after potentially pruning memories
+    Checks if it's time to prune Level 1 (daily) summaries based on their age.
+    This is called on a more frequent interval than L2 pruning.
     """
-    # ... existing code ...
+    import src.infra.config as config
+    agent_id = state['agent_id']
+    sim_step = state['simulation_step']
+    agent_state = state['state']
+    vector_store = state.get('vector_store_manager')
+    
+    # Check if L1 memory pruning is enabled
+    if not getattr(config, 'MEMORY_PRUNING_ENABLED', False) or not getattr(config, 'MEMORY_PRUNING_L1_ENABLED', False):
+        logger.debug(f"L1 pruning is disabled for agent {agent_id}")
+        return state
+    
+    # Check if it's time to run L1 pruning based on check interval
+    check_interval = getattr(config, 'MEMORY_PRUNING_L1_CHECK_INTERVAL_STEPS', 50)
+    if sim_step % check_interval != 0:
+        return state
+    
+    max_age_days = getattr(config, 'MEMORY_PRUNING_L1_MAX_AGE_DAYS', 14)
+    logger.info(f"Agent {agent_id}: Checking for L1 summaries older than {max_age_days} days at step {sim_step}")
+    
+    # Find L1 summaries older than the configured threshold
+    old_l1_summary_ids = vector_store.get_l1_summaries_older_than(max_age_days)
+    
+    if not old_l1_summary_ids:
+        logger.info(f"Agent {agent_id}: No old L1 summaries found for pruning")
+        return state
+    
+    # Log the pruning operation
+    logger.info(f"Agent {agent_id}: Pruning {len(old_l1_summary_ids)} old L1 summaries")
+    
+    # Delete the old L1 summaries
+    success = vector_store.delete_memories_by_ids(old_l1_summary_ids)
+    
+    if success:
+        logger.info(f"Agent {agent_id}: Successfully pruned {len(old_l1_summary_ids)} old L1 summaries")
+    else:
+        logger.error(f"Agent {agent_id}: Failed to prune old L1 summaries")
+    
+    return state
 
 def _maybe_prune_l2_memories(state: AgentTurnState) -> Dict[str, Any]:
     """
@@ -881,18 +907,20 @@ def _maybe_prune_l2_memories(state: AgentTurnState) -> Dict[str, Any]:
     vector_store = state.get('vector_store_manager')
     
     # Check if L2 memory pruning is enabled and if it's time to check
-    if not config.MEMORY_PRUNING_ENABLED or not config.MEMORY_PRUNING_L2_ENABLED:
+    if not getattr(config, 'MEMORY_PRUNING_ENABLED', False) or not getattr(config, 'MEMORY_PRUNING_L2_ENABLED', False):
         logger.debug(f"L2 pruning is disabled for agent {agent_id}")
         return state
         
     # Check if it's time to run L2 pruning based on check interval
-    if sim_step % config.MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS != 0:
+    check_interval = getattr(config, 'MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS', 100)
+    if sim_step % check_interval != 0:
         return state
         
-    logger.info(f"Agent {agent_id}: Checking for L2 summaries older than {config.MEMORY_PRUNING_L2_MAX_AGE_DAYS} days at step {sim_step}")
+    max_age_days = getattr(config, 'MEMORY_PRUNING_L2_MAX_AGE_DAYS', 30)
+    logger.info(f"Agent {agent_id}: Checking for L2 summaries older than {max_age_days} days at step {sim_step}")
     
     # Find L2 summaries older than the configured threshold
-    old_l2_summary_ids = vector_store.get_l2_summaries_older_than(config.MEMORY_PRUNING_L2_MAX_AGE_DAYS)
+    old_l2_summary_ids = vector_store.get_l2_summaries_older_than(max_age_days)
     
     if not old_l2_summary_ids:
         logger.info(f"Agent {agent_id}: No old L2 summaries found for pruning")
@@ -903,7 +931,7 @@ def _maybe_prune_l2_memories(state: AgentTurnState) -> Dict[str, Any]:
     
     # Delete the old L2 summaries
     success = vector_store.delete_memories_by_ids(old_l2_summary_ids)
-    
+                        
     if success:
         logger.info(f"Agent {agent_id}: Successfully pruned {len(old_l2_summary_ids)} old L2 summaries")
     else:
@@ -1694,9 +1722,8 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> Dict[str, Any]:
     # Get the relevant L1 summaries from the vector store
     l1_summaries = vector_store.retrieve_filtered_memories(
         agent_id=agent_id,
-        query_text=query,
         filters={"memory_type": "consolidated_summary", "step": step_filter},
-        k=50  # Get all summaries in the range, up to 50
+        limit=50  # Get all summaries in the range, up to 50
     )
     
     # If we don't have any L1 summaries to consolidate, return early
@@ -1830,6 +1857,95 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> Dict[str, Any]:
         "state": agent_state
     }
 
+def _maybe_prune_l1_memories_mus(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Checks if it's time to prune Level 1 (consolidated) memories using MUS-based pruning.
+    Only runs if enabled and at the configured interval.
+    """
+    import src.infra.config as config
+    agent_id = state['agent_id']
+    sim_step = state['simulation_step']
+    vector_store = state.get('vector_store_manager')
+    
+    if not getattr(config, 'MEMORY_PRUNING_L1_MUS_ENABLED', False):
+        return state
+    
+    check_interval = getattr(config, 'MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS', 50)
+    if sim_step % check_interval != 0:
+        return state
+    
+    logger.info(f"Agent {agent_id}: Performing MUS-based L1 pruning check at step {sim_step}")
+    
+    mus_threshold = getattr(config, 'MEMORY_PRUNING_L1_MUS_THRESHOLD', 0.3)
+    min_age_days = getattr(config, 'MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION', 7)
+    
+    if not vector_store:
+        logger.warning(f"Agent {agent_id}: No vector store manager available for MUS-based L1 pruning.")
+        return state
+    
+    ids_to_prune = vector_store.get_l1_memories_for_mus_pruning(mus_threshold, min_age_days)
+    
+    if ids_to_prune:
+        logger.info(f"Agent {agent_id}: MUS-based L1 pruning: deleting {len(ids_to_prune)} L1 summaries (sample: {ids_to_prune[:3]})")
+        success = vector_store.delete_memories_by_ids(ids_to_prune)
+        if success:
+            logger.info(f"Agent {agent_id}: Successfully pruned {len(ids_to_prune)} L1 summaries by MUS.")
+        else:
+            logger.error(f"Agent {agent_id}: Failed to prune L1 summaries by MUS.")
+    else:
+        logger.info(f"Agent {agent_id}: No L1 summaries eligible for MUS-based pruning at this check.")
+    
+    return state
+
+def _maybe_prune_l2_memories_mus(state: AgentTurnState) -> Dict[str, Any]:
+    """
+    Checks if it's time to prune Level 2 (chapter) memories using MUS-based pruning.
+    Only runs if enabled and at the configured interval.
+    
+    Args:
+        state (AgentTurnState): The current agent graph state
+        
+    Returns:
+        Dict[str, Any]: The updated state after potentially pruning L2 memories by MUS
+    """
+    import src.infra.config as config
+    agent_id = state['agent_id']
+    sim_step = state['simulation_step']
+    vector_store = state.get('vector_store_manager')
+    
+    # Check if MUS-based L2 memory pruning is enabled
+    if not getattr(config, 'MEMORY_PRUNING_L2_MUS_ENABLED', False):
+        return state
+        
+    # Check if it's time to run MUS-based L2 pruning based on check interval
+    check_interval = getattr(config, 'MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS', 100)
+    if sim_step % check_interval != 0:
+        return state
+        
+    logger.info(f"Agent {agent_id}: Performing MUS-based L2 pruning check at step {sim_step}")
+    
+    mus_threshold = getattr(config, 'MEMORY_PRUNING_L2_MUS_THRESHOLD', 0.3)
+    min_age_days = getattr(config, 'MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION', 14)
+    
+    if not vector_store:
+        logger.warning(f"Agent {agent_id}: No vector store manager available for MUS-based L2 pruning.")
+        return state
+        
+    # Get L2 summaries that meet the MUS pruning criteria
+    ids_to_prune = vector_store.get_l2_memories_for_mus_pruning(mus_threshold, min_age_days)
+    
+    if ids_to_prune:
+        logger.info(f"Agent {agent_id}: MUS-based L2 pruning: deleting {len(ids_to_prune)} L2 summaries (sample: {ids_to_prune[:3]})")
+        success = vector_store.delete_memories_by_ids(ids_to_prune)
+        if success:
+            logger.info(f"Agent {agent_id}: Successfully pruned {len(ids_to_prune)} L2 summaries by MUS.")
+        else:
+            logger.error(f"Agent {agent_id}: Failed to prune L2 summaries by MUS.")
+    else:
+        logger.info(f"Agent {agent_id}: No L2 summaries eligible for MUS-based pruning at this check.")
+    
+    return state
+
 def create_basic_agent_graph():
     """
     Builds the agent turn graph with intent routing.
@@ -1853,11 +1969,13 @@ def create_basic_agent_graph():
     workflow.add_node("handle_leave_project", handle_leave_project_node) # Specific intent handler
     workflow.add_node("handle_send_direct_message", handle_send_direct_message_node) # New intent handler
     workflow.add_node("update_state", update_state_node) # Unified state update
-    workflow.add_node("prune_l2_memories", _maybe_prune_l2_memories) # L2 memory pruning node
-    workflow.add_node("prune_l1_memories", _maybe_prune_l1_memories) # L1 memory pruning node
+    workflow.add_node("prune_l2_memories", _maybe_prune_l2_memories) # L2 memory age-based pruning node
+    workflow.add_node("prune_l2_mus_memories", _maybe_prune_l2_memories_mus) # MUS-based L2 memory pruning node
+    workflow.add_node("prune_l1_mus_memories", _maybe_prune_l1_memories_mus) # MUS-based L1 memory pruning node
+    workflow.add_node("prune_l1_memories", _maybe_prune_l1_memories) # L1 memory age-based pruning node
     workflow.add_node("consolidate_memories", _maybe_consolidate_memories) # Memory consolidation node
     workflow.add_node("finalize_message", finalize_message_agent_node) # Final decision on message sending
- 
+
     # Define edges
     workflow.set_entry_point("analyze_sentiment")
     workflow.add_edge("analyze_sentiment", "prepare_relationship_prompt")
@@ -1867,17 +1985,19 @@ def create_basic_agent_graph():
     # Route to the appropriate handler based on the intent
     workflow.add_conditional_edges(
         "generate_action_output",
-        route_action_intent,
+        route_action_intent, # This function returns the NAME of the next node
         {
-            "propose_idea": "handle_propose_idea",
-            "continue_collaboration": "handle_continue_collaboration",
-            "idle": "handle_idle",
-            "ask_clarification": "handle_ask_clarification",
-            "perform_deep_analysis": "handle_deep_analysis",
-            "create_project": "handle_create_project",
-            "join_project": "handle_join_project",
-            "leave_project": "handle_leave_project",
-            "send_direct_message": "handle_send_direct_message"
+            # The keys here MUST match the exact strings returned by route_action_intent
+            "handle_propose_idea": "handle_propose_idea",
+            "handle_ask_clarification": "handle_ask_clarification",
+            "handle_continue_collaboration": "handle_continue_collaboration",
+            "handle_idle": "handle_idle", 
+            "handle_deep_analysis": "handle_deep_analysis",
+            "handle_create_project": "handle_create_project",
+            "handle_join_project": "handle_join_project",
+            "handle_leave_project": "handle_leave_project",
+            "handle_send_direct_message": "handle_send_direct_message",
+            "update_state": "update_state"  # Handles the 'else' case from route_action_intent
         }
     )
     
@@ -1892,17 +2012,21 @@ def create_basic_agent_graph():
     workflow.add_edge("handle_leave_project", "update_state")
     workflow.add_edge("handle_send_direct_message", "update_state")
     
-    # Update state goes to L2 memory pruning
+    # Update state goes to L2 memory pruning (age-based)
     workflow.add_edge("update_state", "prune_l2_memories")
     
-    # Add the L2 pruning to the memory management pipeline
-    workflow.add_edge("prune_l2_memories", "prune_l1_memories")
+    # Add the new L2 MUS-based pruning node to the memory management pipeline
+    workflow.add_edge("prune_l2_memories", "prune_l2_mus_memories")
+    
+    # Continue with the rest of the memory management pipeline
+    workflow.add_edge("prune_l2_mus_memories", "prune_l1_mus_memories")
+    workflow.add_edge("prune_l1_mus_memories", "prune_l1_memories")
     workflow.add_edge("prune_l1_memories", "consolidate_memories")
     workflow.add_edge("consolidate_memories", "finalize_message")
     
     # Finalize message is the end of the graph
     workflow.add_edge("finalize_message", END)
-    
+
     # Compile the workflow
     return workflow.compile()
 

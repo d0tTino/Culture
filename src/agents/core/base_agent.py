@@ -13,7 +13,7 @@ from src.infra import config
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
-    from src.infra.memory.vector_store import ChromaVectorStoreManager
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.sim.knowledge_board import KnowledgeBoard
 
 logger = logging.getLogger(__name__)

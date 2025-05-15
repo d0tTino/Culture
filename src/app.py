@@ -31,7 +31,7 @@ from src.sim.simulation import Simulation
 from src.sim.knowledge_board import KnowledgeBoard
 from src.infra.llm_client import get_ollama_client
 from src.agents.core.base_agent import Agent
-from src.infra.memory.vector_store import ChromaVectorStoreManager
+from src.agents.memory.vector_store import ChromaVectorStoreManager
 
 # Try to import discord bot if present and enabled
 try:
@@ -627,6 +627,11 @@ def main():
     Main entry point for the application.
     """
     import argparse
+    from src.infra.logging_config import setup_logging
+    
+    # Setup logging with our custom configuration
+    root_logger, llm_perf_logger = setup_logging(log_dir="logs")
+    
     parser = argparse.ArgumentParser(description='Run the Culture.ai simulation with different test cases')
     parser.add_argument('test_case', type=int, choices=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
                         help='Test case to run (1-10)')
@@ -636,13 +641,16 @@ def main():
     
     args = parser.parse_args()
     
-    # Set logging level
+    # Set logging level for root logger (won't affect llm_perf_logger which has separate handlers)
     if args.log == 'debug':
-        logging.getLogger().setLevel(logging.DEBUG)
+        root_logger.setLevel(logging.DEBUG)
     elif args.log == 'info':
-        logging.getLogger().setLevel(logging.INFO)
+        root_logger.setLevel(logging.INFO)
     elif args.log == 'warning':
-        logging.getLogger().setLevel(logging.WARNING)
+        root_logger.setLevel(logging.WARNING)
+    
+    # Log that LLM performance monitoring is active
+    llm_perf_logger.info("LLM performance monitoring initialized")
     
     use_discord = args.discord
     test_case = args.test_case

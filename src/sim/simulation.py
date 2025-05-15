@@ -1,8 +1,32 @@
+#!/usr/bin/env python
+# At the top of the file, add:
+
+import logging
+import sys
+
+# Configure root logger to show all levels of messages to stdout
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+# Test DSPy import
+try:
+    logging.info("SIMULATION: Attempting to import DSPy role_thought_generator as a test...")
+    from src.agents.dspy_programs.role_thought_generator import generate_role_prefixed_thought
+    logging.info("SIMULATION: Successfully imported DSPy role_thought_generator!")
+except ImportError as e:
+    logging.error(f"SIMULATION: Failed to import DSPy role_thought_generator: {e}")
+    import traceback
+    logging.error(f"SIMULATION: Import traceback: {traceback.format_exc()}")
+
+# Regular imports follow...
+
 """
 Defines the Simulation class responsible for managing agents and the simulation loop.
 """
 
-import logging
 import time
 import asyncio
 from typing import List, Dict, Any, TYPE_CHECKING, Optional
@@ -12,7 +36,7 @@ from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
     from src.agents.core.base_agent import Agent
-    from src.infra.memory.vector_store import ChromaVectorStoreManager
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.interfaces.discord_bot import SimulationDiscordBot
 
 from src.agents.core.agent_state import AgentState
@@ -543,3 +567,78 @@ class Simulation:
     #      """Updates the global environment state after agent actions."""
     #      # To be implemented
     #      pass 
+
+def parse_args():
+    """Parse command line arguments."""
+    import argparse
+    parser = argparse.ArgumentParser(description='Run the Culture.ai simulation.')
+    parser.add_argument('--steps', type=int, default=5, help='Number of steps to run the simulation for.')
+    parser.add_argument('--agents', type=int, default=3, help='Number of agents to create for the simulation.')
+    parser.add_argument('--scenario', type=str, default="Collaborative problem-solving session", 
+                        help='Scenario description for the simulation.')
+    parser.add_argument('--verbosity', type=str, default='INFO', 
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Logging verbosity level.')
+    return parser.parse_args()
+
+def main():
+    """
+    Main entry point for running the simulation.
+    """
+    args = parse_args()
+    
+    # Configure logging
+    logging.basicConfig(level=getattr(logging, args.verbosity))
+    
+    # Test DSPy modules
+    logging.info("SIMULATION: Attempting to import DSPy role_thought_generator as a test...")
+    try:
+        from src.agents.dspy_programs.role_thought_generator import generate_role_prefixed_thought
+        logging.info("SIMULATION: Successfully imported DSPy role_thought_generator!")
+    except Exception as e:
+        logging.error(f"SIMULATION: Failed to import DSPy role_thought_generator: {e}")
+    
+    # Test DSPy action intent selector
+    logging.info("SIMULATION: Attempting to import DSPy action_intent_selector as a test...")
+    try:
+        from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector
+        action_selector = get_optimized_action_selector()
+        logging.info(f"SIMULATION: Successfully imported and initialized DSPy action_intent_selector!")
+        
+        # Run a quick test
+        test_example = {
+            "agent_role": "Facilitator",
+            "current_situation": "Starting a new simulation.",
+            "agent_goal": "Help the group collaborate effectively.",
+            "available_actions": ['propose_idea', 'ask_clarification', 'continue_collaboration', 'idle']
+        }
+        
+        try:
+            prediction = action_selector(**test_example)
+            logging.info(f"SIMULATION: Action selector test successful! Selected action: {prediction.chosen_action_intent}")
+        except Exception as e:
+            logging.error(f"SIMULATION: Action selector test call failed: {e}")
+    except Exception as e:
+        logging.error(f"SIMULATION: Failed to import/initialize DSPy action_intent_selector: {e}")
+        import traceback
+        logging.error(f"SIMULATION: {traceback.format_exc()}")
+    
+    # Create agents for the simulation
+    from src.agents.core.base_agent import Agent
+    agents = []
+    for i in range(args.agents):
+        agent = Agent(agent_id=f"agent_{i+1}")
+        agents.append(agent)
+    
+    # Create the simulation with the specified agents
+    sim = Simulation(
+        agents=agents,
+        scenario=args.scenario
+    )
+    
+    # Run the simulation
+    sim.run(num_steps=args.steps)
+
+# Call the main function when the script is run directly
+if __name__ == "__main__":
+    main() 

@@ -2,15 +2,39 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+.pytest_cache/
 
 # Distribution / packaging
 dist/
 build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Virtual environments
 venv/
 env/
+test_venv/
+test_venv_clean/
+test_venv_temp/
+.env/
+.venv/
+ENV/
+env/
+venv/
 ENV/
 
 # IDE specific files
@@ -18,22 +42,71 @@ ENV/
 .vscode/
 *.swp
 *.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
 
 # Database files
 *.sqlite3
+*.db
 chroma_db_store/
 chroma_db_test*/
 
 # Logs
+logs/
 *.log
+.coverage
+htmlcov/
+coverage.xml
 
 # Environment variables
 .env
-.env.local
+.env.*
+!.env.example
+
+# Local configuration
+.local/
+config/
 
 # Temp files
 *.tmp
+tmp/
+temp/
+output.txt
+temp.txt
+simulation_debug.txt
+simulation_log.txt
+memory_pruning_analysis.txt
 
-# OS specific
-.DS_Store
-Thumbs.db 
+# ChromaDB test directories
+test_chroma_db/
+test_chroma_dbs/
+test_chroma_db_persistence_specific/
+test_chroma_pruning_*/
+test_chroma_usage_tracking_*/
+test_memory_utility_score_*/
+test_full_memory_pipeline_*/
+chroma_benchmark_*/
+test_chroma_*/
+memory_usage_tracking_test_*/
+
+# Mypy cache
+.mypy_cache/
+
+# Pytest cache
+.pytest_cache/
+
+# Coverage reports
+.coverage
+htmlcov/
+.coverage.*
+coverage.xml
+*.cover
+
+# Temp test directories
+/test_memory_utility_score_*
+/test_mus_pruning_*
+/temp_extract/
+/temp/ 

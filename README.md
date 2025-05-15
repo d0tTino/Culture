@@ -143,9 +143,42 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
    ```
 
 6. Configuration:
-   * Copy `config/.env.example` to `config/.env` if it exists.
-   * Edit `config/.env` to set your `OLLAMA_API_BASE` (if not default `http://localhost:11434`) and `DISCORD_BOT_TOKEN` (if using the Discord interface).
-   * Review default settings in `src/infra/config.py` and adjust if necessary (e.g., default LLM model, memory pruning settings).
+   * Copy `.env.example` to `.env` in the project root
+   * Edit `.env` to customize your simulation settings, including:
+     * API keys (if any)
+     * LLM model settings
+     * Memory pruning thresholds
+     * Resource costs/awards
+     * Role change parameters
+   * See `docs/configuration_system.md` for detailed configuration documentation
+
+## Code Linting and Formatting
+
+This project uses Black for code formatting, isort for import sorting, Flake8 for linting, and Mypy for static type checking.
+
+To install development dependencies (including linting tools), run:
+```bash
+pip install -r requirements-dev.txt
+```
+
+To run all linters and formatters:
+```bash
+# On Linux/Mac:
+./scripts/lint.sh
+
+# On Windows:
+scripts\lint.bat
+```
+
+See `docs/coding_standards.md` for detailed information about our coding standards and linting setup.
+
+## Development Practices
+
+### Code Review
+
+All significant code changes undergo review to ensure quality and maintainability. Our lightweight code review process helps maintain standards, share knowledge, and catch issues early.
+
+For more information, see `docs/code_review_process.md`.
 
 ## Usage
 
@@ -394,50 +427,3 @@ The framework leverages DSPy for optimizing agent action intent selection:
 - **Result Validation**: Verified that optimized selections consistently produced justifications showing understanding of role, goals, and current situation
 
 Detailed documentation is available in `experiments/dspy_action_intent_report.md`.
-
-### DSPy-Ollama Integration
-
-The framework now includes a robust integration between DSPy and local Ollama models, enabling advanced optimizers like BootstrapFewShot to work with local LLMs:
-
-- **OllamaLM Class**: Created a proper implementation that inherits from `dspy.LM` in `src/infra/dspy_ollama_integration.py`, with all required methods including `__init__`, `__call__`, `basic_request`, and `generate`
-- **Global Configuration**: Implemented `configure_dspy_with_ollama()` function to easily set up DSPy with an Ollama model
-- **Comprehensive Testing**: Developed test script in `experiments/test_dspy_ollama_optimizer_integration.py` with three test scenarios:
-  - Direct calls to OllamaLM
-  - Using OllamaLM with dspy.Predict
-  - Using OllamaLM with DSPy's BootstrapFewShot optimizer
-- **API Compatibility**: Fixed implementation issues related to parameter patterns DSPy uses when calling language models
-- **Enhanced Experiments**: Updated `dspy_action_intent_experiment.py` to use the new integration
-
-This integration resolves the "No LM is loaded" errors that previously occurred when attempting to use DSPy optimizers with local Ollama models.
-
-### LLM Call Performance Monitoring
-
-The framework now includes comprehensive monitoring for LLM calls to provide insights into performance:
-
-- **Decorator-Based Monitoring**: Added a monitoring decorator that can be applied to any function making LLM calls, maintaining clean separation of concerns
-- **Key Metrics Collection**: Tracks important metrics including:
-  - Request latency and duration
-  - Success/failure status
-  - Token usage (prompt and completion)
-  - Context information (model name, caller context)
-- **Detailed Error Tracking**: Captures error types and messages for failed calls
-- **Performance Insights**: Provides visibility into performance bottlenecks, error patterns, and resource utilization
-- **Simulation Stability**: Helps identify and address failed LLM calls that might affect simulation stability
-
-This monitoring system adds minimal computational overhead while providing valuable insights for optimizing simulation performance.
-
-### Memory Pruning System
-
-A sophisticated memory pruning system has been implemented to maintain optimal performance while preserving critical information:
-
-- **Hierarchical Pruning**: Implements age-based pruning with different retention policies for each memory hierarchy level
-- **Level 1 Summary Pruning**: Automatically prunes Level 1 (session) summaries after they've been consolidated into Level 2 (chapter) summaries
-- **Level 2 Summary Pruning**: Prunes older Level 2 summaries based on age to prevent indefinite accumulation
-- **Configurable Parameters**: Provides flexible configuration options including:
-  - Maximum age for L2 summaries before pruning
-  - Check interval frequency to control how often pruning is performed
-  - Enable/disable toggles for each pruning level
-- **Performance Benefits**: Reduces vector store size and improves retrieval performance by removing redundant memories
-- **Verification Tools**: Includes scripts for checking pruning status (`check_pruning.py`) and analyzing pruning logs (`analyze_memory_pruning_log.py`)
-
-The pruning system helps maintain manageable memory sizes as simulations run for extended periods, preventing performance degradation while ensuring critical information is preserved in higher-level memory structures.
