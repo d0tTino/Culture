@@ -109,4 +109,5 @@ coverage.xml
 /test_memory_utility_score_*
 /test_mus_pruning_*
 /temp_extract/
-/temp/ 
+/temp/ test_memory_utility_score_*
+test_mus_pruning_*
