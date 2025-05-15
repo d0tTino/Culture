@@ -14,7 +14,7 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages # Although not used yet, good practice
 from src.infra.llm_client import generate_structured_output, analyze_sentiment, generate_text, summarize_memory_context, generate_response # Updated import structure to match function name
 from collections import deque
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, ValidationError
 from src.agents.core.roles import ROLE_PROMPT_SNIPPETS, ROLE_DESCRIPTIONS, ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER
 from src.infra import config  # Import config for role change parameters
 from src.agents.core.agent_state import AgentState
@@ -347,312 +347,319 @@ def retrieve_and_summarize_memories_node(state: AgentTurnState) -> Dict[str, str
 
 def generate_thought_and_message_node(state: AgentTurnState) -> Dict[str, Optional[AgentActionOutput]]:
     """
-    Node that calls the LLM to generate structured output (thought, message_content, message_recipient_id, intent)
-    based on context.
+    Generates the agent's thought and message for the turn using the LLM or DSPy.
+    Handles errors gracefully and logs them with context.
     """
-    # Add debug logging to check DSPY_AVAILABLE status
-    logging.info(f"DSPY STATUS CHECK - DSPY_AVAILABLE = {DSPY_AVAILABLE}")
-    logging.info(f"DSPY ACTION SELECTOR STATUS - DSPY_ACTION_SELECTOR_AVAILABLE = {DSPY_ACTION_SELECTOR_AVAILABLE}")
-    
-    agent_id = state['agent_id']
-    sim_step = state['simulation_step']
-    prev_thought = state.get('previous_thought', None)
-    perception = state.get('environment_perception', {})
-    perceived_messages = state.get('perceived_messages', [])
-    sentiment_score = state.get('turn_sentiment_score', 0)
-    prompt_modifier = state.get('prompt_modifier', "")
-    agent_goal = state.get('agent_goal', "Contribute to the simulation as effectively as possible.")
-    rag_summary = state.get('rag_summary', "(No relevant past memories found via RAG)")
-    knowledge_board_content = state.get('knowledge_board_content', [])
-    scenario_description = state.get('scenario_description', "")
-    
-    # Get agent state
-    agent_state = state['agent_state'] if 'agent_state' in state else state.get('state')
-    
-    # Get the current role name
-    role = agent_state.role
-    raw_role_name = role  # Store the raw role name for DSPy
-    role_description = ROLE_DESCRIPTIONS.get(role, f"A person with the role of {role}.")
-
-    # Prepare current situation summary for DSPy
-    recent_messages_str = "".join(["- " + m.get('sender_name', 'Someone') + ": " + m.get('content', '') + "\n" for m in perceived_messages])
-    previous_thoughts_str = prev_thought if prev_thought else 'This is your first turn.'
-    
-    current_situation = (
-        "Environment: " + perception.get('description', 'You are in a collaborative simulation environment.') + "\n\n" +
-        "Recent messages: " + recent_messages_str + "\n\n" + 
-        "Relevant knowledge: " + str(knowledge_board_content) + "\n\n" +
-        "Your previous thoughts: " + previous_thoughts_str + "\n\n" +
-        "Goals: " + agent_goal + "\n\n" +
-        "Relevant memories: " + rag_summary + "\n\n" +
-        "Scenario: " + scenario_description
-    )
-
-    # Log the attempt to use DSPy
-    logging.info(f"Agent {agent_id} attempting to generate thought using DSPy: DSPY_AVAILABLE={DSPY_AVAILABLE}")
-    
-    # PHASE 1: Use DSPy to generate the role-prefixed thought start
-    role_prefixed_thought_start = None
-    
-    if DSPY_AVAILABLE:
-        try:
-            # Create a simpler situation just for the prefix generator
-            situation_for_prefix = f"My role is {raw_role_name}. The current simulation context is: {scenario_description[:200]}"
-            
-            # Call the DSPy function for role-prefixed thought
-            result = generate_role_prefixed_thought(
-                agent_role=raw_role_name,
-                current_situation=situation_for_prefix
-            )
-            
-            # Extract the generated thought prefix
-            role_prefixed_thought_start = result.thought_process
-            logging.info(f"DSPy successfully generated role-adherent thought prefix for Agent {agent_id}")
-            
-            # Log the first part of the thought for debugging
-            thought_preview = role_prefixed_thought_start[:50] + "..." if role_prefixed_thought_start and len(role_prefixed_thought_start) > 50 else role_prefixed_thought_start
-            logging.info(f"DSPy role-prefixed thought preview: {thought_preview}")
-            
-        except Exception as e:
-            logging.error(f"Error using DSPy for role-prefixed thought generation: {e}")
-            logging.error(f"Falling back to standard LLM prompt for Agent {agent_id}")
-            import traceback
-            logging.error(f"DSPy error traceback: {traceback.format_exc()}")
-    
-    # If DSPy failed or isn't available for role-prefixed thought, use a simple template
-    if not role_prefixed_thought_start:
-        # Prepare a role prefix with proper grammar (a vs. an)
-        role_prefix = "an" if role[0].lower() in ['a', 'e', 'i', 'o', 'u'] else "a"
-        role_prefixed_thought_start = f"As {role_prefix} {role}, I need to consider the current situation carefully."
-    
-    # PHASE 2: Use DSPy to select action intent and generate justification
-    chosen_intent_enum = None
-    justification_for_intent = None
-    
-    # Get available actions list
-    from src.agents.core.agent_state import AgentActionIntent
-    available_actions = [intent.value for intent in AgentActionIntent]
-    
-    # Prepare comprehensive situation for action intent selection
-    current_situation_for_action_intent = current_situation  # Use the full situation
-    
-    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: About to check if DSPy action selector is available: DSPY_ACTION_SELECTOR_AVAILABLE={DSPY_ACTION_SELECTOR_AVAILABLE}, optimized_action_selector exists: {optimized_action_selector is not None}")
-    
-    if DSPY_ACTION_SELECTOR_AVAILABLE and optimized_action_selector:
-        try:
-            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Calling DSPy action selector with role={raw_role_name}, goal={agent_goal[:30]}...")
-            
-            # Call the DSPy action intent selector
-            action_selection_prediction = optimized_action_selector(
-                agent_role=raw_role_name,
-                current_situation=current_situation_for_action_intent,
-                agent_goal=agent_goal,
-                available_actions=available_actions
-            )
-            
-            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy action selection successful, processing results")
-            
-            # Extract the selected intent and justification
-            chosen_intent_str = action_selection_prediction.chosen_action_intent
-            justification_for_intent = action_selection_prediction.justification_thought
-            
-            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Raw DSPy results - intent: '{chosen_intent_str}', justification sample: '{justification_for_intent[:50]}...'")
-            
-            # Enhanced string cleaning logic for DSPy output
-            if chosen_intent_str:
-                # Log raw intent string before cleaning
-                raw_intent_str = chosen_intent_str
-                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Raw DSPy intent string: '{raw_intent_str}'")
-                
-                # Step 1: General whitespace stripping
-                chosen_intent_str = chosen_intent_str.strip()
-                
-                # Step 2: Remove specific DSPy output artifacts
-                if chosen_intent_str.startswith(r"]]\n"):
-                    chosen_intent_str = chosen_intent_str[4:]  # Skip ']]\n'
-                elif chosen_intent_str.startswith(r"]\n"):
-                    chosen_intent_str = chosen_intent_str[2:]  # Skip ']\n'
-                elif chosen_intent_str.startswith("]]"):
-                    chosen_intent_str = chosen_intent_str[2:]  # Skip ']]'
-                elif chosen_intent_str.startswith("]"):
-                    chosen_intent_str = chosen_intent_str[1:]  # Skip ']'
-                
-                # Strip whitespace again after prefix removal
-                chosen_intent_str = chosen_intent_str.strip()
-                
-                # Step 3: Remove surrounding quotes
-                chosen_intent_str = chosen_intent_str.strip('"')
-                chosen_intent_str = chosen_intent_str.strip("'")
-                
-                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Cleaned DSPy intent string: '{chosen_intent_str}'")
-            
-            # Apply similar cleaning to justification if available
-            if justification_for_intent:
-                # Log raw justification before cleaning
-                raw_justification = justification_for_intent
-                
-                # Apply the same cleaning logic
-                justification_for_intent = justification_for_intent.strip()
-                if justification_for_intent.startswith(r"]]\n"):
-                    justification_for_intent = justification_for_intent[4:]
-                elif justification_for_intent.startswith(r"]\n"):
-                    justification_for_intent = justification_for_intent[2:]
-                elif justification_for_intent.startswith("]]"):
-                    justification_for_intent = justification_for_intent[2:]
-                elif justification_for_intent.startswith("]"):
-                    justification_for_intent = justification_for_intent[1:]
-                
-                justification_for_intent = justification_for_intent.strip()
-                justification_for_intent = justification_for_intent.strip('"')
-                justification_for_intent = justification_for_intent.strip("'")
-                
-                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Cleaned justification from '{raw_justification[:30]}...' to '{justification_for_intent[:30]}...'")
-            
-            # Validate chosen_intent_str is a valid AgentActionIntent
-            try:
-                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Validating intent '{chosen_intent_str}' against AgentActionIntent enum")
-                chosen_intent_enum = AgentActionIntent(chosen_intent_str)
-                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Intent validation successful: '{chosen_intent_enum.value}'")
-            except ValueError:
-                logger.warning(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy chose an invalid action_intent '{chosen_intent_str}'. Falling back to IDLE.")
-                chosen_intent_enum = AgentActionIntent.IDLE  # Fallback
-                justification_for_intent = f"I was considering options but will default to idle due to an internal decision error regarding '{chosen_intent_str}'."
-            
-            logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Final DSPy selected action_intent='{chosen_intent_enum.value}' with justification: {justification_for_intent[:80]}...")
-        except Exception as e:
-            logger.error(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Error during DSPy action intent selection: {e}. Falling back to LLM for intent.", exc_info=True)
-            # Fallback: these will be determined by the main LLM call later
-            chosen_intent_enum = None 
-            justification_for_intent = "I need to determine my action based on the overall context."
-    else:
-        logger.warning(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy action selector not available, using standard LLM for intent selection")
-    
-    # PHASE 3: Combine thoughts for the final agent thought
-    if justification_for_intent:
-        # Remove any "As a ROLE," prefix from the justification if it exists
-        # to avoid duplication when combining with role_prefixed_thought_start
-        if justification_for_intent.startswith("As a " + raw_role_name + ",") or justification_for_intent.startswith("As an " + raw_role_name + ","):
-            # Extract just the reasoning part after the role prefix
-            prefix_end = justification_for_intent.find(",")
-            if prefix_end > 0:
-                justification_for_intent = justification_for_intent[prefix_end + 1:].strip()
+    try:
+        # Add debug logging to check DSPY_AVAILABLE status
+        logging.info(f"DSPY STATUS CHECK - DSPY_AVAILABLE = {DSPY_AVAILABLE}")
+        logging.info(f"DSPY ACTION SELECTOR STATUS - DSPY_ACTION_SELECTOR_AVAILABLE = {DSPY_ACTION_SELECTOR_AVAILABLE}")
         
-        # Combine the role-prefixed thought with the justification
-        final_agent_thought = role_prefixed_thought_start + " " + justification_for_intent
-    else:
-        # If no justification was provided, just use the role-prefixed thought
-        final_agent_thought = role_prefixed_thought_start
-    
-    # PHASE 4: Prepare prompt for the main LLM call
-    # Set up the base prompt with context
-    prompt_parts = []
-    prompt_parts.append(f"# AGENT INFORMATION")
-    prompt_parts.append(f"Agent ID: {agent_id}")
-    prompt_parts.append(f"Role: {role}")
-    prompt_parts.append(f"Role Description: {role_description}")
-    prompt_parts.append(f"Goal: {agent_goal}")
-    
-    if scenario_description:
-        prompt_parts.append("\n# SCENARIO")
-        prompt_parts.append(scenario_description)
-    
-    # Include environment perception details
-    if perception:
-        prompt_parts.append("\n# ENVIRONMENT")
-        prompt_parts.append(perception.get('description', '(No environment description available)'))
-        if 'other_agents' in perception:
-            prompt_parts.append(_format_other_agents(perception['other_agents'], agent_state.relationships))
-    
-    # Include KB content if available
-    if knowledge_board_content:
-        prompt_parts.append("\n# KNOWLEDGE BOARD")
-        prompt_parts.append(_format_knowledge_board(knowledge_board_content))
-    
-    # RAG-retrieved memories section
-    prompt_parts.append("\n# RELEVANT PAST MEMORIES")
-    prompt_parts.append(rag_summary)
-    
-    # Messages from previous step
-    if perceived_messages:
-        prompt_parts.append("\n# MESSAGES FROM OTHERS")
-        prompt_parts.append(_format_messages(perceived_messages))
-    
-    # Add the relationship context to guide how to interact with others
-    prompt_parts.append("\n# RELATIONSHIP CONTEXT")
-    prompt_parts.append(prompt_modifier)
-    
-    # Previous thought (if any)
-    if prev_thought:
-        prompt_parts.append("\n# YOUR PREVIOUS THOUGHT")
-        prompt_parts.append(prev_thought)
-    
-    # Current mood for context
-    if hasattr(agent_state, 'mood_value'):
-        mood_value = agent_state.mood_value
-        mood_level = get_mood_level(mood_value)
-        descriptive_mood = get_descriptive_mood(mood_value)
-        prompt_parts.append("\n# YOUR CURRENT MOOD")
-        prompt_parts.append(f"Mood level: {mood_level} ({descriptive_mood}, value: {mood_value:.2f})")
-    
-    # Include the final combined thought to guide the LLM
-    prompt_parts.append("\n# YOUR INTERNAL THOUGHT PROCESS (follow this reasoning):")
-    prompt_parts.append(final_agent_thought)
-    
-    # Provide guidance on the chosen action intent if available
-    if chosen_intent_enum:
-        prompt_parts.append("\n# YOUR CHOSEN ACTION INTENT (execute this): " + chosen_intent_enum.value)
-        prompt_parts.append("Based on your thought process and chosen action intent, formulate your response below.")
-    else:
-        prompt_parts.append("\n# ACTION INTENT OPTIONS")
-        prompt_parts.append("Based on your thought process, select one of the following action intents:")
-        for intent in AgentActionIntent:
-            prompt_parts.append(f"- {intent.value}")
-
-    # Add final instructions for formulating the structured response
-    prompt_parts.append("\nRespond with a structured output containing your thought, chosen action intent, and message content (if any).")
-    
-    # Combine all prompt parts
-    full_prompt = "\n\n".join(prompt_parts)
-    
-    # Define the output schema based on the AgentActionOutput model
-    output_schema = {
-        "thought": "The agent's internal thought or reasoning for the turn.",
-        "action_intent": "The agent's primary intent for this turn (choose from: idle, continue_collaboration, propose_idea, ask_clarification, perform_deep_analysis, create_project, join_project, leave_project, send_direct_message).",
-        "message_content": "The message to send to other agents, or null if choosing not to send a message.",
-        "message_recipient_id": "The ID of the agent this message is directed to. null means broadcast to all agents.",
-        "requested_role_change": "Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.",
-        "project_name_to_create": "Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent.",
-        "project_description_for_creation": "Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent.",
-        "project_id_to_join_or_leave": "Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents."
-    }
-    
-    # Generate the structured output using the full prompt and schema
-    structured_llm_output = generate_structured_output(
-        full_prompt, 
-        response_model=AgentActionOutput,
-        model=agent_state.llm_model_name if hasattr(agent_state, 'llm_model_name') else None
-    )
-    
-    # If we have a structured output, override thought and intent if DSPy provided them
-    if structured_llm_output:
-        # Always use our combined thought for consistency
-        structured_llm_output.thought = final_agent_thought
+        agent_id = state['agent_id']
+        sim_step = state['simulation_step']
+        prev_thought = state.get('previous_thought', None)
+        perception = state.get('environment_perception', {})
+        perceived_messages = state.get('perceived_messages', [])
+        sentiment_score = state.get('turn_sentiment_score', 0)
+        prompt_modifier = state.get('prompt_modifier', "")
+        agent_goal = state.get('agent_goal', "Contribute to the simulation as effectively as possible.")
+        rag_summary = state.get('rag_summary', "(No relevant past memories found via RAG)")
+        knowledge_board_content = state.get('knowledge_board_content', [])
+        scenario_description = state.get('scenario_description', "")
         
-        # Only override the action intent if DSPy provided one
-        if chosen_intent_enum:
-            structured_llm_output.action_intent = chosen_intent_enum.value
-    else:
-        # Handle failure case - create a basic output
-        logger.error(f"Agent {agent_id}: Failed to generate structured output, using fallback")
-        structured_llm_output = AgentActionOutput(
-            thought=final_agent_thought,
-            message_content=None,
-            message_recipient_id=None,
-            action_intent=chosen_intent_enum.value if chosen_intent_enum else "idle"
+        # Get agent state
+        agent_state = state['agent_state'] if 'agent_state' in state else state.get('state')
+        
+        # Get the current role name
+        role = agent_state.role
+        raw_role_name = role  # Store the raw role name for DSPy
+        role_description = ROLE_DESCRIPTIONS.get(role, f"A person with the role of {role}.")
+
+        # Prepare current situation summary for DSPy
+        recent_messages_str = "".join(["- " + m.get('sender_name', 'Someone') + ": " + m.get('content', '') + "\n" for m in perceived_messages])
+        previous_thoughts_str = prev_thought if prev_thought else 'This is your first turn.'
+        
+        current_situation = (
+            "Environment: " + perception.get('description', 'You are in a collaborative simulation environment.') + "\n\n" +
+            "Recent messages: " + recent_messages_str + "\n\n" + 
+            "Relevant knowledge: " + str(knowledge_board_content) + "\n\n" +
+            "Your previous thoughts: " + previous_thoughts_str + "\n\n" +
+            "Goals: " + agent_goal + "\n\n" +
+            "Relevant memories: " + rag_summary + "\n\n" +
+            "Scenario: " + scenario_description
         )
-    
-    # Return the structured output
-    return {"structured_output": structured_llm_output}
+
+        # Log the attempt to use DSPy
+        logging.info(f"Agent {agent_id} attempting to generate thought using DSPy: DSPY_AVAILABLE={DSPY_AVAILABLE}")
+        
+        # PHASE 1: Use DSPy to generate the role-prefixed thought start
+        role_prefixed_thought_start = None
+        
+        if DSPY_AVAILABLE:
+            try:
+                # Create a simpler situation just for the prefix generator
+                situation_for_prefix = f"My role is {raw_role_name}. The current simulation context is: {scenario_description[:200]}"
+                
+                # Call the DSPy function for role-prefixed thought
+                result = generate_role_prefixed_thought(
+                    agent_role=raw_role_name,
+                    current_situation=situation_for_prefix
+                )
+                
+                # Extract the generated thought prefix
+                role_prefixed_thought_start = result.thought_process
+                logging.info(f"DSPy successfully generated role-adherent thought prefix for Agent {agent_id}")
+                
+                # Log the first part of the thought for debugging
+                thought_preview = role_prefixed_thought_start[:50] + "..." if role_prefixed_thought_start and len(role_prefixed_thought_start) > 50 else role_prefixed_thought_start
+                logging.info(f"DSPy role-prefixed thought preview: {thought_preview}")
+                
+            except Exception as e:
+                logging.error(f"Error using DSPy for role-prefixed thought generation: {e}")
+                logging.error(f"Falling back to standard LLM prompt for Agent {agent_id}")
+                import traceback
+                logging.error(f"DSPy error traceback: {traceback.format_exc()}")
+        
+        # If DSPy failed or isn't available for role-prefixed thought, use a simple template
+        if not role_prefixed_thought_start:
+            # Prepare a role prefix with proper grammar (a vs. an)
+            role_prefix = "an" if role[0].lower() in ['a', 'e', 'i', 'o', 'u'] else "a"
+            role_prefixed_thought_start = f"As {role_prefix} {role}, I need to consider the current situation carefully."
+        
+        # PHASE 2: Use DSPy to select action intent and generate justification
+        chosen_intent_enum = None
+        justification_for_intent = None
+        
+        # Get available actions list
+        from src.agents.core.agent_state import AgentActionIntent
+        available_actions = [intent.value for intent in AgentActionIntent]
+        
+        # Prepare comprehensive situation for action intent selection
+        current_situation_for_action_intent = current_situation  # Use the full situation
+        
+        logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: About to check if DSPy action selector is available: DSPY_ACTION_SELECTOR_AVAILABLE={DSPY_ACTION_SELECTOR_AVAILABLE}, optimized_action_selector exists: {optimized_action_selector is not None}")
+        
+        if DSPY_ACTION_SELECTOR_AVAILABLE and optimized_action_selector:
+            try:
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Calling DSPy action selector with role={raw_role_name}, goal={agent_goal[:30]}...")
+                
+                # Call the DSPy action intent selector
+                action_selection_prediction = optimized_action_selector(
+                    agent_role=raw_role_name,
+                    current_situation=current_situation_for_action_intent,
+                    agent_goal=agent_goal,
+                    available_actions=available_actions
+                )
+                
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy action selection successful, processing results")
+                
+                # Extract the selected intent and justification
+                chosen_intent_str = action_selection_prediction.chosen_action_intent
+                justification_for_intent = action_selection_prediction.justification_thought
+                
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Raw DSPy results - intent: '{chosen_intent_str}', justification sample: '{justification_for_intent[:50]}...'")
+                
+                # Enhanced string cleaning logic for DSPy output
+                if chosen_intent_str:
+                    # Log raw intent string before cleaning
+                    raw_intent_str = chosen_intent_str
+                    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Raw DSPy intent string: '{raw_intent_str}'")
+                    
+                    # Step 1: General whitespace stripping
+                    chosen_intent_str = chosen_intent_str.strip()
+                    
+                    # Step 2: Remove specific DSPy output artifacts
+                    if chosen_intent_str.startswith(r"]]\n"):
+                        chosen_intent_str = chosen_intent_str[4:]  # Skip ']]\n'
+                    elif chosen_intent_str.startswith(r"]\n"):
+                        chosen_intent_str = chosen_intent_str[2:]  # Skip ']\n'
+                    elif chosen_intent_str.startswith("]]"):
+                        chosen_intent_str = chosen_intent_str[2:]  # Skip ']]'
+                    elif chosen_intent_str.startswith("]"):
+                        chosen_intent_str = chosen_intent_str[1:]  # Skip ']'
+                    
+                    # Strip whitespace again after prefix removal
+                    chosen_intent_str = chosen_intent_str.strip()
+                    
+                    # Step 3: Remove surrounding quotes
+                    chosen_intent_str = chosen_intent_str.strip('"')
+                    chosen_intent_str = chosen_intent_str.strip("'")
+                    
+                    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Cleaned DSPy intent string: '{chosen_intent_str}'")
+                
+                # Apply similar cleaning to justification if available
+                if justification_for_intent:
+                    # Log raw justification before cleaning
+                    raw_justification = justification_for_intent
+                    
+                    # Apply the same cleaning logic
+                    justification_for_intent = justification_for_intent.strip()
+                    if justification_for_intent.startswith(r"]]\n"):
+                        justification_for_intent = justification_for_intent[4:]
+                    elif justification_for_intent.startswith(r"]\n"):
+                        justification_for_intent = justification_for_intent[2:]
+                    elif justification_for_intent.startswith("]]"):
+                        justification_for_intent = justification_for_intent[2:]
+                    elif justification_for_intent.startswith("]"):
+                        justification_for_intent = justification_for_intent[1:]
+                    
+                    justification_for_intent = justification_for_intent.strip()
+                    justification_for_intent = justification_for_intent.strip('"')
+                    justification_for_intent = justification_for_intent.strip("'")
+                    
+                    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Cleaned justification from '{raw_justification[:30]}...' to '{justification_for_intent[:30]}...'")
+                
+                # Validate chosen_intent_str is a valid AgentActionIntent
+                try:
+                    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Validating intent '{chosen_intent_str}' against AgentActionIntent enum")
+                    chosen_intent_enum = AgentActionIntent(chosen_intent_str)
+                    logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Intent validation successful: '{chosen_intent_enum.value}'")
+                except ValueError:
+                    logger.warning(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy chose an invalid action_intent '{chosen_intent_str}'. Falling back to IDLE.")
+                    chosen_intent_enum = AgentActionIntent.IDLE  # Fallback
+                    justification_for_intent = f"I was considering options but will default to idle due to an internal decision error regarding '{chosen_intent_str}'."
+                
+                logger.info(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Final DSPy selected action_intent='{chosen_intent_enum.value}' with justification: {justification_for_intent[:80]}...")
+            except Exception as e:
+                logger.error(f"[DSPY ACTION SELECTOR] Agent {agent_id}: Error during DSPy action intent selection: {e}. Falling back to LLM for intent.", exc_info=True)
+                # Fallback: these will be determined by the main LLM call later
+                chosen_intent_enum = None 
+                justification_for_intent = "I need to determine my action based on the overall context."
+        else:
+            logger.warning(f"[DSPY ACTION SELECTOR] Agent {agent_id}: DSPy action selector not available, using standard LLM for intent selection")
+        
+        # PHASE 3: Combine thoughts for the final agent thought
+        if justification_for_intent:
+            # Remove any "As a ROLE," prefix from the justification if it exists
+            # to avoid duplication when combining with role_prefixed_thought_start
+            if justification_for_intent.startswith("As a " + raw_role_name + ",") or justification_for_intent.startswith("As an " + raw_role_name + ","):
+                # Extract just the reasoning part after the role prefix
+                prefix_end = justification_for_intent.find(",")
+                if prefix_end > 0:
+                    justification_for_intent = justification_for_intent[prefix_end + 1:].strip()
+            
+            # Combine the role-prefixed thought with the justification
+            final_agent_thought = role_prefixed_thought_start + " " + justification_for_intent
+        else:
+            # If no justification was provided, just use the role-prefixed thought
+            final_agent_thought = role_prefixed_thought_start
+        
+        # PHASE 4: Prepare prompt for the main LLM call
+        # Set up the base prompt with context
+        prompt_parts = []
+        prompt_parts.append(f"# AGENT INFORMATION")
+        prompt_parts.append(f"Agent ID: {agent_id}")
+        prompt_parts.append(f"Role: {role}")
+        prompt_parts.append(f"Role Description: {role_description}")
+        prompt_parts.append(f"Goal: {agent_goal}")
+        
+        if scenario_description:
+            prompt_parts.append("\n# SCENARIO")
+            prompt_parts.append(scenario_description)
+        
+        # Include environment perception details
+        if perception:
+            prompt_parts.append("\n# ENVIRONMENT")
+            prompt_parts.append(perception.get('description', '(No environment description available)'))
+            if 'other_agents' in perception:
+                prompt_parts.append(_format_other_agents(perception['other_agents'], agent_state.relationships))
+        
+        # Include KB content if available
+        if knowledge_board_content:
+            prompt_parts.append("\n# KNOWLEDGE BOARD")
+            prompt_parts.append(_format_knowledge_board(knowledge_board_content))
+        
+        # RAG-retrieved memories section
+        prompt_parts.append("\n# RELEVANT PAST MEMORIES")
+        prompt_parts.append(rag_summary)
+        
+        # Messages from previous step
+        if perceived_messages:
+            prompt_parts.append("\n# MESSAGES FROM OTHERS")
+            prompt_parts.append(_format_messages(perceived_messages))
+        
+        # Add the relationship context to guide how to interact with others
+        prompt_parts.append("\n# RELATIONSHIP CONTEXT")
+        prompt_parts.append(prompt_modifier)
+        
+        # Previous thought (if any)
+        if prev_thought:
+            prompt_parts.append("\n# YOUR PREVIOUS THOUGHT")
+            prompt_parts.append(prev_thought)
+        
+        # Current mood for context
+        if hasattr(agent_state, 'mood_value'):
+            mood_value = agent_state.mood_value
+            mood_level = get_mood_level(mood_value)
+            descriptive_mood = get_descriptive_mood(mood_value)
+            prompt_parts.append("\n# YOUR CURRENT MOOD")
+            prompt_parts.append(f"Mood level: {mood_level} ({descriptive_mood}, value: {mood_value:.2f})")
+        
+        # Include the final combined thought to guide the LLM
+        prompt_parts.append("\n# YOUR INTERNAL THOUGHT PROCESS (follow this reasoning):")
+        prompt_parts.append(final_agent_thought)
+        
+        # Provide guidance on the chosen action intent if available
+        if chosen_intent_enum:
+            prompt_parts.append("\n# YOUR CHOSEN ACTION INTENT (execute this): " + chosen_intent_enum.value)
+            prompt_parts.append("Based on your thought process and chosen action intent, formulate your response below.")
+        else:
+            prompt_parts.append("\n# ACTION INTENT OPTIONS")
+            prompt_parts.append("Based on your thought process, select one of the following action intents:")
+            for intent in AgentActionIntent:
+                prompt_parts.append(f"- {intent.value}")
+
+        # Add final instructions for formulating the structured response
+        prompt_parts.append("\nRespond with a structured output containing your thought, chosen action intent, and message content (if any).")
+        
+        # Combine all prompt parts
+        full_prompt = "\n\n".join(prompt_parts)
+        
+        # Define the output schema based on the AgentActionOutput model
+        output_schema = {
+            "thought": "The agent's internal thought or reasoning for the turn.",
+            "action_intent": "The agent's primary intent for this turn (choose from: idle, continue_collaboration, propose_idea, ask_clarification, perform_deep_analysis, create_project, join_project, leave_project, send_direct_message).",
+            "message_content": "The message to send to other agents, or null if choosing not to send a message.",
+            "message_recipient_id": "The ID of the agent this message is directed to. null means broadcast to all agents.",
+            "requested_role_change": "Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.",
+            "project_name_to_create": "Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent.",
+            "project_description_for_creation": "Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent.",
+            "project_id_to_join_or_leave": "Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents."
+        }
+        
+        # Generate the structured output using the full prompt and schema
+        structured_llm_output = generate_structured_output(
+            full_prompt, 
+            response_model=AgentActionOutput,
+            model=agent_state.llm_model_name if hasattr(agent_state, 'llm_model_name') else None
+        )
+        
+        # If we have a structured output, override thought and intent if DSPy provided them
+        if structured_llm_output:
+            # Always use our combined thought for consistency
+            structured_llm_output.thought = final_agent_thought
+            
+            # Only override the action intent if DSPy provided one
+            if chosen_intent_enum:
+                structured_llm_output.action_intent = chosen_intent_enum.value
+        else:
+            # Handle failure case - create a basic output
+            logger.error(f"Agent {agent_id}: Failed to generate structured output, using fallback")
+            structured_llm_output = AgentActionOutput(
+                thought=final_agent_thought,
+                message_content=None,
+                message_recipient_id=None,
+                action_intent=chosen_intent_enum.value if chosen_intent_enum else "idle"
+            )
+        
+        # Return the structured output
+        return {"structured_output": structured_llm_output}
+    except (KeyError, TypeError, AttributeError, ValidationError) as e:
+        logger.error(f"Error in generate_thought_and_message_node for agent {state.get('agent_id', '?')}: {e}", exc_info=True)
+        return {"structured_output": None, "error": str(e)}
+    except Exception as e:
+        logger.error(f"Unexpected error in generate_thought_and_message_node for agent {state.get('agent_id', '?')}: {e}", exc_info=True)
+        return {"structured_output": None, "error": str(e)}
 
 def process_role_change(agent_state, requested_role):
     """

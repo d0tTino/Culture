@@ -680,4 +680,9 @@ def main():
         logging.error(f"Invalid test case: {test_case}")
 
 if __name__ == "__main__":
-    main() 
+    try:
+        main()
+    except Exception as e:
+        logging.critical(f"Unhandled exception in main application: {e}", exc_info=True)
+        import sys
+        sys.exit(1) 

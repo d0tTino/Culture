@@ -72,20 +72,17 @@ class SimulationDiscordBot:
         if not self.is_ready:
             logger.warning("Discord bot not ready yet, message not sent")
             return False
-        
         try:
             channel = self.client.get_channel(self.channel_id)
             if not channel:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
                 return False
-                
             if embed:
                 await channel.send(embed=embed)
                 logger.debug("Sent Discord embed update")
                 return True
             elif content:
-                # Discord message length limit is 2000 characters
-                if len(content) > 1990:  # Leave some room for prefixes/suffixes
+                if len(content) > 1990:
                     content = content[:1990] + "..."
                 await channel.send(content)
                 logger.debug(f"Sent Discord text update: {content[:50]}...")
@@ -93,8 +90,11 @@ class SimulationDiscordBot:
             else:
                 logger.warning("send_simulation_update called with no content or embed")
                 return False
+        except (discord.DiscordException, OSError) as e:
+            logger.error(f"Discord API/network error sending message: {e}", exc_info=True)
+            return False
         except Exception as e:
-            logger.error(f"Error sending Discord message: {e}")
+            logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
             return False
     
     def create_step_start_embed(self, step: int) -> discord.Embed:

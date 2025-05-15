@@ -7,6 +7,7 @@ Manages environment variables and configuration settings.
 import os
 import logging
 from typing import Dict, Any, Optional
+import json
 
 try:
     from dotenv import load_dotenv
@@ -43,18 +44,26 @@ def load_config():
     
     # Override with environment variables
     for key in DEFAULT_CONFIG:
-        env_value = os.environ.get(key)
-        if env_value:
-            # Convert string values to appropriate types
-            if key in ["MEMORY_THRESHOLD_L1", "MEMORY_THRESHOLD_L2"]:
-                try:
-                    _CONFIG[key] = float(env_value)
-                except ValueError:
-                    logger.warning(f"Could not convert {key}={env_value} to float. Using default {_CONFIG[key]}")
-            else:
-                _CONFIG[key] = env_value
+        try:
+            env_value = os.environ.get(key)
+            if env_value:
+                # Convert string values to appropriate types
+                if key in ["MEMORY_THRESHOLD_L1", "MEMORY_THRESHOLD_L2"]:
+                    try:
+                        _CONFIG[key] = float(env_value)
+                    except ValueError:
+                        logger.warning(f"Could not convert {key}={env_value} to float. Using default {_CONFIG[key]}")
+                else:
+                    _CONFIG[key] = env_value
+        except (KeyError, FileNotFoundError, json.JSONDecodeError) as e:
+            logger.error(f"Error loading config key {key}: {e}", exc_info=True)
     
     logger.info(f"Configuration loaded: {_CONFIG}")
+    # Fail fast if critical config is missing
+    if not _CONFIG.get("OLLAMA_API_BASE"):
+        logger.critical("OLLAMA_API_BASE is missing from configuration. Exiting.")
+        import sys
+        sys.exit(1)
     return _CONFIG
 
 def get_config(key: str = None) -> Any:

@@ -10,6 +10,12 @@ from pydantic import BaseModel, Field, ValidationError
 from typing import Type, TypeVar, Optional, List, Any, Dict, Union
 import requests
 from src.utils.decorators import monitor_llm_call
+import time
+from requests.exceptions import RequestException
+try:
+    from litellm.exceptions import APIError
+except ImportError:
+    APIError = Exception  # Fallback if litellm is not installed
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +98,22 @@ def get_ollama_client():
         # Depending on requirements, could try to re-initialize here or just return None
     return client
 
+def _retry_with_backoff(func, max_retries=3, base_delay=1, *args, **kwargs):
+    """
+    Helper for retrying a function with exponential backoff.
+    Returns (result, error) tuple. If successful, error is None.
+    """
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs), None
+        except (RequestException, APIError, ValidationError) as e:
+            logger.error(f"LLM call failed (attempt {attempt+1}/{max_retries}): {e}", exc_info=True)
+            time.sleep(base_delay * (2 ** attempt))
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM call (attempt {attempt+1}/{max_retries}): {e}", exc_info=True)
+            time.sleep(base_delay * (2 ** attempt))
+    return None, e
+
 @monitor_llm_call(model_param="model", context="text_generation")
 def generate_text(prompt: str, model: str = "mistral:latest", temperature: float = 0.7) -> str | None:
     """
@@ -117,35 +139,23 @@ def generate_text(prompt: str, model: str = "mistral:latest", temperature: float
     ollama_client = get_ollama_client()
     if not ollama_client:
         logger.warning("Attempted to generate text but Ollama client is unavailable.")
-        return None # Client not available
-
-    try:
-        logger.debug(f"Sending prompt to Ollama model '{model}':\n---PROMPT START---\n{prompt}\n---PROMPT END---")
-        # Use ollama.chat for conversational models
-        response = ollama_client.chat(
+        return None
+    def call():
+        return ollama_client.chat(
             model=model,
             messages=[{'role': 'user', 'content': prompt}],
-            options={'temperature': temperature} # Pass temperature if needed
+            options={'temperature': temperature}
         )
-        # Check if response structure is as expected
-        if 'message' in response and 'content' in response['message']:
-            generated_text = response['message']['content']
-            logger.debug(f"Received response from Ollama: {generated_text}")
-            return generated_text.strip()
-        else:
-            logger.error(f"Unexpected response structure from Ollama: {response}")
-            return None
-
-    except Exception as e:
-        logger.error(f"Error during Ollama API call to model '{model}': {e}", exc_info=True)
-        logger.error(f"Request details: model={model}, temperature={temperature}")
-        logger.error(f"Ollama server URL: {OLLAMA_API_BASE}")
-        logger.error("Please ensure the Ollama server is running and the model is available")
-        # Additional debugging info for network errors
-        if "connection" in str(e).lower():
-            logger.error(f"Connection error. Check if Ollama server is running at {OLLAMA_API_BASE}")
-        elif "404" in str(e):
-            logger.error(f"Model '{model}' not found. Available models can be listed with 'ollama list'")
+    response, error = _retry_with_backoff(call)
+    if error:
+        logger.error(f"Failed to generate text after retries: {error}")
+        return None
+    if 'message' in response and 'content' in response['message']:
+        generated_text = response['message']['content']
+        logger.debug(f"Received response from Ollama: {generated_text}")
+        return generated_text.strip()
+    else:
+        logger.error(f"Unexpected response structure from Ollama: {response}")
         return None
 
 @monitor_llm_call(model_param="model", context="memory_summarization")

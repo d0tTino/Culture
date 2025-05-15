@@ -16,6 +16,12 @@ from datetime import datetime, timedelta, timezone
 import time
 import numpy as np
 from sentence_transformers import SentenceTransformer
+import json
+from pydantic import ValidationError
+try:
+    from chromadb.exceptions import ChromaDBException
+except ImportError:
+    ChromaDBException = Exception
 
 # Constants for memory usage tracking
 USAGE_TRACKING_FIELDS = [
@@ -97,13 +103,8 @@ class ChromaVectorStoreManager:
             str: Unique ID of the stored memory
         """
         try:
-            # Generate embedding for the content
             embedding = self.get_embedding(content)
-            
-            # Create a memory ID for tracking
             memory_id = f"{agent_id}_{step}_{event_type}_{uuid.uuid4()}"
-        
-            # Prepare metadata with memory management fields
             metadata_dict = metadata or {}
             metadata_dict.update({
                 "agent_id": agent_id,
@@ -111,27 +112,25 @@ class ChromaVectorStoreManager:
                 "event_type": event_type,
                 "memory_type": memory_type or "raw",
                 "timestamp": datetime.utcnow().isoformat(),
-                # Initialize memory usage tracking fields explicitly with zero values
                 "retrieval_count": 0,
                 "last_retrieved_timestamp": "",
                 "accumulated_relevance_score": 0.0,
                 "retrieval_relevance_count": 0
             })
-        
-            # Add to ChromaDB collection
-            self.collection.add(
-                ids=[memory_id],
-                embeddings=[embedding],
-                metadatas=[metadata_dict],
-                documents=[content]
-            )
-            
+            try:
+                self.collection.add(
+                    ids=[memory_id],
+                    embeddings=[embedding],
+                    metadatas=[metadata_dict],
+                    documents=[content]
+                )
+            except (ChromaDBException, OSError, ValidationError, json.JSONDecodeError) as e:
+                logger.error(f"ChromaDB add_memory failed: agent_id={agent_id}, step={step}, event_type={event_type}, error={e}", exc_info=True)
+                return ""
             return memory_id
         except Exception as e:
-            # Log the error with detailed information
-            logger.error(f"Error adding memory. agent_id={agent_id}, step={step}, event_type={event_type}: {e}")
-            # Re-raise for proper error handling upstream
-            raise
+            logger.error(f"Error adding memory. agent_id={agent_id}, step={step}, event_type={event_type}: {e}", exc_info=True)
+            return ""
     
     def record_role_change(self, agent_id: str, step: int, previous_role: str, new_role: str) -> str:
         """
@@ -336,8 +335,11 @@ class ChromaVectorStoreManager:
             
                 return formatted_results
             
+        except (ChromaDBException, OSError, ValidationError, json.JSONDecodeError) as e:
+            logger.error(f"ChromaDB retrieve_relevant_memories failed: agent_id={agent_id}, query={query}, error={e}", exc_info=True)
+            return []
         except Exception as e:
-            logger.error(f"Error retrieving relevant memories for agent {agent_id}: {e}")
+            logger.error(f"Unexpected error in retrieve_relevant_memories: agent_id={agent_id}, query={query}, error={e}", exc_info=True)
             return []
     
     def retrieve_filtered_memories(self, agent_id: str, filters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, include_usage_stats: bool = False) -> List[Dict[str, Any]]:
