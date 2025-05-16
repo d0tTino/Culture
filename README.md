@@ -427,3 +427,13 @@ The framework leverages DSPy for optimizing agent action intent selection:
 - **Result Validation**: Verified that optimized selections consistently produced justifications showing understanding of role, goals, and current situation
 
 Detailed documentation is available in `experiments/dspy_action_intent_report.md`.
+
+## Testing
+
+Culture.ai uses pytest with marker-based test selection and parallelization for fast feedback:
+
+- **Default run** (`pytest`): Runs only unit tests (fast, no external dependencies)
+- **Full suite** (`pytest -m "slow or dspy_program or integration" -v -n auto`): Runs all slow, DSPy, and integration tests in parallel
+- ChromaDB test DBs are stored in RAM (tmpfs) on Linux for speed; see `docs/testing.md` for details
+
+See [docs/testing.md](docs/testing.md) for full instructions, marker definitions, and troubleshooting.

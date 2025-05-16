@@ -10,6 +10,7 @@ import sys
 import os
 import time
 from typing import List, Dict, Any, Optional
+import pytest
 
 from src.agents.core.base_agent import Agent
 from src.agents.core.agent_state import AgentState
@@ -817,6 +818,8 @@ class TestProjectEdgeCases(TestCase):
         return self.passed
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 async def run_tests():
     """Run all test cases and report results"""
     # Configure console output with colors for better readability

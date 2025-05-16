@@ -235,5 +235,5 @@ def test_agent_state():
                 logger.info(f"Initial DU: {initial_du}, current DU: {agent.state.du}")
                 logger.info(f"DU history: {agent.state.du_history}")
 
-if __name__ == "__main__":
-    test_agent_state() 
+def test_discovery_sanity():
+    assert True 

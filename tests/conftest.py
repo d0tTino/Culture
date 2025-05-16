@@ -6,6 +6,8 @@ Pytest fixtures for use across test files.
 import sys
 import os
 import pathlib
+import shutil
+import tempfile
 
 # Add the project root to path to allow importing src modules
 project_root = str(pathlib.Path(__file__).parent.parent.absolute())
@@ -61,4 +63,25 @@ def mock_ollama_by_default(request, monkeypatch):
     
     # If test is not explicitly requiring Ollama, mock all Ollama functions
     from src.infra.llm_mock_helper import patch_ollama_functions
-    patch_ollama_functions(monkeypatch) 
+    patch_ollama_functions(monkeypatch)
+
+@pytest.fixture(scope="session")
+def chroma_test_dir(request):
+    """
+    Provides a unique ChromaDB test directory for each pytest-xdist worker.
+    On Linux, uses /dev/shm/chroma_tests/{worker_id}/ for tmpfs speed.
+    On other OSs, falls back to a temp directory.
+    Auto-deletes the directory after the session.
+    """
+    worker_id = getattr(request.config, 'workerinput', {}).get('workerid', 'master')
+    if sys.platform.startswith("linux") and os.path.exists("/dev/shm"):
+        base_dir = f"/dev/shm/chroma_tests/{worker_id}"
+    else:
+        base_dir = tempfile.mkdtemp(prefix=f"chroma_tests_{worker_id}_")
+    os.makedirs(base_dir, exist_ok=True)
+    yield base_dir
+    # Teardown: remove the directory after the session
+    try:
+        shutil.rmtree(base_dir)
+    except Exception as e:
+        print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}") 

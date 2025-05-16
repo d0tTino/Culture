@@ -1,0 +1,55 @@
+{
+  "traces": [],
+  "train": [],
+  "demos": [
+    {
+      "augmented": true,
+      "role_name": "Innovator",
+      "context": "The team is stuck on a legacy system migration and needs a breakthrough idea.",
+      "thought": "]\nAs an Innovator, I need to think outside the box and propose a creative solution that streamlines the migration process while minimizing downtime."
+    },
+    {
+      "augmented": true,
+      "role_name": "Innovator",
+      "context": "A competitor just launched a similar product with a unique feature.",
+      "thought": "]\nAs an Innovator, I should analyze the competitor's unique feature to identify potential improvements or differentiators for our product."
+    },
+    {
+      "augmented": true,
+      "role_name": "Innovator",
+      "context": "User engagement metrics are flat despite recent updates.",
+      "thought": "]\nAs an Innovator, I should analyze user feedback and identify potential improvements to re-engage users with fresh features or content."
+    },
+    {
+      "augmented": true,
+      "role_name": "Analyzer",
+      "context": "Recent A\/B test results are inconclusive, and the team is unsure how to proceed.",
+      "thought": "]\nAs an Analyzer, I need to delve deeper into the data, identify patterns, and suggest alternative hypotheses or methods to draw more meaningful conclusions."
+    }
+  ],
+  "signature": {
+    "instructions": "Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or 'As an [ROLE],' and reflects the agent's role and current situation.",
+    "fields": [
+      {
+        "prefix": "Role Name:",
+        "description": "The assigned role of the agent."
+      },
+      {
+        "prefix": "Context:",
+        "description": "The current situational context or recent interactions."
+      },
+      {
+        "prefix": "Thought:",
+        "description": "The agent's generated thought, prefixed by their role."
+      }
+    ]
+  },
+  "lm": null,
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.11",
+      "dspy": "2.6.23",
+      "cloudpickle": "3.1"
+    }
+  }
+}

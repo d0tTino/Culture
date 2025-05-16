@@ -40,8 +40,26 @@ except ImportError:
     logging.warning("Discord bot module not found, will run without Discord integration.")
     DiscordBot = None
 
+# === TEMPORARY: Force agent-to-agent messages for DSPy relationship updater spot-check ===
+FORCED_INTERACTION_SCENARIO = (
+    "Agents Alice, Bob, and Carol must discuss and agree on a topic for their next group project. "
+    "Alice should initiate by asking Bob for his ideas. Bob should respond to Alice. "
+    "Carol should then comment on Bob's idea to Alice. All agents should address each other directly in their first message."
+)
+
+# Replace the default scenario for this test run
+DEFAULT_SCENARIO = FORCED_INTERACTION_SCENARIO
+
 # Test scenario for relationship verification
 VERIFICATION_SCENARIO = "The team is collaboratively designing a specification for a communication protocol. Each agent should contribute ideas and feedback while being aware of their relationships with others."
+
+# --- Dark Forest Hypothesis Scenario ---
+DARK_FOREST_SCENARIO = (
+    "In a vast galaxy filled with unknown civilizations, each agent must decide whether to broadcast their existence, remain hidden, or preemptively attack others. "
+    "Revealing oneself may attract allies or deadly enemies. Hiding may ensure survival but limit opportunities. "
+    "Agents have incomplete information about others' intentions and must weigh the risks of communication, cooperation, and aggression. "
+    "The simulation explores the consequences of the 'dark forest' hypothesis: in a universe where any contact could be fatal, what strategies emerge?"
+)
 
 def create_base_simulation(
     scenario: str = VERIFICATION_SCENARIO,
@@ -622,19 +640,41 @@ def test_case_10_targeted_multiplier_comprehensive(use_discord=False):
             
     logging.info("TEST CASE 10 COMPLETED")
 
+def test_case_11_dark_forest(use_discord=False):
+    """
+    Test Case 11: Dark Forest Hypothesis Scenario
+    Agents must choose between hiding, broadcasting, or attacking, with incomplete information and existential risk.
+    """
+    logging.info("STARTING TEST CASE 11: DARK FOREST HYPOTHESIS SCENARIO")
+    sim = create_base_simulation(
+        scenario=DARK_FOREST_SCENARIO,
+        num_agents=4,
+        steps=8,
+        use_discord=use_discord
+    )
+    # Optionally, you could customize agent goals or state here for more realism
+    sim.run(8)
+    logging.info("TEST CASE 11 COMPLETED: See logs for agent strategies and outcomes.")
+
 def main():
     """
     Main entry point for the application.
     """
     import argparse
     from src.infra.logging_config import setup_logging
-    
+    # --- DSPy LM configuration ---
+    from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+    lm = configure_dspy_with_ollama(model_name="mistral:latest", temperature=0.1)
+    import dspy
+    import logging
+    logging.getLogger("dspy_ollama").info(f"[DSPy] LM configured at app startup: {dspy.settings.lm}")
+    # --- end DSPy LM configuration ---
     # Setup logging with our custom configuration
     root_logger, llm_perf_logger = setup_logging(log_dir="logs")
     
     parser = argparse.ArgumentParser(description='Run the Culture.ai simulation with different test cases')
-    parser.add_argument('test_case', type=int, choices=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
-                        help='Test case to run (1-10)')
+    parser.add_argument('test_case', type=int, choices=list(range(1,12)), 
+                        help='Test case to run (1-11, where 11 is the dark forest scenario)')
     parser.add_argument('--discord', action='store_true', help='Enable Discord integration')
     parser.add_argument('--log', choices=['debug', 'info', 'warning'], default='info',
                         help='Set logging level')
@@ -676,6 +716,8 @@ def main():
         test_case_4_broadcast_vs_targeted(use_discord)
     elif test_case == 10:
         test_case_10_targeted_multiplier_comprehensive(use_discord)
+    elif test_case == 11:
+        test_case_11_dark_forest(use_discord)
     else:
         logging.error(f"Invalid test case: {test_case}")
 

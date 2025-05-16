@@ -17,32 +17,25 @@ from src.agents.memory.vector_store import ChromaVectorStoreManager
 @pytest.mark.memory
 @pytest.mark.vector_store
 @pytest.mark.critical_path
+@pytest.mark.usefixtures("chroma_test_dir")
 class TestMemoryUsageTracking(unittest.TestCase):
     """Tests for memory usage tracking in the vector store."""
     
-    @classmethod
-    def setUpClass(cls):
-        """Set up the test environment."""
-        cls.test_dir = tempfile.mkdtemp(prefix="memory_usage_tracking_test_")
-        cls.vector_store = ChromaVectorStoreManager(persist_directory=cls.test_dir)
-        
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the test environment."""
-        try:
-            # Make sure the ChromaDB client is closed
-            if hasattr(cls, 'vector_store') and cls.vector_store:
-                if hasattr(cls.vector_store, 'client') and cls.vector_store.client:
-                    cls.vector_store.client.close()
-                    
-            # Add a small delay to ensure resources are released
-            time.sleep(0.5)
-            
-            # Remove the test directory
-            if os.path.exists(cls.test_dir):
-                shutil.rmtree(cls.test_dir)
-        except Exception as e:
-            logging.error(f"Error during teardown: {e}")
+    @pytest.fixture(autouse=True)
+    def _inject_fixtures(self, request, chroma_test_dir):
+        self.request = request
+        self.chroma_test_dir = chroma_test_dir
+    
+    def setUp(self):
+        self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
+    
+    def tearDown(self):
+        if hasattr(self, 'vector_store') and self.vector_store:
+            if hasattr(self.vector_store, 'client') and self.vector_store.client:
+                try:
+                    self.vector_store.client.close()
+                except AttributeError:
+                    pass
     
     def test_memory_usage_tracking(self):
         """Test that memory usage statistics are tracked correctly."""

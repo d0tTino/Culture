@@ -22,31 +22,24 @@ from src.agents.memory.vector_store import ChromaVectorStoreManager
 @pytest.mark.memory
 @pytest.mark.hierarchical_memory
 @pytest.mark.vector_store
+@pytest.mark.usefixtures("chroma_test_dir")
 class TestHierarchicalMemoryPersistence(unittest.TestCase):
     """Tests for hierarchical memory persistence in the agent memory system."""
     
-    @classmethod
-    def setUpClass(cls):
-        """Set up the test environment with a temporary directory."""
-        cls.test_dir = tempfile.mkdtemp(prefix="hierarchical_memory_test_")
-        cls.vector_store = ChromaVectorStoreManager(persist_directory=cls.test_dir)
-        
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the test environment."""
+    @pytest.fixture(autouse=True)
+    def _inject_fixtures(self, request, chroma_test_dir):
+        self.request = request
+        self.chroma_test_dir = chroma_test_dir
+    
+    def setUp(self):
+        self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
+    
+    def tearDown(self):
         try:
-            # Make sure the ChromaDB client is closed properly
-            if hasattr(cls, 'vector_store') and cls.vector_store:
-                if hasattr(cls.vector_store, 'client') and cls.vector_store.client:
-                    # The client doesn't have a close method directly
+            if hasattr(self, 'vector_store') and self.vector_store:
+                if hasattr(self.vector_store, 'client') and self.vector_store.client:
                     pass
-                    
-            # Add a small delay to ensure resources are released
             time.sleep(0.5)
-            
-            # Remove the test directory
-            if os.path.exists(cls.test_dir):
-                shutil.rmtree(cls.test_dir)
         except Exception as e:
             logging.error(f"Error during teardown: {e}")
     

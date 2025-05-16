@@ -1,0 +1,118 @@
+{
+  "traces": [],
+  "train": [],
+  "demos": [
+    {
+      "augmented": true,
+      "current_relationship_score": 0.1,
+      "interaction_summary": "Agents worked together to solve a technical problem and both contributed ideas.",
+      "agent1_persona": "Collaborative, optimistic software engineer",
+      "agent2_persona": "Detail-oriented, analytical data scientist",
+      "interaction_sentiment": 0.7,
+      "new_relationship_score": "]\n0.4",
+      "relationship_change_rationale": "]]\nPositive collaboration on a problem-solving task increased the relationship score slightly."
+    },
+    {
+      "augmented": true,
+      "current_relationship_score": 0.8,
+      "interaction_summary": "Agents disagreed on the best approach for a project milestone, but discussion remained civil.",
+      "agent1_persona": "Assertive project manager",
+      "agent2_persona": "Cautious, risk-averse analyst",
+      "interaction_sentiment": -0.2,
+      "new_relationship_score": "]\n0.6",
+      "relationship_change_rationale": "Although there was disagreement, the civil nature of the discussion indicates a willingness to work together and compromise, which slightly improved the relationship score."
+    },
+    {
+      "augmented": true,
+      "current_relationship_score": 0.4,
+      "interaction_summary": "Agent 2 took credit for Agent 1's work in a team meeting, causing frustration.",
+      "agent1_persona": "Creative, recognition-seeking designer",
+      "agent2_persona": "Ambitious, competitive marketer",
+      "interaction_sentiment": -0.9,
+      "new_relationship_score": "]\n-0.7",
+      "relationship_change_rationale": "]]\nAgent 2's unprofessional behavior caused frustration, leading to a decrease in the relationship score."
+    },
+    {
+      "augmented": true,
+      "current_relationship_score": -0.1,
+      "interaction_summary": "Facilitator helped resolve a misunderstanding between the agents, leading to a productive outcome.",
+      "agent1_persona": "Diplomatic facilitator",
+      "agent2_persona": "Direct, results-focused engineer",
+      "interaction_sentiment": 0.5,
+      "new_relationship_score": "]\n0.2",
+      "relationship_change_rationale": "]]\nThe facilitator helped resolve a misunderstanding, leading to improved communication and understanding between the agents."
+    }
+  ],
+  "signature": {
+    "instructions": "Updates the relationship score between two agents based on their interaction, personas, and sentiment.\n\nInputs:\n    current_relationship_score: float - Current relationship score between the two agents (e.g., -1.0 to 1.0)\n    interaction_summary: str - Summary of the most recent interaction between the agents\n    agent1_persona: str - Persona\/role description of agent 1\n    agent2_persona: str - Persona\/role description of agent 2\n    interaction_sentiment: float - Sentiment score of the interaction (-1.0 to 1.0)\nOutputs:\n    new_relationship_score: float - Updated relationship score after the interaction\n    relationship_change_rationale: str - Explanation for the relationship score change",
+    "fields": [
+      {
+        "prefix": "Current Relationship Score:",
+        "description": "Current relationship score between the two agents (e.g., -1.0 to 1.0)"
+      },
+      {
+        "prefix": "Interaction Summary:",
+        "description": "Summary of the most recent interaction between the agents"
+      },
+      {
+        "prefix": "Agent 1 Persona:",
+        "description": "Persona\/role description of agent 1"
+      },
+      {
+        "prefix": "Agent 2 Persona:",
+        "description": "Persona\/role description of agent 2"
+      },
+      {
+        "prefix": "Interaction Sentiment:",
+        "description": "Sentiment score of the interaction (-1.0 to 1.0)"
+      },
+      {
+        "prefix": "New Relationship Score:",
+        "description": "Updated relationship score after the interaction"
+      },
+      {
+        "prefix": "Relationship Change Rationale:",
+        "description": "Explanation for the relationship score change"
+      }
+    ]
+  },
+  "lm": null,
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.11",
+      "dspy": "2.6.23",
+      "cloudpickle": "3.1"
+    }
+  },
+  "instructions": "Updates the relationship score between two agents based on their interaction, personas, and sentiment.\n\nInputs:\n    current_relationship_score: float - Current relationship score between the two agents (e.g., -1.0 to 1.0)\n    interaction_summary: str - Summary of the most recent interaction between the agents\n    agent1_persona: str - Persona/role description of agent 1\n    agent2_persona: str - Persona/role description of agent 2\n    interaction_sentiment: float - Sentiment score of the interaction (-1.0 to 1.0)\nOutputs:\n    new_relationship_score: float - Updated relationship score after the interaction\n    relationship_change_rationale: str - Explanation for the relationship score change",
+  "fields": [
+    {
+      "prefix": "Current Relationship Score:",
+      "description": "Current relationship score between the two agents (e.g., -1.0 to 1.0)"
+    },
+    {
+      "prefix": "Interaction Summary:",
+      "description": "Summary of the most recent interaction between the agents"
+    },
+    {
+      "prefix": "Agent 1 Persona:",
+      "description": "Persona/role description of agent 1"
+    },
+    {
+      "prefix": "Agent 2 Persona:",
+      "description": "Persona/role description of agent 2"
+    },
+    {
+      "prefix": "Interaction Sentiment:",
+      "description": "Sentiment score of the interaction (-1.0 to 1.0)"
+    },
+    {
+      "prefix": "New Relationship Score:",
+      "description": "Updated relationship score after the interaction"
+    },
+    {
+      "prefix": "Relationship Change Rationale:",
+      "description": "Explanation for the relationship score change"
+    }
+  ]
+}

@@ -31,99 +31,52 @@ logger = logging.getLogger("test_memory_utility_score")
 @pytest.mark.memory
 @pytest.mark.mus
 @pytest.mark.slow
+@pytest.mark.usefixtures("chroma_test_dir")
 class TestMemoryUtilityScore(unittest.TestCase):
     """
     Test case demonstrating the calculation of Memory Utility Score (MUS)
     for advanced memory pruning as outlined in the design proposal.
     """
-    
-    @classmethod
-    def setUpClass(cls):
-        """
-        Set up the test environment by:
-        1. Creating a test-specific ChromaDB directory
-        2. Adding test memories to the vector store
-        """
-        logger.info("Setting up test environment for memory utility score tests")
-
-        # Enable mock mode for LLM to avoid Ollama 404 errors
-        cls.mock_context = MockLLM({
+    @pytest.fixture(autouse=True)
+    def _inject_fixtures(self, request, chroma_test_dir):
+        self.request = request
+        self.chroma_test_dir = chroma_test_dir
+    def setUp(self):
+        self.mock_context = MockLLM({
             "default": "Mocked response for memory utility score tests",
         })
-        cls.mock_context.__enter__()
-        
-        # Set vector store directory - use test-specific location
-        cls.vector_store_dir = f"./test_memory_utility_score_{uuid.uuid4().hex[:6]}"
-        
-        # Remove any previous test database
-        if os.path.exists(cls.vector_store_dir):
-            logger.info(f"Removing previous test ChromaDB at {cls.vector_store_dir}")
-            shutil.rmtree(cls.vector_store_dir)
-        
-        # Create vector store manager
-        cls.vector_store = ChromaVectorStoreManager(persist_directory=cls.vector_store_dir)
-        
-        # Define test agent ID
-        cls.agent_id = "test_agent_1"
-        
-        # Add several test memories with different characteristics
-        cls.memory_ids = []
-        
-        # Memory 1: High relevance memory (will be retrieved often)
-        memory_id = cls.vector_store.add_memory(
-            agent_id=cls.agent_id,
+        self.mock_context.__enter__()
+        self.vector_store_dir = self.chroma_test_dir
+        self.vector_store = ChromaVectorStoreManager(persist_directory=self.vector_store_dir)
+        self.agent_id = "test_agent_1"
+        self.memory_ids = []
+        memory_id = self.vector_store.add_memory(
+            agent_id=self.agent_id,
             step=1,
             event_type="thought",
             content="Important insight about the core problem we're solving with the transformer architecture."
         )
-        cls.memory_ids.append(memory_id)
-        
-        # Memory 2: Medium relevance memory
-        memory_id = cls.vector_store.add_memory(
-            agent_id=cls.agent_id,
+        self.memory_ids.append(memory_id)
+        memory_id = self.vector_store.add_memory(
+            agent_id=self.agent_id,
             step=2,
             event_type="broadcast_sent",
             content="I've been thinking about how we could optimize the encoder-decoder architecture."
         )
-        cls.memory_ids.append(memory_id)
-        
-        # Memory 3: Low relevance memory (will rarely be retrieved)
-        memory_id = cls.vector_store.add_memory(
-            agent_id=cls.agent_id,
+        self.memory_ids.append(memory_id)
+        memory_id = self.vector_store.add_memory(
+            agent_id=self.agent_id,
             step=3,
             event_type="broadcast_perceived",
             content="The weather is quite nice today, isn't it?"
         )
-        cls.memory_ids.append(memory_id)
-        
-        logger.info(f"Added {len(cls.memory_ids)} test memories to vector store")
-    
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up after the tests"""
-        # Disable mock mode
-        cls.mock_context.__exit__(None, None, None)
-        
-        # Explicitly close the ChromaDB client if possible
-        try:
-            if hasattr(cls, 'vector_store') and hasattr(cls.vector_store, 'client'):
-                # Try to explicitly close any connections
-                if hasattr(cls.vector_store.client, 'close'):
-                    cls.vector_store.client.close()
-                    cls.vector_store = None
-            
-            # Try to remove the directory
-            if os.path.exists(cls.vector_store_dir):
-                try:
-                    shutil.rmtree(cls.vector_store_dir)
-                    logger.info(f"Removed test ChromaDB directory: {cls.vector_store_dir}")
-                except PermissionError as e:
-                    # On Windows, sometimes ChromaDB keeps locks on files
-                    logger.warning(f"Could not remove test directory due to permission error: {e}")
-                    logger.warning("This is normal on Windows and won't affect test results")
-        except Exception as e:
-            logger.warning(f"Error during test cleanup: {e}")
-    
+        self.memory_ids.append(memory_id)
+    def tearDown(self):
+        self.mock_context.__exit__(None, None, None)
+        if hasattr(self, 'vector_store') and hasattr(self.vector_store, 'client'):
+            if hasattr(self.vector_store.client, 'close'):
+                self.vector_store.client.close()
+                self.vector_store = None
     def test_memory_utility_score_calculation(self):
         """
         Test calculating the Memory Utility Score for memories.

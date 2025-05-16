@@ -34,41 +34,47 @@ logger = logging.getLogger("test_memory_pruning_mus")
 @pytest.mark.mus
 @pytest.mark.hierarchical_memory
 @pytest.mark.slow
+@pytest.mark.usefixtures("chroma_test_dir")
 class TestMUSBasedMemoryPruning(unittest.TestCase):
     """Tests for MUS-based memory pruning in the agent memory system."""
     
-    @classmethod
-    def setUpClass(cls):
-        """Set up the test environment with a temporary vector store."""
-        # Enable mock mode for LLM to avoid Ollama errors
-        cls.mock_context = MockLLM({
+    @pytest.fixture(autouse=True)
+    def _inject_fixtures(self, request, chroma_test_dir):
+        self.request = request
+        self.chroma_test_dir = chroma_test_dir
+    
+    def setUp(self):
+        self.mock_context = MockLLM({
             "default": "Mocked response for MUS pruning tests",
         })
-        cls.mock_context.__enter__()
-        
-        # Create test directory with unique name to avoid conflicts
-        cls.test_dir = f"./test_mus_pruning_{uuid.uuid4().hex[:6]}"
-        
-        # Remove any existing directory
-        if os.path.exists(cls.test_dir):
-            shutil.rmtree(cls.test_dir)
-        
-        # Create the vector store manager
-        cls.vector_store = ChromaVectorStoreManager(persist_directory=cls.test_dir)
-        
-        # Test agent ID
-        cls.agent_id = "test_mus_pruning_agent"
-        
-        # Create test memories with different utility characteristics
-        cls.create_test_memories()
+        self.mock_context.__enter__()
+        self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
+        self.agent_id = "test_mus_pruning_agent"
+        self.create_test_memories()
     
-    @classmethod
-    def create_test_memories(cls):
+    def tearDown(self):
+        self.mock_context.__exit__(None, None, None)
+        
+        try:
+            # Clean up vector store resources
+            if hasattr(self, 'vector_store') and self.vector_store:
+                if hasattr(self.vector_store, 'client') and self.vector_store.client:
+                    # Try to explicitly close connections
+                    if hasattr(self.vector_store.client, 'close'):
+                        self.vector_store.client.close()
+                    self.vector_store = None
+            
+            # Wait a moment to ensure resources are released
+            time.sleep(0.5)
+        except Exception as e:
+            logger.warning(f"Error during test cleanup: {e}")
+    
+    def create_test_memories(self):
         """Create test memories with different MUS characteristics."""
         logger.info("Creating test memories with different MUS characteristics...")
         
         # Storage for memory IDs by category
-        cls.memory_ids = {
+        self.memory_ids = {
             "l1_high_mus": [],
             "l1_medium_mus": [],
             "l1_low_mus": [],
@@ -80,8 +86,8 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
         # 1. Create L1 memories (consolidated_summary)
         # High MUS memory (frequently accessed, high relevance)
         for i in range(3):
-            memory_id = cls.vector_store.add_memory(
-                agent_id=cls.agent_id,
+            memory_id = self.vector_store.add_memory(
+                agent_id=self.agent_id,
                 step=10 + i,
                 event_type="consolidation",
                 content=f"L1 High-MUS Summary {i}: Contains important insights about project architecture.",
@@ -92,16 +98,16 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "consolidation_window_end": 19
                 }
             )
-            cls.memory_ids["l1_high_mus"].append(memory_id)
+            self.memory_ids["l1_high_mus"].append(memory_id)
             
             # Simulate high usage by retrieving multiple times
             for _ in range(10):  # High retrieval count
-                cls._simulate_retrieval(memory_id, relevance_score=0.9)  # High relevance
+                self._simulate_retrieval(memory_id, relevance_score=0.9)  # High relevance
         
         # Medium MUS memory (medium access, medium relevance)
         for i in range(3):
-            memory_id = cls.vector_store.add_memory(
-                agent_id=cls.agent_id,
+            memory_id = self.vector_store.add_memory(
+                agent_id=self.agent_id,
                 step=20 + i,
                 event_type="consolidation",
                 content=f"L1 Medium-MUS Summary {i}: Discusses weekly progress and team coordination.",
@@ -112,16 +118,16 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "consolidation_window_end": 29
                 }
             )
-            cls.memory_ids["l1_medium_mus"].append(memory_id)
+            self.memory_ids["l1_medium_mus"].append(memory_id)
             
             # Simulate medium usage
             for _ in range(5):  # Medium retrieval count
-                cls._simulate_retrieval(memory_id, relevance_score=0.5)  # Medium relevance
+                self._simulate_retrieval(memory_id, relevance_score=0.5)  # Medium relevance
         
         # Low MUS memory (rarely accessed, low relevance)
         for i in range(3):
-            memory_id = cls.vector_store.add_memory(
-                agent_id=cls.agent_id,
+            memory_id = self.vector_store.add_memory(
+                agent_id=self.agent_id,
                 step=30 + i,
                 event_type="consolidation",
                 content=f"L1 Low-MUS Summary {i}: Notes about routine administrative tasks completed.",
@@ -132,17 +138,17 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "consolidation_window_end": 39
                 }
             )
-            cls.memory_ids["l1_low_mus"].append(memory_id)
+            self.memory_ids["l1_low_mus"].append(memory_id)
             
             # Simulate low usage
             for _ in range(1):  # Low retrieval count
-                cls._simulate_retrieval(memory_id, relevance_score=0.2)  # Low relevance
+                self._simulate_retrieval(memory_id, relevance_score=0.2)  # Low relevance
         
         # 2. Create L2 memories (chapter_summary)
         # High MUS memory
         for i in range(2):
-            memory_id = cls.vector_store.add_memory(
-                agent_id=cls.agent_id,
+            memory_id = self.vector_store.add_memory(
+                agent_id=self.agent_id,
                 step=100 + i * 10,
                 event_type="chapter_consolidation",
                 content=f"L2 High-MUS Chapter {i}: Major project milestone reached with key architecture decisions.",
@@ -153,16 +159,16 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "chapter_end_step": 109
                 }
             )
-            cls.memory_ids["l2_high_mus"].append(memory_id)
+            self.memory_ids["l2_high_mus"].append(memory_id)
             
             # Simulate high usage
             for _ in range(15):
-                cls._simulate_retrieval(memory_id, relevance_score=0.95)
+                self._simulate_retrieval(memory_id, relevance_score=0.95)
         
         # Medium MUS memory
         for i in range(2):
-            memory_id = cls.vector_store.add_memory(
-                agent_id=cls.agent_id,
+            memory_id = self.vector_store.add_memory(
+                agent_id=self.agent_id,
                 step=110 + i * 10,
                 event_type="chapter_consolidation",
                 content=f"L2 Medium-MUS Chapter {i}: Agent participated in team discussions about feature implementation.",
@@ -173,16 +179,16 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "chapter_end_step": 119
                 }
             )
-            cls.memory_ids["l2_medium_mus"].append(memory_id)
+            self.memory_ids["l2_medium_mus"].append(memory_id)
             
             # Simulate medium usage
             for _ in range(6):
-                cls._simulate_retrieval(memory_id, relevance_score=0.6)
+                self._simulate_retrieval(memory_id, relevance_score=0.6)
         
         # Low MUS memory
         for i in range(2):
-            memory_id = cls.vector_store.add_memory(
-                agent_id=cls.agent_id,
+            memory_id = self.vector_store.add_memory(
+                agent_id=self.agent_id,
                 step=120 + i * 10,
                 event_type="chapter_consolidation",
                 content=f"L2 Low-MUS Chapter {i}: Routine updates and minor administrative activities.",
@@ -193,53 +199,22 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "chapter_end_step": 129
                 }
             )
-            cls.memory_ids["l2_low_mus"].append(memory_id)
+            self.memory_ids["l2_low_mus"].append(memory_id)
             
             # Simulate low usage
             for _ in range(2):
-                cls._simulate_retrieval(memory_id, relevance_score=0.3)
+                self._simulate_retrieval(memory_id, relevance_score=0.3)
         
-        logger.info(f"Created test memories: {sum(len(ids) for ids in cls.memory_ids.values())} total")
+        logger.info(f"Created test memories: {sum(len(ids) for ids in self.memory_ids.values())} total")
     
-    @classmethod
-    def _simulate_retrieval(cls, memory_id, relevance_score=0.5):
+    def _simulate_retrieval(self, memory_id, relevance_score=0.5):
         """Simulate retrieving a memory to update its usage statistics."""
         # Manually update memory usage statistics
-        cls.vector_store._update_memory_usage_stats(
+        self.vector_store._update_memory_usage_stats(
             memory_ids=[memory_id],
             relevance_scores=[relevance_score],
             increment_count=True
         )
-    
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the test environment."""
-        # Disable mock mode
-        cls.mock_context.__exit__(None, None, None)
-        
-        try:
-            # Clean up vector store resources
-            if hasattr(cls, 'vector_store') and cls.vector_store:
-                if hasattr(cls.vector_store, 'client') and cls.vector_store.client:
-                    # Try to explicitly close connections
-                    if hasattr(cls.vector_store.client, 'close'):
-                        cls.vector_store.client.close()
-                    cls.vector_store = None
-            
-            # Wait a moment to ensure resources are released
-            time.sleep(0.5)
-            
-            # Remove the test directory
-            if os.path.exists(cls.test_dir):
-                try:
-                    shutil.rmtree(cls.test_dir)
-                    logger.info(f"Removed test ChromaDB directory: {cls.test_dir}")
-                except PermissionError as e:
-                    # On Windows, sometimes ChromaDB keeps locks on files
-                    logger.warning(f"Could not remove test directory due to permission error: {e}")
-                    logger.warning("This is normal on Windows and won't affect test results")
-        except Exception as e:
-            logger.warning(f"Error during test cleanup: {e}")
     
     def _calculate_expected_mus(self, memory_category):
         """
