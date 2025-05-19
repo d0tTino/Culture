@@ -20,7 +20,13 @@ example1 = dspy.Example(
     - Step 7, Targeted Message: Sent message to Agent_2: "Good point about latency. We could implement an adaptive rotation schedule based on network conditions, with longer rotation periods in high-latency environments."
     """,
     current_mood="excited",
-    l1_summary="As an Innovator, I proposed a new idea for a decentralized communication protocol using asymmetric encryption with rotating keys and created the 'Secure Protocol Design' project to explore this concept. Agent_2 asked about how key rotation would work in high-latency environments, to which I suggested implementing an adaptive rotation schedule that adjusts based on network conditions. I'm feeling excited about this collaborative exploration of secure communication protocols."
+    l1_summary=(
+        "As an Innovator, I proposed a new idea for a decentralized communication protocol using "
+        "asymmetric encryption with rotating keys and created the 'Secure Protocol Design' project to "
+        "explore this concept. Agent_2 asked about how key rotation would work in high-latency environments, "
+        "to which I suggested implementing an adaptive rotation schedule that adjusts based on network "
+        "conditions. I'm feeling excited about this collaborative exploration of secure communication protocols."
+    ),
 )
 
 # Example 2: Facilitator role managing group dynamics
@@ -37,7 +43,15 @@ example2 = dspy.Example(
     - Step 15, Perceived Message: Agent_4 said: "I agree. This approach could lead to better personalization as well."
     """,
     current_mood="thoughtful",
-    l1_summary="As a Facilitator, I noticed communication disconnect between Agent_3 and Agent_4 regarding data analysis approaches. I intervened by asking everyone to clarify their objectives, revealing that Agent_3 wanted to identify demographic patterns while Agent_4 focused on recommendation algorithm optimization. Recognizing these goals were complementary, I proposed a two-phase approach that would address both needs. This suggestion was well-received by both agents, who acknowledged the potential for their work to enhance each other's objectives. My thoughtful mediation helped transform a potential conflict into productive collaboration."
+    l1_summary=(
+        "As a Facilitator, I noticed communication disconnect between Agent_3 and Agent_4 regarding data "
+        "analysis approaches. I intervened by asking everyone to clarify their objectives, revealing that "
+        "Agent_3 wanted to identify demographic patterns while Agent_4 focused on recommendation algorithm "
+        "optimization. Recognizing these goals were complementary, I proposed a two-phase approach that would "
+        "address both needs. This suggestion was well-received by both agents, who acknowledged the potential "
+        "for their work to enhance each other's objectives. My thoughtful mediation helped transform a potential "
+        "conflict into productive collaboration."
+    ),
 )
 
 # Example 3: Analyzer role evaluating project progress
@@ -54,7 +68,16 @@ example3 = dspy.Example(
     - Step 25, Broadcast Message: "Thank you for sharing that experience, Agent_5. Let's quantify these trade-offs more precisely. I'll prepare a cost-benefit analysis comparing our current architecture with Transformer-XL and Reformer, considering both performance improvements and computational requirements."
     """,
     current_mood="focused",
-    l1_summary="As an Analyzer, I evaluated our NLP model's performance, noting a 4.2% accuracy improvement but diminishing returns from additional training data. When Agent_1 asked about causes, I identified architectural limitations in capturing long-range text dependencies and suggested exploring Transformer-XL or Reformer architectures. Agent_5 shared experience with Transformer-XL, highlighting higher computational requirements but justified results for complex tasks. I proposed preparing a detailed cost-benefit analysis to quantify trade-offs between our current architecture and these alternatives, considering both performance gains and computational costs. Throughout this analysis, I maintained a focused approach to solving our technical challenges."
+    l1_summary=(
+        "As an Analyzer, I evaluated our NLP model's performance, noting a 4.2% accuracy improvement but "
+        "diminishing returns from additional training data. When Agent_1 asked about causes, I identified "
+        "architectural limitations in capturing long-range text dependencies and suggested exploring "
+        "Transformer-XL or Reformer architectures. Agent_5 shared experience with Transformer-XL, highlighting "
+        "higher computational requirements but justified results for complex tasks. I proposed preparing a "
+        "detailed cost-benefit analysis to quantify trade-offs between our current architecture and these "
+        "alternatives, considering both performance gains and computational costs. Throughout this analysis, "
+        "I maintained a focused approach to solving our technical challenges."
+    ),
 )
 
 # Example 4: Default contributor role with project joining
@@ -71,7 +94,15 @@ example4 = dspy.Example(
     - Step 5, Broadcast Message: "I've reviewed the current ARIMA implementation. While it works well for regular patterns, it might miss complex dependencies. I suggest we implement a hybrid approach combining ARIMA with LSTM to capture both linear and non-linear patterns."
     """,
     current_mood="interested",
-    l1_summary="As a Default Contributor, I identified a predictive maintenance project led by Agent_3 seeking time-series analysis expertise. I expressed interest, highlighting my experience with LSTM and Prophet models for equipment failure prediction. After being welcomed to the project, I joined 'Predictive Maintenance Algorithms' and evaluated their existing ARIMA implementation. I then suggested enhancing their approach with a hybrid ARIMA-LSTM model to better capture both linear and non-linear patterns in the data. My interested engagement led to a constructive contribution that could potentially improve the project's effectiveness."
+    l1_summary=(
+        "As a Default Contributor, I identified a predictive maintenance project led by Agent_3 seeking "
+        "time-series analysis expertise. I expressed interest, highlighting my experience with LSTM and "
+        "Prophet models for equipment failure prediction. After being welcomed to the project, I joined "
+        "'Predictive Maintenance Algorithms' and evaluated their existing ARIMA implementation. I then "
+        "suggested enhancing their approach with a hybrid ARIMA-LSTM model to better capture both linear "
+        "and non-linear patterns in the data. My interested engagement led to a constructive contribution "
+        "that could potentially improve the project's effectiveness."
+    ),
 )
 
 # Example 5: Innovator with a rejected proposal
@@ -88,8 +119,16 @@ example5 = dspy.Example(
     - Step 20, Thought: My proposal has been effectively rejected for now. I should accept this decision gracefully and focus on other priorities.
     """,
     current_mood="disappointed",
-    l1_summary="As an Innovator, I proposed a novel content recommendation system combining collaborative filtering with knowledge graphs to address the cold start problem. My proposal faced resistance: Agent_2 raised concerns about computational complexity, Agent_4 questioned the development investment given our existing matrix factorization approach, and despite my responses addressing these concerns and citing potential 15% improvement in recommendation relevance, Agent_1 deferred the proposal until next quarter, prioritizing system stability. Though disappointed, I've accepted this decision and will shift my focus to other priorities while perhaps refining my proposal for future reconsideration."
+    l1_summary=(
+        "As an Innovator, I proposed a novel content recommendation system combining collaborative filtering "
+        "with knowledge graphs to address the cold start problem. My proposal faced resistance: Agent_2 "
+        "raised concerns about computational complexity, Agent_4 questioned the development investment given "
+        "our existing matrix factorization approach, and despite my responses addressing these concerns and "
+        "citing potential 15% improvement in recommendation relevance, Agent_1 deferred the proposal until "
+        "next quarter, prioritizing system stability. Though disappointed, I've accepted this decision and "
+        "will shift my focus to other priorities while perhaps refining my proposal for future reconsideration."
+    ),
 )
 
 # List of all examples for convenient access
-all_examples = [example1, example2, example3, example4, example5] 
+all_examples = [example1, example2, example3, example4, example5]

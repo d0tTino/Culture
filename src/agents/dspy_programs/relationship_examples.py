@@ -7,7 +7,7 @@ examples = [
         "agent2_persona": "Detail-oriented, analytical data scientist",
         "interaction_sentiment": 0.7,
         "new_relationship_score": 0.3,
-        "relationship_change_rationale": "Successful collaboration and positive sentiment increased mutual respect and trust."
+        "relationship_change_rationale": "Successful collaboration and positive sentiment increased mutual respect and trust.",
     },
     # 2. Minor Disagreement
     {
@@ -17,7 +17,7 @@ examples = [
         "agent2_persona": "Cautious, risk-averse analyst",
         "interaction_sentiment": -0.2,
         "new_relationship_score": 0.7,
-        "relationship_change_rationale": "Minor disagreement led to a slight decrease, but strong underlying relationship prevented major impact."
+        "relationship_change_rationale": "Minor disagreement led to a slight decrease, but strong underlying relationship prevented major impact.",
     },
     # 3. Significant Conflict/Betrayal
     {
@@ -27,7 +27,7 @@ examples = [
         "agent2_persona": "Ambitious, competitive marketer",
         "interaction_sentiment": -0.9,
         "new_relationship_score": -0.2,
-        "relationship_change_rationale": "Strong negative sentiment and perceived betrayal caused a significant drop in trust."
+        "relationship_change_rationale": "Strong negative sentiment and perceived betrayal caused a significant drop in trust.",
     },
     # 4. Role-Driven Positive (Facilitator mediation)
     {
@@ -37,7 +37,7 @@ examples = [
         "agent2_persona": "Direct, results-focused engineer",
         "interaction_sentiment": 0.5,
         "new_relationship_score": 0.1,
-        "relationship_change_rationale": "Facilitator's mediation improved understanding and slightly increased the relationship score."
+        "relationship_change_rationale": "Facilitator's mediation improved understanding and slightly increased the relationship score.",
     },
     # 5. Persona-Driven (agreeable vs gruff)
     {
@@ -47,7 +47,7 @@ examples = [
         "agent2_persona": "Gruff, no-nonsense veteran",
         "interaction_sentiment": 0.0,
         "new_relationship_score": 0.0,
-        "relationship_change_rationale": "Neutral interaction and contrasting personas resulted in no significant change."
+        "relationship_change_rationale": "Neutral interaction and contrasting personas resulted in no significant change.",
     },
     # 6. No Change (transactional)
     {
@@ -57,7 +57,7 @@ examples = [
         "agent2_persona": "Reserved, introverted developer",
         "interaction_sentiment": 0.0,
         "new_relationship_score": -0.5,
-        "relationship_change_rationale": "Purely transactional interaction did not affect the relationship score."
+        "relationship_change_rationale": "Purely transactional interaction did not affect the relationship score.",
     },
     # 7. Strong negative to positive turnaround
     {
@@ -67,6 +67,6 @@ examples = [
         "agent2_persona": "Stubborn, but honest contributor",
         "interaction_sentiment": 0.9,
         "new_relationship_score": -0.3,
-        "relationship_change_rationale": "Very positive interaction helped repair the relationship, but some past issues remain."
+        "relationship_change_rationale": "Very positive interaction helped repair the relationship, but some past issues remain.",
     },
-] 
+]

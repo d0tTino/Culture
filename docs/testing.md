@@ -106,3 +106,92 @@ Slowest 10 durations:
 ```
 
 All tests pass green. Wall-clock time for full suite: **~1 minute** on Ryzen 7 workstation. 
+
+---
+
+# Weaviate Local Setup for Development/Testing
+
+## Running Weaviate Locally (for Vector Store Development)
+
+Culture.ai supports Weaviate as an alternative vector store. To run Weaviate locally for development or testing:
+
+### 1. Docker Compose (no vectorizer, for external embeddings)
+
+Save this as `docker-compose.yml`:
+
+```yaml
+version: '3.4'
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.30.3
+    ports:
+      - 8080:8080
+      - 50051:50051
+    restart: on-failure:0
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      CLUSTER_HOSTNAME: 'node1'
+volumes:
+  weaviate_data:
+```
+
+Start Weaviate:
+```bash
+docker compose up -d
+```
+
+Weaviate will be available at `http://localhost:8080`.
+
+### 2. Python Client
+
+Install the client:
+```bash
+pip install weaviate-client
+```
+
+Connect in Python:
+```python
+import weaviate
+client = weaviate.connect_to_local()
+print(client.is_ready())  # Should print True
+client.close()
+```
+
+### 3. Using External Embeddings
+- When defining a class (collection), set `vectorizer: 'none'` in the schema.
+- When adding objects, provide your own embedding vector via the `vector` argument.
+
+See `src/agents/memory/weaviate_vector_store_manager.py` for a reference implementation.
+
+### 4. Switching Vector Store Backends (Chroma/Weaviate)
+
+To use Weaviate as the vector store backend:
+
+1. Set the following environment variables (in your shell or .env file):
+   ```env
+   VECTOR_STORE_BACKEND=weaviate
+   WEAVIATE_URL=http://localhost:8080
+   ```
+2. Restart your application or test run. The agent will use WeaviateVectorStoreManager for all memory operations.
+
+To switch back to ChromaDB, set:
+   ```env
+   VECTOR_STORE_BACKEND=chroma
+   VECTOR_STORE_DIR=./chroma_db
+   ```
+
+### 5. Migrating Data from ChromaDB to Weaviate
+
+A migration script is provided:
+
+```bash
+python scripts/migrate_chroma_to_weaviate.py --chroma_dir ./chroma_db --weaviate_url http://localhost:8080
+```
+
+- This will copy all memories from the ChromaDB collection to the Weaviate class, preserving UUIDs and metadata.
+- You can specify collection/class names with `--chroma_collection` and `--weaviate_class` if needed.
+- See `scripts/migrate_chroma_to_weaviate.py` for details. 

@@ -20,7 +20,12 @@ example1 = dspy.Example(
     - Step 7, Targeted Message: Sent message to Agent_2: "Good point about latency. We could implement an adaptive rotation schedule based on network conditions, with longer rotation periods in high-latency environments."
     """,
     current_mood="excited",
-    l1_summary="I proposed an innovative decentralized communication protocol using asymmetric encryption with rotating keys and created the 'Secure Protocol Design' project to explore this novel concept. When Agent_2 questioned key rotation in high-latency environments, I quickly identified an adaptive solution: implementing rotation schedules that automatically adjust based on network conditions. This creative problem-solving approach demonstrates my innovative thinking by rapidly addressing technical challenges while maintaining the core breakthrough concept. My excited mood fueled this creative exchange and the potential for further development of this disruptive communication technology."
+    l1_summary=(
+        "I proposed an innovative decentralized communication protocol using asymmetric encryption with rotating keys and created the 'Secure Protocol Design' project to explore this novel concept. "
+        "When Agent_2 questioned key rotation in high-latency environments, I quickly identified an adaptive solution: implementing rotation schedules that automatically adjust based on network conditions. "
+        "This creative problem-solving approach demonstrates my innovative thinking by rapidly addressing technical challenges while maintaining the core breakthrough concept. "
+        "My excited mood fueled this creative exchange and the potential for further development of this disruptive communication technology."
+    ),
 )
 
 # Example 2: Innovator connecting disparate ideas
@@ -37,7 +42,12 @@ example2 = dspy.Example(
     - Step 17, Broadcast Message: "Exactly! It's like a biologically-inspired simulated annealing. We could gradually reduce the 'neuroplasticity' parameter over time, similar to how annealing works, but the weight adjustments would follow biologically-plausible rules."
     """,
     current_mood="inspired",
-    l1_summary="I discovered a novel connection between biological neuroplasticity and artificial neural networks, proposing a dynamic weight adjustment mechanism inspired by biological synaptic strengthening. When Agent_4 expressed concerns about training unpredictability, I reframed this limitation as a potential advantage for escaping local optima using controlled stochasticity. Agent_3's mention of simulated annealing provided the perfect opportunity to synthesize these seemingly disparate concepts into a groundbreaking hybrid approach: a biologically-inspired simulated annealing where neuroplasticity parameters gradually reduce over time while following biologically-plausible rules. This cross-disciplinary innovation represents the kind of unconventional thinking that creates new possibilities at the intersection of different fields, reflecting my inspired state and Innovator mindset."
+    l1_summary=(
+        "I discovered a novel connection between biological neuroplasticity and artificial neural networks, proposing a dynamic weight adjustment mechanism inspired by biological synaptic strengthening. "
+        "When Agent_4 expressed concerns about training unpredictability, I reframed this limitation as a potential advantage for escaping local optima using controlled stochasticity. "
+        "Agent_3's mention of simulated annealing provided the perfect opportunity to synthesize these seemingly disparate concepts into a groundbreaking hybrid approach: a biologically-inspired simulated annealing where neuroplasticity parameters gradually reduce over time while following biologically-plausible rules. "
+        "This cross-disciplinary innovation represents the kind of unconventional thinking that creates new possibilities at the intersection of different fields, reflecting my inspired state and Innovator mindset."
+    ),
 )
 
 # Example 3: Innovator with a rejected proposal who finds new direction
@@ -54,7 +64,13 @@ example3 = dspy.Example(
     - Step 20, Thought: By adapting my original idea, I've found a path forward that addresses concerns while preserving the core innovation.
     """,
     current_mood="adaptable",
-    l1_summary="I proposed an innovative recommendation system combining collaborative filtering with knowledge graphs to solve the cold start problem. When faced with resistance about computational complexity and development resources, I rapidly pivoted my approach instead of abandoning the core insight. My creative adaptation—a lightweight knowledge graph layer that activates only for new users and edge cases—preserved the innovative solution to the cold start problem while addressing implementation concerns. This strategic pivot showcases my adaptable mood and innovative problem-solving by finding unexpected middle ground that maintained the breakthrough potential while making implementation feasible. Agent_2's positive response to this refined approach validates how innovation often requires iterative reimagining when confronted with practical constraints."
+    l1_summary=(
+        "I proposed an innovative recommendation system combining collaborative filtering with knowledge graphs to solve the cold start problem. "
+        "When faced with resistance about computational complexity and development resources, I rapidly pivoted my approach instead of abandoning the core insight. "
+        "My creative adaptation—a lightweight knowledge graph layer that activates only for new users and edge cases—preserved the innovative solution to the cold start problem while addressing implementation concerns. "
+        "This strategic pivot showcases my adaptable mood and innovative problem-solving by finding unexpected middle ground that maintained the breakthrough potential while making implementation feasible. "
+        "Agent_2's positive response to this refined approach validates how innovation often requires iterative reimagining when confronted with practical constraints."
+    ),
 )
 
 # Example 4: Innovator spotting unexpected patterns
@@ -71,7 +87,12 @@ example4 = dspy.Example(
     - Step 25, Broadcast Message: "Exactly! I'm thinking we could develop a 'weekend mode' that proactively suggests certain feature combinations based on these temporal patterns. This could significantly enhance user experience with minimal development overhead."
     """,
     current_mood="curious",
-    l1_summary="My curious analysis uncovered a previously unnoticed temporal pattern in user behavior: weekend-specific correlations between functionally unrelated features A and C that don't exist on weekdays. When Agent_1 questioned if this might be a statistical anomaly, I validated my discovery with three months of statistically significant data, emphasizing the non-obvious nature of this insight since the features lack functional relationship in our current design. Agent_3's suggestion about time-sensitive feature bundles aligned perfectly with my thinking, leading me to propose an innovative 'weekend mode' that would proactively suggest feature combinations based on these temporal patterns. This discovery demonstrates how my innovative perspective finds hidden patterns in existing data that others missed, potentially creating significant user experience improvements with minimal development investment."
+    l1_summary=(
+        "My curious analysis uncovered a previously unnoticed temporal pattern in user behavior: weekend-specific correlations between functionally unrelated features A and C that don't exist on weekdays. "
+        "When Agent_1 questioned if this might be a statistical anomaly, I validated my discovery with three months of statistically significant data, emphasizing the non-obvious nature of this insight since the features lack functional relationship in our current design. "
+        "Agent_3's suggestion about time-sensitive feature bundles aligned perfectly with my thinking, leading me to propose an innovative 'weekend mode' that would proactively suggest feature combinations based on these temporal patterns. "
+        "This discovery demonstrates how my innovative perspective finds hidden patterns in existing data that others missed, potentially creating significant user experience improvements with minimal development investment."
+    ),
 )
 
 # Example 5: Innovator generating multiple solution alternatives
@@ -89,7 +110,12 @@ example5 = dspy.Example(
     - Step 33, Broadcast Message: "Absolutely! I'll create a simple proof of concept that simulates the risk assessment engine and shows the potential performance gains."
     """,
     current_mood="energetic",
-    l1_summary="When Agent_2 presented an authentication system dilemma pitting security against speed, I rejected the perceived binary constraint and generated three innovative alternatives: adaptive risk-based authentication, distributed token preprocessing, and a hybrid system using fast preliminary validation with asynchronous deep verification. When Agent_4 questioned how we'd determine risk factors in real-time for the adaptive approach, I proposed an innovative lightweight ML model evaluating contextual factors like IP reputation, device fingerprints, and behavioral patterns to route requests through appropriate security pathways. My energetic brainstorming transformed a seemingly impossible trade-off into multiple viable solutions, earning enough interest that Agent_2 requested my help in developing a prototype. This demonstrates my value as an Innovator who can break through perceived constraints by generating multiple creative alternatives when others see only binary choices."
+    l1_summary=(
+        "When Agent_2 presented an authentication system dilemma pitting security against speed, I rejected the perceived binary constraint and generated three innovative alternatives: adaptive risk-based authentication, distributed token preprocessing, and a hybrid system using fast preliminary validation with asynchronous deep verification. "
+        "When Agent_4 questioned how we'd determine risk factors in real-time for the adaptive approach, I proposed an innovative lightweight ML model evaluating contextual factors like IP reputation, device fingerprints, and behavioral patterns to route requests through appropriate security pathways. "
+        "My energetic brainstorming transformed a seemingly impossible trade-off into multiple viable solutions, earning enough interest that Agent_2 requested my help in developing a prototype. "
+        "This demonstrates my value as an Innovator who can break through perceived constraints by generating multiple creative alternatives when others see only binary choices."
+    ),
 )
 
 # Example 6: Innovator building on others' ideas
@@ -107,7 +133,12 @@ example6 = dspy.Example(
     - Step 44, Broadcast Message: "I'm excited about this too. I suggest we create a rapid prototype focusing on a single dashboard section. We could implement the dual-mode interface and test how users respond to both the guided and expert experiences. This would give us concrete feedback before expanding further."
     """,
     current_mood="collaborative",
-    l1_summary="When Agent_3 mentioned users struggling with complex dashboard visualizations, I proposed reimagining the entire interaction paradigm with an AI-guided narrative approach using progressive complexity disclosure. Taking Agent_1's concern about quick data access into account, I innovated further by suggesting a dynamic dual-mode system offering both guided narrative and expert modes, enhanced with machine learning that personalizes explanations based on interaction patterns. Agent_3's positive response to this direction, especially regarding accommodating varying user expertise levels, prompted me to propose a concrete implementation strategy: creating a rapid prototype for a single dashboard section to test user responses to both modes. My collaborative mood fostered this creative evolution that transformed a standard usability problem into an opportunity for a breakthrough adaptive interface combining storytelling with data visualization while incorporating others' feedback to strengthen the innovation."
+    l1_summary=(
+        "When Agent_3 mentioned users struggling with complex dashboard visualizations, I proposed reimagining the entire interaction paradigm with an AI-guided narrative approach using progressive complexity disclosure. "
+        "Taking Agent_1's concern about quick data access into account, I innovated further by suggesting a dynamic dual-mode system offering both guided narrative and expert modes, enhanced with machine learning that personalizes explanations based on interaction patterns. "
+        "Agent_3's positive response to this direction, especially regarding accommodating varying user expertise levels, prompted me to propose a concrete implementation strategy: creating a rapid prototype for a single dashboard section to test user responses to both modes. "
+        "My collaborative mood fostered this creative evolution that transformed a standard usability problem into an opportunity for a breakthrough adaptive interface combining storytelling with data visualization while incorporating others' feedback to strengthen the innovation."
+    ),
 )
 
 # Example 7: Innovator identifying unexpected application for existing technology
@@ -124,16 +155,13 @@ example7 = dspy.Example(
     - Step 53, Broadcast Message: "There are several open-access wildlife camera datasets we could use for initial testing. I've identified the Snapshot Serengeti dataset as particularly suitable. I propose creating a small proof-of-concept that adapts our existing algorithm to this dataset, measuring both accuracy and identifying the key adaptations needed for cross-domain functionality."
     """,
     current_mood="inventive",
-    l1_summary="I identified a highly innovative cross-domain application for our manufacturing image recognition system: adapting it for ecological research to identify and track animal species in wildlife camera feeds. When Agent_5 raised concerns about environmental variables like lighting and occlusion, I reframed these challenges as opportunities—using uncontrolled wildlife conditions as accelerated stress-tests that could improve the algorithm's robustness for both applications, creating a win-win that expands our market while enhancing our core product. Agent_2's interest in bidirectional improvements and question about testing data prompted me to propose using open-access wildlife datasets, specifically Snapshot Serengeti, for an initial proof-of-concept. My inventive mood drove this unexpected connection between seemingly unrelated domains, demonstrating classic innovative thinking by seeing potential applications others missed and transforming apparent obstacles into opportunities for dual-domain advancement."
+    l1_summary=(
+        "I identified a highly innovative cross-domain application for our manufacturing image recognition system: adapting it for ecological research to identify and track animal species in wildlife camera feeds. "
+        "When Agent_5 raised concerns about environmental variables like lighting and occlusion, I reframed these challenges as opportunities—using uncontrolled wildlife conditions as accelerated stress-tests that could improve the algorithm's robustness for both applications, creating a win-win that expands our market while enhancing our core product. "
+        "Agent_2's interest in bidirectional improvements and question about testing data prompted me to propose using open-access wildlife datasets, specifically Snapshot Serengeti, for an initial proof-of-concept. "
+        "My inventive mood drove this unexpected connection between seemingly unrelated domains, demonstrating classic innovative thinking by seeing potential applications others missed and transforming apparent obstacles into opportunities for dual-domain advancement."
+    ),
 )
 
 # Compile all examples into a list for optimization
-innovator_l1_examples = [
-    example1,
-    example2,
-    example3,
-    example4,
-    example5,
-    example6,
-    example7
-] 
+innovator_l1_examples = [example1, example2, example3, example4, example5, example6, example7]
