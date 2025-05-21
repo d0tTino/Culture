@@ -531,3 +531,50 @@ All other type, linter, and formatting issues have been resolved. This ensures:
 - Clear documentation of any necessary type system escape hatches
 
 See the development log for details on the compliance process and any remaining exceptions.
+
+## **How to Unblock Your Setup**
+
+### **Use a Minimal, Robust Setup Script**
+
+Since venv is not working, **just use the system Python and pip**.  
+Here's a minimal script for your "Initial setup" box that will work in almost any environment:
+
+```sh
+# Print Python and pip versions for debugging
+python3 --version || python --version
+pip3 --version || pip --version
+
+# Upgrade pip (try both python and pip3 for compatibility)
+python -m pip install --upgrade pip || pip3 install --upgrade pip
+
+# Install dependencies if requirements.txt exists
+if [ -f requirements.txt ]; then
+    pip install -r requirements.txt
+fi
+
+# (Optional) Install pre-commit hooks if used
+if [ -f .pre-commit-config.yaml ]; then
+    pip install pre-commit
+    pre-commit install
+fi
+
+echo "Setup complete."
+```
+
+**Key points:**
+- No venv creation or activation.
+- Uses whatever Python/pip is available.
+- Installs dependencies and pre-commit hooks if present.
+
+---
+
+## **What to do next**
+1. **Copy and paste the above script** into your Initial setup box.
+2. Save and re-run the setup.
+3. If you need a venv for local development, you can create it manually on your own machine, but for CI/automation, this script will always work.
+
+---
+
+**If you need to support venv in the future, make sure your environment has `python3-venv` and `python3-ensurepip` installed.**
+
+Let me know if you want a version for a specific environment (Docker, Codespaces, etc.) or if you hit any other errors!

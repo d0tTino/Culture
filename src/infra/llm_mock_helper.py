@@ -7,6 +7,8 @@ import logging
 import socket
 from unittest.mock import MagicMock
 
+import pytest
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,14 +27,14 @@ def is_ollama_running() -> bool:
 class MockLLMResponse:
     """Mock response for LLM calls"""
 
-    def __init__(self, content: str = "This is a mock response"):
-        self.content = content
-        self.structured_output = {
+    def __init__(self, content: str = "This is a mock response") -> None:
+        self.content: str = content
+        self.structured_output: dict[str, str] = {
             "thought": "Mock thought for testing",
             "message_content": "Mock message for testing",
             "action_intent": "idle",
         }
-        self.message = {"content": content}
+        self.message: dict[str, str] = {"content": content}
 
 
 def create_mock_ollama_client() -> object:
@@ -49,7 +51,7 @@ def create_mock_ollama_client() -> object:
     return mock_client
 
 
-def patch_ollama_functions(monkeypatch: object) -> None:
+def patch_ollama_functions(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Patch all Ollama-dependent functions for testing
 

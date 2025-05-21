@@ -14,9 +14,9 @@ class AsyncDSPyManager:
     """
 
     def __init__(self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
-        self.max_workers = max_workers
-        self.default_timeout = default_timeout
+        self.executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=max_workers)
+        self.max_workers: int = max_workers
+        self.default_timeout: float = default_timeout
         logger.info(
             f"AsyncDSPyManager initialized with max_workers={max_workers}, "
             f"default_timeout={default_timeout}s"
@@ -45,8 +45,7 @@ class AsyncDSPyManager:
         logger.info(
             f"Submitting DSPy call: {getattr(dspy_callable, '__name__', str(dspy_callable))}"
         )
-        # Use partial to bind args/kwargs
-        func = partial(dspy_callable, *args, **kwargs)
+        func: Callable[[], object] = partial(dspy_callable, *args, **kwargs)
         return loop.run_in_executor(self.executor, func)
 
     async def get_result(
