@@ -2,7 +2,7 @@
 python-dotenv==1.1.0
 langgraph==0.4.3
 ollama==0.1.9
-pydantic>=2.7.4
+pydantic>=2.0.0,<3.0.0
 pydantic-core>=2.16.2
 
 # Vector Database and Embeddings for Memory
@@ -29,3 +29,7 @@ discord.py==2.3.2
 # langchain-community==0.0.13
 
 # Add other dependencies as needed 
+weaviate-client>=4.5.4
+fastapi
+uvicorn[standard]
+sse-starlette 

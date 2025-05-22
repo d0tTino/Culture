@@ -427,3 +427,154 @@ The framework leverages DSPy for optimizing agent action intent selection:
 - **Result Validation**: Verified that optimized selections consistently produced justifications showing understanding of role, goals, and current situation
 
 Detailed documentation is available in `experiments/dspy_action_intent_report.md`.
+
+### Asynchronous DSPy Program Management (AsyncDSPyManager)
+
+All DSPy program calls (for memory summarization, action intent selection, and relationship updating) are now managed asynchronously via the `AsyncDSPyManager`. This enables non-blocking, parallel DSPy execution for all agents, with robust timeout and error handling—if a DSPy call is slow or fails, a failsafe output is returned and the simulation continues smoothly.
+
+Agent and graph methods that invoke DSPy programs are now `async def` and must be awaited. The main simulation loop is fully asynchronous, using `asyncio.run()`. This pattern significantly improves simulation responsiveness, stability, and scalability, especially as agent populations grow or LLM calls become slow or unreliable.
+
+For more details, see [docs/architecture.md](docs/architecture.md#61-asynchronous-dspy-program-management-asyncdspymanager).
+
+## Testing
+
+Culture.ai uses pytest with marker-based test selection and parallelization for fast feedback:
+
+- **Default run** (`pytest`): Runs only unit tests (fast, no external dependencies)
+- **Full suite** (`pytest -m "slow or dspy_program or integration" -v -n auto`): Runs all slow, DSPy, and integration tests in parallel
+- ChromaDB test DBs are stored in RAM (tmpfs) on Linux for speed; see `docs/testing.md` for details
+
+See [docs/testing.md](docs/testing.md) for full instructions, marker definitions, and troubleshooting.
+
+## Quickstart for Developers
+
+### Prerequisites
+- **Python 3.10+**
+- **Ollama** (for local LLM inference): [Install Ollama](https://ollama.ai/download)
+- **Docker** (for Weaviate vector store, optional but recommended)
+
+### Setup Instructions
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/d0tTino/Culture.git
+   cd Culture
+   ```
+2. **Create and activate a virtual environment:**
+   ```bash
+   python -m venv .venv
+   # On Linux/Mac:
+   source .venv/bin/activate
+   # On Windows:
+   .venv\Scripts\activate
+   ```
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
+   ```
+4. **Set up Ollama and pull the required model:**
+   ```bash
+   ollama pull mistral:latest
+   ```
+5. **Run Weaviate (for vector store, optional):**
+   ```bash
+   docker compose up -d  # See docs/testing.md for details
+   # Or use ChromaDB (default, file-based, no extra setup needed)
+   ```
+6. **Configure environment variables:**
+   - Copy `.env.example` to `.env` and edit as needed:
+     - `OLLAMA_BASE_URL` (e.g., http://localhost:11434)
+     - `WEAVIATE_URL` (e.g., http://localhost:8080)
+     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
+   - See `.env.example` and `docs/testing.md` for details.
+
+### Running the Simulation
+Run a basic simulation (default parameters):
+```bash
+python -m src.app --simulation_steps 5
+```
+
+### Running Tests
+Run the full test suite:
+```bash
+python -m pytest tests/
+```
+Generate a coverage report:
+```bash
+python -m pytest --cov=src --cov-report=term-missing tests/
+```
+
+### Project Structure (Key Directories)
+- `src/` — Main source code (agents, graphs, memory, infra, simulation)
+- `tests/` — Unit and integration tests
+- `docs/` — Documentation (architecture, testing, coding standards)
+- `scripts/` — Utility and migration scripts
+- `experiments/` — Research and optimization scripts
+
+### Contributing
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
+
+For advanced testing, parallelization, and CI details, see [docs/testing.md](docs/testing.md).
+
+## Code Quality and Type Safety
+
+The `src/agents/memory/` directory is now strictly compliant with both Ruff (linter/formatter) and Mypy (type checker) in strict mode. All files are type-annotated and linted to the highest practical standard, with only the following justified exceptions:
+
+- `vector_store.py`: One generic utility function (`first_list_element`) uses `Any` in its signature for necessary flexibility. This is documented and accepted.
+- `weaviate_vector_store_manager.py`: One unavoidable Mypy error due to generic invariance in the Weaviate client API, as documented in [Mypy docs](https://mypy.readthedocs.io/en/stable/common_issues.html#variance) and in the code/dev log.
+
+All other type, linter, and formatting issues have been resolved. This ensures:
+
+- Full static type safety for all agent memory management code
+- Consistent, modern Python formatting and import order
+- Defensive runtime checks for all third-party API interactions
+- Clear documentation of any necessary type system escape hatches
+
+See the development log for details on the compliance process and any remaining exceptions.
+
+## **How to Unblock Your Setup**
+
+### **Use a Minimal, Robust Setup Script**
+
+Since venv is not working, **just use the system Python and pip**.  
+Here's a minimal script for your "Initial setup" box that will work in almost any environment:
+
+```sh
+# Print Python and pip versions for debugging
+python3 --version || python --version
+pip3 --version || pip --version
+
+# Upgrade pip (try both python and pip3 for compatibility)
+python -m pip install --upgrade pip || pip3 install --upgrade pip
+
+# Install dependencies if requirements.txt exists
+if [ -f requirements.txt ]; then
+    pip install -r requirements.txt
+fi
+
+# (Optional) Install pre-commit hooks if used
+if [ -f .pre-commit-config.yaml ]; then
+    pip install pre-commit
+    pre-commit install
+fi
+
+echo "Setup complete."
+```
+
+**Key points:**
+- No venv creation or activation.
+- Uses whatever Python/pip is available.
+- Installs dependencies and pre-commit hooks if present.
+
+---
+
+## **What to do next**
+1. **Copy and paste the above script** into your Initial setup box.
+2. Save and re-run the setup.
+3. If you need a venv for local development, you can create it manually on your own machine, but for CI/automation, this script will always work.
+
+---
+
+**If you need to support venv in the future, make sure your environment has `python3-venv` and `python3-ensurepip` installed.**
+
+Let me know if you want a version for a specific environment (Docker, Codespaces, etc.) or if you hit any other errors!

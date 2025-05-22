@@ -1,0 +1,137 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-8.0.2, pluggy-1.5.0
+rootdir: C:\Users\w1n51\OneDrive\Desktop\Programing Projects\Culture.ai
+configfile: pytest.ini
+plugins: anyio-4.8.0, langsmith-0.3.42, asyncio-0.23.5, cov-4.1.0, mock-3.14.0, profiling-1.8.1, xdist-3.5.0
+asyncio: mode=Mode.STRICT
+created: 8/8 workers
+8 workers [44 items]
+
+............................................                             [100%]
+============================== warnings summary ===============================
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\discord\player.py:28: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=2612, family=2, type=1, proto=0, laddr=('127.0.0.1', 55387), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=6136, family=2, type=1, proto=0, laddr=('127.0.0.1', 55388), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=3068, family=2, type=1, proto=0, laddr=('127.0.0.1', 55389), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=940, family=2, type=1, proto=0, laddr=('127.0.0.1', 55391), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=6064, family=2, type=1, proto=0, laddr=('127.0.0.1', 55392), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=5996, family=2, type=1, proto=0, laddr=('127.0.0.1', 55393), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=5328, family=2, type=1, proto=0, laddr=('127.0.0.1', 55394), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\_pytest\mark\structures.py:392: ResourceWarning: unclosed <socket.socket fd=6012, family=2, type=1, proto=0, laddr=('127.0.0.1', 55395), raddr=('127.0.0.1', 11434)>
+    return list(normalize_mark_list(mark_list))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/memory/test_weaviate_vector_store_manager.py::test_add_and_query_multiple_memories
+tests/unit/memory/test_weaviate_vector_store_manager.py::test_initialization_and_collection_creation
+tests/unit/memory/test_weaviate_vector_store_manager.py::test_delete_memories
+tests/unit/memory/test_weaviate_vector_store_manager.py::test_add_and_query_single_memory
+tests/unit/memory/test_weaviate_vector_store_manager.py::test_query_empty_collection
+tests/unit/memory/test_weaviate_vector_store_manager.py::test_delete_collection
+  C:\Users\w1n51\AppData\Local\Programs\Python\Python311\Lib\site-packages\weaviate\collections\classes\config.py:1963: PydanticDeprecatedSince211: Accessing the 'model_fields' attribute on the instance is deprecated. Instead, you should access this attribute from the model class. Deprecated in Pydantic V2.11 to be removed in V3.0.
+    for cls_field in self.model_fields:
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform win32, python 3.11.9-final-0 -----------
+Name                                                          Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------------------------------
+src\__init__.py                                                   0      0   100%
+src\agents\__init__.py                                            0      0   100%
+src\agents\core\__init__.py                                       0      0   100%
+src\agents\core\agent_state.py                                  142     33    77%   107-108, 117-124, 156-157, 160-161, 164-165, 168-169, 172, 175, 178, 181, 184, 187, 190, 193, 196, 199, 202, 205, 208, 211, 214, 217, 220, 223
+src\agents\core\base_agent.py                                   166     67    60%   19-20, 84-85, 138, 168-169, 180-182, 194-217, 226-245, 273, 282-284, 315-316, 351-377, 385, 389, 424-431, 444, 476-484, 499-507
+src\agents\core\roles.py                                          6      0   100%
+src\agents\dspy_programs\__init__.py                              0      0   100%
+src\agents\dspy_programs\action_intent_selector.py              101     31    69%   23-28, 64-65, 72-74, 111-112, 119-120, 134-161, 172-174
+src\agents\dspy_programs\compiled\__init__.py                     0      0   100%
+src\agents\dspy_programs\l1_analyzer_summary_examples.py          9      9     0%   8-135
+src\agents\dspy_programs\l1_facilitator_summary_examples.py      10     10     0%   8-166
+src\agents\dspy_programs\l1_innovator_summary_examples.py         9      9     0%   8-131
+src\agents\dspy_programs\l1_summary_examples.py                   7      7     0%   8-95
+src\agents\dspy_programs\l1_summary_generator.py                 57     15    74%   27-29, 52, 66-73, 85, 90-92
+src\agents\dspy_programs\l2_analyzer_summary_examples.py          9      9     0%   8-116
+src\agents\dspy_programs\l2_facilitator_summary_examples.py      10     10     0%   8-131
+src\agents\dspy_programs\l2_innovator_summary_examples.py         8      8     0%   8-101
+src\agents\dspy_programs\l2_summary_examples.py                   7      7     0%   8-96
+src\agents\dspy_programs\l2_summary_generator.py                 57     25    56%   27-29, 82-84, 94-103, 126-151, 155
+src\agents\dspy_programs\rag_context_synthesizer.py             112     37    67%   25-29, 74-76, 79-81, 120-123, 144, 173-174, 188-190, 194, 198-224, 227-228
+src\agents\dspy_programs\relationship_examples.py                 1      1     0%   1
+src\agents\dspy_programs\relationship_updater.py                 40     16    60%   53-70
+src\agents\dspy_programs\role_specific_summary_generator.py     136     34    75%   29-31, 81-85, 92, 94, 120-121, 125-128, 131-132, 134-136, 141-148, 164, 168, 174-182, 200, 204, 263, 280
+src\agents\dspy_programs\role_thought_examples.py                 1      0   100%
+src\agents\dspy_programs\role_thought_generator.py               49     15    69%   14-16, 28, 43-44, 54-60, 76-77
+src\agents\dspy_programs\test_synthesizer.py                     30     30     0%   6-86
+src\agents\graphs\__init__.py                                     0      0   100%
+src\agents\graphs\basic_agent_graph.py                          989    656    34%   34-37, 58-69, 73, 167-193, 213-269, 288, 294-324, 362-366, 376-387, 390-394, 407-408, 412-415, 419-420, 428-429, 437-438, 442-446, 454-455, 490-494, 521-554, 581-596, 604-621, 626-690, 717-742, 766-791, 810, 812-833, 854-880, 887-904, 911-921, 929-997, 1002-1022, 1026-1034, 1038-1049, 1061-1066, 1078-1091, 1100-1103, 1121-1196, 1203-1233, 1240-1296, 1303-1365, 1372-1413, 1420-1437, 1450, 1452, 1454, 1457-1469, 1498-1651, 1668-1693, 1716-1742, 1833-1837
+src\agents\memory\__init__.py                                     2      0   100%
+src\agents\memory\vector_store.py                               448    260    42%   127-129, 131-133, 149-175, 191, 201-202, 255-265, 338-343, 399-401, 413-465, 484-539, 548-590, 602-649, 662-663, 684, 698-719, 738-799, 834, 840-842, 858-891, 905-951, 966-969, 989, 992-994
+src\agents\memory\weaviate_vector_store_manager.py               71     15    79%   40-41, 47, 73, 81-82, 117-119, 130-131, 140-141, 146-147
+src\app.py                                                      345    345     0%   8-722
+src\infra\__init__.py                                             0      0   100%
+src\infra\config.py                                             118     27    77%   16-19, 53-61, 67, 72-74, 91, 129, 225-231, 243-246, 250
+src\infra\dspy_ollama_integration.py                            103     31    70%   16-18, 67-69, 137-141, 166-167, 182-183, 206, 224-233, 252-253, 269-271, 287, 299, 310, 316
+src\infra\llm_client.py                                         210    118    44%   17-18, 44-47, 51, 60-69, 73-74, 87-90, 96-99, 109-115, 133-137, 141-142, 151-152, 158-159, 176-228, 245-246, 250, 270-271, 276-281, 305-342, 347-348, 413-419, 433, 443-448
+src\infra\llm_mock_helper.py                                     37     11    70%   15-22, 27-33
+src\infra\logging_config.py                                      29     23    21%   18-64
+src\infra\memory\__init__.py                                      0      0   100%
+src\infra\warning_filters.py                                     10      2    80%   28-30
+src\interfaces\__init__.py                                        0      0   100%
+src\interfaces\discord_bot.py                                   158    158     0%   6-288
+src\sim\__init__.py                                               0      0   100%
+src\sim\knowledge_board.py                                       24     10    58%   52, 66-88
+src\sim\simulation.py                                           276    154    44%   19-22, 38-40, 75, 93, 100, 110, 144-146, 166-167, 220, 262-285, 289-300, 309-311, 322-331, 365-420, 433-489, 503-546, 575-584, 590-642, 646
+src\test_role_change.py                                          77     77     0%   6-183
+src\utils\__init__.py                                             0      0   100%
+src\utils\async_dspy_manager.py                                  31      0   100%
+src\utils\decorators.py                                          51     17    67%   58-67, 76-94
+-------------------------------------------------------------------------------------------
+TOTAL                                                          3946   2277    42%
+
+================= 44 passed, 22 warnings in 75.30s (0:01:15) ==================

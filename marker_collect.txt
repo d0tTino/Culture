@@ -1,0 +1,58 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-8.0.2, pluggy-1.5.0
+rootdir: C:\Users\w1n51\OneDrive\Desktop\Programing Projects\Culture.ai
+configfile: pytest.ini
+plugins: anyio-4.8.0, langsmith-0.3.42, asyncio-0.23.5, cov-4.1.0, mock-3.14.0, profiling-1.8.1, xdist-3.5.0
+asyncio: mode=Mode.STRICT
+collected 24 items
+
+<Dir Culture.ai>
+  <Package tests>
+    <Package integration>
+      <Package memory>
+        <Module test_memory_pruning_mus.py>
+          <UnitTestCase TestMUSBasedMemoryPruning>
+            <TestCaseFunction test_a_l1_mus_calculation>
+            <TestCaseFunction test_b_l2_mus_calculation>
+            <TestCaseFunction test_z_memory_deletion>
+        <Module test_memory_utility_score.py>
+          <UnitTestCase TestMemoryUtilityScore>
+            <TestCaseFunction test_memory_utility_score_calculation>
+      <Module test_hierarchical_memory_persistence.py>
+        <UnitTestCase TestHierarchicalMemoryPersistence>
+          <TestCaseFunction test_hierarchical_memory_persistence>
+      <Module test_memory_usage_tracking.py>
+        <UnitTestCase TestMemoryUsageTracking>
+          <TestCaseFunction test_memory_usage_tracking>
+          <TestCaseFunction test_retrieve_memory_ids>
+    <Module test_pytest_sanity.py>
+      <Function test_pytest_sanity>
+    <Package unit>
+      <Package core>
+        <Module test_agent_state.py>
+          <Function test_agent_state>
+          <Function test_discovery_sanity>
+      <Package dspy>
+        <Module test_dspy_direct.py>
+          <Function test_direct_call>
+        <Module test_dspy_role_adherence.py>
+          <Function test_role_prefix_adherence>
+      <Package dspy_programs>
+        <Module test_rag_context_synthesizer.py>
+          <UnitTestCase TestRAGContextSynthesizer>
+            <TestCaseFunction test_clean_output_with_bracket_prefix>
+            <TestCaseFunction test_clean_output_without_bracket_prefix>
+            <TestCaseFunction test_initialization_with_compiled_program>
+            <TestCaseFunction test_initialization_without_compiled_program>
+            <TestCaseFunction test_synthesize_error_handling>
+            <TestCaseFunction test_synthesize_success>
+        <Module test_role_specific_summary_generator.py>
+          <UnitTestCase TestRoleSpecificSummaryGeneratorFallback>
+            <TestCaseFunction test_l1_template_fallback_extracts_keywords>
+            <TestCaseFunction test_l1_template_fallback_when_all_dspy_fails>
+            <TestCaseFunction test_l1_template_fallback_without_mood>
+            <TestCaseFunction test_l2_template_fallback_when_all_dspy_fails>
+            <TestCaseFunction test_l2_template_fallback_without_optional_fields>
+            <TestCaseFunction test_normal_operation_uses_fallbacks_properly>
+
+======================== 24 tests collected in 13.24s =========================

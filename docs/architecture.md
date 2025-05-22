@@ -96,6 +96,28 @@ retrieve_filtered_memories()  # Retrieve memories by metadata filters
 query_memories()    # Combined semantic and metadata filtering
 ```
 
+#### WeaviateVectorStoreManager
+
+The `WeaviateVectorStoreManager` class (`src/agents/memory/weaviate_vector_store_manager.py`) is an alternative vector store interface using Weaviate:
+
+- Stores agent memories with metadata and *external* (pre-computed) embeddings
+- Retrieves memories by vector similarity and metadata filters
+- Supports batch add, query, and delete operations
+- Can be selected as the backend via configuration
+
+Core methods include:
+
+```python
+add_memories()      # Add a batch of memories with vectors and metadata
+query_memories()    # Query by vector similarity and optional filters
+delete_memories()   # Delete by UUID
+delete_collection() # Drop the entire class/collection
+```
+
+**Configuration:**
+- Set `VECTOR_STORE_BACKEND=weaviate` and `WEAVIATE_URL` in your environment or `.env` file to use Weaviate.
+- The agent will use WeaviateVectorStoreManager for all memory operations if configured.
+
 #### Memory Hierarchy
 
 The memory system implements a hierarchical organization:
@@ -296,6 +318,37 @@ DSPy programs integrate with the memory system by:
 - Generating L1 summaries during memory consolidation
 - Creating L2 summaries at chapter boundaries
 - Providing role-appropriate context for memory retrieval
+
+## 6.1 Asynchronous DSPy Program Management (AsyncDSPyManager)
+
+### Overview
+
+The `AsyncDSPyManager` (`src/utils/async_dspy_manager.py`) is a core infrastructure component that manages all DSPy program calls asynchronously using a thread pool. It provides:
+- **Non-blocking execution** of DSPy programs, improving simulation responsiveness and throughput.
+- **Timeout handling**: If a DSPy call exceeds the allowed time, the manager returns a failsafe output.
+- **Graceful error recovery**: Exceptions in DSPy calls are caught, logged, and replaced with safe fallback results.
+
+### Integration Points
+
+- **BaseAgent Methods**: All agent methods that invoke DSPy programs (e.g., action selection, memory summarization, relationship updating) now use `AsyncDSPyManager` and are defined as `async def`. These methods must be awaited.
+- **LangGraph Nodes**: Any graph node that calls these agent methods must also be `async def` and use `await`.
+- **Simulation Loop**: The main simulation loop in `src/app.py` is now asynchronous and uses `asyncio.run()` to drive agent turns.
+- **DSPy Program Requirements**: All DSPy program modules must provide a `get_failsafe_output()` method, which returns a safe default output for use in error/timeout cases.
+
+### Developer Implications
+
+- **Concurrency Model**: AsyncDSPyManager uses a `ThreadPoolExecutor` internally, allowing multiple DSPy calls to run in parallel without blocking the event loop.
+- **Async/Await Discipline**: Any code path that triggers DSPy program execution must be async and use `await` for correct scheduling and error handling.
+- **Timeouts and Failsafes**: Developers can configure per-call or default timeouts. On timeout or error, the manager logs the issue and returns the program's failsafe output, ensuring simulation stability.
+- **Error Logging**: All timeouts and exceptions are logged with context, aiding in debugging and monitoring.
+
+### Benefits
+
+- **Responsiveness**: Agents and the simulation remain responsive even if some DSPy calls are slow or fail.
+- **Robustness**: The system degrades gracefully under LLM/DSPy errors, always producing a valid output.
+- **Scalability**: Parallel DSPy execution enables scaling to larger agent populations and more complex simulations.
+
+For implementation details, see the docstrings in `AsyncDSPyManager`, the async methods in `BaseAgent`, and the async graph nodes in `basic_agent_graph.py`.
 
 ## 7. Infrastructure
 

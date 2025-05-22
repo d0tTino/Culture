@@ -3,9 +3,8 @@
 Test script for the RAGContextSynthesizer class
 """
 
-import sys
-import os
 import logging
+import sys
 from pathlib import Path
 
 # Add the project root to the Python path
@@ -20,12 +19,13 @@ from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesiz
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("test_synthesizer")
 
+
 def main():
     """Test the RAGContextSynthesizer with a real example"""
     # Create the synthesizer
     logger.info("Creating RAGContextSynthesizer...")
     synthesizer = RAGContextSynthesizer()
-    
+
     # Sample context and question
     context = """
     The agent decision-making process involves multiple stages: 
@@ -43,18 +43,18 @@ def main():
     Action intents are selected from a predefined list of possible actions, with the selection
     guided by the agent's thought process, role-specific behavior patterns, and current goals.
     """
-    
+
     question = "How do agents make decisions in the simulation?"
-    
+
     # Synthesize an answer
     logger.info("Synthesizing answer...")
     answer = synthesizer.synthesize(context, question)
-    
+
     # Display the result
     logger.info("Question: %s", question)
     logger.info("Context: %s", context[:100] + "..." if len(context) > 100 else context)
     logger.info("Answer: %s", answer)
-    
+
     # Test with a different example
     context2 = """
     The Knowledge Board is a central repository where agents can post ideas and information, 
@@ -68,19 +68,20 @@ def main():
     The Knowledge Board serves as a form of collective memory and shared context for all agents 
     in the simulation.
     """
-    
+
     question2 = "What is the Knowledge Board and how is it used?"
-    
+
     # Synthesize an answer for the second example
     logger.info("\nSynthesizing answer for second example...")
     answer2 = synthesizer.synthesize(context2, question2)
-    
+
     # Display the result
     logger.info("Question: %s", question2)
     logger.info("Context: %s", context2[:100] + "..." if len(context2) > 100 else context2)
     logger.info("Answer: %s", answer2)
-    
+
     return 0
 
+
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())
