@@ -7,4 +7,4 @@ including persistence, retrieval, and memory utility operations.
 
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 
-__all__ = ["ChromaVectorStoreManager"]
+__all__ = ['ChromaVectorStoreManager'] 
