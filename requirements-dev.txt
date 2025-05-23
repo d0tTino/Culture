@@ -9,7 +9,6 @@ mypy==1.7.1
 # Testing
 pytest==8.0.2
 pytest-cov==4.1.0
-pytest-xdist==3.5.0  # Parallel test execution
 chromadb==0.4.23  # Required for testing vector store functionality
 sentence-transformers==2.5.0  # Required for testing vector store functionality
 
@@ -28,6 +27,4 @@ deptry==0.12.0
 
 # Documentation
 sphinx==7.2.6
-sphinx-rtd-theme==2.0.0
-pre-commit
-types-requests 
+sphinx-rtd-theme==2.0.0 

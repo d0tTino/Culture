@@ -21,14 +21,7 @@ example1 = dspy.Example(
     - Step 25, Broadcast Message: "Thank you for sharing that experience, Agent_5. Let's quantify these trade-offs more precisely. I'll prepare a cost-benefit analysis comparing our current architecture with Transformer-XL and Reformer, considering both performance improvements and computational requirements."
     """,
     current_mood="focused",
-    l1_summary=(
-        "I conducted a detailed analysis of our NLP model's performance metrics across multiple test runs, "
-        "identifying a precise 4.2% accuracy improvement alongside diminishing returns from additional training data. "
-        "My systematic evaluation determined this was likely due to architectural limitations in capturing long-range text dependencies rather than data quality issues. "
-        "I recommended specific alternative architectures (Transformer-XL or Reformer) based on technical capabilities rather than general improvements. "
-        "When Agent_5 provided qualitative feedback about Transformer-XL's computational requirements, I immediately proposed quantifying these trade-offs through a rigorous cost-benefit analysis comparing performance gains against computational costs across multiple architectures. "
-        "Throughout this exchange, I maintained a focused analytical approach, prioritizing empirical evidence and quantitative assessment to drive decision-making about technical architecture choices."
-    ),
+    l1_summary="I conducted a detailed analysis of our NLP model's performance metrics across multiple test runs, identifying a precise 4.2% accuracy improvement alongside diminishing returns from additional training data. My systematic evaluation determined this was likely due to architectural limitations in capturing long-range text dependencies rather than data quality issues. I recommended specific alternative architectures (Transformer-XL or Reformer) based on technical capabilities rather than general improvements. When Agent_5 provided qualitative feedback about Transformer-XL's computational requirements, I immediately proposed quantifying these trade-offs through a rigorous cost-benefit analysis comparing performance gains against computational costs across multiple architectures. Throughout this exchange, I maintained a focused analytical approach, prioritizing empirical evidence and quantitative assessment to drive decision-making about technical architecture choices."
 )
 
 # Example 2: Analyzer identifying data inconsistencies
@@ -45,14 +38,7 @@ example2 = dspy.Example(
     - Step 19, Broadcast Message: "Excellent insight. After examining server response times and network logs, I've found a correlation with increased API latency specifically on weekday afternoons. Mobile connections appear most affected, with response times averaging 2.3x longer than baseline during these periods, exceeding our 1.5-second threshold for optimal user experience."
     """,
     current_mood="methodical",
-    l1_summary=(
-        "I identified a precise statistical anomaly in user acquisition data: a 27% drop in conversion rates from step 3 to 4 "
-        "specifically on mobile devices during weekday afternoons, with no similar pattern on weekends or other times. "
-        "When Agent_2 suggested a connection to ongoing A/B testing, I methodically cross-referenced with test schedules and performed segmented data analysis, "
-        "conclusively determining that both test and control groups were equally affected, eliminating the A/B test as a causal factor. "
-        "Agent_4's hypothesis about external factors prompted me to analyze server and network metrics, where I discovered a direct correlation with increased API latency during the specific time windows—mobile connections experienced precisely 2.3x longer response times, exceeding our established 1.5-second threshold for optimal user experience. "
-        "My analysis systematically narrowed down potential causes through evidence-based elimination and precise quantification, ultimately identifying the technical root cause of the conversion anomaly."
-    ),
+    l1_summary="I identified a precise statistical anomaly in user acquisition data: a 27% drop in conversion rates from step 3 to 4 specifically on mobile devices during weekday afternoons, with no similar pattern on weekends or other times. When Agent_2 suggested a connection to ongoing A/B testing, I methodically cross-referenced with test schedules and performed segmented data analysis, conclusively determining that both test and control groups were equally affected, eliminating the A/B test as a causal factor. Agent_4's hypothesis about external factors prompted me to analyze server and network metrics, where I discovered a direct correlation with increased API latency during the specific time windows—mobile connections experienced precisely 2.3x longer response times, exceeding our established 1.5-second threshold for optimal user experience. My analysis systematically narrowed down potential causes through evidence-based elimination and precise quantification, ultimately identifying the technical root cause of the conversion anomaly."
 )
 
 # Example 3: Analyzer identifying logical contradiction in project requirements
@@ -70,12 +56,7 @@ example3 = dspy.Example(
     - Step 31, Broadcast Message: "Federated learning could indeed balance these requirements more effectively. Based on published benchmarks and our user patterns, I estimate we could retain approximately 85% of personalization effectiveness while addressing the main privacy concerns. However, this would increase computational requirements by 2.7x and introduce model convergence challenges in our highly heterogeneous user base. I recommend a small-scale technical proof of concept to validate these projections."
     """,
     current_mood="analytical",
-    l1_summary=(
-        "I identified a fundamental logical contradiction in our project requirements: the mutual exclusivity between maximizing personalization and eliminating user data storage. "
-        "When Agent_3 suggested using local storage as a solution, I conducted a three-point quantitative analysis of specific trade-offs: 1) 40% reduced effectiveness for multi-device users based on our user patterns, 2) loss of collaborative filtering which drives 63% of successful recommendations, and 3) approximately 35% increased friction in new user onboarding due to cold-start problems. "
-        "When Agent_1 proposed federated learning, I provided a data-backed assessment estimating 85% personalization effectiveness retention while addressing privacy concerns, but noted the precise 2.7x increase in computational requirements and convergence challenges in our heterogeneous user base. "
-        "My analytical approach transformed a contradictory requirement into a structured evaluation of implementation options with quantified trade-offs, culminating in a recommendation for an evidence-based proof of concept to validate projections."
-    ),
+    l1_summary="I identified a fundamental logical contradiction in our project requirements: the mutual exclusivity between maximizing personalization and eliminating user data storage. When Agent_3 suggested using local storage as a solution, I conducted a three-point quantitative analysis of specific trade-offs: 1) 40% reduced effectiveness for multi-device users based on our user patterns, 2) loss of collaborative filtering which drives 63% of successful recommendations, and 3) approximately 35% increased friction in new user onboarding due to cold-start problems. When Agent_1 proposed federated learning, I provided a data-backed assessment estimating 85% personalization effectiveness retention while addressing privacy concerns, but noted the precise 2.7x increase in computational requirements and convergence challenges in our heterogeneous user base. My analytical approach transformed a contradictory requirement into a structured evaluation of implementation options with quantified trade-offs, culminating in a recommendation for an evidence-based proof of concept to validate projections."
 )
 
 # Example 4: Analyzer evaluating competing algorithms
@@ -92,14 +73,7 @@ example4 = dspy.Example(
     - Step 38, Broadcast Message: "I've assessed algorithm stability by running each on 10 different bootstrapped samples from our data. Measuring cluster assignment consistency: K-means showed moderate variability (78% consistency), DBSCAN was more stable (85% consistency), Hierarchical was highly stable (92% consistency), GMM showed lower stability (71% consistency), while BIRCH achieved 82% consistency. For monthly reanalysis, the stability metrics suggest hierarchical clustering would provide the most consistent segments over time, despite its longer execution time."
     """,
     current_mood="thorough",
-    l1_summary=(
-        "I conducted a systematic comparison of five clustering algorithms (K-means, DBSCAN, Hierarchical, Gaussian Mixture, and BIRCH) for user segmentation using multiple quantitative metrics. "
-        "My initial analysis provided precise values for silhouette scores (ranging from 0.65 to 0.72), execution times (12s to 78s), and memory usage (1.2GB to 2.8GB) for each algorithm. "
-        "When Agent_2 inquired about interpretability, I extended my analysis to include structured marketing team evaluations, quantifying interpretability from 4/10 (Hierarchical) to 8/10 (K-means). "
-        "Agent_5's question about stability prompted further empirical testing using bootstrapped sampling, revealing specific consistency percentages ranging from 71% (GMM) to 92% (Hierarchical). "
-        "My thorough, multi-dimensional analysis evolved beyond simplistic recommendations to present a comprehensive trade-off framework, ultimately suggesting that despite longer execution time, Hierarchical clustering's superior stability (92% consistency) makes it optimal for our recurring monthly segmentation needs. "
-        "This demonstrates my analytical approach of systematically evaluating multiple solutions across diverse, relevant dimensions before reaching evidence-based conclusions."
-    ),
+    l1_summary="I conducted a systematic comparison of five clustering algorithms (K-means, DBSCAN, Hierarchical, Gaussian Mixture, and BIRCH) for user segmentation using multiple quantitative metrics. My initial analysis provided precise values for silhouette scores (ranging from 0.65 to 0.72), execution times (12s to 78s), and memory usage (1.2GB to 2.8GB) for each algorithm. When Agent_2 inquired about interpretability, I extended my analysis to include structured marketing team evaluations, quantifying interpretability from 4/10 (Hierarchical) to 8/10 (K-means). Agent_5's question about stability prompted further empirical testing using bootstrapped sampling, revealing specific consistency percentages ranging from 71% (GMM) to 92% (Hierarchical). My thorough, multi-dimensional analysis evolved beyond simplistic recommendations to present a comprehensive trade-off framework, ultimately suggesting that despite longer execution time, Hierarchical clustering's superior stability (92% consistency) makes it optimal for our recurring monthly segmentation needs. This demonstrates my analytical approach of systematically evaluating multiple solutions across diverse, relevant dimensions before reaching evidence-based conclusions."
 )
 
 # Example 5: Analyzer debugging performance regression
@@ -118,14 +92,7 @@ example5 = dspy.Example(
     - Step 44, Broadcast Message: "I've analyzed the deployment structure and identified that we can selectively revert the query pattern changes without affecting other improvements. The specific issue is isolated to the UserPreferenceService class, methods fetchUserSettings() and applyUserPreferences(). Reverting these methods to version 2.3.0 while maintaining other updates would resolve the performance regression with minimal impact. I've prepared a targeted patch that implements this fix."
     """,
     current_mood="systematic",
-    l1_summary=(
-        "When faced with reports of a 40% application response time increase after deployment, I implemented a systematic debugging methodology to isolate the cause. "
-        "First, I differentiated between frontend and backend issues by comparing timing metrics, precisely quantifying a 37.8% increase in server response times versus only 3.2% in frontend rendering—clearly localizing the problem on the backend. "
-        "I then formulated three specific hypotheses based on deployment changes: the new caching layer, updated database query patterns, or authentication flow modifications. "
-        "Through controlled component isolation testing, I definitively identified the exact cause: an N+1 query problem in the user preference lookup, where each request now triggered exactly 12 separate database queries instead of using the previous batched approach. "
-        "When Agent_2 asked about selective reversion, I analyzed the deployment structure and pinpointed the specific code locations (UserPreferenceService class, methods fetchUserSettings() and applyUserPreferences()), enabling a targeted fix without sacrificing other improvements. "
-        "My systematic approach enabled rapid, precise problem identification without resorting to blanket solutions or guesswork."
-    ),
+    l1_summary="When faced with reports of a 40% application response time increase after deployment, I implemented a systematic debugging methodology to isolate the cause. First, I differentiated between frontend and backend issues by comparing timing metrics, precisely quantifying a 37.8% increase in server response times versus only 3.2% in frontend rendering—clearly localizing the problem on the backend. I then formulated three specific hypotheses based on deployment changes: the new caching layer, updated database query patterns, or authentication flow modifications. Through controlled component isolation testing, I definitively identified the exact cause: an N+1 query problem in the user preference lookup, where each request now triggered exactly 12 separate database queries instead of using the previous batched approach. When Agent_2 asked about selective reversion, I analyzed the deployment structure and pinpointed the specific code locations (UserPreferenceService class, methods fetchUserSettings() and applyUserPreferences()), enabling a targeted fix without sacrificing other improvements. My systematic approach enabled rapid, precise problem identification without resorting to blanket solutions or guesswork."
 )
 
 # Example 6: Analyzer evaluating experiment results
@@ -142,13 +109,7 @@ example6 = dspy.Example(
     - Step 57, Broadcast Message: "Looking at 14-day conversion to paid subscription rates, the new flow showed a modest but statistically significant improvement: 8.4% vs 7.2% in the control group (p=0.02), representing a relative increase of 16.7%. However, the average revenue per user showed no significant difference ($5.23 vs $5.18, p=0.68). When analyzed by tier, the new flow primarily increased conversions to our basic tier (+1.5 percentage points) with no significant impact on premium tier adoption (-0.3 percentage points, p=0.41)."
     """,
     current_mood="meticulous",
-    l1_summary=(
-        "I analyzed comprehensive results from our 2-week A/B test of the new onboarding flow, using a statistically robust sample of 24,362 users split nearly equally between control and variant groups. "
-        "My analysis identified statistically significant improvements in completion rate (67.3% vs 58.9%, p<0.001) and completion time (3.2 vs 4.7 minutes), while finding no significant impact on 30-day retention (p=0.74). "
-        "When Agent_1 requested segment analysis, I conducted a multi-dimensional statistical breakdown, revealing precisely quantified, statistically significant variations across platforms (mobile users showing +12.7 percentage points improvement vs +4.8 for desktop), age demographics (18-34 age group showing +11.2 percentage points vs +5.3 for 35+), and language segments (non-English users benefiting substantially more at +14.6 percentage points vs +5.9). "
-        "Agent_3's question about business impact prompted further analysis of conversion metrics, where I identified a statistically significant 16.7% relative increase in paid subscription conversion (8.4% vs 7.2%, p=0.02), while noting no significant ARPU difference (p=0.68) and a tier-specific pattern of increased basic tier adoption without premium tier impact. "
-        "My meticulous approach ensured comprehensive statistical validation across multiple dimensions and metrics, providing actionable insights about differential segment impacts."
-    ),
+    l1_summary="I analyzed comprehensive results from our 2-week A/B test of the new onboarding flow, using a statistically robust sample of 24,362 users split nearly equally between control and variant groups. My analysis identified statistically significant improvements in completion rate (67.3% vs 58.9%, p<0.001) and completion time (3.2 vs 4.7 minutes), while finding no significant impact on 30-day retention (p=0.74). When Agent_1 requested segment analysis, I conducted a multi-dimensional statistical breakdown, revealing precisely quantified, statistically significant variations across platforms (mobile users showing +12.7 percentage points improvement vs +4.8 for desktop), age demographics (18-34 age group showing +11.2 percentage points vs +5.3 for 35+), and language segments (non-English users benefiting substantially more at +14.6 percentage points vs +5.9). Agent_3's question about business impact prompted further analysis of conversion metrics, where I identified a statistically significant 16.7% relative increase in paid subscription conversion (8.4% vs 7.2%, p=0.02), while noting no significant ARPU difference (p=0.68) and a tier-specific pattern of increased basic tier adoption without premium tier impact. My meticulous approach ensured comprehensive statistical validation across multiple dimensions and metrics, providing actionable insights about differential segment impacts."
 )
 
 # Example 7: Analyzer evaluating learning algorithm improvements
@@ -167,14 +128,16 @@ example7 = dspy.Example(
     - Step 65, Broadcast Message: "Based on the comprehensive evaluation, I recommend implementing the gradient boosting model for the initial deployment for three quantifiable reasons: 1) Its inference time is 5.1x faster, which is critical for our real-time application with SLA requirements; 2) It demonstrates superior robustness to missing data, which occurs in approximately 8% of production cases based on current metrics; and 3) It provides interpretable feature importance, which allows for ongoing refinement. While the neural network achieved marginally better accuracy (+1.5%) and AUC-ROC (+0.02), these advantages don't outweigh the operational benefits of gradient boosting for our specific use case and constraints."
     """,
     current_mood="precise",
-    l1_summary=(
-        "I designed and executed a rigorous comparison between gradient boosting and neural network approaches using 5-fold stratified cross-validation across multiple performance dimensions. "
-        "My analysis quantified precise performance metrics with confidence intervals: the neural network achieved slightly better predictive metrics (accuracy: 85.7% ±1.6%, F1: 0.81 ±0.02, AUC-ROC: 0.89 ±0.02) versus gradient boosting (accuracy: 84.2% ±1.3%, F1: 0.79 ±0.02, AUC-ROC: 0.87 ±0.01). "
-        "However, I also evaluated practical considerations, measuring the neural network's 5.1x slower inference time (215ms vs 42ms) and extracting feature importance insights showing features X, Y, and Z contributing 68% of predictive power in the gradient boosting model. "
-        "Agent_5's question prompted additional robustness testing with synthetic missing data at three specific rates, revealing gradient boosting's superior resilience (0.4%, 1.7%, and 4.3% accuracy drops) compared to the neural network's higher sensitivity (1.2%, 3.8%, and 7.9% drops), with particular vulnerability in transactional data. "
-        "When asked for a recommendation, I provided a data-backed conclusion favoring gradient boosting based on precisely quantified operational advantages in speed, robustness to the 8% missing data rate in production, and interpretability benefits, despite the neural network's marginal accuracy gains."
-    ),
+    l1_summary="I designed and executed a rigorous comparison between gradient boosting and neural network approaches using 5-fold stratified cross-validation across multiple performance dimensions. My analysis quantified precise performance metrics with confidence intervals: the neural network achieved slightly better predictive metrics (accuracy: 85.7% ±1.6%, F1: 0.81 ±0.02, AUC-ROC: 0.89 ±0.02) versus gradient boosting (accuracy: 84.2% ±1.3%, F1: 0.79 ±0.02, AUC-ROC: 0.87 ±0.01). However, I also evaluated practical considerations, measuring the neural network's 5.1x slower inference time (215ms vs 42ms) and extracting feature importance insights showing features X, Y, and Z contributing 68% of predictive power in the gradient boosting model. Agent_5's question prompted additional robustness testing with synthetic missing data at three specific rates, revealing gradient boosting's superior resilience (0.4%, 1.7%, and 4.3% accuracy drops) compared to the neural network's higher sensitivity (1.2%, 3.8%, and 7.9% drops), with particular vulnerability in transactional data. When asked for a recommendation, I provided a data-backed conclusion favoring gradient boosting based on precisely quantified operational advantages in speed, robustness to the 8% missing data rate in production, and interpretability benefits, despite the neural network's marginal accuracy gains."
 )
 
 # Compile all examples into a list for optimization
-analyzer_l1_examples = [example1, example2, example3, example4, example5, example6, example7]
+analyzer_l1_examples = [
+    example1,
+    example2,
+    example3,
+    example4,
+    example5,
+    example6,
+    example7
+] 
