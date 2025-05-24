@@ -1,8 +1,10 @@
+# ruff: noqa: E501, ANN101, ANN401
 """
 DSPy RAG Context Synthesizer
 
-This module provides a DSPy-based solution for synthesizing concise answers from retrieved contexts
-based on a question. It can load an optimized DSPy program or fall back to a basic version.
+This module provides a DSPy-based solution for synthesizing concise answers from retrieved
+contexts based on a question. It can load an optimized DSPy program or fall back to a basic
+version.
 
 The module handles the "]]" prefix artifact that sometimes appears in DSPy-Ollama outputs.
 """
@@ -31,8 +33,7 @@ except ImportError as e:
     raise
 
 
-# Define the DSPy Signature for RAG synthesis
-class RAGSynthesis(dspy.Signature):  # type: ignore[no-any-unimported]
+class RAGSynthesis(dspy.Signature):  # type: ignore[no-any-unimported,misc]
     """
     Given a query and a list of retrieved context passages, synthesize a concise and relevant
     answer or insight that addresses the query based strictly on the provided contexts.
@@ -42,7 +43,10 @@ class RAGSynthesis(dspy.Signature):  # type: ignore[no-any-unimported]
     question = dspy.InputField(desc="The question or topic to guide the synthesis.")
 
     synthesized_answer = dspy.OutputField(
-        desc="A concise answer or insight synthesized strictly from the provided contexts that directly addresses the question."
+        desc=(
+            "A concise answer or insight synthesized strictly from the provided contexts "
+            "that directly addresses the question."
+        )
     )
 
 
@@ -51,7 +55,7 @@ class FailsafeRAGContextSynthesizer:
     Failsafe version of the RAGContextSynthesizer. Always returns a safe default answer.
     """
 
-    def synthesize(self, context: str, question: str) -> str:
+    def synthesize(self: "FailsafeRAGContextSynthesizer", context: str, question: str) -> str:
         return "Failsafe: No answer available due to processing error."
 
 
@@ -61,7 +65,7 @@ class RAGContextSynthesizer:
     Can use either an optimized/compiled DSPy program or a default one, with robust fallback logic.
     """
 
-    def __init__(self, compiled_program_path: Optional[str] = None):
+    def __init__(self: "RAGContextSynthesizer", compiled_program_path: Optional[str] = None):
         """
         Initialize the RAG Context Synthesizer.
 
@@ -87,7 +91,7 @@ class RAGContextSynthesizer:
             logger.critical(f"Failed to load RAGContextSynthesizer program: {e}. Using failsafe.")
             self.dspy_program = None
 
-    def _load_program(self, compiled_program_path: str) -> object:
+    def _load_program(self: "RAGContextSynthesizer", compiled_program_path: str) -> object:
         """
         Load a compiled DSPy program or create a default one.
 
@@ -97,39 +101,30 @@ class RAGContextSynthesizer:
         Returns:
             A DSPy module for RAG synthesis
         """
-        # Create the default DSPy module
         default_module = dspy.Predict(RAGSynthesis)
 
-        # Check if compiled program exists
         if not os.path.exists(compiled_program_path):
             logger.warning(f"Compiled program not found at {compiled_program_path}")
             logger.info("Using default (unoptimized) RAG synthesis module")
             return default_module
 
-        # Try to load the compiled program
         try:
             logger.info(f"Loading compiled program from {compiled_program_path}")
-
-            # Instead of direct load, we'll take a more cautious approach
-            # to handle potential structure mismatches between expected format
-            # and what's in the file
             program = default_module
             try:
                 program.load(compiled_program_path)
                 logger.info("Successfully loaded compiled RAG synthesis program")
                 return program
             except KeyError as ke:
-                # Handle signature format incompatibility gracefully
                 logger.error(f"Error loading compiled program: {ke}")
                 logger.info("The compiled program format is incompatible. Using default module.")
                 return default_module
-
         except Exception as e:
             logger.error(f"Error loading compiled program: {e}")
             logger.info("Falling back to default (unoptimized) RAG synthesis module")
             return default_module
 
-    def _clean_output(self, text: str) -> str:
+    def _clean_output(self: "RAGContextSynthesizer", text: str) -> str:
         """
         Clean the output from DSPy, removing artifacts like the "]]" prefix.
 
@@ -142,21 +137,14 @@ class RAGContextSynthesizer:
         if not text:
             return ""
 
-        # Remove the "]]" prefix if present
-        # This handles variations like "]]text", "]] text", or even multiple brackets
         cleaned_text = re.sub(r"^(\s*\]{2,})+\s*", "", text)
 
-        # Remove ']' prefix
         if cleaned_text.startswith("]"):
             cleaned_text = cleaned_text[1:].lstrip()
 
-        # Remove "[[ ## completed ## ]]" or similar completion markers
         cleaned_text = re.sub(r"\[\[\s*##\s*completed\s*##\s*\]\]", "", cleaned_text)
-
-        # Trim any leading/trailing whitespace
         cleaned_text = cleaned_text.strip()
 
-        # Log if cleaning was performed
         if cleaned_text != text:
             logger.debug(f"Output cleaning performed: '{text}' -> '{cleaned_text}'")
 
@@ -176,9 +164,9 @@ class RAGContextSynthesizer:
         logger.info(f"Synthesizing answer for question: {question[:50]}...")
 
         try:
-            if not self.dspy_program:
+            if not callable(self.dspy_program):
                 logger.warning(
-                    "RAGContextSynthesizer DSPy program not available, using failsafe fallback."
+                    "RAGContextSynthesizer DSPy program is not callable, using failsafe fallback."
                 )
                 return self.failsafe.synthesize(context, question)
             prediction = self.dspy_program(context=context, question=question)

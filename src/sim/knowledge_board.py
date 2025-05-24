@@ -16,9 +16,9 @@ class KnowledgeBoard:
     Maintains a list of knowledge entries as structured dictionaries.
     """
 
-    entries: list[Any]
+    entries: list[dict[str, Any]]
 
-    def __init__(self, entries: list[Any] | None = None) -> None:
+    def __init__(self, entries: list[dict[str, Any]] | None = None) -> None:
         """
         Initialize an empty knowledge board.
         """
@@ -50,7 +50,7 @@ class KnowledgeBoard:
         )
         return recent_entries
 
-    def get_full_entries(self, max_entries: int = 10) -> list[dict]:
+    def get_full_entries(self, max_entries: int = 10) -> list[dict[str, Any]]:
         """
         Returns the full structured entries from the knowledge board, limited to the most recent
         entries.

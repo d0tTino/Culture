@@ -1,3 +1,4 @@
+# ruff: noqa: E501, ANN101, ANN401
 """
 DSPy L1 Summary Generator
 
@@ -13,13 +14,13 @@ import logging
 import os
 from typing import Optional
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 import dspy
 
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configure DSPy with Ollama LM
 try:
@@ -30,7 +31,7 @@ except ImportError as e:
     raise
 
 
-class GenerateL1SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
+class GenerateL1SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported,misc]
     """
     Generates a concise L1 summary from recent agent events, considering the agent's role,
     context, and optionally mood.
@@ -41,15 +42,25 @@ class GenerateL1SummarySignature(dspy.Signature):  # type: ignore[no-any-unimpor
         desc="The current role of the agent (e.g., 'Data Analyst', 'Philosopher')."
     )
     recent_events: str = dspy.InputField(
-        desc="A chronological series of recent memory events (thoughts, actions, perceived messages) for the agent that need to be summarized into an L1 summary. This is the context from the agent's short-term memory."
+        desc=(
+            "A chronological series of recent memory events (thoughts, actions, perceived "
+            "messages) for the agent that need to be summarized into an L1 summary. This is "
+            "the context from the agent's short-term memory."
+        )
     )
     current_mood: Optional[str] = dspy.InputField(
-        desc="The agent's current mood (e.g., 'curious', 'frustrated'), which may influence the summary's tone or focus."
+        desc=(
+            "The agent's current mood (e.g., 'curious', 'frustrated'), which may influence "
+            "the summary's tone or focus."
+        )
     )
 
     # Output field
     l1_summary: str = dspy.OutputField(
-        desc="A concise and informative L1 summary of the recent events, capturing key insights or developments relevant to the agent's role and ongoing activities."
+        desc=(
+            "A concise and informative L1 summary of the recent events, capturing key "
+            "insights or developments relevant to the agent's role and ongoing activities."
+        )
     )
 
 
@@ -59,7 +70,10 @@ class FailsafeL1SummaryGenerator:
     """
 
     def generate_summary(
-        self, agent_role: str, recent_events: str, current_mood: Optional[str] = None
+        self: "FailsafeL1SummaryGenerator",
+        agent_role: str,
+        recent_events: str,
+        current_mood: Optional[str] = None,
     ) -> str:
         return "Failsafe: No summary available due to processing error."
 
@@ -70,11 +84,11 @@ class L1SummaryGenerator:
     """
 
     def __init__(
-        self,
+        self: "L1SummaryGenerator",
         compiled_program_path: Optional[
             str
         ] = "src/agents/dspy_programs/compiled/optimized_l1_summarizer.json",
-    ):
+    ) -> None:
         try:
             self.l1_predictor = dspy.Predict(GenerateL1SummarySignature)
             if compiled_program_path and os.path.exists(compiled_program_path):
@@ -85,7 +99,8 @@ class L1SummaryGenerator:
                     )
                 except Exception as e:
                     logger.error(
-                        f"Failed to load compiled L1 summarizer from {compiled_program_path}: {e}. Using default predictor."
+                        f"Failed to load compiled L1 summarizer from {compiled_program_path}: {e}. "
+                        "Using default predictor."
                     )
             else:
                 logger.info(
@@ -97,7 +112,10 @@ class L1SummaryGenerator:
             self.failsafe = FailsafeL1SummaryGenerator()
 
     def generate_summary(
-        self, agent_role: str, recent_events: str, current_mood: Optional[str] = None
+        self: "L1SummaryGenerator",
+        agent_role: str,
+        recent_events: str,
+        current_mood: Optional[str] = None,
     ) -> str:
         try:
             if not self.l1_predictor:
@@ -119,7 +137,10 @@ class L1SummaryGenerator:
                 return self.failsafe.generate_summary(agent_role, recent_events, current_mood)
 
     def _fallback_generate_summary(
-        self, agent_role: str, recent_events: str, current_mood: Optional[str] = None
+        self: "L1SummaryGenerator",
+        agent_role: str,
+        recent_events: str,
+        current_mood: Optional[str] = None,
     ) -> str:
         """
         Fallback method to generate a basic summary when DSPy fails.

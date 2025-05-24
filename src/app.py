@@ -10,6 +10,7 @@ import asyncio
 import logging
 import sys
 import threading
+from typing import Optional, Type
 
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -19,10 +20,12 @@ from src.sim.simulation import Simulation
 
 # Try to import discord bot if present and enabled
 try:
-    from src.interfaces.discord_bot import DiscordBot
+    from src.interfaces.discord_bot import SimulationDiscordBot
+
+    simulation_discord_bot_class: Optional[Type[SimulationDiscordBot]] = SimulationDiscordBot
 except ImportError:
     logging.warning("Discord bot module not found, will run without Discord integration.")
-    DiscordBot = None
+    simulation_discord_bot_class = None
 
 # === TEMPORARY: Force agent-to-agent messages for DSPy relationship updater spot-check ===
 FORCED_INTERACTION_SCENARIO = (
@@ -84,8 +87,11 @@ def create_base_simulation(
 
     # Initialize Discord bot if requested
     discord_bot = None
-    if use_discord and DiscordBot:
-        discord_bot = DiscordBot()
+    if use_discord and simulation_discord_bot_class:
+        # TODO: Replace with actual token and channel_id from config or environment
+        bot_token = "YOUR_DISCORD_BOT_TOKEN"
+        channel_id = 123456789012345678  # Replace with actual channel ID
+        discord_bot = simulation_discord_bot_class(bot_token, channel_id)
         if not discord_bot.is_ready:
             logging.warning("Discord bot not ready, will run without Discord integration.")
             discord_bot = None

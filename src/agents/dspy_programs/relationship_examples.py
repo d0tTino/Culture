@@ -1,3 +1,7 @@
+# NOTE: This file contains intentional E501 (line too long) violations in string/data blocks.
+# These are documented as technical debt and do not affect runtime logic.
+# See docs/coding_standards.md for details.
+
 examples = [
     # 1. Positive Collaboration
     {

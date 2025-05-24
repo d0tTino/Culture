@@ -8,10 +8,9 @@ from src.infra.memory.vector_store to src.agents.memory.vector_store.
 
 import re
 from pathlib import Path
-from typing import List, Tuple
 
 
-def find_python_files(base_dir: str = ".") -> List[Path]:
+def find_python_files(base_dir: str = ".") -> list[Path]:
     """Find all Python files in the project."""
     base_path = Path(base_dir)
     python_files = list(base_path.glob("**/*.py"))
@@ -20,7 +19,7 @@ def find_python_files(base_dir: str = ".") -> List[Path]:
     return [f for f in python_files if not any(part.startswith(".") for part in f.parts)]
 
 
-def update_imports_in_file(file_path: Path) -> Tuple[int, List[str]]:
+def update_imports_in_file(file_path: Path) -> tuple[int, list[str]]:
     """
     Update import statements in a single file.
 
@@ -59,7 +58,7 @@ def update_imports_in_file(file_path: Path) -> Tuple[int, List[str]]:
     return change_count, changes
 
 
-def main():
+def main() -> None:
     """Main function to update imports across the codebase."""
     print("Updating memory import statements across the codebase...")
 

@@ -20,6 +20,7 @@ from src.infra.warning_filters import configure_warning_filters
 
 configure_warning_filters()  # Apply filters
 
+from typing import Optional
 from unittest.mock import patch
 
 import pytest
@@ -27,7 +28,7 @@ import pytest
 from tests.utils.mock_llm import MockLLM
 
 
-def is_ollama_running():
+def is_ollama_running() -> Optional[bool]:
     """Check if Ollama server is running by attempting to connect to localhost:11434"""
     import socket
 

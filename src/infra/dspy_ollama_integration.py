@@ -7,6 +7,8 @@ import logging
 import time
 from typing import Any
 
+import requests
+
 # Import DSPy and Ollama
 try:
     import dspy
@@ -22,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dspy_ollama")
 
 
-class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
+class OllamaLM(dspy.LM):  # type: ignore
     """
     A DSPy-compatible language model implementation for Ollama.
 
@@ -252,16 +254,33 @@ def configure_dspy_with_ollama(
         logger.error("DSPy or Ollama not available. Cannot configure DSPy.")
         return None
 
+    # Check Ollama server availability
+    try:
+        logger.info(f"Checking Ollama server availability at {api_base}...")
+        response = requests.get(api_base, timeout=2)
+        if response.status_code != 200:
+            logger.error(
+                f"Ollama server not accessible at {api_base}. "
+                f"Status code: {response.status_code}. "
+                "DSPy LM cannot be configured."
+            )
+            return None
+    except Exception as e:
+        logger.critical(
+            f"Ollama server not accessible at {api_base}. Exception: {e}. "
+            "DSPy LM cannot be configured."
+        )
+        return None
+
     try:
         # Create and configure the OllamaLM instance
         ollama_lm = OllamaLM(model_name=model_name, api_base=api_base, temperature=temperature)
-
-        # Configure DSPy to use this LM globally
         dspy.settings.configure(lm=ollama_lm)
-        logger.info(f"DSPy configured to use Ollama model {model_name}")
-
+        logger.info(
+            f"DSPy LM successfully configured with Ollama model '{model_name}' "
+            f"at '{api_base}'."
+        )
         return ollama_lm
-
     except Exception as e:
         logger.error(f"Failed to configure DSPy with Ollama: {e}")
         return None

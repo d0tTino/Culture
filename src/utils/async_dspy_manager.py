@@ -28,7 +28,7 @@ class AsyncDSPyManager:
         *args: object,
         timeout: float | None = None,
         **kwargs: object,
-    ) -> asyncio.Future:
+    ) -> asyncio.Future[object]:
         """
         Submit a DSPy callable to be executed asynchronously.
 
@@ -50,7 +50,7 @@ class AsyncDSPyManager:
 
     async def get_result(
         self,
-        future: asyncio.Future,
+        future: asyncio.Future[object],
         default_value: object = None,
         timeout: float | None = None,
         dspy_callable: Callable[..., object] | None = None,
@@ -83,7 +83,7 @@ class AsyncDSPyManager:
 
     def _handle_timeout(
         self,
-        future: asyncio.Future,
+        future: asyncio.Future[object],
         default_value: object = None,
         timeout: float | None = None,
         dspy_callable: Callable[..., object] | None = None,

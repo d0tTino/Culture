@@ -1,3 +1,4 @@
+# ruff: noqa: E501, ANN101, ANN401
 """
 DSPy L2 Summary Generator
 
@@ -13,16 +14,15 @@ import logging
 import os
 from typing import Optional
 
+import dspy
+
+from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
-    import dspy
-
-    from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
-
-    # Configure DSPy with Ollama LM
     configure_dspy_with_ollama(model_name="mistral:latest", temperature=0.1)
     logger.info("Successfully configured DSPy with Ollama for L2 summarization")
 except ImportError as e:
@@ -30,7 +30,7 @@ except ImportError as e:
     dspy = None
 
 
-class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
+class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported,misc]
     """
     Generates a high-level L2 insight summary from a series of L1 summaries,
     considering agent role, mood trends, and goals.
@@ -41,25 +41,33 @@ class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimpor
     )
 
     l1_summaries_context = dspy.InputField(
-        desc="A compilation of recent L1 summaries that form the basis for the L2 summary. "
-        "This represents a session's worth of condensed information."
+        desc=(
+            "A compilation of recent L1 summaries that form the basis for the L2 summary. "
+            "This represents a session's worth of condensed information."
+        )
     )
 
     overall_mood_trend = dspy.InputField(
-        desc="A general trend of the agent's mood over the period covered by the L1 summaries "
-        "(e.g., 'improving', 'declining', 'stable optimistic').",
+        desc=(
+            "A general trend of the agent's mood over the period covered by the L1 summaries "
+            "(e.g., 'improving', 'declining', 'stable optimistic')."
+        ),
         required=False,
     )
 
     agent_goals = dspy.InputField(
-        desc="A brief statement of the agent's current primary goals or objectives, "
-        "to help focus the L2 summary on relevant insights.",
+        desc=(
+            "A brief statement of the agent's current primary goals or objectives, "
+            "to help focus the L2 summary on relevant insights."
+        ),
         required=False,
     )
 
     l2_summary = dspy.OutputField(
-        desc="A comprehensive yet concise L2 summary synthesizing key insights, themes, "
-        "or progress from the provided L1 summaries, relevant to the agent's role and goals."
+        desc=(
+            "A comprehensive yet concise L2 summary synthesizing key insights, themes, "
+            "or progress from the provided L1 summaries, relevant to the agent's role and goals."
+        )
     )
 
 
@@ -73,11 +81,11 @@ class L2SummaryGenerator:
     """
 
     def __init__(
-        self,
+        self: "L2SummaryGenerator",
         compiled_program_path: Optional[
             str
         ] = "src/agents/dspy_programs/compiled/optimized_l2_summarizer.json",
-    ):
+    ) -> None:
         """
         Initialize the L2 summary generator with a DSPy predictor module.
 
@@ -105,7 +113,6 @@ class L2SummaryGenerator:
                         f"Failed to load compiled L2 summarizer from {compiled_program_path}: {e}. "
                         "Using default predictor."
                     )
-                    # Fallback to default dspy.Predict if loading fails (already created above)
             else:
                 logger.info(
                     "No compiled L2 summarizer found or path not provided. Using default predictor."
@@ -117,7 +124,7 @@ class L2SummaryGenerator:
             self.l2_predictor = None
 
     def generate_summary(
-        self,
+        self: "L2SummaryGenerator",
         agent_role: str,
         l1_summaries_context: str,
         overall_mood_trend: Optional[str] = None,

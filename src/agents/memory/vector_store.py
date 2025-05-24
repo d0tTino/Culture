@@ -372,12 +372,14 @@ class ChromaVectorStoreManager:
 
             # Extract and format the results
             formatted_results = []
-            memory_ids = []
-            relevance_scores = []
+            memory_ids: list[str] = []
+            relevance_scores: list[float] = []
 
             if results and "metadatas" in results and results["metadatas"]:
-                metadatas = first_list_element(results["metadatas"])
-                documents = (
+                metadatas: list[Mapping[str, str | int | float | bool]] = first_list_element(
+                    results["metadatas"]
+                )
+                documents: list[str] = (
                     first_list_element(results.get("documents"))
                     if results.get("documents")
                     else []
@@ -386,7 +388,7 @@ class ChromaVectorStoreManager:
 
                 # Calculate relevance scores (1 - distance)
                 if results.get("distances") and results["distances"]:
-                    distances = first_list_element(results["distances"])
+                    distances: list[float] = first_list_element(results["distances"])
                     relevance_scores = [1.0 - float(distance) for distance in distances]
 
                 # Update usage statistics
@@ -486,8 +488,10 @@ class ChromaVectorStoreManager:
             memory_ids: list[str] = []
 
             if results and "ids" in results and results["ids"]:
-                metadatas = results.get("metadatas")
-                documents = results.get("documents")
+                metadatas: list[Mapping[str, str | int | float | bool]] | None = results.get(
+                    "metadatas"
+                )
+                documents: list[str] | None = results.get("documents")
                 for i, memory_id in enumerate(results["ids"]):
                     if (
                         metadatas is not None
@@ -706,7 +710,7 @@ class ChromaVectorStoreManager:
             and len(results["ids"]) > 0
             else []
         )
-        distances = (
+        distances: list[float] = (
             results["distances"][0]
             if results
             and "distances" in results
@@ -722,8 +726,10 @@ class ChromaVectorStoreManager:
         # Filter by threshold if provided
         filtered_memories = []
         if results and "metadatas" in results and results["metadatas"]:
-            metadatas = first_list_element(results["metadatas"])
-            documents = (
+            metadatas: list[Mapping[str, str | int | float | bool]] = first_list_element(
+                results["metadatas"]
+            )
+            documents: list[str] = (
                 first_list_element(results.get("documents")) if results.get("documents") else []
             )
             for i, memory_id in enumerate(memory_ids):

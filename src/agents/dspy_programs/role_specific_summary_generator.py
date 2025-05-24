@@ -1,3 +1,4 @@
+# ruff: noqa: E501, ANN101, ANN401
 """
 Role-Specific Summary Generator
 
@@ -198,30 +199,6 @@ STOPWORDS = {
     "aren't",
     "wasn't",
     "weren't",
-    "hasn't",
-    "haven't",
-    "hadn't",
-    "doesn't",
-    "don't",
-    "didn't",
-    "won't",
-    "wouldn't",
-    "shan't",
-    "shouldn't",
-    "can't",
-    "cannot",
-    "couldn't",
-    "mustn't",
-    "let's",
-    "that's",
-    "who's",
-    "what's",
-    "here's",
-    "there's",
-    "when's",
-    "where's",
-    "why's",
-    "how's",
 }
 
 

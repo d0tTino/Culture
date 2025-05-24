@@ -9,7 +9,7 @@ import glob
 import shutil
 
 
-def cleanup_temp_db(dry_run=False):
+def cleanup_temp_db(dry_run: bool = False) -> None:
     """
     Clean up temporary ChromaDB directories.
 

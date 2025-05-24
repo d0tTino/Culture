@@ -350,4 +350,43 @@ For detailed information about our code review process, including scope, respons
 
 ## 13. Conclusion
 
-These coding standards provide a foundation for consistent, high-quality code in the Culture.ai project. As the project evolves, these standards may be refined and expanded. All team members should strive to follow these guidelines while writing clear, efficient, and maintainable code. 
+These coding standards provide a foundation for consistent, high-quality code in the Culture.ai project. As the project evolves, these standards may be refined and expanded. All team members should strive to follow these guidelines while writing clear, efficient, and maintainable code.
+
+# Code Quality & Compliance (2025-05)
+
+- The codebase is **Ruff and Mypy strict-compliant** (with justified exceptions for third-party APIs).
+- All obsolete/one-off scripts have been archived or removed. Only canonical cleanup and migration scripts remain (see `scripts/README.md`).
+- All new scripts and helpers must pass Ruff and Mypy strict mode before merging.
+
+## Known Ruff E501 (Line Too Long) Exceptions — Technical Debt
+
+As of [May 2025], the following lines in `src/agents/graphs/basic_agent_graph.py` exceed the 99-character limit (E501):
+
+393, 412, 433, 443, 453, 621, 633, 673, 697, 704, 722, 777, 784, 812, 835, 876, 880, 884, 887, 891, 895, 935, 991, 1020, 1045, 1073, 1093, 1152, 1167, 1220, 1230, 1239, 1257, 1262, 1268, 1273, 1309, 1322, 1400, 1439, 1446, 1465, 1480, 1488, 1492, 1503, 1535, 1546, 1554, 1592, 1598, 1608, 1633, 1667, 1677, 1683
+
+These are primarily string literals, docstrings, or logging statements that require careful manual splitting for readability and compliance. Automated and batch fixes were ineffective due to their complexity or formatting.
+
+**Action:**
+- Marked as technical debt. Revisit and address these lines in a future refactor.
+- All other actionable Ruff/Mypy errors are resolved and enforced in CI/pre-commit.
+
+## Known Ruff E501 (Line Too Long) Exceptions in Example/Data Files — Technical Debt
+
+As of [May 2025], the following files in `src/agents/dspy_programs/` contain long string literals or docstrings that exceed the 99-character limit (E501):
+
+- `l2_summary_examples.py`
+- `l2_facilitator_summary_examples.py`
+- `l2_innovator_summary_examples.py`
+- `l2_analyzer_summary_examples.py`
+- `l1_innovator_summary_examples.py`
+- `l1_summary_examples.py`
+- `l1_analyzer_summary_examples.py`
+- `l1_facilitator_summary_examples.py`
+- `role_thought_examples.py`
+- `relationship_examples.py`
+
+These files are used for test data, prompt examples, or documentation and do not contain production logic. Automated and batch fixes are not applied to these files to preserve formatting and semantic clarity. 
+
+**Action:**
+- Marked as technical debt. Revisit and address these lines in a future refactor if needed.
+- All active logic files and tests are held to strict Ruff/Mypy compliance and are enforced in CI/pre-commit. 

@@ -33,7 +33,7 @@ CHROMA_DIRS_TO_REMOVE = [
 ]
 
 
-def check_file_count():
+def check_file_count() -> int:
     """Count total files in the workspace."""
     total_count = 0
     for root, _, files in os.walk("."):
@@ -42,7 +42,7 @@ def check_file_count():
     return total_count
 
 
-def remove_directory(dir_path):
+def remove_directory(dir_path: str) -> bool:
     """Safely remove a directory."""
     if os.path.exists(dir_path):
         try:
@@ -55,7 +55,7 @@ def remove_directory(dir_path):
     return False
 
 
-def archive_directory(dir_path):
+def archive_directory(dir_path: str) -> bool:
     """Archive a directory to a ZIP file and remove the original."""
     if not os.path.exists(dir_path) or not os.path.isdir(dir_path):
         logger.warning(f"Directory does not exist: {dir_path}")
@@ -98,7 +98,7 @@ def archive_directory(dir_path):
         return False
 
 
-def archive_tests_directory():
+def archive_tests_directory() -> bool:
     """Archive the tests directory but keep a minimal structure."""
     tests_dir = "tests"
     if not os.path.exists(tests_dir):
@@ -146,7 +146,7 @@ def archive_tests_directory():
         return False
 
 
-def remove_excess_logs():
+def remove_excess_logs() -> bool:
     """Remove unnecessary log files."""
     log_dir = "logs"
     if os.path.exists(log_dir) and os.path.isdir(log_dir):
@@ -166,7 +166,7 @@ def remove_excess_logs():
     return False
 
 
-def remove_test_chromadb_dirs():
+def remove_test_chromadb_dirs() -> int:
     """Remove all ChromaDB test directories."""
     removed = 0
     for dir_name in CHROMA_DIRS_TO_REMOVE:
@@ -196,7 +196,7 @@ def remove_test_chromadb_dirs():
     return removed
 
 
-def main():
+def main() -> None:
     """Main execution function."""
     start_count = check_file_count()
     logger.info(f"Starting file count: {start_count}")

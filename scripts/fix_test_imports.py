@@ -10,7 +10,7 @@ import os
 import re
 
 
-def fix_imports_in_file(file_path):
+def fix_imports_in_file(file_path: str) -> None:
     """
     Fix the import paths in a single test file.
 
@@ -29,7 +29,7 @@ def fix_imports_in_file(file_path):
 
     # Check if we need to replace anything
     if not re.search(old_pattern, content):
-        return False
+        return
 
     # Replace the pattern
     new_content = re.sub(old_pattern, new_path, content)
@@ -38,10 +38,10 @@ def fix_imports_in_file(file_path):
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(new_content)
 
-    return True
+    return
 
 
-def main():
+def main() -> None:
     """
     Find all Python test files in the tests directory and fix their imports.
     """
@@ -52,13 +52,11 @@ def main():
     for filename in os.listdir(tests_dir):
         if filename.endswith(".py"):
             file_path = os.path.join(tests_dir, filename)
-            if fix_imports_in_file(file_path):
-                print(f"✓ Fixed imports in {file_path}")
-                modified_files += 1
-            else:
-                print(f"- No changes needed in {file_path}")
+            fix_imports_in_file(file_path)
+            print(f"Checked imports in {file_path}")
+            modified_files += 1
 
-    print(f"\nFixed imports in {modified_files} files.")
+    print(f"\nChecked imports in {modified_files} files.")
 
 
 if __name__ == "__main__":

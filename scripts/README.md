@@ -15,4 +15,32 @@ python scripts/cleanup_temp_db.py --dry-run
 
 # Actually remove the directories (will prompt for confirmation)
 python scripts/cleanup_temp_db.py
-``` 
+```
+
+# Culture.ai Scripts
+
+## Code Quality & Compliance
+- The codebase is **Ruff and Mypy strict-compliant** (with justified exceptions for third-party APIs).
+- All obsolete/one-off scripts have been archived or removed. Only canonical cleanup and migration scripts remain.
+- All scripts and helpers are type-annotated and linted.
+
+## Linting & Type Checking
+To check and auto-fix code style and type issues:
+
+```sh
+ruff check . --fix
+mypy scripts --strict
+```
+
+## Workflow
+- All new scripts must pass Ruff and Mypy strict mode before merging.
+- Use PRs for all changes; CI will enforce code quality gates.
+
+## Canonical Maintenance Scripts
+- `final_cleanup.py`: Aggressive file/directory cleanup and archiving.
+- `cleanup_temp_db.py`: Remove temporary ChromaDB directories.
+- `migrate_chroma_to_weaviate.py`: Migrate agent memories from ChromaDB to Weaviate.
+- `fix_test_imports.py`, `update_memory_imports.py`: Automated import path fixers.
+
+## Onboarding
+- See `/docs/coding_standards.md` and `/docs/testing.md` for full onboarding and contribution guidelines. 

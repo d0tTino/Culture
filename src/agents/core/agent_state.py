@@ -245,3 +245,15 @@ class AgentState(BaseModel):
 
     def update_current_project_id(self, project_id: str | None) -> None:
         self.current_project_id = project_id
+
+    def apply_relationship_decay(self, decay_factor: float) -> None:
+        """
+        Applies exponential decay to all relationship scores.
+        Each score is multiplied by (1 - decay_factor) and clamped to the valid range.
+        Args:
+            decay_factor (float): The decay factor to apply (e.g., 0.01 for 1% decay per step).
+        """
+        for agent_id, score in self.relationships.items():
+            decayed = score * (1 - decay_factor)
+            decayed = max(self.min_relationship_score, min(self.max_relationship_score, decayed))
+            self.relationships[agent_id] = decayed

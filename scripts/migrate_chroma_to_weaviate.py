@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("migrate_chroma_to_weaviate")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Migrate agent memories from ChromaDB to Weaviate."
     )
@@ -45,10 +45,10 @@ def main():
             metadatas = batch["metadatas"]
             vectors = batch["embeddings"]
             # Ensure UUID is present in metadata for Weaviate
-            for meta, id_ in zip(metadatas, batch_ids):
+            for meta, id_ in zip(metadatas, batch_ids):  # type: ignore[arg-type]
                 if "uuid" not in meta:
-                    meta["uuid"] = id_
-            weaviate.add_memories(texts, metadatas, vectors)
+                    meta["uuid"] = id_  # type: ignore[index]  # meta is Mapping, but we need dict
+            weaviate.add_memories(texts, metadatas, vectors)  # type: ignore[arg-type]
             logger.info(f"Migrated {i + len(batch_ids)}/{len(all_ids)} memories...")
         logger.info("Migration complete.")
     except Exception as e:

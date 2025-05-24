@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# ruff: noqa: E501, ANN101, ANN401
 """
 Test script for the RAGContextSynthesizer class
 """
@@ -20,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("test_synthesizer")
 
 
-def main():
+def main() -> int:
     """Test the RAGContextSynthesizer with a real example"""
     # Create the synthesizer
     logger.info("Creating RAGContextSynthesizer...")
@@ -28,18 +29,18 @@ def main():
 
     # Sample context and question
     context = """
-    The agent decision-making process involves multiple stages: 
+    The agent decision-making process involves multiple stages:
     1. Perception of the environment
     2. Memory retrieval using RAG
     3. Thought generation
     4. Action intent selection
     5. Message generation or action execution
-    
+
     Each step is optimized with DSPy-trained LLM programs to ensure coherent and appropriate behavior.
-    
+
     The thought generation process creates an internal reflection based on the agent's role,
     goals, and the current situation.
-    
+
     Action intents are selected from a predefined list of possible actions, with the selection
     guided by the agent's thought process, role-specific behavior patterns, and current goals.
     """
@@ -57,15 +58,15 @@ def main():
 
     # Test with a different example
     context2 = """
-    The Knowledge Board is a central repository where agents can post ideas and information, 
+    The Knowledge Board is a central repository where agents can post ideas and information,
     which is then perceived by other agents.
-    
-    Posting to the Knowledge Board costs both Influence Points and Data Units, with more 
+
+    Posting to the Knowledge Board costs both Influence Points and Data Units, with more
     detailed ideas costing more resources.
-    
+
     Agents can reference and build upon ideas from the Knowledge Board in their discussions.
-    
-    The Knowledge Board serves as a form of collective memory and shared context for all agents 
+
+    The Knowledge Board serves as a form of collective memory and shared context for all agents
     in the simulation.
     """
 

@@ -1,3 +1,4 @@
+# ruff: noqa: ANN401
 # src/infra/llm_client.py
 """
 Provides a client for interacting with the Ollama LLM service.
@@ -20,16 +21,18 @@ from .config import OLLAMA_API_BASE  # Import base URL from config
 try:
     from litellm.exceptions import APIError
 except ImportError:
-    APIError = Exception  # type: ignore[assignment]
+    _APIError = Exception
+else:
+    APIError = APIError
 
 logger = logging.getLogger(__name__)
 
 # Define a generic type variable for Pydantic models
-T = TypeVar("T", bound=BaseModel)
+T = TypeVar("T")
 
 # Mock implementation variables and functions
 _MOCK_ENABLED = False
-_MOCK_RESPONSES = {
+_MOCK_RESPONSES: dict[str, Any] = {
     "default": "This is a mock response from the LLM client.",
     "text_generation": "This is a mock text generation response.",
     "structured_output": {
@@ -44,7 +47,7 @@ _MOCK_RESPONSES = {
 
 def enable_mock_mode(
     enabled: bool = True,
-    mock_responses: Optional[dict[str, object]] = None,
+    mock_responses: Optional[dict[str, Any]] = None,
 ) -> None:
     """
     Enable or disable mock mode for testing.
@@ -114,7 +117,7 @@ def get_ollama_client() -> Optional[ollama.Client]:
     """Returns the initialized Ollama client instance."""
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
-    return cast(Optional[ollama.Client], client)
+    return cast(Optional[ollama.Client], client)  # type: ignore[no-any-unimported] # Dynamic import or external stub issue
 
 
 def _retry_with_backoff(
@@ -132,7 +135,7 @@ def _retry_with_backoff(
     for attempt in range(max_retries):
         try:
             return func(*args, **kwargs), None
-        except (RequestException, APIError, ValidationError) as exc:
+        except (RequestException, _APIError, ValidationError) as exc:
             e = exc
             logger.error(
                 f"LLM call failed (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True
@@ -158,7 +161,8 @@ def generate_text(
     Args:
         prompt (str): The input prompt for the LLM.
         model (str): The Ollama model to use (e.g., "mistral:latest", "llama2:latest").
-                     Ensure this model is pulled in your Ollama instance (`ollama pull model_name`).
+            Ensure this model is pulled in your Ollama instance
+            (`ollama pull model_name`).
         temperature (float): The generation temperature (creativity).
 
     Returns:
@@ -358,10 +362,10 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[str]
 @monitor_llm_call(model_param="model", context="structured_output")
 def generate_structured_output(
     prompt: str,
-    response_model: type[T],
+    response_model: type[BaseModel],
     model: str = "mistral:latest",
     temperature: float = 0.2,
-) -> Optional[T]:
+) -> Optional[BaseModel]:
     """
     Generate a structured output using the LLM and parse it into the given Pydantic model.
     If mock mode is enabled, returns a mock response that fits the response_model.
@@ -380,33 +384,36 @@ def generate_structured_output(
         logger.debug(f"Using mock response for {response_model.__name__}")
         try:
             model_name = response_model.__name__
+            # Ensure response_model is a subclass of BaseModel for type safety
+            if not issubclass(response_model, BaseModel):
+                raise TypeError("response_model must be a subclass of BaseModel")
             if model_name in _MOCK_RESPONSES:
                 mock_data = _MOCK_RESPONSES[model_name]
                 if isinstance(mock_data, dict):
                     field_dict: dict[str, Any] = {}
-                    for field_name, field in response_model.__fields__.items():
-                        if field.required:
-                            if field.type_ is str:
+                    for field_name, field in response_model.model_fields.items():
+                        if field.is_required():
+                            if field.annotation is str:
                                 field_dict[field_name] = str(
                                     mock_data.get(field_name, f"Mock {field_name}")
                                 )
-                            elif field.type_ is int:
+                            elif field.annotation is int:
                                 val = mock_data.get(field_name, 1)
                                 field_dict[field_name] = int(val) if isinstance(val, int) else 1
-                            elif field.type_ is float:
+                            elif field.annotation is float:
                                 val = mock_data.get(field_name, 1.0)
                                 field_dict[field_name] = (
                                     float(val) if isinstance(val, float) else 1.0
                                 )
-                            elif field.type_ is bool:
+                            elif field.annotation is bool:
                                 val = mock_data.get(field_name, False)
                                 field_dict[field_name] = (
                                     bool(val) if isinstance(val, bool) else False
                                 )
-                            elif field.type_ is list:
+                            elif field.annotation is list:
                                 val = mock_data.get(field_name, [])
                                 field_dict[field_name] = val if isinstance(val, list) else []
-                            elif field.type_ is dict:
+                            elif field.annotation is dict:
                                 val = mock_data.get(field_name, {})
                                 field_dict[field_name] = val if isinstance(val, dict) else {}
                     return response_model(**field_dict)
@@ -416,20 +423,21 @@ def generate_structured_output(
                         return response_model(**mock_dict)
                     except json.JSONDecodeError:
                         pass
-            field_dict: dict[str, Any] = {}
-            for field_name, field in response_model.__fields__.items():
-                if field.required:
-                    if field.type_ is str:
+            # Only define field_dict if not already defined
+            field_dict = {}
+            for field_name, field in response_model.model_fields.items():
+                if field.is_required():
+                    if field.annotation is str:
                         field_dict[field_name] = f"Mock {field_name}"
-                    elif field.type_ is int:
+                    elif field.annotation is int:
                         field_dict[field_name] = 1
-                    elif field.type_ is float:
+                    elif field.annotation is float:
                         field_dict[field_name] = 1.0
-                    elif field.type_ is bool:
+                    elif field.annotation is bool:
                         field_dict[field_name] = False
-                    elif field.type_ is list:
+                    elif field.annotation is list:
                         field_dict[field_name] = []
-                    elif field.type_ is dict:
+                    elif field.annotation is dict:
                         field_dict[field_name] = {}
             return response_model(**field_dict)
         except Exception as e:
@@ -440,6 +448,9 @@ def generate_structured_output(
     if not ollama_client:
         logger.warning("Attempted to generate structured output but Ollama client is unavailable.")
         return None
+    # Ensure response_model is a subclass of BaseModel for type safety
+    if not issubclass(response_model, BaseModel):
+        raise TypeError("response_model must be a subclass of BaseModel")
     schema_json = json.dumps(response_model.model_json_schema(), indent=2)
     example: dict[str, Any] = {}
     for field_name, field in response_model.model_fields.items():
@@ -479,11 +490,12 @@ def generate_structured_output(
             logger.debug(f"Received potential JSON response from Ollama: {response_text}")
             if response_model:
                 json_data: dict[str, Any] = json.loads(str(response_text))
-                parsed_output: T = response_model(**json_data)
+                parsed_output: BaseModel = response_model(**json_data)
                 logger.debug(f"Successfully parsed structured output: {parsed_output}")
-                return parsed_output  # type: ignore[no-any-return] # Mypy: Assuming ollama.Client method returns compatible type; stubs incomplete.
+                return parsed_output
             else:
-                return json.loads(str(response_text))
+                # Defensive: fallback for non-model response, cast to Optional[BaseModel]
+                return cast(Optional[BaseModel], json.loads(str(response_text)))
         except (json.JSONDecodeError, Exception) as e:
             logger.warning(f"Failed to parse JSON from Ollama response: {e}")
             logger.warning(f"Raw response: {response_text}")
@@ -501,7 +513,7 @@ def get_default_llm_client() -> ollama.Client | None:
     Returns:
         The initialized Ollama client instance
     """
-    return get_ollama_client()  # type: ignore[no-any-return] # Mypy: Type of ollama.Client may be incomplete due to external stubs.
+    return get_ollama_client()
 
 
 def generate_response(

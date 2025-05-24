@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# ruff: noqa: RUF006
 import asyncio
 import logging
 import sys
@@ -36,10 +37,6 @@ except ImportError as e:
 
 # Regular imports follow...
 
-import logging
-import sys
-from typing import TYPE_CHECKING
-
 # Configure the logger for this module
 logger = logging.getLogger(__name__)
 
@@ -47,6 +44,9 @@ logger = logging.getLogger(__name__)
 class Simulation:
     """
     Manages the simulation environment, agents, and time steps.
+
+    Attributes:
+        steps_to_run (int): Number of steps the simulation should run (set externally).
     """
 
     def __init__(
@@ -71,6 +71,7 @@ class Simulation:
         """
         self.agents: list[Agent] = agents
         self.current_step: int = 0
+        self.steps_to_run: int = 0  # Number of steps to run, set externally
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
 
@@ -110,7 +111,7 @@ class Simulation:
             logger.info("Simulation initialized with Discord bot for sending updates.")
         else:
             logger.info(
-                "Simulation initialized without Discord bot. " "No Discord updates will be sent."
+                "Simulation initialized without Discord bot. No Discord updates will be sent."
             )
 
         # --- Store broadcasts from the previous step ---
@@ -164,7 +165,7 @@ class Simulation:
                 self.discord_bot.send_simulation_update(content=message, embed=embed)
             )
 
-    def run_step(self, max_turns: int = 1) -> int:
+    async def run_step(self, max_turns: int = 1) -> int:
         """
         Runs the simulation for a specified number of steps.
 
@@ -276,7 +277,7 @@ class Simulation:
                         }
 
                         # Run the agent's turn with perception data
-                        agent_output = agent.run_turn(
+                        agent_output = await agent.run_turn(
                             simulation_step=current_step,
                             environment_perception=perception_data,
                             vector_store_manager=self.vector_store_manager,
@@ -359,32 +360,13 @@ class Simulation:
 
                     except Exception as agent_exc:
                         logger.error(
-                            f"Error processing agent {getattr(agent, 'agent_id', '?')} in step "
-                            f"{current_step}: {agent_exc}",
+                            f"Agent {agent_id} encountered an error during turn: {agent_exc}",
                             exc_info=True,
                         )
-                        continue  # Skip to next agent
+                        continue  # Continue to next agent
 
-                # Store the messages from this step for next step's perception
+                # Store messages for the next step
                 self.last_step_messages = this_step_messages
-
-                # Update collective metrics after all agents have taken their turns
-                self._update_collective_metrics()
-                logger.info(
-                    f"Step {current_step} collective metrics - IP: {self.collective_ip:.1f}, "
-                    f"DU: {self.collective_du:.1f}"
-                )
-
-                # Send step end update to Discord
-                if self.discord_bot:
-                    step_end_embed = self.discord_bot.create_step_end_embed(
-                        step=current_step,
-                        collective_ip=self.collective_ip,
-                        collective_du=self.collective_du,
-                    )
-                    _ = asyncio.create_task(
-                        self.discord_bot.send_simulation_update(embed=step_end_embed)
-                    )
 
             except Exception as step_exc:
                 logger.critical(
@@ -409,7 +391,7 @@ class Simulation:
         start_time = time.time()
         for step in range(num_steps):
             await asyncio.sleep(0.1)  # Optional: Add a small delay between steps
-            steps = self.run_step(1)  # If run_step needs to be async, refactor it as well
+            steps = await self.run_step(1)  # If run_step needs to be async, refactor it as well
             total_steps_executed += steps
         elapsed_time = time.time() - start_time
         logger.info(

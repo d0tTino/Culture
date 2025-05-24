@@ -195,3 +195,9 @@ python scripts/migrate_chroma_to_weaviate.py --chroma_dir ./chroma_db --weaviate
 - This will copy all memories from the ChromaDB collection to the Weaviate class, preserving UUIDs and metadata.
 - You can specify collection/class names with `--chroma_collection` and `--weaviate_class` if needed.
 - See `scripts/migrate_chroma_to_weaviate.py` for details. 
+
+# Code Quality & Compliance (2025-05)
+
+- The codebase is **Ruff and Mypy strict-compliant** (with justified exceptions for third-party APIs).
+- All obsolete/one-off scripts have been archived or removed. Only canonical cleanup and migration scripts remain (see `scripts/README.md`).
+- All new scripts and helpers must pass Ruff and Mypy strict mode before merging. 

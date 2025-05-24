@@ -316,7 +316,7 @@ class Agent:
         self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
-        vector_store_manager: Any = None,
+        vector_store_manager: object = None,  # ruff: noqa: ANN401 # Accepts any vector store manager implementation
         knowledge_board: "KnowledgeBoard" = None,
     ) -> dict[str, Any]:
         """
@@ -326,7 +326,7 @@ class Agent:
             simulation_step (int): The current step number from the simulation.
             environment_perception (Dict[str, Any], optional): Perception data from the environment.
                 Defaults to an empty dict if not provided.
-            vector_store_manager (Optional[Any], optional): Manager for vector-based memory
+            vector_store_manager (Optional[object], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
                 that agents can read from and write to.
@@ -423,7 +423,8 @@ class Agent:
 
             # Add debug logging to inspect the graph.ainvoke result
             logger.debug(
-                f"RUN_TURN_GRAPH_RESULT :: Agent {self.agent_id}: Full result from graph.ainvoke: {final_result_state}"
+                f"RUN_TURN_GRAPH_RESULT :: Agent {self.agent_id}: Full result from graph.ainvoke: "
+                f"{final_result_state}"
             )
 
             # --- Process Graph Output ---
@@ -437,7 +438,8 @@ class Agent:
 
             # Log dictionary keys to help debug
             logger.debug(
-                f"RUN_TURN_KEYS :: Agent {self.agent_id}: Available keys in graph result: {list(final_result_state.keys())}"
+                f"RUN_TURN_KEYS :: Agent {self.agent_id}: Available keys in graph result: "
+                f"{list(final_result_state.keys())}"
             )
 
             # Extract the updated state from the AgentState object
@@ -458,7 +460,8 @@ class Agent:
                 return turn_output
             else:
                 logger.warning(
-                    f"RUN_TURN_UPDATE_FAIL :: Agent {self.agent_id}: No 'state' found in graph result. self._state NOT updated."
+                    f"RUN_TURN_UPDATE_FAIL :: Agent {self.agent_id}: No 'state' found in graph result. "
+                    f"self._state NOT updated."
                 )
                 return {
                     "message_content": None,
@@ -479,7 +482,10 @@ class Agent:
 
     def __repr__(self) -> str:
         """Returns a detailed string representation for debugging."""
-        return f"Agent(agent_id='{self.agent_id}', role='{self._state.role}', ip={self._state.ip}, du={self._state.du})"
+        return (
+            f"Agent(agent_id='{self.agent_id}', role='{self._state.role}', "
+            f"ip={self._state.ip}, du={self._state.du})"
+        )
 
     # --- Placeholder Methods for Future Functionality ---
 
@@ -495,7 +501,9 @@ class Agent:
 
     # def act(self, action: str, environment: Any):
     #     """Placeholder for executing the chosen action."""
-    #     logger.warning(f"Agent {self.agent_id}: act() method not implemented for action '{action}'.")
+    #     logger.warning(
+    #         f"Agent {self.agent_id}: act() method not implemented for action '{action}'."
+    #     )
     #     pass
 
     # --- AsyncDSPyManager Example Usage (Conceptual) ---
@@ -510,7 +518,7 @@ class Agent:
     # --- Async DSPy Methods ---
     async def async_generate_role_prefixed_thought(
         self, agent_role: str, current_situation: str
-    ) -> Any:
+    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
         """
         Asynchronously generate a role-prefixed thought using a DSPy program.
         Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
@@ -538,7 +546,7 @@ class Agent:
         current_situation: str,
         agent_goal: str,
         available_actions: list[str],
-    ) -> Any:
+    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
         """
         Asynchronously select an action intent using a DSPy program.
         Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
@@ -572,7 +580,7 @@ class Agent:
 
     async def async_generate_l1_summary(
         self, agent_role: str, recent_events: str, current_mood: str | None = None
-    ) -> Any:
+    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
         """
         Asynchronously generate an L1 summary using a DSPy program.
         Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
@@ -599,7 +607,7 @@ class Agent:
         l1_summaries_context: str,
         overall_mood_trend: str | None = None,
         agent_goals: str | None = None,
-    ) -> Any:
+    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
         """
         Asynchronously generate an L2 summary using a DSPy program.
         Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
@@ -631,7 +639,7 @@ class Agent:
         agent1_persona: str,
         agent2_persona: str,
         interaction_sentiment: float,
-    ) -> Any:
+    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
         """
         Asynchronously update a relationship score using a DSPy program.
         Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.

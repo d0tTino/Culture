@@ -8,9 +8,10 @@ and returns the relevant context and a generated answer suitable for RAG assessm
 
 import argparse
 import sys
+from typing import Any
 
 from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
-from src.infra.dspy_ollama_integration import configure_dspy_ollama
+from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
 from src.memory.chroma_vector_store import ChromaVectorStoreManager
 
 
@@ -51,7 +52,7 @@ def query_agent_memory(
     chroma_dir: str,
     max_context_items: int = 10,
     ollama_model: str = "llama3:8b",
-) -> None:
+) -> dict[str, Any]:
     """
     Query an agent's memory and generate a response.
 
@@ -70,7 +71,7 @@ def query_agent_memory(
         vector_store = ChromaVectorStoreManager(chroma_dir)
 
         # Configure DSPy with Ollama
-        configure_dspy_ollama(ollama_model)
+        configure_dspy_with_ollama(ollama_model)
 
         # Initialize RAG synthesizer
         rag_synthesizer = RAGContextSynthesizer()
@@ -105,13 +106,7 @@ def query_agent_memory(
             context = "\n\n".join(context_items)
 
             # Generate answer using RAG synthesizer
-            synthesis_result = rag_synthesizer.forward(query=query, context=context)
-
-            answer = (
-                synthesis_result.answer
-                if hasattr(synthesis_result, "answer")
-                else "No answer generated"
-            )
+            answer = rag_synthesizer.synthesize(context=context, question=query)
 
             return {"retrieved_context": context, "answer": answer}
         else:

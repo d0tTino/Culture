@@ -55,7 +55,16 @@ class SimulationDiscordBot:
                     color=discord.Color.blue(),
                 )
                 embed.set_footer(text=f"Channel ID: {self.channel_id}")
-                await channel.send(embed=embed)
+                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                    await channel.send(embed=embed)
+                else:
+                    if channel is not None:
+                        logger.warning(
+                            f"Attempted to send message to channel {channel.id} "
+                            f"of type {type(channel).__name__}, which does not support .send()"
+                        )
+                    else:
+                        logger.warning("Attempted to send message to a None channel.")
             else:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
@@ -81,15 +90,35 @@ class SimulationDiscordBot:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
                 return False
             if embed:
-                await channel.send(embed=embed)
-                logger.debug("Sent Discord embed update")
-                return True
+                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                    await channel.send(embed=embed)
+                    logger.debug("Sent Discord embed update")
+                    return True
+                else:
+                    if channel is not None:
+                        logger.warning(
+                            f"Attempted to send embed to channel {channel.id} "
+                            f"of type {type(channel).__name__}, which does not support .send()"
+                        )
+                    else:
+                        logger.warning("Attempted to send embed to a None channel.")
+                    return False
             elif content:
                 if len(content) > 1990:
                     content = content[:1990] + "..."
-                await channel.send(content)
-                logger.debug(f"Sent Discord text update: {content[:50]}...")
-                return True
+                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                    await channel.send(content)
+                    logger.debug(f"Sent Discord text update: {content[:50]}...")
+                    return True
+                else:
+                    if channel is not None:
+                        logger.warning(
+                            f"Attempted to send text to channel {channel.id} "
+                            f"of type {type(channel).__name__}, which does not support .send()"
+                        )
+                    else:
+                        logger.warning("Attempted to send text to a None channel.")
+                    return False
             else:
                 logger.warning("send_simulation_update called with no content or embed")
                 return False
@@ -301,7 +330,16 @@ class SimulationDiscordBot:
                         description="The Culture simulation has ended. Bot going offline.",
                         color=discord.Color.red(),
                     )
-                    await channel.send(embed=embed)
+                    if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                        await channel.send(embed=embed)
+                    else:
+                        if channel is not None:
+                            logger.warning(
+                                f"Attempted to send message to channel {channel.id} "
+                                f"of type {type(channel).__name__}, which does not support .send()"
+                            )
+                        else:
+                            logger.warning("Attempted to send message to a None channel.")
             await self.client.close()
             self.is_ready = False
             logger.info("Discord bot stopped")

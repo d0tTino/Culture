@@ -3,19 +3,19 @@
 Provides a MockLLM context manager for LLM-dependent tests.
 """
 
-import contextlib
 import logging
-from contextlib import AbstractContextManager
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Optional
 from unittest.mock import patch
 
 logger = logging.getLogger(__name__)
 
 
-@contextlib.contextmanager
+@contextmanager
 def MockLLM(
     responses: Optional[dict[str, str]] = None, strict_mode: bool = True
-) -> AbstractContextManager[None]:
+) -> Iterator[None]:
     """
     Context manager for mocking LLM responses in tests.
 
@@ -98,3 +98,8 @@ def MockLLM(
         except ImportError:
             # If DSPy isn't available, proceed without patching it
             yield
+
+
+def get_mock_llm_response(prompt: str) -> dict[str, str]:
+    # ... existing code ...
+    return {"response": "mock"}

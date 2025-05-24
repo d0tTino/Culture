@@ -5,20 +5,17 @@ Defines the basic LangGraph structure for an agent's turn.
 
 import logging
 import os
-import random  # Add import for random to test negative sentiment
-import re  # Add import for regular expressions
+import random
+import re
 import sys
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
-    List,
     Literal,
     Optional,
     TypedDict,
 )
 
-from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.core.agent_state import AgentState
@@ -33,31 +30,37 @@ from src.agents.core.roles import (
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
-from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 from src.infra import config  # Import config for role change parameters
-from src.infra.llm_client import (  # Updated import structure to match function name
+from src.infra.llm_client import (
     analyze_sentiment,
     generate_structured_output,
-    generate_text,
 )
 
 # At the top of the file, after other DSPy imports
 try:
     import os
 
-    from dspy import Predict
+    from dspy import (
+        Predict,  # type: ignore[import]
+    )
 
+    # Mypy: Suppressing noise from transformers internal error
     from src.agents.dspy_programs.relationship_updater import RelationshipUpdater
 
     _REL_UPDATER_PATH = os.path.join(
-        os.path.dirname(__file__), "../dspy_programs/compiled/optimized_relationship_updater.json"
+        os.path.dirname(__file__),
+        "../dspy_programs/compiled/optimized_relationship_updater.json",
     )
     if os.path.exists(_REL_UPDATER_PATH):
-        _optimized_relationship_updater = Predict.load(RelationshipUpdater, _REL_UPDATER_PATH)
+        _optimized_relationship_updater = Predict.load(
+            RelationshipUpdater,
+            _REL_UPDATER_PATH,
+        )
     else:
         _optimized_relationship_updater = None
 except Exception as e:
     _optimized_relationship_updater = None
+    logger = logging.getLogger(__name__)
     logger.error(f"Failed to load OptimizedRelationshipUpdater: {e}")
 
 # Add dspy imports with detailed error handling
@@ -71,11 +74,11 @@ try:
     # Only set DSPY_AVAILABLE if LM is configured
     DSPY_AVAILABLE = hasattr(dspy.settings, "lm") and dspy.settings.lm is not None
     logging.info(
-        f"[DSPy] DSPY_AVAILABLE set to {DSPY_AVAILABLE} (LM: {getattr(dspy.settings, 'lm', None)})"
+        f"[DSPy] DSPY_AVAILABLE set to {DSPY_AVAILABLE} "
+        f"(LM: {getattr(dspy.settings, 'lm', None)})"
     )
     DSPY_ACTION_SELECTOR_AVAILABLE = False  # Will be set to True if loading succeeds
     logging.info("DSPy modules imported successfully")
-
     # Initialize the action selector (loads the compiled program)
     # Try to load it once at module level to avoid repeated loads
     try:
@@ -84,7 +87,8 @@ try:
         logging.info("Successfully loaded DSPy optimized_action_selector.")
     except Exception as e:
         logging.error(
-            f"Failed to load DSPy optimized_action_selector: {e}. Action intent selection will use fallback.",
+            f"Failed to load DSPy optimized_action_selector: {e}. "
+            "Action intent selection will use fallback.",
             exc_info=True,
         )
         optimized_action_selector = None
@@ -98,12 +102,11 @@ except ImportError as e:
     DSPY_ACTION_SELECTOR_AVAILABLE = False
     logging.warning("DSPy modules not available - will use standard LLM prompt")
     optimized_action_selector = None
+    dspy = None
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
     pass
-
-logger = logging.getLogger(__name__)
 
 # Decay factors for mood and relationships (loaded from config)
 MOOD_DECAY_FACTOR = config.MOOD_DECAY_FACTOR
@@ -130,6 +133,9 @@ DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFI
 # List of valid roles
 VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 
+# Ensure logger is defined at the top and used throughout
+logger = logging.getLogger(__name__)
+
 
 # Define the Pydantic model for structured LLM output
 class AgentActionOutput(BaseModel):
@@ -145,13 +151,19 @@ class AgentActionOutput(BaseModel):
     message_content: str | None = Field(
         None,
         json_schema_extra={
-            "description": "The message to send to other agents, or None if choosing not to send a message."
+            "description": (
+                "The message to send to other agents, or None if choosing not to send a "
+                "message."
+            )
         },
     )
     message_recipient_id: str | None = Field(
         None,
         json_schema_extra={
-            "description": "The ID of the agent this message is directed to. None means broadcast to all agents."
+            "description": (
+                "The ID of the agent this message is directed to. None means broadcast to all "
+                "agents."
+            )
         },
     )
     action_intent: Literal[
@@ -171,25 +183,38 @@ class AgentActionOutput(BaseModel):
     requested_role_change: str | None = Field(
         None,
         json_schema_extra={
-            "description": "Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null."
+            "description": (
+                "Optional: If you wish to request a change to a different role, specify the role "
+                "name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as "
+                "null."
+            )
         },
     )
     project_name_to_create: str | None = Field(
         None,
         json_schema_extra={
-            "description": "Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent."
+            "description": (
+                "Optional: If you want to create a new project, specify the name here. This is "
+                "used with the 'create_project' intent."
+            )
         },
     )
     project_description_for_creation: str | None = Field(
         None,
         json_schema_extra={
-            "description": "Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent."
+            "description": (
+                "Optional: If you want to create a new project, specify the description here. "
+                "This is used with the 'create_project' intent."
+            )
         },
     )
     project_id_to_join_or_leave: str | None = Field(
         None,
         json_schema_extra={
-            "description": "Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents."
+            "description": (
+                "Optional: If you want to join or leave a project, specify the project ID here. "
+                "This is used with the 'join_project' and 'leave_project' intents."
+            )
         },
     )
 
@@ -199,35 +224,31 @@ class AgentTurnState(TypedDict):
     """Represents the state passed into and modified by the agent's graph turn."""
 
     agent_id: str
-    current_state: Dict[str, Any]  # The agent's full state dictionary (for backward compatibility)
+    current_state: dict[str, object]  # The agent's full state dictionary
     simulation_step: int  # The current step number from the simulation
     previous_thought: str | None  # The thought from the *last* turn
-    environment_perception: Dict[str, Any]  # Perception data from the environment
-    perceived_messages: List[
-        Dict[str, Any]
-    ]  # Messages perceived from last step (broadcasts and targeted)
-    memory_history_list: List[Dict[str, Any]]  # Field for memory history list
+    environment_perception: dict[str, object]  # Perception data from the environment
+    perceived_messages: list[dict[str, object]]  # Messages perceived from last step
+    memory_history_list: list[dict[str, object]]  # Field for memory history list
     turn_sentiment_score: int  # Field for aggregated sentiment score
     prompt_modifier: str  # Field for relationship-based prompt adjustments
-    structured_output: Optional[AgentActionOutput]  # Holds the parsed LLM output object
+    structured_output: AgentActionOutput | None  # Holds the parsed LLM output object
     agent_goal: str  # The agent's goal for the simulation
-    updated_state: Dict[
-        str, Any
-    ]  # Output field: The updated state after the turn (for backward compatibility)
-    vector_store_manager: Optional[Any]  # For persisting memories to vector store
+    updated_state: dict[str, object]  # Output field: The updated state after the turn
+    vector_store_manager: object | None  # For persisting memories to vector store
     rag_summary: str  # Summarized memories from vector store
-    knowledge_board_content: List[str]  # Current entries on the knowledge board
-    knowledge_board: Optional[Any]  # The knowledge board instance for posting entries
+    knowledge_board_content: list[str]  # Current entries on the knowledge board
+    knowledge_board: object | None  # The knowledge board instance for posting entries
     scenario_description: str  # Description of the simulation scenario
     current_role: str  # The agent's current role in the simulation
     influence_points: int  # The agent's current Influence Points
     steps_in_current_role: int  # Steps taken in the current role
     data_units: int  # The agent's current Data Units
-    current_project_affiliation: Optional[str]  # The agent's current project ID (if any)
-    available_projects: Dict[str, Any]  # Dictionary of available projects
+    current_project_affiliation: str | None  # The agent's current project ID (if any)
+    available_projects: dict[str, object]  # Dictionary of available projects
     state: AgentState  # The agent's structured state object (new Pydantic model)
-    collective_ip: Optional[float]  # Total IP across all agents in the simulation
-    collective_du: Optional[float]  # Total DU across all agents in the simulation
+    collective_ip: float | None  # Total IP across all agents in the simulation
+    collective_du: float | None  # Total DU across all agents in the simulation
 
 
 # --- Node Functions ---
@@ -242,7 +263,8 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
     sim_step = state["simulation_step"]
     perceived_messages = state.get("perceived_messages", [])
     logger.debug(
-        f"Node 'analyze_perception_sentiment_node' executing for agent {agent_id} at step {sim_step}"
+        f"Node 'analyze_perception_sentiment_node' executing for agent {agent_id} "
+        f"at step {sim_step}"
     )
 
     total_sentiment_score = 0
@@ -255,7 +277,8 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
     for msg in perceived_messages:
         sender_id = msg.get("sender_id", "unknown")
         message_content = msg.get("content", None)
-        msg.get("recipient_id", None)
+        # F841: Remove unused unpacked variable
+        # msg.get("recipient_id", None)
 
         # Optional: Add special handling for targeted messages
         # For example, private messages might have more emotional impact
@@ -277,7 +300,8 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
             # else: sentiment is None (error occurred), do nothing
 
     logger.info(
-        f"Agent {agent_id}: Aggregated sentiment score from {analyzed_count} perceived messages: {total_sentiment_score}"
+        f"Agent {agent_id}: Aggregated sentiment score from {analyzed_count} perceived messages: "
+        f"{total_sentiment_score}"
     )
     # Return the calculated score to be added to the graph state
     return {"turn_sentiment_score": total_sentiment_score}
@@ -291,12 +315,15 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
     """
     from src.infra.config import get_relationship_label
 
-    state["agent_id"]
+    _ = state["agent_id"]
     agent_state = state["state"]
     relationships = agent_state.relationships
 
     # Default neutral modifier
-    modifier = "You have neutral relationships with all agents. Maintain a balanced approach in your interactions."
+    modifier = (
+        "You have neutral relationships with all agents. "
+        "Maintain a balanced approach in your interactions."
+    )
 
     # Only generate relationship-based prompts if we have relationships
     if relationships:
@@ -327,18 +354,30 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
         target_guidance = "When choosing a target for messages or actions:"
         if strong_positive_relations:
             agents_str = ", ".join([f"Agent_{aid}" for aid in strong_positive_relations[:3]])
-            target_guidance += f" Prefer to target {agents_str} for collaboration since you have positive relationships with them."
+            target_guidance += (
+                f" Prefer to target {agents_str} for collaboration since you have "
+                "positive relationships with them."
+            )
         if strong_negative_relations:
             agents_str = ", ".join([f"Agent_{aid}" for aid in strong_negative_relations[:3]])
             if strong_positive_relations:
-                target_guidance += f" Be more cautious when engaging with {agents_str} due to your negative relationships."
+                target_guidance += (
+                    f" Be more cautious when engaging with {agents_str} due to your "
+                    "negative relationships."
+                )
             else:
-                target_guidance += f" Be cautious when engaging with {agents_str} due to your negative relationships."
+                target_guidance += (
+                    f" Be cautious when engaging with {agents_str} due to your "
+                    "negative relationships."
+                )
         guidance_parts.append(target_guidance)
 
         # Message tone guidance
         tone_guidance = "Adjust your communication tone based on relationships:"
-        tone_guidance += " Use warm, friendly language with allies; neutral, professional tone with neutral relationships; cautious, formal tone with negative relationships."
+        tone_guidance += (
+            " Use warm, friendly language with allies; neutral, professional tone with "
+            "neutral relationships; cautious, formal tone with negative relationships."
+        )
         guidance_parts.append(tone_guidance)
 
         # Action intent guidance
@@ -355,7 +394,10 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
         decision_guidance += (
             " Give more weight to input from agents you have positive relationships with;"
         )
-        decision_guidance += " Critically evaluate suggestions from agents with whom you have negative relationships;"
+        decision_guidance += (
+            " Critically evaluate suggestions from agents with whom you have negative "
+            "relationships;"
+        )
         decision_guidance += " When opinions differ, prioritize input from your closest allies."
         guidance_parts.append(decision_guidance)
 
@@ -366,10 +408,13 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
     return {"prompt_modifier": modifier}
 
 
-async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, str]:
+async def retrieve_and_summarize_memories_node(
+    state: AgentTurnState,
+) -> dict[str, str]:
     """
     Asynchronously retrieve and summarize memories using the agent's async DSPy method.
-    Uses AsyncDSPyManager for non-blocking DSPy calls. On timeout or error, returns a failsafe output and logs the issue.
+    Uses AsyncDSPyManager for non-blocking DSPy calls. On timeout or error, returns a
+    failsafe output and logs the issue.
     Must be awaited in the graph.
     """
     agent = state.get("agent_instance")
@@ -384,11 +429,13 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         recent_message = perceived_messages[-1].get("content", "")
     if not vector_store_manager or agent is None:
         logger.warning(
-            f"Agent {agent_id}: No vector store manager or agent instance available for memory retrieval."
+            f"Agent {agent_id}: No vector store manager or agent instance available for "
+            "memory retrieval."
         )
         result = {"rag_summary": "(No memory retrieval available: vector store or agent missing)"}
         logger.info(
-            f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}"
+            f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: "
+            f"{result['rag_summary']}"
         )
         return result
     query_text = f"Memories relevant to: Goal '{agent_goal}'"
@@ -407,7 +454,8 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
             logger.info(f"Agent {agent_id}: No relevant memories found for query.")
             result = {"rag_summary": "(No relevant past memories found via RAG)"}
             logger.info(
-                f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}"
+                f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: "
+                f"{result['rag_summary']}"
             )
             return result
         logger.info(f"Agent {agent_id}: Retrieved {len(retrieved_memories)} memories.")
@@ -428,7 +476,8 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         logger.debug(f"Agent {agent_id}: Memory summary: '{summary}'")
         result = {"rag_summary": summary}
         logger.info(
-            f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}"
+            f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: "
+            f"{result['rag_summary']}"
         )
         return result
     except Exception as e:
@@ -438,7 +487,8 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         )
         result = {"rag_summary": "(Memory retrieval failed due to an error)"}
         logger.info(
-            f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: {result['rag_summary']}"
+            f"[RAG VERIFICATION] Agent {agent_id} RAG Summary after retrieval: "
+            f"{result['rag_summary']}"
         )
         return result
 
@@ -448,16 +498,17 @@ async def generate_thought_and_message_node(
 ) -> dict[str, AgentActionOutput | None]:
     """
     Asynchronously generate the agent's thought and message for the turn using LLM or DSPy.
-    Uses AsyncDSPyManager for non-blocking DSPy calls. On timeout or error, returns a failsafe output and logs the issue.
+    Uses AsyncDSPyManager for non-blocking DSPy calls. On timeout or error, returns a
+    failsafe output and logs the issue.
     Must be awaited in the graph.
     """
     agent = state.get("agent_instance")
     agent_id = state["agent_id"]
-    state["simulation_step"]
+    _ = state["simulation_step"]
     prev_thought = state.get("previous_thought", None)
     perception = state.get("environment_perception", {})
     perceived_messages = state.get("perceived_messages", [])
-    state.get("turn_sentiment_score", 0)
+    _ = state.get("turn_sentiment_score", 0)
     prompt_modifier = state.get("prompt_modifier", "")
     agent_goal = state.get(
         "agent_goal", "Contribute to the simulation as effectively as possible."
@@ -616,7 +667,8 @@ async def generate_thought_and_message_node(
             "\n# YOUR CHOSEN ACTION INTENT (execute this): " + chosen_intent_enum.value
         )
         prompt_parts.append(
-            "Based on your thought process and chosen action intent, formulate your response below."
+            "Based on your thought process and chosen action intent, "
+            "formulate your response below."
         )
     else:
         prompt_parts.append("\n# ACTION INTENT OPTIONS")
@@ -628,23 +680,12 @@ async def generate_thought_and_message_node(
 
     # Add final instructions for formulating the structured response
     prompt_parts.append(
-        "\nRespond with a structured output containing your thought, chosen action intent, and message content (if any)."
+        "\nRespond with a structured output containing your thought, chosen action intent, "
+        "and message content (if any)."
     )
 
     # Combine all prompt parts
     full_prompt = "\n\n".join(prompt_parts)
-
-    # Define the output schema based on the AgentActionOutput model
-    output_schema = {
-        "thought": "The agent's internal thought or reasoning for the turn.",
-        "action_intent": "The agent's primary intent for this turn (choose from: idle, continue_collaboration, propose_idea, ask_clarification, perform_deep_analysis, create_project, join_project, leave_project, send_direct_message).",
-        "message_content": "The message to send to other agents, or null if choosing not to send a message.",
-        "message_recipient_id": "The ID of the agent this message is directed to. null means broadcast to all agents.",
-        "requested_role_change": "Optional: If you wish to request a change to a different role, specify the role name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as null.",
-        "project_name_to_create": "Optional: If you want to create a new project, specify the name here. This is used with the 'create_project' intent.",
-        "project_description_for_creation": "Optional: If you want to create a new project, specify the description here. This is used with the 'create_project' intent.",
-        "project_id_to_join_or_leave": "Optional: If you want to join or leave a project, specify the project ID here. This is used with the 'join_project' and 'leave_project' intents.",
-    }
 
     # Generate the structured output using the full prompt and schema
     structured_llm_output = generate_structured_output(
@@ -678,14 +719,8 @@ async def generate_thought_and_message_node(
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     """
     Process a role change request for an agent.
-    Checks if the agent has sufficient resources (influence points) and meets cooldown requirements.
-
-    Args:
-        agent_state (AgentState): The agent's state object
-        requested_role (str): The role the agent is requesting to change to
-
-    Returns:
-        bool: True if the role change was successful, False otherwise
+    Checks if the agent has sufficient resources (influence points) and meets cooldown
+    requirements.
     """
     # Check if the requested role is valid
     if requested_role not in [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]:
@@ -702,14 +737,19 @@ def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     # Check if cooldown period has passed
     if agent_state.steps_in_current_role < agent_state.role_change_cooldown:
         logger.warning(
-            f"Agent {agent_state.agent_id} requested role change to {requested_role} but cooldown period not satisfied (needs {agent_state.role_change_cooldown} steps, current: {agent_state.steps_in_current_role})."
+            f"Agent {agent_state.agent_id} requested role change to {requested_role} but "
+            "cooldown period not satisfied (needs "
+            f"{agent_state.role_change_cooldown} steps, current: "
+            f"{agent_state.steps_in_current_role})."
         )
         return False
 
     # Check if the agent has enough IP
     if agent_state.ip < agent_state.role_change_ip_cost:
         logger.warning(
-            f"Agent {agent_state.agent_id} requested role change to {requested_role} but had insufficient IP (needed {agent_state.role_change_ip_cost}, had {agent_state.ip})."
+            f"Agent {agent_state.agent_id} requested role change to {requested_role} but had "
+            f"insufficient IP (needed {agent_state.role_change_ip_cost}, "
+            f"had {agent_state.ip})."
         )
         return False
 
@@ -727,7 +767,8 @@ def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     agent_state.role_history.append((agent_state.last_action_step, requested_role))
 
     logger.info(
-        f"Agent {agent_state.agent_id} changed role from {old_role} to {requested_role}. Spent {agent_state.role_change_ip_cost} IP. Remaining IP: {agent_state.ip}"
+        f"Agent {agent_state.agent_id} changed role from {old_role} to {requested_role}. Spent "
+        f"{agent_state.role_change_ip_cost} IP. Remaining IP: {agent_state.ip}"
     )
     return True
 
@@ -782,14 +823,18 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             agent_state.add_memory(sim_step, "role_change", f"Changed role to {requested_role}")
         else:
             logger.info(
-                f"Agent {agent_id} failed to change role to {requested_role} (insufficient IP or cooldown)"
+                f"Agent {agent_id} failed to change role to {requested_role} "
+                "(insufficient IP or cooldown)"
             )
 
             # Add a memory about the failed role change
             agent_state.add_memory(
                 sim_step,
                 "resource_constraint",
-                f"Attempted to change role to {requested_role} but had insufficient Influence Points or cooldown not satisfied",
+                (
+                    f"Attempted to change role to {requested_role} but had insufficient "
+                    "Influence Points or cooldown not satisfied"
+                ),
             )
 
     # PASSIVE RESOURCE GENERATION: Generate Data Units based on agent's role
@@ -817,7 +862,8 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             previous_du = agent_state.du
             agent_state.du += generated_du
             logger.info(
-                f"Agent {agent_id}: Generated {generated_du} DU passively based on role '{role_name}'. DU: {previous_du:.1f} → {agent_state.du:.1f}"
+                f"Agent {agent_id}: Generated {generated_du} DU passively based on role "
+                f"'{role_name}'. DU: {previous_du:.1f} → {agent_state.du:.1f}"
             )
 
     # MEMORY CONSOLIDATION: First-level hierarchical memory summarization
@@ -840,7 +886,11 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                     memory_content = memory.get("content", "No content")
 
                     # Add formatted memory to the context string
-                    short_term_memory_context += f"- Step {memory_step}, {memory_type.replace('_', ' ').title()}: {memory_content}\n"
+                    short_term_memory_context += (
+                        f"- Step {memory_step}, "
+                        f"{memory_type.replace('_', ' ').title()}: "
+                        f"{memory_content}\n"
+                    )
 
                 # Create an instance of L1SummaryGenerator
                 l1_gen = L1SummaryGenerator()
@@ -881,26 +931,32 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                                 memory_type="consolidated_summary",
                             )
                             logger.info(
-                                f"Agent {agent_id}: Successfully stored consolidated memory in vector store"
+                                f"Agent {agent_id}: Successfully stored consolidated memory "
+                                "in vector store"
                             )
                         except Exception as e:
                             logger.error(
-                                f"Agent {agent_id}: Failed to store consolidated memory in vector store: {e}"
+                                f"Agent {agent_id}: Failed to store consolidated memory in "
+                                f"vector store: {e}"
                             )
 
                     logger.info(
-                        f"Agent {agent_id}: Generated a level-1 memory consolidation summary at step {sim_step}"
+                        f"Agent {agent_id}: Generated a level-1 memory consolidation summary "
+                        f"at step {sim_step}"
                     )
                     logger.debug(
-                        f"Agent {agent_id}: Memory consolidation summary: {memory_summary[:100]}..."
+                        f"Agent {agent_id}: Memory consolidation summary: "
+                        f"{memory_summary[:100]}..."
                     )
                 else:
                     logger.warning(
-                        f"Agent {agent_id}: Failed to generate memory consolidation summary - empty result"
+                        f"Agent {agent_id}: Failed to generate memory consolidation summary "
+                        "- empty result"
                     )
             else:
                 logger.warning(
-                    f"Agent {agent_id}: Cannot generate memory consolidation - no LLM client available"
+                    f"Agent {agent_id}: Cannot generate memory consolidation - "
+                    "no LLM client available"
                 )
         except Exception as e:
             logger.error(f"Agent {agent_id}: Error during memory consolidation: {e}")
@@ -923,7 +979,7 @@ def _maybe_prune_l1_memories(state: AgentTurnState) -> dict[str, Any]:
 
     agent_id = state["agent_id"]
     sim_step = state["simulation_step"]
-    state["state"]
+    _ = state["state"]
     vector_store = state.get("vector_store_manager")
 
     # Check if L1 memory pruning is enabled
@@ -940,7 +996,8 @@ def _maybe_prune_l1_memories(state: AgentTurnState) -> dict[str, Any]:
 
     max_age_days = getattr(config, "MEMORY_PRUNING_L1_MAX_AGE_DAYS", 14)
     logger.info(
-        f"Agent {agent_id}: Checking for L1 summaries older than {max_age_days} days at step {sim_step}"
+        f"Agent {agent_id}: Checking for L1 summaries older than {max_age_days} "
+        f"days at step {sim_step}"
     )
 
     # Find L1 summaries older than the configured threshold
@@ -979,7 +1036,7 @@ def _maybe_prune_l2_memories(state: AgentTurnState) -> dict[str, Any]:
     """
     agent_id = state["agent_id"]
     sim_step = state["simulation_step"]
-    state["state"]
+    _ = state["state"]
     vector_store = state.get("vector_store_manager")
 
     # Check if L2 memory pruning is enabled and if it's time to check
@@ -996,7 +1053,8 @@ def _maybe_prune_l2_memories(state: AgentTurnState) -> dict[str, Any]:
 
     max_age_days = getattr(config, "MEMORY_PRUNING_L2_MAX_AGE_DAYS", 30)
     logger.info(
-        f"Agent {agent_id}: Checking for L2 summaries older than {max_age_days} days at step {sim_step}"
+        f"Agent {agent_id}: Checking for L2 summaries older than {max_age_days} "
+        f"days at step {sim_step}"
     )
 
     # Find L2 summaries older than the configured threshold
@@ -1025,12 +1083,13 @@ def _maybe_prune_l2_memories(state: AgentTurnState) -> dict[str, Any]:
 async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
     """
     Asynchronously finalize the message preparation and handle relationship updates.
-    Uses AsyncDSPyManager for non-blocking DSPy calls. On timeout or error, returns a failsafe output and logs the issue.
+    Uses AsyncDSPyManager for non-blocking DSPy calls. On timeout or error, returns a
+    failsafe output and logs the issue.
     Must be awaited in the graph.
     """
     agent = state.get("agent_instance")
     agent_id = state["agent_id"]
-    state["simulation_step"]
+    _ = state["simulation_step"]
     message_content = state.get("message_content")
     message_recipient_id = state.get("message_recipient_id")
     action_intent = state.get("action_intent", "idle")
@@ -1050,7 +1109,9 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
             and agent is not None
         ):
             logger.debug(
-                f"Updating relationship for sender {agent_id} with target {message_recipient_id} based on outgoing message sentiment: {outgoing_sentiment}"
+                f"Updating relationship for sender {agent_id} with target "
+                f"{message_recipient_id} based on outgoing message sentiment: "
+                f"{outgoing_sentiment}"
             )
             try:
                 current_score = final_agent_state.relationships.get(message_recipient_id, 0.0)
@@ -1078,7 +1139,8 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
                 new_score = max(min_score, min(max_score, new_score))
                 final_agent_state.relationships[message_recipient_id] = new_score
                 logger.info(
-                    f"[DSPy] Updated relationship ({agent_id}->{message_recipient_id}): {current_score:.2f} -> {new_score:.2f}. Rationale: {rationale}"
+                    f"[DSPy] Updated relationship ({agent_id}->{message_recipient_id}): "
+                    f"{current_score:.2f} -> {new_score:.2f}. Rationale: {rationale}"
                 )
             except Exception as e:
                 logger.error(f"DSPy RelationshipUpdater failed, falling back to rule-based: {e}")
@@ -1098,7 +1160,8 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
             "updated_agent_state": final_agent_state,
         }
     logger.debug(
-        f"FINALIZE_RETURN :: Agent {agent_id}: Returning final state with updated_agent_state included"
+        f"FINALIZE_RETURN :: Agent {agent_id}: Returning final state with "
+        "updated_agent_state included"
     )
     return return_values
 
@@ -1157,7 +1220,8 @@ def route_broadcast_decision(state: AgentTurnState) -> str:
     has_message = structured_output and structured_output.message_content is not None
 
     logger.debug(
-        f"Agent {agent_id} in mood '{current_mood}' (descriptive: '{descriptive_mood}') deciding on broadcasting message..."
+        f"Agent {agent_id} in mood '{current_mood}' (descriptive: '{descriptive_mood}') "
+        "deciding on broadcasting message..."
     )
 
     # Only broadcast if:
@@ -1172,7 +1236,8 @@ def route_broadcast_decision(state: AgentTurnState) -> str:
     else:
         if has_message:
             logger.info(
-                f"Agent {agent_id} suppressing message due to mood: '{current_mood}', descriptive mood: '{descriptive_mood}'"
+                f"Agent {agent_id} suppressing message due to mood: '{current_mood}', "
+                f"descriptive mood: '{descriptive_mood}'"
             )
         return "exit"  # No message to broadcast or agent is unhappy
 
@@ -1223,9 +1288,9 @@ def handle_propose_idea_node(state: AgentTurnState) -> dict[str, Any]:
     current_ip = agent_persistent_state.ip
     current_du = agent_persistent_state.du
 
-    # Log the current IP and DU amounts for debugging
-    logging.debug(
-        f"Agent {agent_id} current IP: {current_ip}, current DU: {current_du}, attempting to propose idea"
+    logger.debug(
+        f"Agent {agent_id} current IP: {current_ip}, current DU: {current_du}, "
+        "attempting to propose idea"
     )
 
     if idea_content:
@@ -1234,8 +1299,9 @@ def handle_propose_idea_node(state: AgentTurnState) -> dict[str, Any]:
             # Deduct the DU cost for the detailed idea
             agent_persistent_state.du -= PROPOSE_DETAILED_IDEA_DU_COST
             updated_du = agent_persistent_state.du
-            logging.info(
-                f"Agent {agent_id} spent {PROPOSE_DETAILED_IDEA_DU_COST} DU to post a detailed idea. Remaining DU: {updated_du}."
+            logger.info(
+                f"Agent {agent_id} spent {PROPOSE_DETAILED_IDEA_DU_COST} DU to post a "
+                f"detailed idea. Remaining DU: {updated_du}."
             )
 
             # Now check if agent has enough IP to post to the Knowledge Board
@@ -1243,15 +1309,16 @@ def handle_propose_idea_node(state: AgentTurnState) -> dict[str, Any]:
                 # Deduct the cost to post the idea
                 agent_persistent_state.ip -= IP_COST_TO_POST_IDEA
                 updated_ip = agent_persistent_state.ip
-                logging.info(
-                    f"Agent {agent_id} spent {IP_COST_TO_POST_IDEA} IP to post an idea. Remaining IP: {updated_ip}."
+                logger.info(
+                    f"Agent {agent_id} spent {IP_COST_TO_POST_IDEA} IP to post an idea. "
+                    f"Remaining IP: {updated_ip}."
                 )
 
                 # Add the proposed idea to the Knowledge Board
                 if knowledge_board:
                     entry = f"{idea_content}"
                     knowledge_board.add_entry(entry, agent_id, sim_step)
-                    logging.info(
+                    logger.info(
                         f"KnowledgeBoard: Added entry from Agent {agent_id} at step {sim_step}"
                     )
                     award_ip = True
@@ -1261,24 +1328,36 @@ def handle_propose_idea_node(state: AgentTurnState) -> dict[str, Any]:
                     # Award the IP for a successful proposal
                     agent_persistent_state.ip += IP_AWARD_FOR_PROPOSAL
                     final_ip = agent_persistent_state.ip
-                    logging.info(
-                        f"Agent {agent_id} earned {IP_AWARD_FOR_PROPOSAL} IP for proposing an idea. New IP: {final_ip}."
+                    logger.info(
+                        f"Agent {agent_id} earned {IP_AWARD_FOR_PROPOSAL} IP for proposing an "
+                        f"idea. "
+                        f"New IP: {final_ip}."
                     )
             else:
                 # Agent doesn't have enough IP to post to the Knowledge Board
-                logging.warning(
-                    f"Agent {agent_id} attempted to post idea '{idea_content[:30]}...' but had insufficient IP ({current_ip} IP) for the cost of {IP_COST_TO_POST_IDEA} IP. Idea not posted."
+                logger.warning(
+                    f"Agent {agent_id} attempted to post idea "
+                    f"'{idea_content[:30]}...' but had "
+                    f"insufficient IP ({current_ip} IP) for the cost of "
+                    f"{IP_COST_TO_POST_IDEA} IP. "
+                    "Idea not posted."
                 )
 
                 # Refund the DU since the idea wasn't posted
                 agent_persistent_state.du += PROPOSE_DETAILED_IDEA_DU_COST
-                logging.info(
-                    f"Agent {agent_id} was refunded {PROPOSE_DETAILED_IDEA_DU_COST} DU since the idea wasn't posted due to insufficient IP."
+                logger.info(
+                    f"Agent {agent_id} was refunded "
+                    f"{PROPOSE_DETAILED_IDEA_DU_COST} DU since the idea "
+                    "wasn't posted due to insufficient IP."
                 )
         else:
             # Agent doesn't have enough DU to post the detailed idea
-            logging.warning(
-                f"Agent {agent_id} attempted to post idea '{idea_content[:30]}...' but had insufficient DU ({current_du} DU) for the cost of {PROPOSE_DETAILED_IDEA_DU_COST} DU. Idea not posted."
+            logger.warning(
+                f"Agent {agent_id} attempted to post idea "
+                f"'{idea_content[:30]}...' but had "
+                f"insufficient DU ({current_du} DU) for the cost of "
+                f"{PROPOSE_DETAILED_IDEA_DU_COST} DU. "
+                "Idea not posted."
             )
 
     # Store the proposed idea content and updated agent state in the return state
@@ -1306,7 +1385,7 @@ def _format_other_agents(
         other_id = agent_info.get("agent_id", "unknown")
         other_name = agent_info.get("name", other_id[:8])
         other_mood = agent_info.get("mood", "unknown")
-        agent_info.get("descriptive_mood", "unknown")
+        _ = agent_info.get("descriptive_mood", "unknown")
 
         # Get relationship score and label
         relationship_score = relationships.get(other_id, 0.0)
@@ -1314,7 +1393,8 @@ def _format_other_agents(
 
         # Include the full agent_id for clear targeting
         lines.append(
-            f"  - {other_name} (Agent ID: '{other_id}', Mood: {other_mood}, Relationship: {relationship_label} ({relationship_score:.1f}))"
+            f"  - {other_name} (Agent ID: '{other_id}', Mood: {other_mood}, "
+            f"Relationship: {relationship_label} ({relationship_score:.1f}))"
         )
 
     return "\n".join(lines)
@@ -1327,7 +1407,8 @@ def _format_knowledge_board(board_entries: list[str]) -> str:
 
     lines = []
     lines.append(
-        "  You can reference a board entry by its Step and original Agent ID (e.g., 'Regarding Step 3's idea by Agent_XYZ...')."
+        "  You can reference a board entry by its Step and original Agent ID "
+        "(e.g., 'Regarding Step 3's idea by Agent_XYZ...')."
     )
     for i, entry in enumerate(board_entries):
         lines.append(f"  - {entry}")
@@ -1405,7 +1486,8 @@ def handle_continue_collaboration_node(state: AgentTurnState) -> dict[str, Any]:
     """
     agent_id = state.get("agent_id", "UNKNOWN_HANDLER")
     logger.info(
-        f"Agent {agent_id}: Executing 'continue_collaboration' intent handler (currently placeholder)."
+        f"Agent {agent_id}: Executing 'continue_collaboration' intent handler "
+        "(currently placeholder)."
     )
     # Potentially add minor relationship boosts or mood adjustments here later if desired
     return state
@@ -1444,14 +1526,16 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
         if len(message_content) > 100:
             is_detailed = True
             logger.debug(
-                f"Agent {agent_id} clarification considered detailed due to length: {len(message_content)} chars"
+                f"Agent {agent_id} clarification considered detailed due to length: "
+                f"{len(message_content)} chars"
             )
 
         # Check for multiple question marks (indicating multiple questions)
         if message_content.count("?") > 1:
             is_detailed = True
             logger.debug(
-                f"Agent {agent_id} clarification considered detailed due to multiple questions: {message_content.count('?')} questions"
+                f"Agent {agent_id} clarification considered detailed due to multiple questions: "
+                f"{message_content.count('?')} questions"
             )
 
         # Check for keywords indicating a detailed request
@@ -1470,7 +1554,8 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
             if keyword.lower() in message_content.lower():
                 is_detailed = True
                 logger.debug(
-                    f"Agent {agent_id} clarification considered detailed due to keyword: '{keyword}'"
+                    f"Agent {agent_id} clarification considered detailed due to keyword: "
+                    f"'{keyword}'"
                 )
                 break
 
@@ -1485,7 +1570,9 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
 
                 # Log the DU deduction
                 logger.info(
-                    f"Agent {agent_id} spent {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for a detailed clarification request. Remaining DU: {new_du}."
+                    f"Agent {agent_id} spent {DU_COST_REQUEST_DETAILED_CLARIFICATION} DU for "
+                    f"a detailed clarification request. "
+                    f"Remaining DU: {new_du}."
                 )
 
                 # Store the clarification question in agent state
@@ -1493,11 +1580,17 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
             else:
                 # Not enough DU for a detailed clarification
                 logger.warning(
-                    f"Agent {agent_id} attempted a detailed clarification but had insufficient DU ({current_du} < {DU_COST_REQUEST_DETAILED_CLARIFICATION}). Request blocked."
+                    f"Agent {agent_id} attempted a detailed clarification but had "
+                    f"insufficient DU ({current_du} < "
+                    f"{DU_COST_REQUEST_DETAILED_CLARIFICATION}). "
+                    f"Request blocked."
                 )
 
                 # Modify the message content to indicate that the request was blocked
-                simplified_message = "I wanted to ask a detailed question, but I don't have enough data units (DU) at the moment. Could you provide some basic information instead?"
+                simplified_message = (
+                    "I wanted to ask a detailed question, but I don't have enough data units (DU) "
+                    "at the moment. Could you provide some basic information instead?"
+                )
 
                 # Update the message in the structured output
                 structured_output.message_content = simplified_message
@@ -1508,7 +1601,11 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
                 agent_persistent_state.last_clarification_downgraded = True
 
                 # Add a memory entry about the failed attempt
-                memory_content = f"Attempted to ask a detailed clarification: '{original_message[:50]}...' but had insufficient DU ({current_du}/{DU_COST_REQUEST_DETAILED_CLARIFICATION})"
+                memory_content = (
+                    f"Attempted to ask a detailed clarification: "
+                    f"'{original_message[:50]}...' but had "
+                    f"insufficient DU ({current_du}/{DU_COST_REQUEST_DETAILED_CLARIFICATION})"
+                )
                 agent_persistent_state.add_memory(
                     state.get("simulation_step", 0), "resource_constraint", memory_content
                 )
@@ -1540,7 +1637,8 @@ def handle_deep_analysis_node(state: AgentTurnState) -> dict[str, Any]:
     # If not an analyzer, log a warning but still allow it (with the same cost for now)
     if not is_analyzer:
         logger.warning(
-            f"Agent {agent_id} (Role: {current_role}) is attempting a deep analysis, which is more suited for Analyzers."
+            f"Agent {agent_id} (Role: {current_role}) is attempting a deep analysis, "
+            "which is more suited for Analyzers."
         )
 
     # Check if the agent has enough DU for the deep analysis
@@ -1551,7 +1649,8 @@ def handle_deep_analysis_node(state: AgentTurnState) -> dict[str, Any]:
 
         # Log the DU deduction
         logger.info(
-            f"Agent {agent_id} (Role: {current_role}) spent {DU_COST_DEEP_ANALYSIS} DU to perform deep analysis. Remaining DU: {new_du}."
+            f"Agent {agent_id} (Role: {current_role}) spent {DU_COST_DEEP_ANALYSIS} DU to "
+            f"perform deep analysis. Remaining DU: {new_du}."
         )
 
         # Note: The outcome of this analysis might lead to DU earning through the
@@ -1559,7 +1658,8 @@ def handle_deep_analysis_node(state: AgentTurnState) -> dict[str, Any]:
     else:
         # Not enough DU to perform the deep analysis
         logger.warning(
-            f"Agent {agent_id} attempted deep analysis but had insufficient DU ({current_du} < {DU_COST_DEEP_ANALYSIS}). Action may be less effective or not fully registered."
+            f"Agent {agent_id} attempted deep analysis but had insufficient DU ({current_du} < "
+            f"{DU_COST_DEEP_ANALYSIS}). Action may be less effective or not fully registered."
         )
         # We don't modify the agent state here as they don't have enough DU to spend
 
@@ -1597,13 +1697,15 @@ def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
 
     if current_ip < config.IP_COST_CREATE_PROJECT:
         logger.warning(
-            f"Agent {agent_id} attempted to create project '{project_name}' but had insufficient IP ({current_ip} < {config.IP_COST_CREATE_PROJECT})"
+            f"Agent {agent_id} attempted to create project '{project_name}' but had "
+            f"insufficient IP ({current_ip} < {config.IP_COST_CREATE_PROJECT})"
         )
         return state
 
     if current_du < config.DU_COST_CREATE_PROJECT:
         logger.warning(
-            f"Agent {agent_id} attempted to create project '{project_name}' but had insufficient DU ({current_du} < {config.DU_COST_CREATE_PROJECT})"
+            f"Agent {agent_id} attempted to create project '{project_name}' but had "
+            f"insufficient DU ({current_du} < {config.DU_COST_CREATE_PROJECT})"
         )
         return state
 
@@ -1613,7 +1715,8 @@ def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
 
     if not simulation:
         logger.error(
-            f"Agent {agent_id} couldn't create project '{project_name}' because simulation reference is missing"
+            f"Agent {agent_id} couldn't create project '{project_name}' because "
+            "simulation reference is missing"
         )
         return state
 
@@ -1638,7 +1741,9 @@ def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
 
         desc_info = f" with description: '{project_description}'" if project_description else ""
         logger.info(
-            f"Agent {agent_id} created project '{project_name}'{desc_info} (ID: {project_id}) at a cost of {config.IP_COST_CREATE_PROJECT} IP and {config.DU_COST_CREATE_PROJECT} DU"
+            f"Agent {agent_id} created project '{project_name}'{desc_info} (ID: {project_id}) "
+            f"at a cost of {config.IP_COST_CREATE_PROJECT} IP and "
+            f"{config.DU_COST_CREATE_PROJECT} DU"
         )
     else:
         logger.warning(f"Agent {agent_id} failed to create project '{project_name}'")
@@ -1672,7 +1777,8 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
     current_project = agent_persistent_state.current_project_id
     if current_project:
         logger.warning(
-            f"Agent {agent_id} attempted to join project '{project_id}' but is already a member of project '{current_project}'"
+            f"Agent {agent_id} attempted to join project '{project_id}' but is already a member "
+            f"of project '{current_project}'"
         )
         return state
 
@@ -1682,13 +1788,15 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
 
     if current_ip < config.IP_COST_JOIN_PROJECT:
         logger.warning(
-            f"Agent {agent_id} attempted to join project '{project_id}' but had insufficient IP ({current_ip} < {config.IP_COST_JOIN_PROJECT})"
+            f"Agent {agent_id} attempted to join project '{project_id}' but had insufficient IP "
+            f"({current_ip} < {config.IP_COST_JOIN_PROJECT})"
         )
         return state
 
     if current_du < config.DU_COST_JOIN_PROJECT:
         logger.warning(
-            f"Agent {agent_id} attempted to join project '{project_id}' but had insufficient DU ({current_du} < {config.DU_COST_JOIN_PROJECT})"
+            f"Agent {agent_id} attempted to join project '{project_id}' but had insufficient DU "
+            f"({current_du} < {config.DU_COST_JOIN_PROJECT})"
         )
         return state
 
@@ -1697,7 +1805,8 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
 
     if not simulation:
         logger.error(
-            f"Agent {agent_id} couldn't join project '{project_id}' because simulation reference is missing"
+            f"Agent {agent_id} couldn't join project '{project_id}' because simulation reference "
+            "is missing"
         )
         return state
 
@@ -1724,7 +1833,9 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
         )
 
         logger.info(
-            f"Agent {agent_id} joined project '{project_name}' (ID: {project_id}) at a cost of {config.IP_COST_JOIN_PROJECT} IP and {config.DU_COST_JOIN_PROJECT} DU"
+            f"Agent {agent_id} joined project '{project_name}' (ID: {project_id}) at a "
+            f"cost of {config.IP_COST_JOIN_PROJECT} IP and "
+            f"{config.DU_COST_JOIN_PROJECT} DU"
         )
     else:
         logger.warning(f"Agent {agent_id} failed to join project with ID '{project_id}'")
@@ -1760,7 +1871,8 @@ def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
 
     if not simulation:
         logger.error(
-            f"Agent {agent_id} couldn't leave project '{project_id}' because simulation reference is missing"
+            f"Agent {agent_id} couldn't leave project '{project_id}' because simulation "
+            f"reference is missing"
         )
         return state
 
@@ -1807,7 +1919,8 @@ def handle_send_direct_message_node(state: AgentTurnState) -> dict[str, Any]:
         return state
 
     logger.info(
-        f"Agent {agent_id} sending direct message to {message_recipient_id}: '{message_content[:30]}...'"
+        f"Agent {agent_id} sending direct message to {message_recipient_id}: "
+        f"'{message_content[:30]}...'"
     )
 
     # Set flag to ensure this is processed as a targeted message
@@ -1857,428 +1970,49 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
     Checks if it's time to consolidate L1 summaries into L2 summaries at the current step.
     This node generates Level 2 (chapter) summaries from Level 1 summaries after a configured
     number of steps have passed since the last L2 consolidation.
-
-    Args:
-        state (AgentTurnState): The current agent graph state
-
-    Returns:
-        Dict[str, Any]: The updated state after potentially consolidating memories
-    """
-    agent_id = state["agent_id"]
-    sim_step = state["simulation_step"]
-    agent_state = state["state"]
-    vector_store = state.get("vector_store_manager")
-
-    # Define the L2 consolidation interval (every 10 steps by default)
-    L2_CONSOLIDATION_INTERVAL = 10
-
-    # Check if we're at a step where L2 consolidation should happen
-    if sim_step % L2_CONSOLIDATION_INTERVAL != 0 or sim_step == 0:
-        return state
-
-    # Check if we have access to the vector store for retrieving L1 summaries
-    if not vector_store:
-        logger.warning(
-            f"Agent {agent_id}: Cannot perform L2 memory consolidation - no vector store available"
-        )
-        return state
-
-    # Since we're at a consolidation step, we'll create a Level 2 summary from
-    # all Level 1 summaries since the last consolidation
-
-    # Get the last Level 2 consolidation step (init to 0 if not set)
-    last_l2_step = getattr(agent_state, "last_level_2_consolidation_step", 0)
-
-    logger.info(
-        f"Agent {agent_id}: Performing L2 memory consolidation at step {sim_step}. Last L2 consolidation was at step {last_l2_step}"
-    )
-
-    # Retrieve all Level 1 summaries since the last L2 consolidation
-    f"recent consolidated summaries for agent {agent_id}"
-
-    # Define the step range for the L1 summaries we want
-    # We want summaries after the last L2 consolidation up to the current step
-    step_filter = {"$gt": last_l2_step, "$lte": sim_step}
-
-    # Get the relevant L1 summaries from the vector store
-    l1_summaries = vector_store.retrieve_filtered_memories(
-        agent_id=agent_id,
-        filters={"memory_type": "consolidated_summary", "step": step_filter},
-        limit=50,  # Get all summaries in the range, up to 50
-    )
-
-    # If we don't have any L1 summaries to consolidate, return early
-    if not l1_summaries or len(l1_summaries) == 0:
-        logger.info(f"Agent {agent_id}: No Level 1 summaries found for L2 consolidation")
-        return state
-
-    logger.info(
-        f"Agent {agent_id}: Found {len(l1_summaries)} Level 1 summaries to consolidate into a Level 2 summary"
-    )
-
-    # Prepare the context string from the L1 summaries
-    l1_summaries_context = ""
-
-    # Sort the summaries by step for chronological order
-    sorted_summaries = sorted(l1_summaries, key=lambda x: x.get("step", 0))
-
-    for summary in sorted_summaries:
-        step = summary.get("step", "unknown")
-        content = summary.get("content", "No content")
-        l1_summaries_context += f"- Step {step}, Consolidated Summary: {content}\n"
-
-    # Prepare optional inputs for the L2SummaryGenerator
-
-    # Get descriptive mood if available
-    current_mood = (
-        get_descriptive_mood(agent_state.mood_value)
-        if hasattr(agent_state, "mood_value")
-        else None
-    )
-
-    # Analyze mood trend (simple approach for now)
-    overall_mood_trend = None
-    if hasattr(agent_state, "mood_history") and len(agent_state.mood_history) >= 2:
-        recent_moods = [mood for step, mood in agent_state.mood_history[-5:]]
-        # Simple trend detection
-        if all(mood == recent_moods[0] for mood in recent_moods):
-            overall_mood_trend = f"Consistently {recent_moods[0]}"
-        elif recent_moods[-1] > recent_moods[0]:
-            overall_mood_trend = f"Improving from {recent_moods[0]} to {recent_moods[-1]}"
-        elif recent_moods[-1] < recent_moods[0]:
-            overall_mood_trend = f"Declining from {recent_moods[0]} to {recent_moods[-1]}"
-        else:
-            overall_mood_trend = f"Fluctuating with recent {recent_moods[-1]}"
-
-    # Format agent goals
-    agent_goals = None
-    if hasattr(agent_state, "goals") and agent_state.goals:
-        agent_goals = "Current goals: " + ", ".join(
-            [goal.get("description", "") for goal in agent_state.goals if "description" in goal]
-        )
-
-    # Create an instance of L2SummaryGenerator
-    l2_gen = L2SummaryGenerator()
-
-    # Generate the L2 summary using DSPy
-    try:
-        l2_summary_text = l2_gen.generate_summary(
-            agent_role=agent_state.role,
-            l1_summaries_context=l1_summaries_context,
-            overall_mood_trend=overall_mood_trend,
-            agent_goals=agent_goals,
-        )
-
-        if not l2_summary_text:
-            # If DSPy generation failed, fallback to direct LLM call (if available)
-            if agent_state.llm_client:
-                logger.warning(
-                    f"Agent {agent_id}: DSPy L2 summary generation failed, falling back to direct LLM"
-                )
-
-                # Build a prompt for the LLM
-                prompt = f"""You are helping generate a Level 2 (L2) memory summary for an agent with role {agent_state.role}.
-                
-                Based on the following series of Level 1 summaries, create a comprehensive yet concise Level 2 summary that captures the key insights, themes, and developments across this period.
-                
-                Level 1 Summaries:
-                {l1_summaries_context}
-                
-                """
-
-                if overall_mood_trend:
-                    prompt += f"Overall mood trend during this period: {overall_mood_trend}\n\n"
-
-                if agent_goals:
-                    prompt += f"Agent's goals: {agent_goals}\n\n"
-
-                prompt += "Generate a comprehensive L2 summary that synthesizes these experiences into meaningful insights:"
-
-                # Call the LLM directly
-                l2_summary_text = generate_text(prompt, model=config.LLM_NAME_SHORT)
-            else:
-                logger.error(
-                    f"Agent {agent_id}: Cannot generate L2 summary - DSPy failed and no LLM client available"
-                )
-                return state
-
-    except Exception as e:
-        logger.error(f"Agent {agent_id}: Failed to generate L2 summary: {e}")
-        return state
-
-    # If we have a valid L2 summary, store it
-    if l2_summary_text:
-        # Create metadata for the L2 summary
-        l2_summary = {
-            "step": sim_step,
-            "type": "chapter_summary",  # This is a Level 2 summary
-            "level": 2,
-            "content": l2_summary_text,
-            "source": "l1_summaries_consolidation",
-            "consolidated_entries": len(l1_summaries),
-            "consolidation_period": f"{last_l2_step + 1}-{sim_step}",
-        }
-
-        # Add the L2 summary to the agent's memory
-        agent_state.add_memory(sim_step, "chapter_summary", l2_summary_text)
-
-        # Update the last L2 consolidation step
-        agent_state.last_level_2_consolidation_step = sim_step
-
-        # Store the L2 summary in the vector store
-        try:
-            vector_store.add_memory(
-                agent_id=agent_id,
-                step=sim_step,
-                event_type="chapter_summary",  # Type for filtering
-                content=l2_summary_text,
-                memory_type="chapter_summary",  # Type for filtering
-                level=2,
-                consolidation_period=f"{last_l2_step + 1}-{sim_step}",
-                consolidated_entries=len(l1_summaries),
-            )
-            logger.info(
-                f"Agent {agent_id}: Successfully stored Level 2 chapter summary in vector store"
-            )
-        except Exception as e:
-            logger.error(
-                f"Agent {agent_id}: Failed to store Level 2 chapter summary in vector store: {e}"
-            )
-
-        logger.info(
-            f"Agent {agent_id}: Generated a Level 2 chapter summary at step {sim_step}, consolidating {len(l1_summaries)} Level 1 summaries"
-        )
-        logger.debug(f"Agent {agent_id}: Chapter summary content: {l2_summary_text[:150]}...")
-    else:
-        logger.warning(
-            f"Agent {agent_id}: Failed to generate Level 2 chapter summary - empty result"
-        )
-
-    return {"state": agent_state}
-
-
-def _maybe_prune_l1_memories_mus(state: AgentTurnState) -> dict[str, Any]:
-    """
-    Checks if it's time to prune Level 1 (consolidated) memories using MUS-based pruning.
-    Only runs if enabled and at the configured interval.
     """
     import src.infra.config as config
 
     agent_id = state["agent_id"]
     sim_step = state["simulation_step"]
+    _ = state["state"]
     vector_store = state.get("vector_store_manager")
 
-    if not getattr(config, "MEMORY_PRUNING_L1_MUS_ENABLED", False):
+    # Check if L2 memory consolidation is enabled and if it's time to check
+    if not getattr(config, "MEMORY_CONSOLIDATION_ENABLED", False) or not getattr(
+        config, "MEMORY_CONSOLIDATION_L1_CHECK_INTERVAL_STEPS", 0
+    ):
+        logger.debug(f"L2 consolidation is disabled for agent {agent_id}")
         return state
 
-    check_interval = getattr(config, "MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS", 50)
+    # Check if it's time to run L2 consolidation based on check interval
+    check_interval = getattr(config, "MEMORY_CONSOLIDATION_L1_CHECK_INTERVAL_STEPS", 0)
     if sim_step % check_interval != 0:
         return state
 
-    logger.info(f"Agent {agent_id}: Performing MUS-based L1 pruning check at step {sim_step}")
-
-    mus_threshold = getattr(config, "MEMORY_PRUNING_L1_MUS_THRESHOLD", 0.3)
-    min_age_days = getattr(config, "MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION", 7)
-
-    if not vector_store:
-        logger.warning(
-            f"Agent {agent_id}: No vector store manager available for MUS-based L1 pruning."
-        )
-        return state
-
-    ids_to_prune = vector_store.get_l1_memories_for_mus_pruning(mus_threshold, min_age_days)
-
-    if ids_to_prune:
-        logger.info(
-            f"Agent {agent_id}: MUS-based L1 pruning: deleting {len(ids_to_prune)} L1 summaries (sample: {ids_to_prune[:3]})"
-        )
-        success = vector_store.delete_memories_by_ids(ids_to_prune)
-        if success:
-            logger.info(
-                f"Agent {agent_id}: Successfully pruned {len(ids_to_prune)} L1 summaries by MUS."
-            )
-        else:
-            logger.error(f"Agent {agent_id}: Failed to prune L1 summaries by MUS.")
-    else:
-        logger.info(
-            f"Agent {agent_id}: No L1 summaries eligible for MUS-based pruning at this check."
-        )
-
-    return state
-
-
-def _maybe_prune_l2_memories_mus(state: AgentTurnState) -> dict[str, Any]:
-    """
-    Checks if it's time to prune Level 2 (chapter) memories using MUS-based pruning.
-    Only runs if enabled and at the configured interval.
-
-    Args:
-        state (AgentTurnState): The current agent graph state
-
-    Returns:
-        Dict[str, Any]: The updated state after potentially pruning L2 memories by MUS
-    """
-    import src.infra.config as config
-
-    agent_id = state["agent_id"]
-    sim_step = state["simulation_step"]
-    vector_store = state.get("vector_store_manager")
-
-    # Check if MUS-based L2 memory pruning is enabled
-    if not getattr(config, "MEMORY_PRUNING_L2_MUS_ENABLED", False):
-        return state
-
-    # Check if it's time to run MUS-based L2 pruning based on check interval
-    check_interval = getattr(config, "MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS", 100)
-    if sim_step % check_interval != 0:
-        return state
-
-    logger.info(f"Agent {agent_id}: Performing MUS-based L2 pruning check at step {sim_step}")
-
-    mus_threshold = getattr(config, "MEMORY_PRUNING_L2_MUS_THRESHOLD", 0.3)
-    min_age_days = getattr(config, "MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION", 14)
-
-    if not vector_store:
-        logger.warning(
-            f"Agent {agent_id}: No vector store manager available for MUS-based L2 pruning."
-        )
-        return state
-
-    # Get L2 summaries that meet the MUS pruning criteria
-    ids_to_prune = vector_store.get_l2_memories_for_mus_pruning(mus_threshold, min_age_days)
-
-    if ids_to_prune:
-        logger.info(
-            f"Agent {agent_id}: MUS-based L2 pruning: deleting {len(ids_to_prune)} L2 summaries (sample: {ids_to_prune[:3]})"
-        )
-        success = vector_store.delete_memories_by_ids(ids_to_prune)
-        if success:
-            logger.info(
-                f"Agent {agent_id}: Successfully pruned {len(ids_to_prune)} L2 summaries by MUS."
-            )
-        else:
-            logger.error(f"Agent {agent_id}: Failed to prune L2 summaries by MUS.")
-    else:
-        logger.info(
-            f"Agent {agent_id}: No L2 summaries eligible for MUS-based pruning at this check."
-        )
-
-    return state
-
-
-def create_basic_agent_graph():
-    """
-    Builds the agent turn graph with intent routing.
-    Flow: Analyze Sentiment -> Prepare Prompt -> Retrieve Memories -> Generate Output -> Route Intent -> [Handle Intent] -> Update State -> Finalize Message -> END
-    """
-    workflow = StateGraph(AgentTurnState)
-
-    # Add the nodes
-    workflow.add_node("analyze_sentiment", analyze_perception_sentiment_node)
-    workflow.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
-    # Add new RAG node for memory retrieval and summarization
-    workflow.add_node("retrieve_memories", retrieve_and_summarize_memories_node)
-    workflow.add_node("generate_action_output", generate_thought_and_message_node)
-    workflow.add_node("handle_propose_idea", handle_propose_idea_node)  # Specific intent handler
-    workflow.add_node(
-        "handle_continue_collaboration", handle_continue_collaboration_node
-    )  # Specific intent handler
-    workflow.add_node("handle_idle", handle_idle_node)  # Specific intent handler
-    workflow.add_node(
-        "handle_ask_clarification", handle_ask_clarification_node
-    )  # Specific intent handler
-    workflow.add_node("handle_deep_analysis", handle_deep_analysis_node)  # Specific intent handler
-    workflow.add_node(
-        "handle_create_project", handle_create_project_node
-    )  # Specific intent handler
-    workflow.add_node("handle_join_project", handle_join_project_node)  # Specific intent handler
-    workflow.add_node("handle_leave_project", handle_leave_project_node)  # Specific intent handler
-    workflow.add_node(
-        "handle_send_direct_message", handle_send_direct_message_node
-    )  # New intent handler
-    workflow.add_node("update_state", update_state_node)  # Unified state update
-    workflow.add_node(
-        "prune_l2_memories", _maybe_prune_l2_memories
-    )  # L2 memory age-based pruning node
-    workflow.add_node(
-        "prune_l2_mus_memories", _maybe_prune_l2_memories_mus
-    )  # MUS-based L2 memory pruning node
-    workflow.add_node(
-        "prune_l1_mus_memories", _maybe_prune_l1_memories_mus
-    )  # MUS-based L1 memory pruning node
-    workflow.add_node(
-        "prune_l1_memories", _maybe_prune_l1_memories
-    )  # L1 memory age-based pruning node
-    workflow.add_node(
-        "consolidate_memories", _maybe_consolidate_memories
-    )  # Memory consolidation node
-    workflow.add_node(
-        "finalize_message", finalize_message_agent_node
-    )  # Final decision on message sending
-
-    # Define edges
-    workflow.set_entry_point("analyze_sentiment")
-    workflow.add_edge("analyze_sentiment", "prepare_relationship_prompt")
-    workflow.add_edge("prepare_relationship_prompt", "retrieve_memories")
-    workflow.add_edge("retrieve_memories", "generate_action_output")
-
-    # Route to the appropriate handler based on the intent
-    workflow.add_conditional_edges(
-        "generate_action_output",
-        route_action_intent,  # This function returns the NAME of the next node
-        {
-            # The keys here MUST match the exact strings returned by route_action_intent
-            "handle_propose_idea": "handle_propose_idea",
-            "handle_ask_clarification": "handle_ask_clarification",
-            "handle_continue_collaboration": "handle_continue_collaboration",
-            "handle_idle": "handle_idle",
-            "handle_deep_analysis": "handle_deep_analysis",
-            "handle_create_project": "handle_create_project",
-            "handle_join_project": "handle_join_project",
-            "handle_leave_project": "handle_leave_project",
-            "handle_send_direct_message": "handle_send_direct_message",
-            "update_state": "update_state",  # Handles the 'else' case from route_action_intent
-        },
+    max_age_days = getattr(config, "MEMORY_CONSOLIDATION_L1_MAX_AGE_DAYS", 14)
+    logger.info(
+        f"Agent {agent_id}: Checking for L1 summaries older than {max_age_days} days at step {sim_step}"
     )
 
-    # All action handlers go to update_state
-    workflow.add_edge("handle_propose_idea", "update_state")
-    workflow.add_edge("handle_continue_collaboration", "update_state")
-    workflow.add_edge("handle_idle", "update_state")
-    workflow.add_edge("handle_ask_clarification", "update_state")
-    workflow.add_edge("handle_deep_analysis", "update_state")
-    workflow.add_edge("handle_create_project", "update_state")
-    workflow.add_edge("handle_join_project", "update_state")
-    workflow.add_edge("handle_leave_project", "update_state")
-    workflow.add_edge("handle_send_direct_message", "update_state")
+    # Find L1 summaries older than the configured threshold
+    old_l1_summary_ids = vector_store.get_l1_summaries_older_than(max_age_days)
 
-    # Update state goes to L2 memory pruning (age-based)
-    workflow.add_edge("update_state", "prune_l2_memories")
+    if not old_l1_summary_ids:
+        logger.info(f"Agent {agent_id}: No old L1 summaries found for consolidation")
+        return state
 
-    # Add the new L2 MUS-based pruning node to the memory management pipeline
-    workflow.add_edge("prune_l2_memories", "prune_l2_mus_memories")
+    # Log the consolidation operation
+    logger.info(f"Agent {agent_id}: Consolidating {len(old_l1_summary_ids)} old L1 summaries")
 
-    # Continue with the rest of the memory management pipeline
-    workflow.add_edge("prune_l2_mus_memories", "prune_l1_mus_memories")
-    workflow.add_edge("prune_l1_mus_memories", "prune_l1_memories")
-    workflow.add_edge("prune_l1_memories", "consolidate_memories")
-    workflow.add_edge("consolidate_memories", "finalize_message")
+    # Delete the old L1 summaries
+    success = vector_store.delete_memories_by_ids(old_l1_summary_ids)
 
-    # Finalize message is the end of the graph
-    workflow.add_edge("finalize_message", END)
+    if success:
+        logger.info(
+            f"Agent {agent_id}: Successfully consolidated {len(old_l1_summary_ids)} old L1 summaries"
+        )
+    else:
+        logger.error(f"Agent {agent_id}: Failed to consolidate old L1 summaries")
 
-    # Compile the workflow
-    return workflow.compile()
-
-
-# Compile the graph
-basic_agent_graph_compiled = create_basic_agent_graph()
-
-
-def is_dspy_lm_configured() -> bool:
-    """Checks if a DSPy LM is configured in settings."""
-    lm = getattr(dspy.settings, "lm", None)
-    if lm is None:
-        logger.debug("[DSPy] LM not configured at time of check.")
-        return False
-    return True
+    return state

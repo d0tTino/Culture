@@ -111,3 +111,43 @@ coverage.xml
 /temp_extract/
 /temp/ test_memory_utility_score_*
 test_mus_pruning_*
+
+# Prevent Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+*.pdb
+
+# Mypy, Ruff, Pytest, and other tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Coverage and test output
+htmlcov/
+.coverage*
+*.log
+*.txt
+*.out
+
+# Data, logs, and temp files
+logs/
+temp/
+data/logs/
+chroma_db/
+scripts/temp/
+
+# VSCode and IDE files
+.vscode/
+.idea/
+*.swp
+
+# Archives and zips
+archives/*.zip
+
+# Ignore test and experiment outputs
+final_test_suite_output.txt
+pytest_*.txt
+coverage_*.txt

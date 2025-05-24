@@ -1,3 +1,4 @@
+# ruff: noqa: E501, ANN101, ANN401
 import logging
 
 import dspy
@@ -5,8 +6,11 @@ import dspy
 logger = logging.getLogger(__name__)
 
 
-class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported]
-    """Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or 'As an [ROLE],' and reflects the agent's role and current situation."""
+class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported,misc]
+    """
+    Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or
+    'As an [ROLE],' and reflects the agent's role and current situation.
+    """
 
     role_name = dspy.InputField(desc="The assigned role of the agent.")
     context = dspy.InputField(desc="The current situational context or recent interactions.")
@@ -21,7 +25,7 @@ except ImportError:
 
 
 class _RolePrefixedThoughtResult:
-    def __init__(self, dspy_result: object) -> None:
+    def __init__(self: "_RolePrefixedThoughtResult", dspy_result: object) -> None:
         self.thought_process = getattr(dspy_result, "thought", None)
         self._dspy_result = dspy_result
 
@@ -31,7 +35,7 @@ class FailsafeRoleThoughtGenerator:
     Failsafe version of the RoleThoughtGenerator. Always returns a safe default thought.
     """
 
-    def __call__(self, role_name: str, context: str) -> object:
+    def __call__(self: "FailsafeRoleThoughtGenerator", role_name: str, context: str) -> object:
         return type(
             "FailsafeResult",
             (),
@@ -45,23 +49,26 @@ def get_role_thought_generator() -> object:
     Returns the optimized module if available, else the base, else a failsafe.
     """
     try:
+        import os
+
         import dspy
 
         from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
 
+        logger.info("Attempting to configure DSPy with Ollama...")
         # Try to configure DSPy
         try:
             configure_dspy_with_ollama()
+            logger.info(f"DSPy configured. LM set to: {getattr(dspy.settings, 'lm', None)}")
         except Exception as e:
             logger.error(f"ROLE THOUGHT GENERATOR: Error configuring DSPy with Ollama: {e}")
         # Try to load optimized/compiled version
-        import os
-
         compiled_path = os.path.join(
             os.path.dirname(__file__), "compiled", "optimized_role_thought_generator.json"
         )
         generator = dspy.Predict(RoleThoughtGenerator)
         if os.path.exists(compiled_path):
+            logger.debug(f"Attempting to load optimized RoleThoughtGenerator from {compiled_path}")
             try:
                 generator.load(compiled_path)
                 logger.info(
@@ -70,7 +77,11 @@ def get_role_thought_generator() -> object:
                 return generator
             except Exception as e:
                 logger.error(f"ROLE THOUGHT GENERATOR: Failed to load optimized generator: {e}")
-        logger.warning("ROLE THOUGHT GENERATOR: Using base (unoptimized) generator as fallback")
+        else:
+            logger.warning(
+                f"Optimized RoleThoughtGenerator JSON not found at {compiled_path}. Will attempt base generator."
+            )
+        logger.info("Using base (unoptimized) RoleThoughtGenerator.")
         return generator
     except Exception as e:
         logger.critical(
@@ -97,7 +108,6 @@ def generate_role_prefixed_thought(agent_role: str, current_situation: str) -> s
     return "Failsafe: Unable to generate thought (generator not callable)."
 
 
-# Add a staticmethod for failsafe output for async manager use
 def get_failsafe_output(*args: object, **kwargs: object) -> str:
     role_name = args[0] if args else kwargs.get("role_name", "unknown")
     return f"Failsafe: Unable to generate thought for role {role_name}."

@@ -3,6 +3,10 @@ DSPy L2 Innovator Summary Examples
 
 This module provides example data for training and testing DSPy-based L2 summary generation
 specifically tailored for agents in the Innovator role.
+
+# NOTE: This file contains intentional E501 (line too long) violations in string/data blocks.
+# These are documented as technical debt and do not affect runtime logic.
+# See docs/coding_standards.md for details.
 """
 
 import dspy

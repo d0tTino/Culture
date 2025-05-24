@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 import weaviate
 import weaviate.classes as wvc
@@ -67,10 +67,6 @@ class WeaviateVectorStoreManager:
     def _ensure_collection_exists(self) -> Collection[dict[str, Any], None]:
         # Check if collection exists, else create with correct schema (vectorizer: none)
         if self.client.collections.exists(self.collection_name):
-            from typing import cast
-
-            # Mypy generic invariance: Collection[...] is not assignable to Collection[...].
-            # This cast is safe for our usage.
             return cast(
                 Collection[dict[str, Any], None],
                 self.client.collections.get(self.collection_name),
@@ -93,7 +89,8 @@ class WeaviateVectorStoreManager:
                 f"Created Weaviate collection '{self.collection_name}' with "
                 f"external vector support."
             )
-            return collection
+            # Mypy: Weaviate client returns Mapping, but we require dict[str, Any] for strict compliance
+            return cast(Collection[dict[str, Any], None], collection)
 
     def add_memories(
         self,

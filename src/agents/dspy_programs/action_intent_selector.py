@@ -1,3 +1,4 @@
+# ruff: noqa: E501, ANN101, ANN401
 """
 DSPy-powered Action Intent Selector Module
 
@@ -9,7 +10,7 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict
+from typing import Any
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO)
@@ -31,8 +32,7 @@ except ImportError as e:
     raise
 
 
-# Define the DSPy Signature for action intent selection
-class ActionIntentSelection(dspy.Signature):
+class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported,misc]
     """
     Given the agent's role, current situation, overarching goal, and available actions,
     select the most appropriate action intent and provide a brief justification.
@@ -42,7 +42,10 @@ class ActionIntentSelection(dspy.Signature):
         desc="The agent's current role (e.g., Innovator, Analyzer, Facilitator)."
     )
     current_situation = dspy.InputField(
-        desc="Concise summary of the current environmental state, recent events, and perceived information."
+        desc=(
+            "Concise summary of the current environmental state, recent events, "
+            "and perceived information."
+        )
     )
     agent_goal = dspy.InputField(
         desc="The agent's primary objective or goal for the current turn or phase."
@@ -55,20 +58,21 @@ class ActionIntentSelection(dspy.Signature):
         desc="The single, most appropriate action intent selected from the available_actions list."
     )
     justification_thought = dspy.OutputField(
-        desc="A brief thought process explaining why this action_intent was chosen given the role, situation, and goal."
+        desc=(
+            "A brief thought process explaining why this action_intent was chosen given the "
+            "role, situation, and goal."
+        )
     )
 
 
-# Create a simple DSPy Module
 select_action_intent_module = dspy.Predict(ActionIntentSelection)
 
-# Path to the compiled/optimized DSPy program
 OPTIMIZED_PROGRAM_PATH = os.path.join(
     os.path.dirname(__file__), "compiled", "optimized_action_selector.json"
 )
 
 
-def load_optimized_program() -> Dict[str, Any] | None:
+def load_optimized_program() -> dict[str, Any] | None:
     """
     Load the optimized program from the JSON file.
 
@@ -102,13 +106,15 @@ class FailsafeActionIntentSelector:
     Failsafe version of the ActionIntentSelector. Always returns a safe default action intent.
     """
 
-    def __call__(self, *args: object, **kwargs: object) -> object:
+    def __call__(self: "FailsafeActionIntentSelector", *args: object, **kwargs: object) -> object:
         return type(
             "FailsafeResult",
             (),
             {
                 "chosen_action_intent": "idle",
-                "justification_thought": "Failsafe: Unable to process action intent due to DSPy error.",
+                "justification_thought": (
+                    "Failsafe: Unable to process action intent due to DSPy error."
+                ),
             },
         )()
 

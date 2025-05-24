@@ -3,6 +3,10 @@ DSPy L2 Summary Examples
 
 This module provides example data for training and testing DSPy-based L2 summary generation.
 These examples represent realistic L1 summaries and ideal L2 summaries for various agent roles.
+
+# NOTE: This file contains intentional E501 (line too long) violations in string/data blocks.
+# These are documented as technical debt and do not affect runtime logic.
+# See docs/coding_standards.md for details.
 """
 
 import dspy

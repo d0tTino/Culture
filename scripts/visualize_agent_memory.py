@@ -17,7 +17,7 @@ import sys
 import textwrap
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # Add the project root to the Python path
 project_root = str(Path(__file__).parent.parent)
@@ -117,7 +117,11 @@ def calculate_mus(metadata: dict[str, Any]) -> float:
 
     # MUS - Final Memory Utility Score
     mus = (0.4 * rfs) + (0.4 * rs) + (0.2 * recs)
-    return mus
+    return float(mus)
+
+
+def first_list_element(x: Any) -> Any:  # noqa: ANN401
+    return x[0] if x and isinstance(x, list) and len(x) > 0 else []
 
 
 def get_all_l2_summaries(
@@ -127,42 +131,35 @@ def get_all_l2_summaries(
     try:
         # Query for all L2 summaries
         l2_query = f"all chapter summaries for agent {agent_id}"
-        l2_where = {
-            "$and": [{"agent_id": {"$eq": agent_id}}, {"memory_type": {"$eq": "chapter_summary"}}]
-        }
+        l2_where = {"agent_id": agent_id, "memory_type": "chapter_summary"}
 
         results = vector_store.collection.query(
             query_texts=[l2_query],
-            where=l2_where,
+            where=cast(
+                Any, l2_where
+            ),  # Mypy: see dev log and https://mypy.readthedocs.io/en/stable/common_issues.html#variance
             n_results=100,  # Large number to get all
-            include=["metadatas", "documents", "ids"],
+            include=["metadatas", "documents"],
         )
 
         l2_summaries = []
         if results and "documents" in results and results["documents"]:
             documents = results["documents"][0]
             metadatas = (
-                results["metadatas"][0] if "metadatas" in results else [{}] * len(documents)
+                first_list_element(results.get("metadatas"))
+                if results.get("metadatas")
+                else [{}] * len(documents)
             )
-            ids = results["ids"][0] if "ids" in results else [""] * len(documents)
-
             for i, doc in enumerate(documents):
                 if i < len(metadatas):
-                    entry = metadatas[i].copy()
+                    entry = dict(metadatas[i])
                     entry["content"] = doc
-                    entry["id"] = ids[i] if i < len(ids) else ""
-
-                    # Calculate MUS for this memory
+                    entry["id"] = entry.get("id", "")
                     entry["mus"] = calculate_mus(entry)
-
                     l2_summaries.append(entry)
-
-        # Sort by step number
         l2_summaries.sort(key=lambda x: x.get("step", 0))
-
         logger.info(f"Retrieved {len(l2_summaries)} L2 summaries for agent {agent_id}")
         return l2_summaries
-
     except Exception as e:
         logger.error(f"Error retrieving L2 summaries: {e}")
         return []
@@ -175,45 +172,35 @@ def get_all_l1_summaries(
     try:
         # Query for all L1 summaries
         l1_query = f"all consolidated summaries for agent {agent_id}"
-        l1_where = {
-            "$and": [
-                {"agent_id": {"$eq": agent_id}},
-                {"memory_type": {"$eq": "consolidated_summary"}},
-            ]
-        }
+        l1_where = {"agent_id": agent_id, "memory_type": "consolidated_summary"}
 
         results = vector_store.collection.query(
             query_texts=[l1_query],
-            where=l1_where,
+            where=cast(
+                Any, l1_where
+            ),  # Mypy: see dev log and https://mypy.readthedocs.io/en/stable/common_issues.html#variance
             n_results=500,  # Large number to get all
-            include=["metadatas", "documents", "ids"],
+            include=["metadatas", "documents"],
         )
 
         l1_summaries = []
         if results and "documents" in results and results["documents"]:
             documents = results["documents"][0]
             metadatas = (
-                results["metadatas"][0] if "metadatas" in results else [{}] * len(documents)
+                first_list_element(results.get("metadatas"))
+                if results.get("metadatas")
+                else [{}] * len(documents)
             )
-            ids = results["ids"][0] if "ids" in results else [""] * len(documents)
-
             for i, doc in enumerate(documents):
                 if i < len(metadatas):
-                    entry = metadatas[i].copy()
+                    entry = dict(metadatas[i])
                     entry["content"] = doc
-                    entry["id"] = ids[i] if i < len(ids) else ""
-
-                    # Calculate MUS for this memory
+                    entry["id"] = entry.get("id", "")
                     entry["mus"] = calculate_mus(entry)
-
                     l1_summaries.append(entry)
-
-        # Sort by step number
         l1_summaries.sort(key=lambda x: x.get("step", 0))
-
         logger.info(f"Retrieved {len(l1_summaries)} L1 summaries for agent {agent_id}")
         return l1_summaries
-
     except Exception as e:
         logger.error(f"Error retrieving L1 summaries: {e}")
         return []
@@ -221,7 +208,7 @@ def get_all_l1_summaries(
 
 def determine_l1_l2_relationships(
     l1_summaries: list[dict[str, Any]], l2_summaries: list[dict[str, Any]]
-) -> dict[str, list[dict[str, Any]]]:
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     """
     Map each L2 summary to its constituent L1 summaries.
 
@@ -245,7 +232,7 @@ def determine_l1_l2_relationships(
                 )
 
     # Map L1 summaries to L2 summaries based on step ranges
-    l2_to_l1s = {l2["id"]: [] for l2 in l2_summaries}
+    l2_to_l1s: dict[str, list[dict[str, Any]]] = {l2["id"]: [] for l2 in l2_summaries}
     assigned_l1_ids = set()
 
     for l1 in l1_summaries:

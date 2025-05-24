@@ -1,4 +1,18 @@
 #!/bin/bash
+# Aggressive cleanup for Python/AI project
+rm -rf __pycache__ .mypy_cache .ruff_cache .pytest_cache htmlcov logs temp chroma_db scripts/temp data/logs archives/__pycache__ scripts/archive/__pycache__ src/agents/__pycache__ src/agents/core/__pycache__ src/agents/memory/__pycache__ src/agents/dspy_programs/__pycache__ tests/__pycache__ tests/unit/__pycache__ tests/integration/__pycache__
+find . -name '*.log' -delete
+find . -name '*.txt' -delete
+find . -name '*.out' -delete
+find . -name '*.pyc' -delete
+find . -name '*.pyo' -delete
+find . -name '*.pyd' -delete
+find . -name '*.pdb' -delete
+find . -name '.coverage*' -delete
+find . -name 'final_test_suite_output.txt' -delete
+find . -name 'pytest_*.txt' -delete
+find . -name 'coverage_*.txt' -delete
+find archives -name '*.zip' -delete
 
 echo "Cleaning up temporary directories..."
 

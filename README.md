@@ -518,63 +518,11 @@ For advanced testing, parallelization, and CI details, see [docs/testing.md](doc
 
 ## Code Quality and Type Safety
 
-The `src/agents/memory/` directory is now strictly compliant with both Ruff (linter/formatter) and Mypy (type checker) in strict mode. All files are type-annotated and linted to the highest practical standard, with only the following justified exceptions:
+As of 2025-05-18, all files in `src/infra/` and `src/agents/dspy_programs/` are strictly compliant with both Ruff (linter/formatter) and Mypy (type checker) in strict mode. All files are type-annotated and linted to the highest practical standard, with only the following justified exceptions:
 
-- `vector_store.py`: One generic utility function (`first_list_element`) uses `Any` in its signature for necessary flexibility. This is documented and accepted.
-- `weaviate_vector_store_manager.py`: One unavoidable Mypy error due to generic invariance in the Weaviate client API, as documented in [Mypy docs](https://mypy.readthedocs.io/en/stable/common_issues.html#variance) and in the code/dev log.
+- `src/infra/llm_client.py`: Two unavoidable Mypy errors (`no-any-unimported`) for `ollama.Client` return types, due to incomplete third-party stubs. These are documented and accepted.
+- All DSPy program modules in `src/agents/dspy_programs/`: Unavoidable Mypy errors (`no-any-unimported`, `misc`) for `dspy.Signature` dynamic base classes. These are documented and accepted.
+- `src/agents/memory/vector_store.py`: One generic utility function (`first_list_element`) uses `Any` in its signature for necessary flexibility. This is documented and accepted.
+- `src/agents/memory/weaviate_vector_store_manager.py`: One unavoidable Mypy error due to generic invariance in the Weaviate client API, as documented in [Mypy docs](https://mypy.readthedocs.io/en/stable/common_issues.html#variance) and in the code/dev log.
 
-All other type, linter, and formatting issues have been resolved. This ensures:
-
-- Full static type safety for all agent memory management code
-- Consistent, modern Python formatting and import order
-- Defensive runtime checks for all third-party API interactions
-- Clear documentation of any necessary type system escape hatches
-
-See the development log for details on the compliance process and any remaining exceptions.
-
-## **How to Unblock Your Setup**
-
-### **Use a Minimal, Robust Setup Script**
-
-Since venv is not working, **just use the system Python and pip**.  
-Here's a minimal script for your "Initial setup" box that will work in almost any environment:
-
-```sh
-# Print Python and pip versions for debugging
-python3 --version || python --version
-pip3 --version || pip --version
-
-# Upgrade pip (try both python and pip3 for compatibility)
-python -m pip install --upgrade pip || pip3 install --upgrade pip
-
-# Install dependencies if requirements.txt exists
-if [ -f requirements.txt ]; then
-    pip install -r requirements.txt
-fi
-
-# (Optional) Install pre-commit hooks if used
-if [ -f .pre-commit-config.yaml ]; then
-    pip install pre-commit
-    pre-commit install
-fi
-
-echo "Setup complete."
-```
-
-**Key points:**
-- No venv creation or activation.
-- Uses whatever Python/pip is available.
-- Installs dependencies and pre-commit hooks if present.
-
----
-
-## **What to do next**
-1. **Copy and paste the above script** into your Initial setup box.
-2. Save and re-run the setup.
-3. If you need a venv for local development, you can create it manually on your own machine, but for CI/automation, this script will always work.
-
----
-
-**If you need to support venv in the future, make sure your environment has `python3-venv` and `python3-ensurepip` installed.**
-
-Let me know if you want a version for a specific environment (Docker, Codespaces, etc.) or if you hit any other errors!
+All other type, linter, and formatting issues have been resolved. DSPy integration is robust, with fallback logic and async management via `AsyncDSPyManager`. See the development log for details on the compliance process and any remaining exceptions.

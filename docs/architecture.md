@@ -319,6 +319,9 @@ DSPy programs integrate with the memory system by:
 - Creating L2 summaries at chapter boundaries
 - Providing role-appropriate context for memory retrieval
 
+### DSPy Programs Compliance Note (2025-05-18)
+All DSPy program modules in `src/agents/dspy_programs/` are strictly compliant with Mypy (strict mode) and Ruff, with only justified ignores for `dspy.Signature` dynamic base classes. Robust fallback logic and async DSPy management are implemented throughout.
+
 ## 6.1 Asynchronous DSPy Program Management (AsyncDSPyManager)
 
 ### Overview
@@ -388,6 +391,9 @@ Infrastructure components are used throughout the system:
 - Configuration is accessed by all modules that need customizable behavior
 - LLM client is used by agent decision logic and DSPy programs
 - DSPy integration is used by memory summarization components
+
+### Infrastructure Compliance Note (2025-05-18)
+All infrastructure code in `src/infra/` is strictly compliant with Mypy (strict mode) and Ruff, with only justified ignores for `ollama.Client` return types due to third-party stub limitations. DSPy integration is robust and fully async-capable.
 
 ## 8. Simulation Environment
 
