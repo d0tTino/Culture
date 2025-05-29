@@ -174,5 +174,5 @@ coverage/
 **/__pycache__/
 *.pytest_cache/
 
-# Ignore root-level text log files
-/*.txt
+# Logs folder for test outputs
+logs/
