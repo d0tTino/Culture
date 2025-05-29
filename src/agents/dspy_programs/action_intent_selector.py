@@ -1,4 +1,4 @@
-# ruff: noqa: E501, ANN101, ANN401
+# ruff: noqa: E501, ANN101
 """
 DSPy-powered Action Intent Selector Module
 
@@ -32,7 +32,7 @@ except ImportError as e:
     raise
 
 
-class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported,misc]
+class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
     """
     Given the agent's role, current situation, overarching goal, and available actions,
     select the most appropriate action intent and provide a brief justification.
@@ -119,7 +119,9 @@ class FailsafeActionIntentSelector:
         )()
 
 
-def get_optimized_action_selector() -> Any:
+def get_optimized_action_selector() -> (
+    Any
+):  # Justification: DSPy module returns dynamic callable, type unknown
     """
     Get the optimized action intent selector module with robust fallback logic.
     Returns a callable that tries optimized, then base, then failsafe at call time.

@@ -11,6 +11,7 @@ import sys
 import time
 
 import pytest
+from typing_extensions import Self
 
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -34,7 +35,10 @@ logger = logging.getLogger("test_project_mechanics")
 
 # Constants
 CHROMA_DB_PATH = "./chroma_db_test_projects"
-SCENARIO = "This is a test simulation to verify project mechanics. Agents should focus on creating, joining, and leaving projects."
+SCENARIO = (
+    "This is a test simulation to verify project mechanics. Agents should focus on creating, "
+    "joining, and leaving projects."
+)
 
 
 class TestCase:
@@ -43,16 +47,16 @@ class TestCase:
     name = "Base Test Case"
     description = "Base test case description"
 
-    def setup(self):
+    def setup(self: Self) -> None:
         """Setup method to prepare the test case"""
         self.passed = False
         self.result_message = ""
 
-    async def run(self) -> bool:
+    async def run(self: Self) -> bool:
         """Run the test case"""
         raise NotImplementedError("Each test case must implement run()")
 
-    def report(self) -> str:
+    def report(self: Self) -> str:
         """Return a report of the test case result"""
         status = "PASSED" if self.passed else "FAILED"
         return f"Test Case: {self.name} - {status}\n{self.description}\n{self.result_message}\n"
@@ -62,9 +66,12 @@ class TestProjectCreation(TestCase):
     """Test case for project creation"""
 
     name = "Project Creation"
-    description = "Verify that an agent can create a project and that the agent's state and simulation are updated correctly"
+    description = (
+        "Verify that an agent can create a project and that the agent's state and simulation "
+        "are updated correctly"
+    )
 
-    async def run(self) -> bool:
+    async def run(self: Self) -> bool:
         self.setup()
         logger.info(f"Running test case: {self.name}")
         logger.info(self.description)
@@ -156,8 +163,10 @@ class TestProjectCreation(TestCase):
                 f"Project ID: {project_id}\n"
                 f"Agent state updated correctly: {state_correct}\n"
                 f"Resources deducted correctly: {resources_deducted}\n"
-                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {agent_state.ip}, expected {expected_ip})\n"
-                f"DU deduction correct: {du_deducted} (from {initial_du} to {agent_state.du}, expected {expected_du})\n"
+                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {agent_state.ip}, "
+                f"expected {expected_ip})\n"
+                f"DU deduction correct: {du_deducted} (from {initial_du} to {agent_state.du}, "
+                f"expected {expected_du})\n"
                 f"Project added to simulation: {project_added}\n"
                 f"Agent's current_project_id: {agent_state.current_project_id}\n"
                 f"Agent's current_project_affiliation: {agent_state.current_project_affiliation}"
@@ -168,8 +177,10 @@ class TestProjectCreation(TestCase):
                 f"Project ID: {project_id}\n"
                 f"Agent state updated correctly: {state_correct}\n"
                 f"Resources deducted correctly: {resources_deducted}\n"
-                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {agent_state.ip}, expected {expected_ip})\n"
-                f"DU deduction correct: {du_deducted} (from {initial_du} to {agent_state.du}, expected {expected_du})\n"
+                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {agent_state.ip}, "
+                f"expected {expected_ip})\n"
+                f"DU deduction correct: {du_deducted} (from {initial_du} to {agent_state.du}, "
+                f"expected {expected_du})\n"
                 f"Project added to simulation: {project_added}\n"
                 f"Agent's current_project_id: {agent_state.current_project_id}\n"
                 f"Agent's current_project_affiliation: {agent_state.current_project_affiliation}"
@@ -193,9 +204,12 @@ class TestProjectJoining(TestCase):
     """Test case for joining a project"""
 
     name = "Project Joining"
-    description = "Verify that an agent can join an existing project with proper state updates and resource deductions"
+    description = (
+        "Verify that an agent can join an existing project with proper state updates and "
+        "resource deductions"
+    )
 
-    async def run(self) -> bool:
+    async def run(self: Self) -> bool:
         self.setup()
         logger.info(f"Running test case: {self.name}")
         logger.info(self.description)
@@ -309,8 +323,10 @@ class TestProjectJoining(TestCase):
                 f"Project ID: {project_id}\n"
                 f"Agent state updated correctly: {state_correct}\n"
                 f"Resources deducted correctly: {resources_correct}\n"
-                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {joiner_state.ip}, expected {expected_ip})\n"
-                f"DU deduction correct: {du_deducted} (from {initial_du} to {joiner_state.du}, expected {expected_du})\n"
+                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {joiner_state.ip}, "
+                f"expected {expected_ip})\n"
+                f"DU deduction correct: {du_deducted} (from {initial_du} to {joiner_state.du}, "
+                f"expected {expected_du})\n"
                 f"Added to project members: {member_added}\n"
                 f"Project members: {simulation.projects[project_id]['members']}\n"
                 f"Agent's current_project_id: {joiner_state.current_project_id}\n"
@@ -322,8 +338,10 @@ class TestProjectJoining(TestCase):
                 f"Project ID: {project_id}\n"
                 f"Agent state updated correctly: {state_correct}\n"
                 f"Resources deducted correctly: {resources_correct}\n"
-                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {joiner_state.ip}, expected {expected_ip})\n"
-                f"DU deduction correct: {du_deducted} (from {initial_du} to {joiner_state.du}, expected {expected_du})\n"
+                f"IP deduction correct: {ip_deducted} (from {initial_ip} to {joiner_state.ip}, "
+                f"expected {expected_ip})\n"
+                f"DU deduction correct: {du_deducted} (from {initial_du} to {joiner_state.du}, "
+                f"expected {expected_du})\n"
                 f"Added to project members: {member_added}\n"
                 f"Project members: {simulation.projects[project_id]['members']}\n"
                 f"Agent's current_project_id: {joiner_state.current_project_id}\n"
@@ -348,9 +366,12 @@ class TestProjectMembershipLimit(TestCase):
     """Test case for project membership limit"""
 
     name = "Project Membership Limit"
-    description = f"Verify that project membership is limited to MAX_PROJECT_MEMBERS ({config.MAX_PROJECT_MEMBERS})"
+    description = (
+        f"Verify that project membership is limited to MAX_PROJECT_MEMBERS "
+        f"({config.MAX_PROJECT_MEMBERS})"
+    )
 
-    async def run(self) -> bool:
+    async def run(self: Self) -> bool:
         self.setup()
         logger.info(f"Running test case: {self.name}")
         logger.info(self.description)
@@ -510,7 +531,8 @@ class TestProjectMembershipLimit(TestCase):
                     f"Resources preserved for failed joiner: {resources_preserved}\n"
                     f"State preserved for failed joiner: {state_preserved}\n"
                     f"Failed joiner not in members: {not_in_members}\n"
-                    f"Project has correct member count ({config.MAX_PROJECT_MEMBERS}): {correct_member_count}\n"
+                    f"Project has correct member count ({config.MAX_PROJECT_MEMBERS}): "
+                    f"{correct_member_count}\n"
                     f"Project members: {simulation.projects[project_id]['members']}"
                 )
             else:
@@ -521,7 +543,8 @@ class TestProjectMembershipLimit(TestCase):
                     f"Resources preserved for failed joiner: {resources_preserved}\n"
                     f"State preserved for failed joiner: {state_preserved}\n"
                     f"Failed joiner not in members: {not_in_members}\n"
-                    f"Project has correct member count ({config.MAX_PROJECT_MEMBERS}): {correct_member_count}\n"
+                    f"Project has correct member count ({config.MAX_PROJECT_MEMBERS}): "
+                    f"{correct_member_count}\n"
                     f"Project members: {simulation.projects[project_id]['members']}"
                 )
 
@@ -549,7 +572,7 @@ class TestProjectLeaving(TestCase):
     name = "Project Leaving"
     description = "Verify that an agent can leave a project with proper state updates"
 
-    async def run(self) -> bool:
+    async def run(self: Self) -> bool:
         self.setup()
         logger.info(f"Running test case: {self.name}")
         logger.info(self.description)
@@ -694,7 +717,7 @@ class TestProjectEdgeCases(TestCase):
         "Verify edge cases such as insufficient resources, deleting non-existent projects, etc."
     )
 
-    async def run(self) -> bool:
+    async def run(self: Self) -> bool:
         self.setup()
         logger.info(f"Running test case: {self.name}")
         logger.info(self.description)
@@ -861,7 +884,7 @@ class TestProjectEdgeCases(TestCase):
 
 @pytest.mark.integration
 @pytest.mark.slow
-async def run_tests():
+async def run_tests() -> bool:
     """Run all test cases and report results"""
     # Configure console output with colors for better readability
     try:
@@ -941,19 +964,23 @@ async def run_tests():
     print(f"{YELLOW}{'=' * 80}{RESET}")
 
     if all_passed:
-        print(f"""
+        print(
+            f"""
 {GREEN}PROJECT MECHANICS IMPLEMENTATION IS COMPLETE:
 ✅ Projects can be created with correct resource costs
 ✅ Agents can join projects with correct resource costs
 ✅ Project membership limits are enforced
 ✅ Agents can leave projects with proper state updates
 ✅ Edge cases are handled gracefully{RESET}
-        """)
+        """
+        )
     else:
-        print(f"""
+        print(
+            f"""
 {RED}PROJECT MECHANICS IMPLEMENTATION HAS ISSUES:
 ❌ Some tests failed. Review the logs above for details.{RESET}
-        """)
+        """
+        )
 
     return all_passed
 

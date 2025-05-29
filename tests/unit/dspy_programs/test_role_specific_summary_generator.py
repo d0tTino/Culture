@@ -5,10 +5,10 @@ These tests focus on verifying the template-based fallback functionality.
 """
 
 import unittest
-from typing import Callable
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+from typing_extensions import Self
 
 from src.agents.dspy_programs.role_specific_summary_generator import (
     RoleSpecificSummaryGenerator,
@@ -24,7 +24,7 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
     when all DSPy-based approaches fail.
     """
 
-    def setUp(self) -> None:
+    def setUp(self: Self) -> None:
         """Set up test environment before each test method."""
         # Sample test data
         self.agent_role = "Innovator"
@@ -50,10 +50,10 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
     @patch("src.agents.dspy_programs.role_specific_summary_generator.L1SummaryGenerator")
     @patch("src.agents.dspy_programs.role_specific_summary_generator.L2SummaryGenerator")
     def test_l1_template_fallback_when_all_dspy_fails(
-        self: "TestRoleSpecificSummaryGeneratorFallback",
+        self: Self,
         mock_l2_generator: MagicMock,
         mock_l1_generator: MagicMock,
-        mock_template_fallback: Callable[..., str],
+        mock_template_fallback: MagicMock,
     ) -> None:
         """Test that L1 summarization uses template fallback when all DSPy approaches fail."""
         # Configure mocks
@@ -62,11 +62,7 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
         mock_l1_instance.generate_summary.side_effect = Exception("DSPy L1 summarization failed")
 
         # Set up the template fallback to return a test string
-        mock_template_fallback.return_value = (
-            f"L1 Summary (Fallback): Agent {self.agent_role} processed 4 events around step 12. "
-            "Key topics included: algorithm, solution, insights. Mood: "
-            f"{self.current_mood}."
-        )
+        mock_template_fallback.return_value = f"L1 Summary (Fallback): Agent {self.agent_role} processed 4 events around step 12. Key topics included: algorithm, solution, insights. Mood: {self.current_mood}."
 
         # Create RoleSpecificSummaryGenerator instance and manually set dictionaries to empty
         with patch(
@@ -75,31 +71,36 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
             generator = RoleSpecificSummaryGenerator()
             generator.l1_predictors = {}  # Force empty dictionaries manually
             generator.l2_predictors = {}
-            # Force fallback L1 generator to fail
-            generator.fallback_l1_generator.generate_summary = MagicMock(
-                side_effect=Exception("Fallback L1 failed")
-            )
-            generator.fallback_l1_generator._fallback_generate_summary = MagicMock(
-                side_effect=Exception("Fallback L1 fallback failed")
-            )
+            # Patch fallback L1 generator's generate_summary to raise Exception
+            with patch.object(
+                generator.fallback_l1_generator,
+                "generate_summary",
+                side_effect=Exception("Fallback L1 failed"),
+            ):
+                with patch.object(
+                    generator.fallback_l1_generator,
+                    "_fallback_generate_summary",
+                    side_effect=Exception("Fallback L1 fallback failed"),
+                ):
+                    # Try to generate L1 summary - should use template fallback
+                    result = generator.generate_l1_summary(
+                        agent_role=self.agent_role,
+                        recent_events=self.recent_events,
+                        current_mood=self.current_mood,
+                    )
 
-            # Try to generate L1 summary - should use template fallback
-            result = generator.generate_l1_summary(
-                agent_role=self.agent_role,
-                recent_events=self.recent_events,
-                current_mood=self.current_mood,
-            )
+                    # Verify logger called with expected message for standard fallback attempt
+                    mock_logger.info.assert_any_call(
+                        f"No role-specific L1 summarizer available for {self.agent_role}, using fallback"
+                    )
 
-            # Verify logger called with expected message for standard fallback attempt
-            mock_logger.info.assert_any_call(
-                f"No role-specific L1 summarizer available for {self.agent_role}, using fallback"
-            )
+                    # Verify logger called with expected message for template fallback
+                    mock_logger.error.assert_any_call(ANY)
 
-            # Verify logger called with expected message for template fallback
-            mock_logger.error.assert_any_call(ANY)
-
-            # Verify result is our mocked template fallback result
-            self.assertEqual(result, "Failsafe: No summary available due to processing error.")
+                    # Verify result is our mocked template fallback result
+                    self.assertEqual(
+                        result, "Failsafe: No summary available due to processing error."
+                    )
 
     @patch(
         "src.agents.dspy_programs.role_specific_summary_generator.RoleSpecificSummaryGenerator._generate_l2_template_fallback"
@@ -107,10 +108,10 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
     @patch("src.agents.dspy_programs.role_specific_summary_generator.L1SummaryGenerator")
     @patch("src.agents.dspy_programs.role_specific_summary_generator.L2SummaryGenerator")
     def test_l2_template_fallback_when_all_dspy_fails(
-        self: "TestRoleSpecificSummaryGeneratorFallback",
+        self: Self,
         mock_l2_generator: MagicMock,
         mock_l1_generator: MagicMock,
-        mock_template_fallback: Callable[..., str],
+        mock_template_fallback: MagicMock,
     ) -> None:
         """Test that L2 summarization uses template fallback when all DSPy approaches fail."""
         # Configure mocks
@@ -119,11 +120,7 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
         mock_l2_instance.generate_summary.side_effect = Exception("DSPy L2 summarization failed")
 
         # Set up the template fallback to return a test string
-        mock_template_fallback.return_value = (
-            f"L2 Summary (Fallback): Agent {self.agent_role} consolidated L1 summaries from step 10 to 40. "
-            "Content involved: Agent proposed innovative solutions and collaborated... "
-            f"Goals: {self.agent_goals}. Mood Trend: {self.overall_mood_trend}."
-        )
+        mock_template_fallback.return_value = f"L2 Summary (Fallback): Agent {self.agent_role} consolidated L1 summaries from step 10 to 40. Content involved: Agent proposed innovative solutions and collaborated... Goals: {self.agent_goals}. Mood Trend: {self.overall_mood_trend}."
 
         # Create RoleSpecificSummaryGenerator instance and manually set dictionaries to empty
         with patch(
@@ -132,35 +129,40 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
             generator = RoleSpecificSummaryGenerator()
             generator.l1_predictors = {}  # Force empty dictionaries manually
             generator.l2_predictors = {}
-            # Force fallback L2 generator to fail
-            generator.fallback_l2_generator.generate_summary = MagicMock(
-                side_effect=Exception("Fallback L2 failed")
-            )
-            generator.fallback_l2_generator._fallback_generate_summary = MagicMock(
-                side_effect=Exception("Fallback L2 fallback failed")
-            )
+            # Patch fallback L2 generator's generate_summary to raise Exception
+            with patch.object(
+                generator.fallback_l2_generator,
+                "generate_summary",
+                side_effect=Exception("Fallback L2 failed"),
+            ):
+                with patch.object(
+                    generator.fallback_l2_generator,
+                    "_fallback_generate_summary",
+                    side_effect=Exception("Fallback L2 fallback failed"),
+                ):
+                    # Try to generate L2 summary - should use template fallback
+                    result = generator.generate_l2_summary(
+                        agent_role=self.agent_role,
+                        l1_summaries_context=self.l1_summaries_context,
+                        overall_mood_trend=self.overall_mood_trend,
+                        agent_goals=self.agent_goals,
+                    )
 
-            # Try to generate L2 summary - should use template fallback
-            result = generator.generate_l2_summary(
-                agent_role=self.agent_role,
-                l1_summaries_context=self.l1_summaries_context,
-                overall_mood_trend=self.overall_mood_trend,
-                agent_goals=self.agent_goals,
-            )
+                    # Verify logger called with expected message for standard fallback attempt
+                    mock_logger.info.assert_any_call(
+                        f"No role-specific L2 summarizer available for {self.agent_role}, using fallback"
+                    )
 
-            # Verify logger called with expected message for standard fallback attempt
-            mock_logger.info.assert_any_call(
-                f"No role-specific L2 summarizer available for {self.agent_role}, using fallback"
-            )
+                    # Verify logger called with expected message for template fallback
+                    mock_logger.error.assert_any_call(ANY)
 
-            # Verify logger called with expected message for template fallback
-            mock_logger.error.assert_any_call(ANY)
-
-            # Verify result is our mocked template fallback result
-            self.assertEqual(result, "Failsafe: No summary available due to processing error.")
+                    # Verify result is our mocked template fallback result
+                    self.assertEqual(
+                        result, "Failsafe: No summary available due to processing error."
+                    )
 
     def test_l1_template_fallback_extracts_keywords(
-        self: "TestRoleSpecificSummaryGeneratorFallback",
+        self: Self,
     ) -> None:
         """Test that L1 template fallback correctly extracts keywords."""
         # Test with text containing obvious keywords
@@ -189,7 +191,9 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
         # Now test the actual template fallback function directly
         generator = RoleSpecificSummaryGenerator()
         result = generator._generate_l1_template_fallback(
-            agent_role=self.agent_role, recent_events=test_events, current_mood=self.current_mood
+            agent_role=self.agent_role,
+            recent_events=test_events,
+            current_mood=self.current_mood,
         )
 
         # Verify the template contains what we expect
@@ -208,7 +212,7 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
         self.assertTrue(found_keywords, f"None of the expected keywords found in result: {result}")
 
     def test_l1_template_fallback_without_mood(
-        self: "TestRoleSpecificSummaryGeneratorFallback",
+        self: Self,
     ) -> None:
         """Test that L1 template fallback works without mood information."""
         # Create generator
@@ -229,7 +233,7 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
         self.assertNotIn(" with ", result)  # This would be part of the mood text
 
     def test_l2_template_fallback_without_optional_fields(
-        self: "TestRoleSpecificSummaryGeneratorFallback",
+        self: Self,
     ) -> None:
         """Test that L2 template fallback works without optional fields."""
         # Create generator
@@ -254,7 +258,7 @@ class TestRoleSpecificSummaryGeneratorFallback(unittest.TestCase):
     @patch("src.agents.dspy_programs.role_specific_summary_generator.L1SummaryGenerator")
     @patch("src.agents.dspy_programs.role_specific_summary_generator.L2SummaryGenerator")
     def test_normal_operation_uses_fallbacks_properly(
-        self: "TestRoleSpecificSummaryGeneratorFallback",
+        self: Self,
         mock_l2_generator: MagicMock,
         mock_l1_generator: MagicMock,
     ) -> None:

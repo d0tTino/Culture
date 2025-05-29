@@ -13,6 +13,7 @@ import unittest
 from datetime import datetime
 
 import pytest
+from typing_extensions import Self
 
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 
@@ -24,14 +25,14 @@ class TestHierarchicalMemoryPersistence(unittest.TestCase):
     """Tests for hierarchical memory persistence in the agent memory system."""
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self, request, chroma_test_dir):
+    def _inject_fixtures(self: Self, request: object, chroma_test_dir: str) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 
-    def setUp(self):
+    def setUp(self: Self) -> None:
         self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
 
-    def tearDown(self):
+    def tearDown(self: Self) -> None:
         try:
             if hasattr(self, "vector_store") and self.vector_store:
                 if hasattr(self.vector_store, "client") and self.vector_store.client:
@@ -40,7 +41,7 @@ class TestHierarchicalMemoryPersistence(unittest.TestCase):
         except Exception as e:
             logging.error(f"Error during teardown: {e}")
 
-    def test_hierarchical_memory_persistence(self):
+    def test_hierarchical_memory_persistence(self: Self) -> None:
         """Test that hierarchical memories (L1 and L2) persist correctly."""
         # Create an agent ID for testing
         agent_id = "test_hierarchical_agent"
@@ -63,12 +64,16 @@ class TestHierarchicalMemoryPersistence(unittest.TestCase):
             l1_ids.append(l1_id)
 
         # Add an L2 summary that references the L1 summaries
-        # Store the L1 summary IDs as a JSON string since ChromaDB doesn't support lists in metadata
+        # Store the L1 summary IDs as a JSON string
+        # since ChromaDB doesn't support lists in metadata
         l2_id = self.vector_store.add_memory(
             agent_id=agent_id,
             step=50,  # After the L1 summaries
             event_type="chapter_consolidation",
-            content="L2 Chapter Summary: This is a test chapter summary based on the previous L1 summaries",
+            content=(
+                "L2 Chapter Summary: This is a test chapter summary based on the previous "
+                "L1 summaries"
+            ),
             memory_type="chapter_summary",
             metadata={
                 "simulation_step_start_timestamp": datetime.now().isoformat(),

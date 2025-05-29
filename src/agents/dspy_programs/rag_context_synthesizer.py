@@ -1,4 +1,4 @@
-# ruff: noqa: E501, ANN101, ANN401
+# ruff: noqa: E501, ANN101
 """
 DSPy RAG Context Synthesizer
 
@@ -33,7 +33,7 @@ except ImportError as e:
     raise
 
 
-class RAGSynthesis(dspy.Signature):  # type: ignore[no-any-unimported,misc]
+class RAGSynthesis(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
     """
     Given a query and a list of retrieved context passages, synthesize a concise and relevant
     answer or insight that addresses the query based strictly on the provided contexts.
@@ -169,7 +169,9 @@ class RAGContextSynthesizer:
                     "RAGContextSynthesizer DSPy program is not callable, using failsafe fallback."
                 )
                 return self.failsafe.synthesize(context, question)
-            prediction = self.dspy_program(context=context, question=question)
+            prediction = self.dspy_program(
+                context=context, question=question
+            )  # Justification: DSPy dynamic output, type unknown
             raw_answer = prediction.synthesized_answer
             cleaned_answer = self._clean_output(raw_answer)
             return cleaned_answer

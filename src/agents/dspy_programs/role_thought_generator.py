@@ -6,7 +6,7 @@ import dspy
 logger = logging.getLogger(__name__)
 
 
-class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported,misc]
+class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
     """
     Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or
     'As an [ROLE],' and reflects the agent's role and current situation.

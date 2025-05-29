@@ -6,6 +6,7 @@ Tests for memory usage tracking in the vector store.
 import unittest
 
 import pytest
+from typing_extensions import Self
 
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 
@@ -18,22 +19,22 @@ class TestMemoryUsageTracking(unittest.TestCase):
     """Tests for memory usage tracking in the vector store."""
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self, request, chroma_test_dir):
+    def _inject_fixtures(self: Self, request: object, chroma_test_dir: str) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 
-    def setUp(self):
+    def setUp(self: Self) -> None:
         self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
 
-    def tearDown(self):
+    def tearDown(self: Self) -> None:
         if hasattr(self, "vector_store") and self.vector_store:
-            if hasattr(self.vector_store, "client") and self.vector_store.client:
-                try:
-                    self.vector_store.client.close()
-                except AttributeError:
-                    pass
+            client = getattr(self.vector_store, "client", None)
+            if client is not None:
+                close_method = getattr(client, "close", None)
+                if callable(close_method):
+                    close_method()
 
-    def test_memory_usage_tracking(self):
+    def test_memory_usage_tracking(self: Self) -> None:
         """Test that memory usage statistics are tracked correctly."""
         # Add some memories
         agent_id = "test_agent"
@@ -73,7 +74,7 @@ class TestMemoryUsageTracking(unittest.TestCase):
             # So we'll just check that the field exists, which we already did with assertIn above
             # self.assertTrue(metadata['last_retrieved_timestamp'])
 
-    def test_retrieve_memory_ids(self):
+    def test_retrieve_memory_ids(self: Self) -> None:
         """Test retrieving memory IDs from metadata."""
         agent_id = "test_agent_ids"
 

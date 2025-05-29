@@ -10,7 +10,8 @@ import asyncio
 import logging
 import sys
 import threading
-from typing import Optional, Type
+from collections.abc import Awaitable
+from typing import Callable, Optional
 
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -22,7 +23,7 @@ from src.sim.simulation import Simulation
 try:
     from src.interfaces.discord_bot import SimulationDiscordBot
 
-    simulation_discord_bot_class: Optional[Type[SimulationDiscordBot]] = SimulationDiscordBot
+    simulation_discord_bot_class: Optional[type[SimulationDiscordBot]] = SimulationDiscordBot
 except ImportError:
     logging.warning("Discord bot module not found, will run without Discord integration.")
     simulation_discord_bot_class = None
@@ -110,9 +111,11 @@ def create_base_simulation(
     # Create the simulation with the agents
     sim = Simulation(
         agents=agents,
-        vector_store_manager=None
-        if not use_vector_store
-        else ChromaVectorStoreManager(persist_directory=vector_store_dir),
+        vector_store_manager=(
+            None
+            if not use_vector_store
+            else ChromaVectorStoreManager(persist_directory=vector_store_dir)
+        ),
         scenario=scenario,
         discord_bot=discord_bot,
     )
@@ -126,7 +129,7 @@ def create_base_simulation(
     return sim
 
 
-async def test_case_1_positive_targeted(use_discord: bool = False):
+async def test_case_1_positive_targeted(use_discord: bool = False) -> None:
     """
     Test Case 1: Positive Interaction (Targeted)
 
@@ -161,7 +164,7 @@ async def test_case_1_positive_targeted(use_discord: bool = False):
     logging.info("TEST CASE 1 COMPLETED")
 
 
-async def test_case_2_negative_targeted(use_discord: bool = False):
+async def test_case_2_negative_targeted(use_discord: bool = False) -> None:
     """
     Test Case 2: Negative Interaction (Targeted)
 
@@ -196,7 +199,7 @@ async def test_case_2_negative_targeted(use_discord: bool = False):
     logging.info("TEST CASE 2 COMPLETED")
 
 
-async def test_case_3_neutral_targeted(use_discord: bool = False):
+async def test_case_3_neutral_targeted(use_discord: bool = False) -> None:
     """
     Test Case 3: Neutral Interaction (Targeted)
 
@@ -245,7 +248,7 @@ async def test_case_3_neutral_targeted(use_discord: bool = False):
     logging.info("TEST CASE 3 COMPLETED")
 
 
-async def test_case_4_broadcast(use_discord: bool = False):
+async def test_case_4_broadcast(use_discord: bool = False) -> None:
     """
     Test Case 4: Broadcast Interaction
 
@@ -314,7 +317,7 @@ async def test_case_4_broadcast(use_discord: bool = False):
     logging.info("TEST CASE 4 COMPLETED")
 
 
-async def test_case_5_decay(use_discord: bool = False):
+async def test_case_5_decay(use_discord: bool = False) -> None:
     """
     Test Case 5: Relationship Decay
 
@@ -354,7 +357,7 @@ async def test_case_5_decay(use_discord: bool = False):
     logging.info("TEST CASE 5 COMPLETED")
 
 
-async def test_case_6_influence(use_discord: bool = False):
+async def test_case_6_influence(use_discord: bool = False) -> None:
     """
     Test Case 6: Relationship Influence on Behavior
 
@@ -401,7 +404,7 @@ async def test_case_6_influence(use_discord: bool = False):
     logging.info("TEST CASE 6 COMPLETED")
 
 
-async def test_case_1_forced_direct_message(use_discord: bool = False):
+async def test_case_1_forced_direct_message(use_discord: bool = False) -> None:
     """
     Test Case 1 (Forced): Positive Interaction (Targeted)
 
@@ -467,7 +470,7 @@ async def test_case_1_forced_direct_message(use_discord: bool = False):
     logging.info("TEST CASE 1 (FORCED) COMPLETED")
 
 
-async def test_case_decay_verification(use_discord: bool = False):
+async def test_case_decay_verification(use_discord: bool = False) -> None:
     """
     Relationship Decay Verification Test
 
@@ -539,7 +542,7 @@ async def test_case_decay_verification(use_discord: bool = False):
     logging.info("RELATIONSHIP DECAY TEST COMPLETED")
 
 
-async def test_case_4_broadcast_vs_targeted(use_discord: bool = False):
+async def test_case_4_broadcast_vs_targeted(use_discord: bool = False) -> None:
     """
     Test Case 4: Broadcast vs. Targeted Interaction
 
@@ -643,7 +646,7 @@ async def test_case_4_broadcast_vs_targeted(use_discord: bool = False):
     logging.info("TEST CASE 4 COMPLETED")
 
 
-async def test_case_10_targeted_multiplier_comprehensive(use_discord: bool = False):
+async def test_case_10_targeted_multiplier_comprehensive(use_discord: bool = False) -> None:
     """
     Test Case 10: Comprehensive Targeted Message Multiplier Test
 
@@ -748,7 +751,7 @@ async def test_case_10_targeted_multiplier_comprehensive(use_discord: bool = Fal
     logging.info("TEST CASE 10 COMPLETED")
 
 
-async def test_case_11_dark_forest(use_discord: bool = False):
+async def test_case_11_dark_forest(use_discord: bool = False) -> None:
     """
     Test Case 11: Dark Forest Hypothesis Scenario
     Agents must choose between hiding, broadcasting, or attacking, with incomplete information
@@ -763,11 +766,13 @@ async def test_case_11_dark_forest(use_discord: bool = False):
     logging.info("TEST CASE 11 COMPLETED: See logs for agent strategies and outcomes.")
 
 
-async def run_test_case_async(test_case_func: object, *args: object, **kwargs: object):
+async def run_test_case_async(
+    test_case_func: Callable[..., Awaitable[None]], *args: object, **kwargs: object
+) -> None:
     await test_case_func(*args, **kwargs)
 
 
-async def main():
+async def main() -> None:
     from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
     from src.infra.logging_config import setup_logging
 
@@ -813,7 +818,7 @@ async def main():
 
         from src.interfaces.dashboard_backend import app as dashboard_app
 
-        def run_dashboard():
+        def run_dashboard() -> None:
             uvicorn.run(dashboard_app, host="0.0.0.0", port=8001, log_level="info")
 
         threading.Thread(target=run_dashboard, daemon=True).start()

@@ -1,4 +1,4 @@
-# ruff: noqa: E501, ANN101, ANN401
+# ruff: noqa: E501, ANN101
 """
 DSPy L2 Summary Generator
 
@@ -30,7 +30,7 @@ except ImportError as e:
     dspy = None
 
 
-class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported,misc]
+class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
     """
     Generates a high-level L2 insight summary from a series of L1 summaries,
     considering agent role, mood trends, and goals.

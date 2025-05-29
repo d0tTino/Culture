@@ -4,9 +4,10 @@ Provides real-time updates about the simulation to a Discord channel.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import discord
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class SimulationDiscordBot:
         intents.message_content = True  # Enable if you plan to add commands later
 
         # Create Discord client
-        self.client = discord.Client(intents=intents)
+        self.client: Any = discord.Client(intents=intents)
 
         # Set up event handlers
         @self.client.event
@@ -69,14 +70,16 @@ class SimulationDiscordBot:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
     async def send_simulation_update(
-        self, content: Optional[str] = None, embed: Optional[discord.Embed] = None
+        self: Self,
+        content: Optional[str] = None,
+        embed: Optional[Any] = None,  # noqa: ANN401
     ) -> Optional[bool]:
         """
         Send a simulation update message to the configured Discord channel.
 
         Args:
             content (Optional[str]): The text message content to send
-            embed (Optional[discord.Embed]): The embed object to send
+            embed (Optional[Any]): The embed object to send
 
         Returns:
             bool: True if message was sent successfully, False otherwise
@@ -129,23 +132,21 @@ class SimulationDiscordBot:
             logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
             return False
 
-    def create_step_start_embed(self, step: int) -> discord.Embed:
+    def create_step_start_embed(self: Self, step: int) -> Any:  # noqa: ANN401
         """Creates an embed for simulation step start"""
         embed = discord.Embed(
             title=f"📊 Simulation Step {step} Started", color=discord.Color.blue()
         )
         return embed
 
-    def create_step_end_embed(self, step: int) -> discord.Embed:
+    def create_step_end_embed(self: Self, step: int) -> Any:  # noqa: ANN401
         """Creates an embed for simulation step end"""
         embed = discord.Embed(
             title=f"✅ Simulation Step {step} Completed", color=discord.Color.green()
         )
         return embed
 
-    def create_knowledge_board_embed(
-        self, agent_id: str, content: str, step: int
-    ) -> discord.Embed:
+    def create_knowledge_board_embed(self: Self, agent_id: str, content: str, step: int) -> Any:  # noqa: ANN401
         """Creates an embed for Knowledge Board posts"""
         embed = discord.Embed(
             title=f"📝 New Knowledge Board Entry (Step {step})",
@@ -156,8 +157,8 @@ class SimulationDiscordBot:
         return embed
 
     def create_role_change_embed(
-        self, agent_id: str, old_role: str, new_role: str, step: int
-    ) -> discord.Embed:
+        self: Self, agent_id: str, old_role: str, new_role: str, step: int
+    ) -> Any:  # noqa: ANN401
         """Creates an embed for agent role changes"""
         embed = discord.Embed(
             title=f"🔄 Agent Role Change (Step {step})",
@@ -167,8 +168,8 @@ class SimulationDiscordBot:
         return embed
 
     def create_project_embed(
-        self, action: str, project_name: str, project_id: str, agent_id: str, step: int
-    ) -> discord.Embed:
+        self: Self, action: str, project_name: str, project_id: str, agent_id: str, step: int
+    ) -> Any:  # noqa: ANN401
         """Creates an embed for project creation/joining/leaving"""
         if action == "create":
             title = f"🏗️ New Project Created (Step {step})"
@@ -197,7 +198,7 @@ class SimulationDiscordBot:
         return embed
 
     def create_agent_message_embed(
-        self,
+        self: Self,
         agent_id: str,
         message_content: str,
         recipient_id: Optional[str] = None,
@@ -205,7 +206,7 @@ class SimulationDiscordBot:
         agent_role: str = "Unknown",
         mood: str = "neutral",
         step: int = 0,
-    ) -> discord.Embed:
+    ) -> Any:  # noqa: ANN401
         """Creates an embed for agent messages (broadcast or targeted)"""
         target_info = f"to Agent {recipient_id[:8]}" if recipient_id else "to All (Broadcast)"
 
@@ -236,8 +237,8 @@ class SimulationDiscordBot:
         return embed
 
     def create_ip_change_embed(
-        self, agent_id: str, old_ip: int, new_ip: int, reason: str, step: int
-    ) -> discord.Embed:
+        self: Self, agent_id: str, old_ip: int, new_ip: int, reason: str, step: int
+    ) -> Any:  # noqa: ANN401
         """Creates an embed for influence point changes"""
         change = new_ip - old_ip
         change_text = f"+{change}" if change > 0 else f"{change}"
@@ -252,8 +253,8 @@ class SimulationDiscordBot:
         return embed
 
     def create_du_change_embed(
-        self, agent_id: str, old_du: float, new_du: float, reason: str, step: int
-    ) -> discord.Embed:
+        self: Self, agent_id: str, old_du: float, new_du: float, reason: str, step: int
+    ) -> Any:  # noqa: ANN401
         """Creates an embed for decision unit changes"""
         change = new_du - old_du
         change_text = f"+{change:.2f}" if change > 0 else f"{change:.2f}"
@@ -268,13 +269,13 @@ class SimulationDiscordBot:
         return embed
 
     def create_agent_action_embed(
-        self,
+        self: Self,
         agent_id: str,
         action_intent: str,
         agent_role: str = "Unknown",
         mood: str = "neutral",
         step: int = 0,
-    ) -> discord.Embed:
+    ) -> Any:  # noqa: ANN401
         """Creates an embed for agent actions that don't involve messages"""
 
         # Determine action description and color based on intent
@@ -307,7 +308,7 @@ class SimulationDiscordBot:
         embed.add_field(name="Intent", value=action_intent, inline=True)
         return embed
 
-    async def run_bot(self) -> None:
+    async def run_bot(self: Self) -> None:
         """
         Start the Discord bot and connect to Discord.
         This is a blocking call that should be run in an asyncio task.
@@ -318,7 +319,7 @@ class SimulationDiscordBot:
         except Exception as e:
             logger.error(f"Error starting Discord bot: {e}")
 
-    async def stop_bot(self) -> None:
+    async def stop_bot(self: Self) -> None:
         """Stop the Discord bot and close the connection."""
         try:
             logger.info("Stopping Discord bot...")

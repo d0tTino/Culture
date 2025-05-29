@@ -45,10 +45,9 @@ def main() -> None:
             metadatas = batch["metadatas"]
             vectors = batch["embeddings"]
             # Ensure UUID is present in metadata for Weaviate
-            for meta, id_ in zip(metadatas, batch_ids):  # type: ignore[arg-type]
-                if "uuid" not in meta:
-                    meta["uuid"] = id_  # type: ignore[index]  # meta is Mapping, but we need dict
-            weaviate.add_memories(texts, metadatas, vectors)  # type: ignore[arg-type]
+            for meta, id_ in zip(metadatas, batch_ids):
+                meta["uuid"] = id_
+            weaviate.add_memories(texts, metadatas, vectors)
             logger.info(f"Migrated {i + len(batch_ids)}/{len(all_ids)} memories...")
         logger.info("Migration complete.")
     except Exception as e:

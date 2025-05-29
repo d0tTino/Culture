@@ -6,6 +6,8 @@ import logging
 import uuid
 from typing import Any
 
+from typing_extensions import Self
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ class KnowledgeBoard:
 
     entries: list[dict[str, Any]]
 
-    def __init__(self, entries: list[dict[str, Any]] | None = None) -> None:
+    def __init__(self: Self, entries: list[dict[str, Any]] | None = None) -> None:
         """
         Initialize an empty knowledge board.
         """
@@ -27,7 +29,7 @@ class KnowledgeBoard:
         #    'entry_id': str}
         logger.info("KnowledgeBoard initialized with empty entries list.")
 
-    def get_state(self, max_entries: int = 10) -> list[str]:
+    def get_state(self: Self, max_entries: int = 10) -> list[str]:
         """
         Returns the current state of the knowledge board, limited to the most recent entries.
 
@@ -50,7 +52,7 @@ class KnowledgeBoard:
         )
         return recent_entries
 
-    def get_full_entries(self, max_entries: int = 10) -> list[dict[str, Any]]:
+    def get_full_entries(self: Self, max_entries: int = 10) -> list[dict[str, Any]]:
         """
         Returns the full structured entries from the knowledge board, limited to the most recent
         entries.
@@ -64,7 +66,7 @@ class KnowledgeBoard:
         """
         return self.entries[-max_entries:] if self.entries else []
 
-    def add_entry(self, entry: str, agent_id: str, step: int) -> bool:
+    def add_entry(self: Self, entry: str, agent_id: str, step: int) -> bool:
         """
         Adds an entry to the knowledge board.
 

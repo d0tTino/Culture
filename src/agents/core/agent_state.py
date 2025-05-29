@@ -1,8 +1,11 @@
 from collections import deque
 from enum import Enum
-from typing import Any, Deque, Dict, List, Tuple
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
+from typing_extensions import Self
+
+from src.infra.config import get_config
 
 
 class AgentActionIntent(str, Enum):
@@ -40,33 +43,33 @@ class AgentState(BaseModel):
     # Add collective metrics tracking
     collective_ip: float | None = None  # Total IP across all agents in simulation
     collective_du: float | None = None  # Total DU across all agents in simulation
-    relationships: Dict[str, float] = Field(
+    relationships: dict[str, float] = Field(
         default_factory=dict
     )  # Maps agent_id to relationship score
-    short_term_memory: Deque[Dict[str, Any]] = Field(
+    short_term_memory: deque[dict[str, Any]] = Field(
         default_factory=deque
     )  # Queue of memory entries
-    goals: List[Dict[str, Any]] = Field(
+    goals: list[dict[str, Any]] = Field(
         default_factory=list
     )  # List of goals/objectives for this agent
-    agent_goal: str = (
-        "Contribute to the simulation as effectively as possible."  # High-level goal for the agent
+    agent_goal: str = Field(
+        default="Contribute to the simulation as effectively as possible."  # High-level goal for the agent # noqa: E501
     )
-    role_history: List[Tuple[int, str]] = Field(
+    role_history: list[tuple[int, str]] = Field(
         default_factory=list
     )  # List of (step, role) tuples
-    mood_history: List[Tuple[int, str]] = Field(
+    mood_history: list[tuple[int, str]] = Field(
         default_factory=list
     )  # List of (step, mood) tuples
-    ip_history: List[Tuple[int, float]] = Field(default_factory=list)  # List of (step, ip) tuples
-    du_history: List[Tuple[int, float]] = Field(default_factory=list)  # List of (step, du) tuples
-    relationship_history: List[Tuple[int, Dict[str, float]]] = Field(
+    ip_history: list[tuple[int, float]] = Field(default_factory=list)  # List of (step, ip) tuples
+    du_history: list[tuple[int, float]] = Field(default_factory=list)  # List of (step, du) tuples
+    relationship_history: list[tuple[int, dict[str, float]]] = Field(
         default_factory=list
     )  # List of (step, relationships) tuples
-    project_history: List[Tuple[int, str | None]] = Field(
+    project_history: list[tuple[int, str | None]] = Field(
         default_factory=list
     )  # List of (step, project_id) tuples
-    projects: Dict[str, Any] = Field(default_factory=dict)  # Maps project_id to project details
+    projects: dict[str, Any] = Field(default_factory=dict)  # Maps project_id to project details
 
     # LLM client for generating summaries and other memory operations
     llm_client: Any | None = None
@@ -88,7 +91,7 @@ class AgentState(BaseModel):
     last_action_step: int | None = None
 
     # Available actions and action intents for this agent
-    available_action_intents: List[str] = Field(default_factory=list)
+    available_action_intents: list[str] = Field(default_factory=list)
 
     # Step counter for tracking simulation steps
     step_counter: int = 0
@@ -99,27 +102,45 @@ class AgentState(BaseModel):
     short_term_memory_decay_rate: float  # Will be initialized from config in BaseAgent
     relationship_decay_rate: float  # Will be initialized from config in BaseAgent
     min_relationship_score: float  # Will be initialized from config in BaseAgent
-    max_relationship_score: float  # Will be initialized from config in BaseAgent
+    max_relationship_score: float = 1.0
     mood_decay_rate: float  # Will be initialized from config in BaseAgent
     mood_update_rate: float  # Will be initialized from config in BaseAgent
     ip_cost_per_message: float  # Will be initialized from config in BaseAgent
     du_cost_per_action: float  # Will be initialized from config in BaseAgent
     role_change_cooldown: int  # Will be initialized from config in BaseAgent
-    role_change_ip_cost: float  # Will be initialized from config in BaseAgent
+    role_change_ip_cost: float = Field(default_factory=lambda: get_config("ROLE_CHANGE_IP_COST"))
 
     # New relationship dynamics parameters
-    positive_relationship_learning_rate: float  # Learning rate for positive sentiment interactions
-    negative_relationship_learning_rate: float  # Learning rate for negative sentiment interactions
-    targeted_message_multiplier: (
-        float  # Multiplier for relationship changes from targeted messages
+    positive_relationship_learning_rate: float = Field(
+        default_factory=lambda: get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE")
+    )
+    negative_relationship_learning_rate: float = Field(
+        default_factory=lambda: get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE")
+    )
+    targeted_message_multiplier: float = Field(
+        default_factory=lambda: get_config("TARGETED_MESSAGE_MULTIPLIER")
     )
 
     # Memory consolidation tracking
-    last_level_2_consolidation_step: int = (
-        0  # Last step when a level-2 memory consolidation occurred
-    )
+    last_level_2_consolidation_step: int = 0
 
-    def add_memory(self, step: int, memory_type: str, content: str) -> None:
+    # --- Mood Management (Derived) ---
+    @computed_field
+    def mood_value(self) -> float:
+        """
+        Returns a numerical representation of the agent's mood.
+        This can be used for calculations or simpler comparisons.
+        """
+        mood_mapping = {
+            "very_positive": 1.0,
+            "positive": 0.5,
+            "neutral": 0.0,
+            "negative": -0.5,
+            "very_negative": -1.0,
+        }
+        return mood_mapping.get(self.mood, 0.0)  # Default to neutral if mood is somehow invalid
+
+    def add_memory(self: Self, step: int, memory_type: str, content: str) -> None:
         """
         Adds a memory to the agent's short-term memory deque.
 
@@ -131,7 +152,7 @@ class AgentState(BaseModel):
         memory_entry = {"step": step, "type": memory_type, "content": content}
         self.short_term_memory.append(memory_entry)
 
-    def update_mood(self, new_mood: str) -> None:
+    def update_mood(self: Self, new_mood: str) -> None:
         """
         Updates the agent's mood.
 
@@ -147,7 +168,7 @@ class AgentState(BaseModel):
         self.descriptive_mood = new_mood
         self.mood_history.append((self.step_counter, new_mood))
 
-    def __init__(self, **data: Any) -> None:
+    def __init__(self: Self, **data: object) -> None:
         super().__init__(**data)
         self.max_short_term_memory = self.max_short_term_memory
         self.short_term_memory_decay_rate = self.short_term_memory_decay_rate
@@ -163,9 +184,10 @@ class AgentState(BaseModel):
         self.positive_relationship_learning_rate = self.positive_relationship_learning_rate
         self.negative_relationship_learning_rate = self.negative_relationship_learning_rate
         self.targeted_message_multiplier = self.targeted_message_multiplier
+        self.step_counter += 1
 
     # Add methods to update collective metrics
-    def update_collective_metrics(self, collective_ip: float, collective_du: float) -> None:
+    def update_collective_metrics(self: Self, collective_ip: float, collective_du: float) -> None:
         """
         Updates the agent's perception of collective IP and DU metrics.
 
@@ -176,77 +198,79 @@ class AgentState(BaseModel):
         self.collective_ip = collective_ip
         self.collective_du = collective_du
 
-    def update_ip(self, new_ip: float) -> None:
+    def update_ip(self: Self, new_ip: float) -> None:
         self.ip = new_ip
         self.ip_history.append((self.step_counter, new_ip))
 
-    def update_du(self, new_du: float) -> None:
+    def update_du(self: Self, new_du: float) -> None:
         self.du = new_du
         self.du_history.append((self.step_counter, new_du))
 
-    def update_role(self, new_role: str) -> None:
+    def update_role(self: Self, new_role: str) -> None:
         self.role = new_role
         self.role_history.append((self.step_counter, new_role))
 
-    def update_project(self, project_id: str | None) -> None:
+    def update_project(self: Self, project_id: str | None) -> None:
         self.current_project_id = project_id
         self.project_history.append((self.step_counter, project_id))
 
-    def update_step_counter(self) -> None:
+    def update_step_counter(self: Self) -> None:
         self.step_counter += 1
 
-    def update_short_term_memory(self, memory: Dict[str, Any]) -> None:
+    def update_short_term_memory(self: Self, memory: dict[str, Any]) -> None:
         self.short_term_memory.append(memory)
 
-    def update_goals(self, goals: List[Dict[str, Any]]) -> None:
+    def update_goals(self: Self, goals: list[dict[str, Any]]) -> None:
         self.goals.extend(goals)
 
-    def update_messages_sent_count(self) -> None:
+    def update_messages_sent_count(self: Self) -> None:
         self.messages_sent_count += 1
 
-    def update_messages_received_count(self) -> None:
+    def update_messages_received_count(self: Self) -> None:
         self.messages_received_count += 1
 
-    def update_actions_taken_count(self) -> None:
+    def update_actions_taken_count(self: Self) -> None:
         self.actions_taken_count += 1
 
-    def update_last_message_step(self, step: int) -> None:
+    def update_last_message_step(self: Self, step: int) -> None:
         self.last_message_step = step
 
-    def update_last_action_step(self, step: int) -> None:
+    def update_last_action_step(self: Self, step: int) -> None:
         self.last_action_step = step
 
-    def update_available_action_intents(self, intents: List[str]) -> None:
+    def update_available_action_intents(self: Self, intents: list[str]) -> None:
         self.available_action_intents.extend(intents)
 
-    def update_last_clarification_question(self, question: str | None) -> None:
+    def update_last_clarification_question(self: Self, question: str | None) -> None:
         self.last_clarification_question = question
 
-    def update_last_clarification_downgraded(self, downgraded: bool) -> None:
+    def update_last_clarification_downgraded(self: Self, downgraded: bool) -> None:
         self.last_clarification_downgraded = downgraded
 
-    def update_relationship_history(self, step: int, relationships: Dict[str, float]) -> None:
+    def update_relationship_history(
+        self: Self, step: int, relationships: dict[str, float]
+    ) -> None:
         self.relationship_history.append((step, relationships))
 
-    def update_ip_history(self, step: int, ip: float) -> None:
+    def update_ip_history(self: Self, step: int, ip: float) -> None:
         self.ip_history.append((step, ip))
 
-    def update_du_history(self, step: int, du: float) -> None:
+    def update_du_history(self: Self, step: int, du: float) -> None:
         self.du_history.append((step, du))
 
-    def update_role_history(self, step: int, role: str) -> None:
+    def update_role_history(self: Self, step: int, role: str) -> None:
         self.role_history.append((step, role))
 
-    def update_project_history(self, step: int, project_id: str | None) -> None:
+    def update_project_history(self: Self, step: int, project_id: str | None) -> None:
         self.project_history.append((step, project_id))
 
-    def update_current_project_affiliation(self, affiliation: str | None) -> None:
+    def update_current_project_affiliation(self: Self, affiliation: str | None) -> None:
         self.current_project_affiliation = affiliation
 
-    def update_current_project_id(self, project_id: str | None) -> None:
+    def update_current_project_id(self: Self, project_id: str | None) -> None:
         self.current_project_id = project_id
 
-    def apply_relationship_decay(self, decay_factor: float) -> None:
+    def apply_relationship_decay(self: Self, decay_factor: float) -> None:
         """
         Applies exponential decay to all relationship scores.
         Each score is multiplied by (1 - decay_factor) and clamped to the valid range.

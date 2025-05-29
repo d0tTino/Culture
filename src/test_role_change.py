@@ -89,7 +89,7 @@ def process_role_change(agent_state: AgentState, state_dict: dict) -> bool:
     return False
 
 
-def test_role_change():
+def test_role_change() -> None:
     """Test that agent role change mechanism works properly."""
 
     print("\n======== ROLE CHANGE TEST ========")

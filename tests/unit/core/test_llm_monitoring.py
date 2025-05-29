@@ -1,20 +1,19 @@
-"""
-Test script for verifying LLM call performance monitoring.
-"""
-
 import os
 import sys
 import time
 
 import pytest
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.infra.llm_client import analyze_sentiment, generate_structured_output, generate_text
+
+"""
+Test script for verifying LLM call performance monitoring.
+"""
 
 # Set up proper paths for imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, project_root)
-
-from pydantic import BaseModel, ConfigDict, Field
-
-from src.infra.llm_client import analyze_sentiment, generate_structured_output, generate_text
 
 
 class LLMTestStructure(BaseModel):
@@ -29,7 +28,7 @@ class LLMTestStructure(BaseModel):
 
 
 @pytest.mark.unit
-def test_llm_monitoring():
+def test_llm_monitoring() -> None:
     """Run a series of LLM calls to verify monitoring functionality."""
     print("Starting LLM monitoring tests...")
     # Test 1: Simple text generation
@@ -39,7 +38,10 @@ def test_llm_monitoring():
         model="mistral:latest",
         temperature=0.7,
     )
-    print(f"Test 1 Result: {result1[:50]}...\n")
+    if isinstance(result1, str):
+        print(f"Test 1 Result: {result1[:50]}...\n")
+    else:
+        print(f"Test 1 Result: {str(result1)[:50]}...\n")
     time.sleep(1)
     # Test 2: Sentiment analysis
     print("Test 2: Sentiment analysis")
@@ -51,7 +53,9 @@ def test_llm_monitoring():
     # Test 3: Structured output
     print("Test 3: Structured output")
     result3 = generate_structured_output(
-        prompt="Create a test structure with a title related to AI, some content, and a score of 8.5.",
+        prompt=(
+            "Create a test structure with a title related to AI, some content, and a score of 8.5."
+        ),
         response_model=LLMTestStructure,
         model="mistral:latest",
         temperature=0.2,

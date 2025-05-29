@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 import requests
+from typing_extensions import Self
 
 # Import DSPy and Ollama
 try:
@@ -24,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dspy_ollama")
 
 
-class OllamaLM(dspy.LM):  # type: ignore
+class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
     """
     A DSPy-compatible language model implementation for Ollama.
 
@@ -76,7 +77,7 @@ class OllamaLM(dspy.LM):  # type: ignore
         self.total_tokens = 0
         self.failed_calls = 0
 
-    def basic_request(self, prompt: str, **kwargs: object) -> dict[str, Any]:
+    def basic_request(self: Self, prompt: str, **kwargs: object) -> dict[str, Any]:
         """
         Make a basic request to the Ollama API.
         This is the core method called by DSPy internals.
@@ -145,7 +146,7 @@ class OllamaLM(dspy.LM):  # type: ignore
             }
 
     def __call__(
-        self,
+        self: Self,
         prompt: str | None = None,
         messages: list[dict[str, Any]] | None = None,
         **kwargs: object,
@@ -183,7 +184,7 @@ class OllamaLM(dspy.LM):  # type: ignore
             logger.warning("Empty or invalid response from Ollama")
             return [""]  # Return empty string as fallback
 
-    def _convert_messages_to_string(self, messages: list[dict[str, Any]]) -> str:
+    def _convert_messages_to_string(self: Self, messages: list[dict[str, Any]]) -> str:
         """
         Convert a list of chat messages to a single string prompt.
 
@@ -202,7 +203,7 @@ class OllamaLM(dspy.LM):  # type: ignore
 
         return "\n\n".join(prompt_parts)
 
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self: Self) -> dict[str, Any]:
         """Return usage statistics."""
         return {
             "total_calls": self.total_calls,
@@ -211,7 +212,7 @@ class OllamaLM(dspy.LM):  # type: ignore
         }
 
     # Implement required methods from the dspy.LM interface
-    def generate(self, prompt: str | list[str], **kwargs: object) -> list[str]:
+    def generate(self: Self, prompt: str | list[str], **kwargs: object) -> list[str]:
         """
         Generate a completion for the given prompt(s).
 
@@ -277,8 +278,7 @@ def configure_dspy_with_ollama(
         ollama_lm = OllamaLM(model_name=model_name, api_base=api_base, temperature=temperature)
         dspy.settings.configure(lm=ollama_lm)
         logger.info(
-            f"DSPy LM successfully configured with Ollama model '{model_name}' "
-            f"at '{api_base}'."
+            f"DSPy LM successfully configured with Ollama model '{model_name}' at '{api_base}'."
         )
         return ollama_lm
     except Exception as e:
@@ -296,7 +296,7 @@ class AsyncDSPyManager:
     fallback support.
     """
 
-    def __init__(self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
+    def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
         """
         Initialize the async manager with a worker pool and default timeout.
         Args:
@@ -305,7 +305,7 @@ class AsyncDSPyManager:
         """
 
     async def submit(
-        self,
+        self: Self,
         dspy_callable: object,
         *args: object,
         timeout: float | None = None,
@@ -321,11 +321,7 @@ class AsyncDSPyManager:
             An asyncio.Future or similar handle for result retrieval.
         """
 
-    async def get_result(
-        self,
-        future: object,
-        default: object = None,
-    ) -> object:
+    async def get_result(self: Self, future: object, default: object = None) -> object:
         """
         Await and retrieve the result of a submitted DSPy call.
         Args:
@@ -335,7 +331,7 @@ class AsyncDSPyManager:
             The result of the DSPy call, or the default value on error/timeout.
         """
 
-    async def shutdown(self) -> None:
+    async def shutdown(self: Self) -> None:
         """
         Cleanly shut down the async manager, cancelling any pending tasks.
         """

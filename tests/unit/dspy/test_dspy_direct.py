@@ -1,8 +1,10 @@
 import logging
 import os
 import sys
+from typing import cast
 
 import pytest
+from typing_extensions import Self
 
 # Configure logging
 logging.basicConfig(
@@ -21,23 +23,26 @@ pytestmark = pytest.mark.skip(reason="Requires specific local LLM configuration,
 
 
 @pytest.mark.skip(
-    reason="Requires specific local LLM configuration (Ollama with mistral:latest and correct ENV VARS), deferred for now"
+    reason=(
+        "Requires specific local LLM configuration (Ollama with mistral:latest "
+        "and correct ENV VARS), deferred for now"
+    )
 )
 @pytest.mark.unit
 @pytest.mark.dspy
 @pytest.mark.critical_path
-def test_direct_call():
+def test_direct_call() -> None:
     """Test direct call to DSPy thought generator with imported LM."""
     try:
         # Import dspy first
         import dspy
 
         # Create a properly formed DSPy LM client
-        class OllamaLM(dspy.LM):
+        class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported] # Mypy cannot follow dspy.LM import; see https://mypy.readthedocs.io/en/stable/common_issues.html
             model_name: str
             temperature: float
 
-            def __init__(self):
+            def __init__(self: Self) -> None:
                 self.model_name = "mistral:latest"
                 self.temperature = 0.1
                 # Pass model parameter to the superclass
@@ -47,7 +52,7 @@ def test_direct_call():
                 self.ollama = ollama
                 logger.info(f"Initialized OllamaLM with model {self.model_name}")
 
-            def basic_request(self, prompt: str, **kwargs: object) -> str:
+            def basic_request(self: Self, prompt: str, **kwargs: object) -> str:
                 """Required method for dspy.LM that handles basic requests."""
                 logger.info(
                     f"Calling Ollama model {self.model_name} with prompt length: {len(prompt)}"
@@ -59,7 +64,7 @@ def test_direct_call():
                         temperature=self.temperature,
                         stream=False,
                     )
-                    return response["message"]["content"]
+                    return cast(str, response["message"]["content"])
                 except Exception as e:
                     logger.error(f"Error calling Ollama API: {e}")
                     return f"Error: {e}"
@@ -70,18 +75,21 @@ def test_direct_call():
         logger.info("DSPy configured with OllamaLM")
 
         # Define the DSPy Signature for role-prefixed thoughts
-        class RolePrefixedThought(dspy.Signature):
-            """Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or 'As an [ROLE],' and reflects the agent's role and current situation."""
+        class RolePrefixedThought(dspy.Signature):  # type: ignore[no-any-unimported] # Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
+            """
+            Generate an agent's internal thought process that strictly begins with
+            'As a [ROLE],' or 'As an [ROLE],' and reflects the agent's role and current situation.
+            """
 
             agent_role = dspy.InputField(desc="The role of the agent.")
             current_situation = dspy.InputField(desc="The current situation or context.")
             thought_process = dspy.OutputField(desc="The generated thought process.")
 
-            def __init__(self, agent_role: str, current_situation: str):
+            def __init__(self: Self, agent_role: str, current_situation: str) -> None:
                 self.agent_role = agent_role
                 self.current_situation = current_situation
 
-            def __call__(self) -> str:
+            def __call__(self: Self) -> str:
                 return f"As a {self.agent_role}, {self.current_situation}"
 
         # Create the DSPy module
@@ -89,7 +97,10 @@ def test_direct_call():
 
         # Test parameters
         agent_role = "Innovator"
-        current_situation = "Simulation step 1. Need to introduce myself to others and potentially propose a creative idea."
+        current_situation = (
+            "Simulation step 1. Need to introduce myself to others and "
+            "potentially propose a creative idea."
+        )
 
         # Call the function directly
         logger.info(f"Calling DSPy generate_thought with role={agent_role}")
@@ -134,9 +145,10 @@ def test_direct_call():
             logger.warning(f"Actual beginning: {thought_process[:50]}...")
 
         # Use assertion instead of return value
-        assert (
-            prefix_is_correct
-        ), f"Generated thought does not start with expected role prefix: {thought_process[:50]}..."
+        assert prefix_is_correct, (
+            f"Generated thought does not start with expected role prefix: "
+            f"{thought_process[:50]}..."
+        )
     except Exception as e:
         logger.error(f"Error in DSPy direct test: {e}")
         import traceback

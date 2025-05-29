@@ -1,22 +1,22 @@
 import logging
 import time
+from collections.abc import Generator
 
 import pytest
+from pytest import LogCaptureFixture
 
 from src.utils.async_dspy_manager import AsyncDSPyManager
 
 
 @pytest.fixture(scope="module")
-def manager():
+def manager() -> Generator[AsyncDSPyManager, None, None]:
     mgr = AsyncDSPyManager(max_workers=2, default_timeout=1.0)
     yield mgr
     mgr.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_successful_execution(
-    manager: AsyncDSPyManager, caplog: pytest.LogCaptureFixture
-) -> None:
+async def test_successful_execution(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
     def mock_dspy_success(duration: float) -> str:
         time.sleep(duration)
         return "success"
@@ -31,7 +31,7 @@ async def test_successful_execution(
 
 
 @pytest.mark.asyncio
-async def test_timeout(manager: AsyncDSPyManager, caplog: pytest.LogCaptureFixture) -> None:
+async def test_timeout(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
     def mock_dspy_success(duration: float) -> str:
         time.sleep(duration)
         return "success"
@@ -42,14 +42,12 @@ async def test_timeout(manager: AsyncDSPyManager, caplog: pytest.LogCaptureFixtu
             future, default_value="timeout", timeout=0.2, dspy_callable=mock_dspy_success
         )
     assert result == "timeout"
-    assert any("timed out" in r for r in caplog.text.splitlines())
+    assert any("Timeout awaiting result" in r for r in caplog.text.splitlines())
 
 
 @pytest.mark.asyncio
-async def test_execution_error(
-    manager: AsyncDSPyManager, caplog: pytest.LogCaptureFixture
-) -> None:
-    def mock_dspy_error():
+async def test_execution_error(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+    def mock_dspy_error() -> None:
         raise ValueError("DSPy error")
 
     with caplog.at_level(logging.ERROR):
@@ -58,4 +56,9 @@ async def test_execution_error(
             future, default_value="error", dspy_callable=mock_dspy_error
         )
     assert result == "error"
-    assert any("raised exception" in r for r in caplog.text.splitlines())
+    assert any("Exception retrieving result" in r for r in caplog.text.splitlines())
+
+
+def def_noop_manager() -> AsyncDSPyManager:
+    mgr = AsyncDSPyManager(max_workers=2, default_timeout=1.0)
+    return mgr

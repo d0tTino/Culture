@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Test script to verify the AgentState refactoring.
 This script initializes a simulation with agents using the new AgentState model
@@ -11,15 +10,14 @@ import sys
 
 import pytest
 
-# Set up proper paths for imports
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-sys.path.insert(0, project_root)
-
-# Now we can import from src
 from src.agents.core.agent_state import AgentState
 from src.agents.core.base_agent import Agent
 from src.sim.simulation import Simulation
 from tests.utils.mock_llm import MockLLM
+
+# Set up proper paths for imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+sys.path.insert(0, project_root)
 
 # Configure logging
 logging.basicConfig(
@@ -150,5 +148,5 @@ async def test_agent_state() -> None:
 
 
 @pytest.mark.unit
-def test_discovery_sanity():
+def test_discovery_sanity() -> None:
     assert True

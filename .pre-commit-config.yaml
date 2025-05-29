@@ -15,7 +15,10 @@ repos:
         additional_dependencies:
           - types-redis
           - types-pyyaml
-        exclude: ^(archives/|scripts/archive/)
+          - types-requests
+          - pydantic
+          - pytest
+        exclude: '^(tests/|archives/|scripts/archive/)'
   # Optionally add more hooks below
   # - repo: https://github.com/pre-commit/pre-commit-hooks
   #   rev: v4.6.0

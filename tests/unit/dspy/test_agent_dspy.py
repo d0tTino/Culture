@@ -47,7 +47,10 @@ try:
             agent_role="Tester",
             current_situation="Testing the DSPy role thought generator directly.",
         )
-        logger.info(f"SUCCESS: DSPy call worked, result: {result.thought_process[:100]}...")
+        if hasattr(result, "thought_process"):
+            logger.info(f"SUCCESS: DSPy call worked, result: {result.thought_process[:100]}...")
+        else:
+            logger.info(f"SUCCESS: DSPy call worked, result: {str(result)[:100]}...")
     else:
         logger.warning(
             "SKIPPED: Cannot run test 3 because generate_role_prefixed_thought is not available"

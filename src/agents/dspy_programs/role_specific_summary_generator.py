@@ -1,4 +1,4 @@
-# ruff: noqa: E501, ANN101, ANN401
+# ruff: noqa: E501, ANN101
 """
 Role-Specific Summary Generator
 

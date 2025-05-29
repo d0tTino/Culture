@@ -3,8 +3,7 @@ from typing import Any, Callable, Optional, cast
 
 import weaviate
 import weaviate.classes as wvc
-from weaviate import WeaviateClient
-from weaviate.collections import Collection
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +20,11 @@ class WeaviateVectorStoreManager:
     url: str
     collection_name: str
     embedding_function: Optional[Callable[[str], list[float]]]
-    client: WeaviateClient
-    collection: Collection[dict[str, Any], None]
+    client: Any
+    collection: Any
 
     def __init__(
-        self,
+        self: Self,
         url: str = "http://localhost:8080",
         collection_name: str = "AgentMemory",
         embedding_function: Optional[Callable[[str], list[float]]] = None,
@@ -44,7 +43,7 @@ class WeaviateVectorStoreManager:
         self.client = self._connect_client(url)
         self.collection = self._ensure_collection_exists()
 
-    def _connect_client(self, url: str) -> WeaviateClient:
+    def _connect_client(self: Self, url: str) -> object:
         # Parse host/port from URL
         import re
 
@@ -64,11 +63,11 @@ class WeaviateVectorStoreManager:
             grpc_secure=False,
         )
 
-    def _ensure_collection_exists(self) -> Collection[dict[str, Any], None]:
+    def _ensure_collection_exists(self: Self) -> object:
         # Check if collection exists, else create with correct schema (vectorizer: none)
         if self.client.collections.exists(self.collection_name):
             return cast(
-                Collection[dict[str, Any], None],
+                object,
                 self.client.collections.get(self.collection_name),
             )
         else:
@@ -89,11 +88,12 @@ class WeaviateVectorStoreManager:
                 f"Created Weaviate collection '{self.collection_name}' with "
                 f"external vector support."
             )
-            # Mypy: Weaviate client returns Mapping, but we require dict[str, Any] for strict compliance
-            return cast(Collection[dict[str, Any], None], collection)
+            # Mypy: Weaviate client returns Mapping, but we require dict[str, Any] for strict
+            # compliance
+            return cast(object, collection)
 
     def add_memories(
-        self,
+        self: Self,
         texts: list[str],
         metadatas: list[dict[str, Any]],
         vectors: list[list[float]],
@@ -120,7 +120,7 @@ class WeaviateVectorStoreManager:
             logger.error(f"Failed to add objects to Weaviate: {e}")
 
     def query_memories(
-        self,
+        self: Self,
         query_vector: list[float],
         n_results: int = 5,
         filter_dict: Optional[dict[str, Any]] = None,
@@ -161,7 +161,7 @@ class WeaviateVectorStoreManager:
             logger.error(f"Weaviate query failed: {e}")
             return []
 
-    def delete_memories(self, uuids: list[str]) -> None:
+    def delete_memories(self: Self, uuids: list[str]) -> None:
         """
         Delete objects by UUID.
         Args:
@@ -173,7 +173,7 @@ class WeaviateVectorStoreManager:
             except Exception as e:
                 logger.error(f"Failed to delete object {uuid} from Weaviate: {e}")
 
-    def delete_collection(self) -> None:
+    def delete_collection(self: Self) -> None:
         """
         Delete the entire collection from Weaviate.
         """
@@ -183,14 +183,14 @@ class WeaviateVectorStoreManager:
         except Exception as e:
             logger.error(f"Failed to delete Weaviate collection '{self.collection_name}': {e}")
 
-    def close(self) -> None:
+    def close(self: Self) -> None:
         try:
             self.client.close()
         except Exception:
             pass
 
     async def aretrieve_relevant_memories(
-        self,
+        self: Self,
         agent_id: str,
         query: str,
         k: int = 3,

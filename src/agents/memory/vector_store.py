@@ -16,13 +16,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, TypeVar, Union, cast
 
 import chromadb
+from chromadb.api.types import Documents, EmbeddingFunction
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
+from typing_extensions import Self
 
+# Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException
 except ImportError:
-    ChromaDBException = Exception
+    ChromaDBException = Exception  # type: ignore
 
 # Constants for memory usage tracking
 USAGE_TRACKING_FIELDS = [
@@ -36,15 +39,18 @@ USAGE_TRACKING_FIELDS = [
 logger = logging.getLogger(__name__)
 
 # Add type alias for ChromaDB metadata
-ChromaMeta = Mapping[str, Union[str, int, float, bool]]
+ChromaMeta = dict[str, Any]
 ChromaMetaDict = dict[str, Union[str, int, float, bool]]
 ChromaMetaList = list[ChromaMeta]
 
 # Add helper to safely get first element of a list of lists
 T = TypeVar("T")
 
+# Ensure chromadb version compatibility (optional, for debugging)
+logger.info(f"Using ChromaDB version: {chromadb.__version__}")
 
-def first_list_element(lst: list[list[T]] | Any) -> list[T]:
+
+def first_list_element(lst: list[list[T]] | object) -> list[T]:
     if isinstance(lst, list) and len(lst) > 0 and isinstance(lst[0], list):
         return lst[0]
     return []
@@ -62,7 +68,7 @@ class ChromaVectorStoreManager:
     - Usage statistics tracking for advanced memory pruning
     """
 
-    def __init__(self, persist_directory: str = "./chroma_db"):
+    def __init__(self: Self, persist_directory: str = "./chroma_db"):
         """
         Initialize the vector store manager with a persistent ChromaDB client.
 
@@ -73,7 +79,7 @@ class ChromaVectorStoreManager:
         os.makedirs(persist_directory, exist_ok=True)
 
         # Initialize embedding function using sentence-transformers
-        self.embedding_function: SentenceTransformerEmbeddingFunction = (
+        self.embedding_function: EmbeddingFunction[Documents] = (
             SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
         )
 
@@ -81,18 +87,18 @@ class ChromaVectorStoreManager:
         logger.info(
             f"Initializing ChromaDB client with persistence directory: {persist_directory}"
         )
-        self.client = chromadb.PersistentClient(path=persist_directory)
+        self.client: Any = chromadb.PersistentClient(path=persist_directory)
 
         # Get or create a collection for agent memories
         collection_name = "agent_memories"
-        self.collection = self.client.get_or_create_collection(
+        self.collection: Any = self.client.get_or_create_collection(
             name=collection_name,
             embedding_function=cast(Any, self.embedding_function),
         )
 
         # Create or get a separate collection for role changes
         role_collection_name = "agent_roles"
-        self.roles_collection = self.client.get_or_create_collection(
+        self.roles_collection: Any = self.client.get_or_create_collection(
             name=role_collection_name,
             embedding_function=cast(Any, self.embedding_function),
         )
@@ -110,7 +116,7 @@ class ChromaVectorStoreManager:
         self.event_count = 0
 
     def add_memory(
-        self,
+        self: Self,
         agent_id: str,
         step: int,
         event_type: str,
@@ -179,7 +185,7 @@ class ChromaVectorStoreManager:
             return ""
 
     def record_role_change(
-        self, agent_id: str, step: int, previous_role: str, new_role: str
+        self: Self, agent_id: str, step: int, previous_role: str, new_role: str
     ) -> str:
         """
         Records a role change event in the role-specific collection.
@@ -226,7 +232,7 @@ class ChromaVectorStoreManager:
             return ""
 
     def _update_memory_usage_stats(
-        self,
+        self: Self,
         memory_ids: list[str],
         relevance_scores: list[float] | None = None,
         increment_count: bool = True,
@@ -340,7 +346,7 @@ class ChromaVectorStoreManager:
                 pass  # Suppress any errors in the error handling itself
 
     def retrieve_relevant_memories(
-        self, agent_id: str, query: str, k: int = 3, include_usage_stats: bool = False
+        self: Self, agent_id: str, query: str, k: int = 3, include_usage_stats: bool = False
     ) -> list[dict[str, Any]]:
         """
         Retrieve memories relevant to the query text, filtered to only include
@@ -437,7 +443,7 @@ class ChromaVectorStoreManager:
             return []
 
     async def aretrieve_relevant_memories(
-        self, agent_id: str, query: str, k: int = 3, include_usage_stats: bool = False
+        self: Self, agent_id: str, query: str, k: int = 3, include_usage_stats: bool = False
     ) -> list[dict[str, Any]]:
         import asyncio
 
@@ -446,7 +452,7 @@ class ChromaVectorStoreManager:
         )
 
     def retrieve_filtered_memories(
-        self,
+        self: Self,
         agent_id: str,
         filters: dict[str, Any] | None = None,
         limit: int | None = None,
@@ -522,7 +528,7 @@ class ChromaVectorStoreManager:
             logger.error(f"Error retrieving filtered memories: {e}")
             return []
 
-    def get_role_history(self, agent_id: str) -> list[dict[str, Any]]:
+    def get_role_history(self: Self, agent_id: str) -> list[dict[str, Any]]:
         """
         Retrieve the role history for a specific agent.
 
@@ -592,7 +598,7 @@ class ChromaVectorStoreManager:
             return []  # Return empty list on error instead of raising an exception
 
     def retrieve_role_specific_memories(
-        self,
+        self: Self,
         agent_id: str,
         query: str | None = None,
         role: str | None = None,
@@ -680,7 +686,7 @@ class ChromaVectorStoreManager:
             )
 
     def query_memories(
-        self,
+        self: Self,
         agent_id: str,
         query: str,
         k: int = 3,
@@ -758,7 +764,7 @@ class ChromaVectorStoreManager:
 
         return filtered_memories
 
-    def get_l2_summaries_older_than(self, max_age_days: int) -> list[str]:
+    def get_l2_summaries_older_than(self: Self, max_age_days: int) -> list[str]:
         """
         Retrieve IDs of Level 2 summaries that are older than the specified maximum age in days.
 
@@ -822,7 +828,7 @@ class ChromaVectorStoreManager:
         logger.info(f"Found {len(ids_to_prune)} L2 summaries older than {max_age_days} days")
         return ids_to_prune
 
-    def delete_memories_by_ids(self, ids: list[str]) -> bool:
+    def delete_memories_by_ids(self: Self, ids: list[str]) -> bool:
         """
         Delete memories from ChromaDB by their IDs.
 
@@ -893,13 +899,12 @@ class ChromaVectorStoreManager:
                             still_exist.extend(check_results["ids"])
                     except Exception as check_error:
                         logger.error(
-                            f"Error checking existence of IDs after deletion: " f"{check_error}"
+                            f"Error checking existence of IDs after deletion: {check_error}"
                         )
 
                 if still_exist:
                     logger.warning(
-                        f"{len(still_exist)} IDs still exist after deletion attempt: "
-                        f"{still_exist}"
+                        f"{len(still_exist)} IDs still exist after deletion attempt: {still_exist}"
                     )
 
                 return False
@@ -909,7 +914,7 @@ class ChromaVectorStoreManager:
             return False
 
     def get_memory_ids_in_step_range(
-        self, agent_id: str, memory_type: str, start_step: int, end_step: int
+        self: Self, agent_id: str, memory_type: str, start_step: int, end_step: int
     ) -> list[str]:
         """
         Get IDs of memories within a specific step range for an agent.
@@ -1018,7 +1023,7 @@ class ChromaVectorStoreManager:
             logger.error(f"Error retrieving memory IDs in step range: {e}", exc_info=True)
             return []
 
-    def _calculate_mus(self, metadata: dict[str, Any]) -> float:
+    def _calculate_mus(self: Self, metadata: dict[str, Any]) -> float:
         """
         Calculates the Memory Utility Score (MUS) for a memory.
         MUS = (0.4 x Retrieval Frequency Score) + (0.4 x Relevance Score) + (0.2 x Recency Score)
@@ -1081,7 +1086,7 @@ class ChromaVectorStoreManager:
         return mus
 
     def get_l1_memories_for_mus_pruning(
-        self, mus_threshold: float, min_age_days: int
+        self: Self, mus_threshold: float, min_age_days: int
     ) -> list[str]:
         """
         Return IDs of L1 summaries (memory_type == 'consolidated_summary') that are older than
@@ -1136,7 +1141,7 @@ class ChromaVectorStoreManager:
         return ids_to_prune
 
     def get_l2_memories_for_mus_pruning(
-        self, mus_threshold: float, min_age_days: int
+        self: Self, mus_threshold: float, min_age_days: int
     ) -> list[str]:
         """
         Return IDs of L2 summaries (memory_type == 'chapter_summary') that are older than
@@ -1211,7 +1216,7 @@ class ChromaVectorStoreManager:
         )
         return ids_to_prune
 
-    def get_embedding(self, text: str) -> list[float]:
+    def get_embedding(self: Self, text: str) -> list[float]:
         """
         Get the embedding for a piece of text using the embedding function.
 
@@ -1228,7 +1233,7 @@ class ChromaVectorStoreManager:
             logger.error(f"Error generating embedding: {e}")
             return [0.0] * 384
 
-    def get_metadata_without_tracking(self, memory_ids: list[str]) -> list[dict[str, Any]]:
+    def get_metadata_without_tracking(self: Self, memory_ids: list[str]) -> list[dict[str, Any]]:
         """
         Get metadata for memories without incrementing tracking stats.
 

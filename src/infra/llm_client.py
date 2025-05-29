@@ -113,11 +113,11 @@ except Exception as e:
     # raise ConnectionError(f"Could not connect to Ollama at {OLLAMA_API_BASE}") from e
 
 
-def get_ollama_client() -> Optional[ollama.Client]:
+def get_ollama_client() -> Any:
     """Returns the initialized Ollama client instance."""
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
-    return cast(Optional[ollama.Client], client)  # type: ignore[no-any-unimported] # Dynamic import or external stub issue
+    return cast(Any, client)
 
 
 def _retry_with_backoff(
@@ -505,7 +505,7 @@ def generate_structured_output(
         return None
 
 
-def get_default_llm_client() -> ollama.Client | None:
+def get_default_llm_client() -> Any:
     """
     Creates and returns a default LLM client instance for use in simulations.
     This function is a convenience wrapper that returns the global client.

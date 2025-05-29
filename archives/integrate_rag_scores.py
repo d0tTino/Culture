@@ -10,9 +10,10 @@ import argparse
 import csv
 import json
 import os
+from typing import Any
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Integrate RAG assessment scores")
     parser.add_argument(
@@ -30,7 +31,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
     """Main function to integrate the scores."""
     args = parse_args()
 
@@ -107,9 +108,9 @@ def main():
     print(f"Loaded {len(scores)} valid assessment scores")
 
     # Group scores by scenario
-    scenario_scores = {}
+    scenario_scores: dict[str, list[dict[str, Any]]] = {}
     for score in scores:
-        scenario_id = score["scenario_id"]
+        scenario_id = str(score["scenario_id"])
         if scenario_id not in scenario_scores:
             scenario_scores[scenario_id] = []
         scenario_scores[scenario_id].append(score)
@@ -158,7 +159,8 @@ def main():
                     updated = True
                 else:
                     print(
-                        f"Warning: Query number {query_num} out of range for agent {agent_id} in scenario {scenario_id}"
+                        f"Warning: Query number {query_num} out of range for agent {agent_id} "
+                        f"in scenario {scenario_id}"
                     )
             else:
                 print(f"Warning: Agent {agent_id} not found in scenario {scenario_id}")
@@ -178,7 +180,7 @@ def main():
     return 0
 
 
-def calculate_rag_metrics(data):
+def calculate_rag_metrics(data: dict[str, Any]) -> None:
     """Calculate overall RAG metrics for the scenario."""
     total_score = 0
     total_count = 0
@@ -214,7 +216,12 @@ def calculate_rag_metrics(data):
                     "human_evaluation_score" in query
                     and "average" in query["human_evaluation_score"]
                 ):
-                    if query["human_evaluation_score"]["average"] >= 3.5:
+                    avg = query["human_evaluation_score"]["average"]
+                    try:
+                        avg_f = float(avg)
+                    except (TypeError, ValueError):
+                        continue
+                    if avg_f >= 3.5:
                         success_count += 1
 
         data["rag_assessment"]["success_rate"] = (

@@ -6,7 +6,7 @@ Provides a MockLLM context manager for LLM-dependent tests.
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Optional
+from typing import Any, Optional, cast
 from unittest.mock import patch
 
 logger = logging.getLogger(__name__)
@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def MockLLM(
-    responses: Optional[dict[str, str]] = None, strict_mode: bool = True
+    responses: Optional[dict[str, Any]] = None, strict_mode: bool = True
 ) -> Iterator[None]:
     """
     Context manager for mocking LLM responses in tests.
 
     Args:
-        responses (dict[str, str], optional): Predefined responses for prompts.
+        responses (dict[str, Any], optional): Predefined responses for prompts.
         strict_mode (bool): Raise if no matching response is found.
 
     Example:
@@ -46,7 +46,8 @@ def MockLLM(
     def mock_generate_text(*args: str, **kwargs: str) -> str:
         logger.info("MockLLM: Intercepted generate_text call")
         prompt = kwargs.get("prompt", "") if kwargs else args[0] if args else ""
-        return responses.get(prompt, responses.get("default", "Default mock response"))
+        result = responses.get(prompt, responses.get("default", "Default mock response"))
+        return cast(str, result)
 
     def mock_analyze_sentiment(*args: str, **kwargs: str) -> float:
         logger.info("MockLLM: Intercepted analyze_sentiment call")
@@ -56,18 +57,22 @@ def MockLLM(
         logger.info("MockLLM: Intercepted summarize_memory_context call")
         return "Mocked memory context summary"
 
-    def mock_generate_structured_output(*args: str, **kwargs: str) -> dict[str, str]:
+    def mock_generate_structured_output(*args: str, **kwargs: str) -> dict[str, Any]:
         logger.info("MockLLM: Intercepted generate_structured_output call")
         if strict_mode and "structured_output" not in responses:
             raise Exception("No structured_output in responses")
-        return responses.get("structured_output", {})
+        result = responses.get("structured_output", {})
+        if isinstance(result, dict):
+            return result
+        return {}
 
     def mock_generate_response(*args: str, **kwargs: str) -> str:
         logger.info("MockLLM: Intercepted generate_response call")
         prompt = kwargs.get("prompt", "") if kwargs else args[0] if args else ""
-        return responses.get(prompt, responses.get("default", "Default mock response"))
+        result = responses.get(prompt, responses.get("default", "Default mock response"))
+        return cast(str, result)
 
-    def mock_ollama_chat(*args: str, **kwargs: str) -> dict[str, str]:
+    def mock_ollama_chat(*args: str, **kwargs: str) -> dict[str, Any]:
         logger.info("MockLLM: Intercepted Ollama chat call")
         return {"message": {"content": responses.get("default", "Default Ollama response")}}
 

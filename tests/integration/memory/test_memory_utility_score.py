@@ -8,8 +8,10 @@ import logging
 import math
 import unittest
 from datetime import datetime
+from typing import Any, Optional, cast
 
 import pytest
+from typing_extensions import Self
 
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from tests.utils.mock_llm import MockLLM
@@ -35,29 +37,36 @@ class TestMemoryUtilityScore(unittest.TestCase):
     """
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self, request, chroma_test_dir):
+    def _inject_fixtures(self: Self, request: object, chroma_test_dir: str) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 
-    def setUp(self):
+    def setUp(self: Self) -> None:
         self.mock_llm_cm = MockLLM({"default": "Mocked response for memory utility score tests"})
         self.mock_llm_cm.__enter__()
         self.vector_store_dir = self.chroma_test_dir
-        self.vector_store = ChromaVectorStoreManager(persist_directory=self.vector_store_dir)
+        self.vector_store: Optional[ChromaVectorStoreManager] = ChromaVectorStoreManager(
+            persist_directory=self.vector_store_dir
+        )
         self.agent_id = "test_agent_1"
         self.memory_ids = []
         memory_id = self.vector_store.add_memory(
             agent_id=self.agent_id,
             step=1,
             event_type="thought",
-            content="Important insight about the core problem we're solving with the transformer architecture.",
+            content=(
+                "Important insight about the core problem we're solving with the "
+                "transformer architecture."
+            ),
         )
         self.memory_ids.append(memory_id)
         memory_id = self.vector_store.add_memory(
             agent_id=self.agent_id,
             step=2,
             event_type="broadcast_sent",
-            content="I've been thinking about how we could optimize the encoder-decoder architecture.",
+            content=(
+                "I've been thinking about how we could optimize the encoder-decoder architecture."
+            ),
         )
         self.memory_ids.append(memory_id)
         memory_id = self.vector_store.add_memory(
@@ -68,19 +77,20 @@ class TestMemoryUtilityScore(unittest.TestCase):
         )
         self.memory_ids.append(memory_id)
 
-    def tearDown(self):
+    def tearDown(self: Self) -> None:
         self.mock_llm_cm.__exit__(None, None, None)
-        if hasattr(self, "vector_store") and hasattr(self.vector_store, "client"):
+        if self.vector_store is not None and hasattr(self.vector_store, "client"):
             if hasattr(self.vector_store.client, "close"):
                 self.vector_store.client.close()
-                self.vector_store = None
+        self.vector_store = None
 
-    def test_memory_utility_score_calculation(self):
+    def test_memory_utility_score_calculation(self: Self) -> None:
         """
         Test calculating the Memory Utility Score for memories.
         This demonstrates the implementation of the MUS formula from the design proposal:
         MUS = (0.4 * RFS) + (0.4 * RS) + (0.2 * RecS)
         """
+        assert self.vector_store is not None
         # Perform multiple retrievals to simulate different usage patterns
 
         # Memory 1: High relevance - retrieve multiple times with highly relevant queries
@@ -105,23 +115,25 @@ class TestMemoryUtilityScore(unittest.TestCase):
         )
 
         # Calculate Memory Utility Score for all memories
-        all_memory_mus = []
+        all_memory_mus: list[dict[str, Any]] = []
 
         # Get all memories with their metadata
         results = self.vector_store.collection.get(
             ids=self.memory_ids, include=["metadatas", "documents"]
         )
+        metadatas = results["metadatas"] if results["metadatas"] is not None else []
+        documents = results["documents"] if results["documents"] is not None else []
 
         # Process each memory
         for i, memory_id in enumerate(self.memory_ids):
-            metadata = results["metadatas"][i]
-            document = results["documents"][i]
+            metadata = metadatas[i] if i < len(metadatas) else {}
+            document = documents[i] if i < len(documents) else ""
 
             # Extract usage statistics
-            retrieval_count = metadata.get("retrieval_count", 0)
-            last_retrieved = metadata.get("last_retrieved_timestamp", "")
-            relevance_count = metadata.get("retrieval_relevance_count", 0)
-            accumulated_relevance = metadata.get("accumulated_relevance_score", 0.0)
+            retrieval_count = int(metadata.get("retrieval_count", 0))
+            last_retrieved = str(metadata.get("last_retrieved_timestamp", ""))
+            relevance_count = int(metadata.get("retrieval_relevance_count", 0))
+            accumulated_relevance = float(metadata.get("accumulated_relevance_score", 0.0))
 
             # Skip if never retrieved
             if retrieval_count == 0:
@@ -179,33 +191,49 @@ class TestMemoryUtilityScore(unittest.TestCase):
             logger.info(f"  Memory Utility Score: {mus:.3f}")
 
         # Sort memories by MUS (highest to lowest)
-        all_memory_mus.sort(key=lambda x: x["mus"], reverse=True)
+        all_memory_mus.sort(key=lambda x: cast(float, x["mus"]), reverse=True)
 
         # Print ranking
         logger.info("\nMemory Ranking by Utility Score:")
         for i, mem in enumerate(all_memory_mus):
             logger.info(
-                f"{i + 1}. MUS={mem['mus']:.3f}, Retrievals={mem['retrieval_count']}: {mem['document'][:50]}..."
+                f"{i + 1}. MUS={mem['mus']:.3f}, Retrievals={mem['retrieval_count']}: "
+                f"{mem['document'][:50]}..."
             )
 
         # Demonstrate pruning decision
         if len(all_memory_mus) >= 3:
             # Verify that Memory 1 has a higher utility score than Memory 3
             high_relevance_mem = next(
-                (m for m in all_memory_mus if "transformer architecture" in m["document"]), None
+                (
+                    m
+                    for m in all_memory_mus
+                    if isinstance(m["document"], str)
+                    and "transformer architecture" in m["document"]
+                ),
+                None,
             )
             low_relevance_mem = next(
-                (m for m in all_memory_mus if "weather" in m["document"]), None
+                (
+                    m
+                    for m in all_memory_mus
+                    if isinstance(m["document"], str) and "weather" in m["document"]
+                ),
+                None,
             )
 
-            if high_relevance_mem and low_relevance_mem:
+            if high_relevance_mem is not None and low_relevance_mem is not None:
                 self.assertGreater(
-                    high_relevance_mem["mus"],
-                    low_relevance_mem["mus"],
-                    "High relevance memory should have higher utility score than low relevance memory",
+                    cast(float, high_relevance_mem["mus"]),
+                    cast(float, low_relevance_mem["mus"]),
+                    (
+                        "High relevance memory should have higher utility score than "
+                        "low relevance memory"
+                    ),
                 )
                 logger.info(
-                    "✓ High relevance memory has higher utility score than low relevance memory"
+                    "\u2713 High relevance memory has higher utility score "
+                    "than low relevance memory"
                 )
 
             # Top N retention demonstration

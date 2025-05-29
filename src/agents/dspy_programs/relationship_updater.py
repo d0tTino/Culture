@@ -1,4 +1,4 @@
-# ruff: noqa: E501, ANN101, ANN401
+# ruff: noqa: E501, ANN101
 import logging
 import os
 
@@ -7,7 +7,7 @@ import dspy
 logger = logging.getLogger(__name__)
 
 
-class RelationshipUpdaterSignature(dspy.Signature):  # type: ignore[no-any-unimported,misc]
+class RelationshipUpdaterSignature(dspy.Signature):  # type: ignore[no-any-unimported]
     """
     Updates the relationship score between two agents based on their interaction, personas,
     and sentiment.
@@ -57,11 +57,42 @@ class FailsafeRelationshipUpdater:
         agent2_persona: str,
         interaction_sentiment: float,
     ) -> object:
+        # Simulate DSPy prediction output for demonstration
+        prediction = type(
+            "Prediction",
+            (),
+            {"new_relationship_score": current_relationship_score},
+        )()
+        dspy_result = prediction
+        raw_score_from_dspy: float | None = getattr(
+            dspy_result, "new_relationship_score", None
+        )  # Justification: DSPy dynamic output, may be float or None
+
+        temp_score_str: str
+        if raw_score_from_dspy is not None:
+            temp_score_str = str(raw_score_from_dspy).strip()
+        else:
+            temp_score_str = ""  # Default to empty string if attribute missing or None
+
+        potential_score: float = current_relationship_score  # Default to current score
+
+        if temp_score_str:  # Only attempt conversion if string is not empty
+            try:
+                converted_value: float = float(temp_score_str)
+                potential_score = converted_value
+            except ValueError:
+                logger.warning(
+                    f"Could not convert score '{temp_score_str}' to float for relationship update. "
+                    f"Defaulting to current score: {current_relationship_score}."
+                )
+                # potential_score already holds current_relationship_score
+
+        new_relationship_score = potential_score
         return type(
             "FailsafeResult",
             (),
             {
-                "new_relationship_score": current_relationship_score,
+                "new_relationship_score": new_relationship_score,
                 "relationship_change_rationale": (
                     "Failsafe: Relationship update skipped due to processing error."
                 ),
@@ -105,7 +136,7 @@ def get_relationship_updater() -> object:
         return FailsafeRelationshipUpdater()
 
 
-def get_failsafe_output(*args: object, **kwargs: object) -> object:
+def get_failsafe_output(*args: float, **kwargs: float) -> object:
     current_relationship_score: float = (
         args[0] if args else kwargs.get("current_relationship_score", 0.0)
     )
@@ -131,10 +162,3 @@ def update_relationship(
 def test_relationship_update() -> None:
     # Implementation of the function
     pass
-
-
-# NOTE: As of 2025-05-18, this file is fully Ruff and Mypy (strict mode) compliant except for a misattributed assignment error at line 104:
-#   'Incompatible types in assignment (expression has type "object", variable has type "float")  [assignment]'
-# There is no such assignment in this file. This is a known Mypy false positive, likely due to dynamic return types from FailsafeRelationshipUpdater.
-# See: https://github.com/python/mypy/issues/12358 for discussion of similar issues.
-# All other type, linter, and formatting issues have been resolved and justified ignores are documented.

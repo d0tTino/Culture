@@ -1,11 +1,12 @@
 import pytest
+from pytest import MonkeyPatch
 
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 
 
 @pytest.mark.unit
-def test_l1_summary_generator_failsafe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_l1_summary_generator_failsafe(monkeypatch: MonkeyPatch) -> None:
     gen = L1SummaryGenerator()
     # Patch l1_predictor to None to trigger fallback
     gen.l1_predictor = None
@@ -15,7 +16,7 @@ def test_l1_summary_generator_failsafe(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.unit
-def test_l2_summary_generator_failsafe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_l2_summary_generator_failsafe(monkeypatch: MonkeyPatch) -> None:
     gen = L2SummaryGenerator()
     # Patch l2_predictor to None to trigger fallback/error
     gen.l2_predictor = None

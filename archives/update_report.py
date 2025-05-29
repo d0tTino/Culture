@@ -16,7 +16,7 @@ import os
 import numpy as np
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Update comparative data and visualizations")
     parser.add_argument(
@@ -34,7 +34,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
     """Main function to update the data and visualizations."""
     args = parse_args()
 
@@ -198,7 +198,7 @@ def main():
     return 0
 
 
-def update_report(report_file, comparative_data):
+def update_report(report_file: str, comparative_data: dict) -> None:
     """Update the MUS threshold tuning report with RAG performance analysis."""
     if not os.path.exists(report_file):
         print(f"Error: Report file not found at {report_file}")
@@ -245,13 +245,45 @@ def update_report(report_file, comparative_data):
             "\n",
             "#### RAG Performance Analysis\n",
             "\n",
-            "The human evaluation of RAG queries reveals important insights about how different MUS threshold configurations affect information retrieval quality:\n",
+            "The human evaluation of RAG queries reveals important insights about how different "
+            "MUS threshold configurations affect information retrieval quality:\n",
             "\n",
-            f"- **Best RAG Performance**: The {comparative_data['summary']['best_rag_performance']} configuration achieved the highest average RAG score, demonstrating superior information retrieval quality.\n",
+            (
+                f"- **Best RAG Performance**: The "
+                f"{comparative_data['summary']['best_rag_performance']} "
+                "configuration achieved the highest "
+                "average RAG score, demonstrating superior information retrieval quality.\n"
+            ),
             "\n",
-            "- **Memory Efficiency vs. RAG Performance**: There is a trade-off between memory efficiency and RAG performance. Configurations with very aggressive pruning (e.g., `mus_very_low`) show high memory efficiency but lower RAG scores, indicating important information may be lost.\n",
+            (
+                "- **Memory Efficiency vs. RAG Performance**: There is a trade-off between memory "
+                "efficiency and RAG performance. Configurations with very "
+                "aggressive pruning (e.g., "
+                "`mus_very_low`) show high memory efficiency but lower RAG scores, "
+                "indicating important information may be lost.\n"
+            ),
             "\n",
-            "- **Balanced Configurations**: The {comparative_data['summary']['recommended_configuration']} configuration provides the best balance between memory efficiency and RAG performance, with an overall score that optimizes both metrics.\n",
+            (
+                "- **Balanced Configurations**: The "
+                f"{comparative_data['summary']['recommended_configuration']} "
+                "configuration provides the best balance between memory efficiency and "
+                "RAG performance, with an overall score that optimizes both metrics.\n"
+            ),
+            "\n",
+            (
+                "- **Memory Efficiency vs. RAG Performance**: There is a trade-off between memory "
+                "efficiency and RAG performance. Configurations with very "
+                "aggressive pruning (e.g., "
+                "`mus_very_low`) show high memory efficiency but lower RAG scores, "
+                "indicating important information may be lost.\n"
+            ),
+            "\n",
+            (
+                "- **Balanced Configurations**: The "
+                f"{comparative_data['summary']['recommended_configuration']} "
+                "configuration provides the best balance between memory efficiency and "
+                "RAG performance, with an overall score that optimizes both metrics.\n"
+            ),
             "\n",
             "![RAG Performance by Scenario](./tuning_results/rag_scores.png)\n",
             "\n",
@@ -298,19 +330,36 @@ def update_report(report_file, comparative_data):
             "\n",
             "### Final Analysis\n",
             "\n",
-            "After analyzing both quantitative memory metrics and qualitative RAG performance assessments, we have identified the optimal MUS threshold configuration that balances memory efficiency with information retrieval quality.\n",
+            (
+                "After analyzing both quantitative memory metrics and qualitative RAG performance "
+                "assessments, we have identified the optimal MUS threshold configuration that "
+                "balances memory efficiency with information retrieval quality.\n"
+            ),
             "\n",
-            f"The **{best_config}** configuration ({best_config_description}) provides the best overall performance with:\n",
+            (
+                f"The **{best_config}** configuration ("
+                f"{best_config_description}) provides the best overall performance with:\n"
+            ),
             "\n",
-            f"- Memory Efficiency Score: {best_config_data.get('memory_efficiency_score', 0.0):.3f}\n",
-            f"- RAG Performance Score: {best_config_data.get('rag_assessment', {}).get('avg_score', 0.0):.3f} / 5.0\n",
-            f"- Overall Score: {best_config_data.get('overall_score', 0.0):.3f}\n",
+            (
+                f"- Memory Efficiency Score: "
+                f"{best_config_data.get('memory_efficiency_score', 0.0):.3f}\n"
+            ),
+            (
+                f"- RAG Performance Score: "
+                f"{best_config_data.get('rag_assessment', {}).get('avg_score', 0.0):.3f} / 5.0\n"
+            ),
+            (f"- Overall Score: {best_config_data.get('overall_score', 0.0):.3f}\n"),
             "\n",
-            "This configuration strikes an optimal balance between maintaining a compact memory footprint and preserving the most useful information for retrieval.\n",
+            (
+                "This configuration strikes an optimal balance between maintaining a compact "
+                "memory footprint and preserving the most useful information for retrieval.\n"
+            ),
             "\n",
             "### Top Configuration Rankings\n",
             "\n",
-            "| Rank | Configuration | Overall Score | Memory Efficiency | RAG Performance | Memory Retention % |\n",
+            "| Rank | Configuration | Overall Score | Memory Efficiency | "
+            "RAG Performance | Memory Retention % |\n",
             "|------|--------------|---------------|-------------------|-----------------|-------------------|\n",
         ]
 
@@ -341,7 +390,8 @@ def update_report(report_file, comparative_data):
             )
 
             recommendations.append(
-                f"| {i + 1} | {scenario_id} | {overall_score:.3f} | {mem_efficiency:.3f} | {rag_score:.2f} | {retention_pct:.1f}% |\n"
+                f"| {i + 1} | {scenario_id} | {overall_score:.3f} | {mem_efficiency:.3f} | "
+                f"{rag_score:.2f} | {retention_pct:.1f}% |\n"
             )
 
         # Add recommended MUS threshold settings

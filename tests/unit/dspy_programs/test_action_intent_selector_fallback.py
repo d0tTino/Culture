@@ -1,9 +1,10 @@
-import pytest
+from pytest import MonkeyPatch
+from typing_extensions import Self
 
 from src.agents.dspy_programs import action_intent_selector
 
 
-def test_action_intent_selector_failsafe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_action_intent_selector_failsafe(monkeypatch: MonkeyPatch) -> None:
     # Patch load_optimized_program to always raise
     monkeypatch.setattr(
         action_intent_selector,
@@ -13,7 +14,7 @@ def test_action_intent_selector_failsafe(monkeypatch: pytest.MonkeyPatch) -> Non
 
     # Patch select_action_intent_module to a dummy callable that also raises
     class Dummy:
-        def __call__(self, *a: object, **k: object) -> None:
+        def __call__(self: Self, *a: object, **k: object) -> None:
             raise Exception("Simulated base failure")
 
     monkeypatch.setattr(action_intent_selector, "select_action_intent_module", Dummy())

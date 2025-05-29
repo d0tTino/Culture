@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
+from typing_extensions import Self
 
 from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
 
@@ -15,7 +16,7 @@ from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesiz
 class TestRAGContextSynthesizer(unittest.TestCase):
     """Test cases for the RAGContextSynthesizer class."""
 
-    def setUp(self):
+    def setUp(self: Self) -> None:
         """Set up for each test case"""
         # Create a patch for the dspy configuration to prevent actual Ollama calls
         patcher = patch(
@@ -28,7 +29,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
         self.synthesizer = RAGContextSynthesizer()
 
     @patch("src.agents.dspy_programs.rag_context_synthesizer.os.path.exists")
-    def test_initialization_without_compiled_program(self, mock_exists: MagicMock) -> None:
+    def test_initialization_without_compiled_program(self: Self, mock_exists: MagicMock) -> None:
         """Test that the class initializes correctly when no compiled program exists."""
         # Set up mock
         mock_exists.return_value = False
@@ -45,7 +46,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
     @patch("src.agents.dspy_programs.rag_context_synthesizer.os.path.exists")
     @patch("dspy.Predict.load")
     def test_initialization_with_compiled_program(
-        self, mock_load: MagicMock, mock_exists: MagicMock
+        self: Self, mock_load: MagicMock, mock_exists: MagicMock
     ) -> None:
         """Test that the class initializes correctly when a compiled program exists."""
         # Set up mocks
@@ -61,7 +62,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
         # Verify synthesizer has a dspy_program
         self.assertIsNotNone(synthesizer.dspy_program)
 
-    def test_clean_output_with_bracket_prefix(self):
+    def test_clean_output_with_bracket_prefix(self: Self) -> None:
         """Test that _clean_output removes the ']]' prefix from text."""
         # Test cases with the bracket prefix
         test_cases = [
@@ -77,7 +78,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
             self.assertTrue(cleaned.startswith("This"))
             self.assertFalse("]]" in cleaned)
 
-    def test_clean_output_without_bracket_prefix(self):
+    def test_clean_output_without_bracket_prefix(self: Self) -> None:
         """Test that _clean_output handles text without the prefix correctly."""
         # Test cases without the bracket prefix
         test_cases = [
@@ -91,7 +92,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
             cleaned = self.synthesizer._clean_output(test_input)
             self.assertEqual(cleaned, test_input.strip())
 
-    def test_synthesize_success(self):
+    def test_synthesize_success(self: Self) -> None:
         """Test the synthesize method with a successful prediction."""
         # Create a mock prediction with the known artifact
         mock_prediction = MagicMock()
@@ -112,7 +113,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
             context="Test context", question="Test question"
         )
 
-    def test_synthesize_error_handling(self):
+    def test_synthesize_error_handling(self: Self) -> None:
         """Test that synthesize handles errors gracefully."""
         # Make the dspy_program raise an exception when called
         self.synthesizer.dspy_program = MagicMock()

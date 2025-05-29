@@ -8,13 +8,13 @@ import logging
 import sys
 from pathlib import Path
 
+# Import the RAGContextSynthesizer
+from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
+
 # Add the project root to the Python path
 current_dir = Path(__file__).parent
 project_root = current_dir.parent.parent.parent
 sys.path.insert(0, str(project_root))
-
-# Import the RAGContextSynthesizer
-from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

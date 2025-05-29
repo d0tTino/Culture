@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # ruff: noqa: RUF006
+import argparse
 import asyncio
 import logging
 import sys
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-import discord
+from typing_extensions import Self
 
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.sim.knowledge_board import KnowledgeBoard
@@ -71,6 +72,7 @@ class Simulation:
         """
         self.agents: list[Agent] = agents
         self.current_step: int = 0
+        self.current_agent_index: int = 0  # Initialize current_agent_index
         self.steps_to_run: int = 0  # Number of steps to run, set externally
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
@@ -87,7 +89,9 @@ class Simulation:
         logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -115,7 +119,7 @@ class Simulation:
             )
 
         # --- Store broadcasts from the previous step ---
-        self.last_step_broadcasts: list[dict[str, any]] = []
+        self.last_step_broadcasts: list[dict[str, Any]] = []
         logger.info("Initialized storage for last step's broadcasts.")
         # --- End NEW ---
 
@@ -134,7 +138,7 @@ class Simulation:
             )
 
     # Add method to update collective metrics
-    def _update_collective_metrics(self):
+    def _update_collective_metrics(self: Self) -> None:
         """
         Updates the collective IP and DU metrics by summing across all agents.
         """
@@ -150,14 +154,14 @@ class Simulation:
         self.collective_du = total_du
 
     async def send_discord_update(
-        self, message: Optional[str] = None, embed: Optional[discord.Embed] = None
-    ):
+        self: Self, message: Optional[str] = None, embed: Optional[object] = None
+    ) -> None:
         """
         Send an update to Discord if the discord_bot is available.
 
         Args:
             message (Optional[str]): The text message to send to Discord
-            embed (Optional[discord.Embed]): The embed object to send to Discord
+            embed (Optional[object]): The embed object to send to Discord
         """
         if self.discord_bot:
             # Use asyncio.create_task to avoid blocking the simulation
@@ -165,7 +169,7 @@ class Simulation:
                 self.discord_bot.send_simulation_update(content=message, embed=embed)
             )
 
-    async def run_step(self, max_turns: int = 1) -> int:
+    async def run_step(self: Self, max_turns: int = 1) -> int:
         """
         Runs the simulation for a specified number of steps.
 
@@ -221,149 +225,162 @@ class Simulation:
                 # --- Process Each Agent's Turn ---
                 # A list to store all messages generated in this step (for next step)
                 this_step_messages = []
+                # Store the index of the agent whose turn just ended for state updates
+                self.previous_agent_index_for_turn_end_update: int = 0
 
-                for agent in self.agents:
-                    try:
-                        agent_id = agent.agent_id
-                        agent_state = agent.state
-                        logger.info(f"Running turn for Agent {agent_id} at step {current_step}...")
+                # Iterate through agents based on current_agent_index, for one full cycle or max_turns
+                # This loop structure might need adjustment if a single run_step is meant to be a single agent's turn
+                # For now, assuming run_step processes one agent's turn from the current_agent_index
 
-                        # Check and report agent's current state before turn
-                        current_role = agent_state.role
-                        current_ip = agent_state.ip
-                        current_du = agent_state.du
-                        current_mood = agent_state.mood
+                if not self.agents:
+                    logger.warning("No agents in simulation to run a turn.")
+                    return steps_executed
 
-                        # Update agent's perception of collective metrics
-                        agent_state.update_collective_metrics(
-                            self.collective_ip, self.collective_du
+                agent_to_run_index = self.current_agent_index
+                agent = self.agents[agent_to_run_index]
+
+                try:
+                    agent_id = agent.agent_id
+                    agent_state = agent.state
+                    logger.info(f"Running turn for Agent {agent_id} at step {current_step}...")
+
+                    # Check and report agent's current state before turn
+                    current_role = agent_state.role
+                    current_ip = agent_state.ip
+                    current_du = agent_state.du
+                    current_mood = agent_state.mood
+
+                    # Update agent's perception of collective metrics
+                    agent_state.update_collective_metrics(self.collective_ip, self.collective_du)
+
+                    # Ensure agent has access to llm_client for memory operations
+                    if hasattr(self, "llm_client") and self.llm_client:
+                        agent_state.llm_client = self.llm_client
+
+                    # Prepare the perception dictionary
+                    perception_data = {
+                        # Add other perception data here if needed in the future
+                        "other_agents_state": (
+                            other_agents_state  # List of dicts with richer info
+                        ),
+                        # --- ADD perceived messages ---
+                        # Filter messages: only broadcasts (recipient_id=None) OR
+                        # messages specifically targeted to this agent
+                        "perceived_messages": [
+                            msg
+                            for msg in last_step_messages
+                            if msg.get("recipient_id") is None
+                            or msg.get("recipient_id") == agent_id
+                        ],
+                        # --- Add Knowledge Board content ---
+                        "knowledge_board_content": board_state,  # Pass the current board state
+                        # --- Add simulation scenario ---
+                        "scenario_description": self.scenario,  # Pass the simulation scenario
+                        # --- Add available projects ---
+                        "available_projects": (
+                            self.get_project_details()  # Pass all projects for perception
+                        ),
+                        # --- Add simulation reference for project actions ---
+                        "simulation": (
+                            self  # Pass the simulation instance for project operations
+                        ),
+                        # --- Add collective metrics ---
+                        "collective_ip": self.collective_ip,
+                        "collective_du": self.collective_du,
+                        # --- End ADD ---
+                    }
+
+                    # Run the agent's turn with perception data
+                    agent_output = await agent.run_turn(
+                        simulation_step=current_step,
+                        environment_perception=perception_data,
+                        vector_store_manager=self.vector_store_manager,
+                        knowledge_board=self.knowledge_board,
+                    )
+
+                    # --- Process Agent Output ---
+                    # Add any broadcasts/messages to the collection for next step
+                    message_content = agent_output.get("message_content")
+                    message_recipient_id = agent_output.get("message_recipient_id")
+                    action_intent = agent_output.get("action_intent", "idle")
+
+                    if message_content:
+                        message_type = (
+                            "broadcast"
+                            if message_recipient_id is None
+                            else f"targeted to {message_recipient_id}"
                         )
-
-                        # Ensure agent has access to llm_client for memory operations
-                        if hasattr(self, "llm_client") and self.llm_client:
-                            agent_state.llm_client = self.llm_client
-
-                        # Prepare the perception dictionary
-                        perception_data = {
-                            # Add other perception data here if needed in the future
-                            "other_agents_state": (
-                                other_agents_state  # List of dicts with richer info
-                            ),
-                            # --- ADD perceived messages ---
-                            # Filter messages: only broadcasts (recipient_id=None) OR
-                            # messages specifically targeted to this agent
-                            "perceived_messages": [
-                                msg
-                                for msg in last_step_messages
-                                if msg.get("recipient_id") is None
-                                or msg.get("recipient_id") == agent_id
-                            ],
-                            # --- Add Knowledge Board content ---
-                            "knowledge_board_content": board_state,  # Pass the current board state
-                            # --- Add simulation scenario ---
-                            "scenario_description": self.scenario,  # Pass the simulation scenario
-                            # --- Add available projects ---
-                            "available_projects": (
-                                self.get_project_details()  # Pass all projects for perception
-                            ),
-                            # --- Add simulation reference for project actions ---
-                            "simulation": (
-                                self  # Pass the simulation instance for project operations
-                            ),
-                            # --- Add collective metrics ---
-                            "collective_ip": self.collective_ip,
-                            "collective_du": self.collective_du,
-                            # --- End ADD ---
-                        }
-
-                        # Run the agent's turn with perception data
-                        agent_output = await agent.run_turn(
-                            simulation_step=current_step,
-                            environment_perception=perception_data,
-                            vector_store_manager=self.vector_store_manager,
-                            knowledge_board=self.knowledge_board,
-                        )
-
-                        # --- Process Agent Output ---
-                        # Add any broadcasts/messages to the collection for next step
-                        message_content = agent_output.get("message_content")
-                        message_recipient_id = agent_output.get("message_recipient_id")
-                        action_intent = agent_output.get("action_intent", "idle")
-
-                        if message_content:
-                            message_type = (
-                                "broadcast"
-                                if message_recipient_id is None
-                                else f"targeted to {message_recipient_id}"
-                            )
-                            logger.info(
-                                f"Agent {agent_id} sent a message ({message_type}): "
-                                f"'{message_content}'"
-                            )
-
-                            # Store the message for the next step's perception
-                            this_step_messages.append(
-                                {
-                                    "step": current_step,
-                                    "sender_id": agent_id,
-                                    "recipient_id": message_recipient_id,
-                                    "content": message_content,
-                                    "action_intent": action_intent,
-                                }
-                            )
-
-                            # Send message to Discord if integration enabled
-                            if self.discord_bot:
-                                message_embed = self.discord_bot.create_agent_message_embed(
-                                    agent_id=agent_id,
-                                    message_content=message_content,
-                                    recipient_id=message_recipient_id,
-                                    action_intent=action_intent,
-                                    agent_role=current_role,
-                                    mood=current_mood,
-                                    step=current_step,
-                                )
-                                _ = asyncio.create_task(
-                                    self.discord_bot.send_simulation_update(embed=message_embed)
-                                )
-
-                        # Process action intent if any
-                        if action_intent and action_intent != "idle":
-                            logger.info(
-                                f"Agent {agent_id} performed action intent: {action_intent}"
-                            )
-
-                            # Send intent action to Discord if integration enabled
-                            if (
-                                self.discord_bot and not message_content
-                            ):  # Only if no message was sent
-                                action_embed = self.discord_bot.create_agent_action_embed(
-                                    agent_id=agent_id,
-                                    action_intent=action_intent,
-                                    agent_role=current_role,
-                                    mood=current_mood,
-                                    step=current_step,
-                                )
-                                _ = asyncio.create_task(
-                                    self.discord_bot.send_simulation_update(embed=action_embed)
-                                )
-
-                        # Update agent counters and report
-                        logger.info(f"Agent {agent_id} completed turn {current_step}:")
                         logger.info(
-                            f"  - Role: {current_role} "
-                            f"(steps in role: {agent_state.steps_in_current_role})"
+                            f"Agent {agent_id} sent a message ({message_type}): "
+                            f"'{message_content}'"
                         )
-                        logger.info(f"  - Mood: {current_mood}")
-                        logger.info(f"  - IP: {agent_state.ip:.1f} (from {current_ip:.1f})")
-                        logger.info(f"  - DU: {agent_state.du:.1f} (from {current_du:.1f})")
 
-                    except Exception as agent_exc:
-                        logger.error(
-                            f"Agent {agent_id} encountered an error during turn: {agent_exc}",
-                            exc_info=True,
+                        # Store the message for the next step's perception
+                        this_step_messages.append(
+                            {
+                                "step": current_step,
+                                "sender_id": agent_id,
+                                "recipient_id": message_recipient_id,
+                                "content": message_content,
+                                "action_intent": action_intent,
+                            }
                         )
-                        continue  # Continue to next agent
+
+                        # Send message to Discord if integration enabled
+                        if self.discord_bot:
+                            message_embed = self.discord_bot.create_agent_message_embed(
+                                agent_id=agent_id,
+                                message_content=message_content,
+                                recipient_id=message_recipient_id,
+                                action_intent=action_intent,
+                                agent_role=current_role,
+                                mood=current_mood,
+                                step=current_step,
+                            )
+                            _ = asyncio.create_task(
+                                self.discord_bot.send_simulation_update(embed=message_embed)
+                            )
+
+                    # Process action intent if any
+                    if action_intent and action_intent != "idle":
+                        logger.info(f"Agent {agent_id} performed action intent: {action_intent}")
+
+                        # Send intent action to Discord if integration enabled
+                        if self.discord_bot and not message_content:  # Only if no message was sent
+                            action_embed = self.discord_bot.create_agent_action_embed(
+                                agent_id=agent_id,
+                                action_intent=action_intent,
+                                agent_role=current_role,
+                                mood=current_mood,
+                                step=current_step,
+                            )
+                            _ = asyncio.create_task(
+                                self.discord_bot.send_simulation_update(embed=action_embed)
+                            )
+
+                    # Update agent counters and report
+                    logger.info(f"Agent {agent_id} completed turn {current_step}:")
+                    logger.info(
+                        f"  - Role: {current_role} "
+                        f"(steps in role: {agent_state.steps_in_current_role})"
+                    )
+                    logger.info(f"  - Mood: {current_mood}")
+                    logger.info(f"  - IP: {agent_state.ip:.1f} (from {current_ip:.1f})")
+                    logger.info(f"  - DU: {agent_state.du:.1f} (from {current_du:.1f})")
+
+                    # Update the agent state in the simulation's list of agents
+                    self.agents[agent_to_run_index] = (
+                        agent  # Ensure the agent object itself is updated if it was replaced
+                    )
+                    self.agents[agent_to_run_index].update_state(agent_state)
+
+                    self.previous_agent_index_for_turn_end_update = agent_to_run_index
+
+                    # Advance to the next agent for the next call to run_step
+                    self.current_agent_index = (self.current_agent_index + 1) % len(self.agents)
+
+                except Exception as e:
+                    logger.error(f"Error during agent {agent_id}'s turn: {e}", exc_info=True)
 
                 # Store messages for the next step
                 self.last_step_messages = this_step_messages
@@ -377,7 +394,7 @@ class Simulation:
             steps_executed += 1
         return steps_executed
 
-    async def async_run(self, num_steps: int):
+    async def async_run(self: Self, num_steps: int) -> None:
         """
         Runs the simulation for a specified number of steps asynchronously.
 
@@ -400,10 +417,13 @@ class Simulation:
         )
 
     def create_project(
-        self, project_name: str, creator_agent_id: str, project_description: Optional[str] = None
+        self: Self,
+        project_name: str,
+        creator_agent_id: str,
+        project_description: Optional[str] = None,
     ) -> Optional[str]:
         """
-        Creates a new project with the given name, initiated by the specified agent.
+        Allows an agent to create a new project.
 
         Args:
             project_name (str): The name of the new project
@@ -478,7 +498,7 @@ class Simulation:
 
         return project_id
 
-    def join_project(self, project_id: str, agent_id: str) -> bool:
+    def join_project(self: Self, project_id: str, agent_id: str) -> bool:
         """
         Adds an agent to an existing project as a member.
 
@@ -552,7 +572,7 @@ class Simulation:
 
         return True
 
-    def leave_project(self, project_id: str, agent_id: str) -> bool:
+    def leave_project(self: Self, project_id: str, agent_id: str) -> bool:
         """
         Removes an agent from a project they are currently a member of.
 
@@ -609,7 +629,7 @@ class Simulation:
 
         return True
 
-    def get_project_details(self) -> dict:
+    def get_project_details(self: Self) -> dict:
         """
         Returns a dictionary containing details of all projects for agent perception.
 
@@ -635,10 +655,8 @@ class Simulation:
     #      pass
 
 
-def parse_args() -> object:
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
-    import argparse
-
     parser = argparse.ArgumentParser(description="Run the Culture.ai simulation.")
     parser.add_argument(
         "--steps", type=int, default=5, help="Number of steps to run the simulation for."
@@ -662,7 +680,7 @@ def parse_args() -> object:
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     """
     Main entry point for running the simulation.
     """
@@ -727,7 +745,9 @@ def main():
     sim = Simulation(agents=agents, scenario=args.scenario)
 
     # Run the simulation
-    sim.async_run(num_steps=args.steps)
+    import asyncio
+
+    asyncio.run(sim.async_run(num_steps=args.steps))
 
 
 # Call the main function when the script is run directly

@@ -6,9 +6,11 @@ Defines the base class for all agents in the Culture simulation.
 import logging
 import uuid
 from collections import deque
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from src.agents.graphs.basic_agent_graph import AgentTurnState, basic_agent_graph_compiled
+from typing_extensions import Self
+
+from src.agents.graphs.basic_agent_graph import AgentTurnState
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra import config
@@ -23,6 +25,11 @@ if TYPE_CHECKING:
     from src.sim.knowledge_board import KnowledgeBoard
 
 logger = logging.getLogger(__name__)
+
+# Corrected imports for DSPy program getters
+from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector
+from src.agents.dspy_programs.relationship_updater import get_relationship_updater
+from src.agents.dspy_programs.role_thought_generator import get_role_thought_generator
 
 
 class Agent:
@@ -40,6 +47,8 @@ class Agent:
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
+        vector_store_manager: Optional[object] = None,
+        async_dspy_manager: Optional[AsyncDSPyManager] = None,
     ):
         """
         Initializes a new agent with a unique ID and default state.
@@ -51,9 +60,15 @@ class Agent:
                 If None is provided, default values will be used.
             name (str, optional): A name for the agent. If None is provided,
                 a default name based on agent_id will be used.
+            vector_store_manager (Optional[object], optional): Manager for vector-based memory
+                storage and retrieval. Used to persist memory events.
+            async_dspy_manager (Optional[AsyncDSPyManager], optional): Manager for DSPy program execution.
         """
         # Generate a unique ID if none provided
         self.agent_id = agent_id if agent_id else str(uuid.uuid4())
+
+        # Explicitly declare vector_store_manager as object for Mypy
+        # self.vector_store_manager: object # Declaration moved to parameter
 
         # Initialize as empty if not provided
         if initial_state is None:
@@ -71,9 +86,11 @@ class Agent:
         # Get values from config or use defaults
         ip = initial_state.get(
             "influence_points",
-            config.INITIAL_INFLUENCE_POINTS
-            if hasattr(config, "INITIAL_INFLUENCE_POINTS")
-            else 10.0,
+            (
+                config.INITIAL_INFLUENCE_POINTS
+                if hasattr(config, "INITIAL_INFLUENCE_POINTS")
+                else 10.0
+            ),
         )
         du = initial_state.get(
             "data_units",
@@ -114,7 +131,8 @@ class Agent:
         # Get project id and ensure current_project_id and current_project_affiliation are in sync
         current_project = initial_state.get("current_project_id", None)
 
-        # Check for goal in initial_state - handle the case where it's a string instead of dict list
+        # Check for goal in initial_state - handle the case where it's a string instead of dict
+        # list
         goals = []
         if "goals" in initial_state:
             goals = initial_state["goals"]
@@ -133,7 +151,8 @@ class Agent:
             descriptive_mood=initial_state.get("descriptive_mood", "neutral"),
             ip=ip,
             du=du,
-            # Initialize deques and dictionaries with default empty values (using default_factory in model)
+            # Initialize deques and dictionaries with default empty values
+            # (using default_factory in model)
             # Import specific values from initial_state if provided
             relationships=initial_state.get("relationships", {}),
             short_term_memory=deque(
@@ -163,59 +182,87 @@ class Agent:
             # New relationship dynamics parameters
             positive_relationship_learning_rate=initial_state.get(
                 "positive_relationship_learning_rate",
-                config.POSITIVE_RELATIONSHIP_LEARNING_RATE
-                if hasattr(config, "POSITIVE_RELATIONSHIP_LEARNING_RATE")
-                else 0.3,
+                (
+                    config.POSITIVE_RELATIONSHIP_LEARNING_RATE
+                    if hasattr(config, "POSITIVE_RELATIONSHIP_LEARNING_RATE")
+                    else 0.3
+                ),
             ),
             negative_relationship_learning_rate=initial_state.get(
                 "negative_relationship_learning_rate",
-                config.NEGATIVE_RELATIONSHIP_LEARNING_RATE
-                if hasattr(config, "NEGATIVE_RELATIONSHIP_LEARNING_RATE")
-                else 0.4,
+                (
+                    config.NEGATIVE_RELATIONSHIP_LEARNING_RATE
+                    if hasattr(config, "NEGATIVE_RELATIONSHIP_LEARNING_RATE")
+                    else 0.4
+                ),
             ),
             targeted_message_multiplier=initial_state.get(
                 "targeted_message_multiplier",
-                config.TARGETED_MESSAGE_MULTIPLIER
-                if hasattr(config, "TARGETED_MESSAGE_MULTIPLIER")
-                else 3.0,
+                (
+                    config.TARGETED_MESSAGE_MULTIPLIER
+                    if hasattr(config, "TARGETED_MESSAGE_MULTIPLIER")
+                    else 3.0
+                ),
             ),
         )
 
         # Initialize the agent's Lang Graph
-        self.graph = basic_agent_graph_compiled
+        # TODO: Replace with actual compiled LangGraph when available
+        self.graph = None
         logger.info(
-            f"Agent {self.agent_id} initialized with basic LangGraph, role: {self._state.role}, mood: {self._state.mood}"
+            f"Agent {self.agent_id} initialized with basic LangGraph, role: {self._state.role}, "
+            f"mood: {self._state.mood}"
         )
 
         # Vector store backend selection
-        backend = (
-            config.VECTOR_STORE_BACKEND if hasattr(config, "VECTOR_STORE_BACKEND") else "chroma"
-        )
-        if backend == "weaviate":
-            self.vector_store_manager = WeaviateVectorStoreManager(
-                url=getattr(config, "WEAVIATE_URL", "http://localhost:8080"),
-                collection_name="AgentMemory",
-                embedding_function=None,  # Should be set to the SentenceTransformer instance if needed
-            )
+        if vector_store_manager:
+            self.vector_store_manager = vector_store_manager
         else:
-            self.vector_store_manager = ChromaVectorStoreManager(
-                persist_directory=getattr(config, "VECTOR_STORE_DIR", "./chroma_db")
+            backend = (
+                config.VECTOR_STORE_BACKEND
+                if hasattr(config, "VECTOR_STORE_BACKEND")
+                else "chroma"
             )
+            if backend == "weaviate":
+                self.vector_store_manager = WeaviateVectorStoreManager(
+                    url=getattr(config, "WEAVIATE_URL", "http://localhost:8080"),
+                    collection_name="AgentMemory",
+                    embedding_function=None,
+                    # Should be set to the SentenceTransformer instance if needed
+                )
+            else:
+                self.vector_store_manager = ChromaVectorStoreManager(
+                    persist_directory=getattr(config, "VECTOR_STORE_DIR", "./chroma_db")
+                )
 
-        self.async_dspy_manager = AsyncDSPyManager()
+        if async_dspy_manager:
+            self.async_dspy_manager = async_dspy_manager
+        else:
+            self.async_dspy_manager = AsyncDSPyManager()
 
-    def get_id(self) -> str:
+        self.action_intent_selector_program = get_optimized_action_selector()
+        self.role_thought_generator_program = get_role_thought_generator()
+        self.relationship_updater_program = get_relationship_updater()
+
+        logger.info(
+            f"Agent {self.agent_id} __init__: self.action_intent_selector_program is {type(self.action_intent_selector_program)}"
+        )
+        logger.info(
+            f"Agent {self.agent_id} __init__: __dict__ after dspy programs assignment: {self.__dict__}"
+        )
+
+    def get_id(self: Self) -> str:
         """Returns the agent's unique ID."""
         return self.agent_id
 
     @property
-    def state(self) -> AgentState:
+    def state(self: Self) -> AgentState:
         """
         Returns the agent's current internal state.
         """
         return self._state
 
-    def update_state(self, updated_state: AgentState) -> None:
+    def update_state(self: Self, updated_state: AgentState) -> None:
         """
         Updates the agent's internal state with a new AgentState object.
 
@@ -225,13 +272,15 @@ class Agent:
         self._state = updated_state
         logger.debug(f"Agent {self.agent_id} state updated")
 
-    def add_memory(self, step: int, memory_type: str, content: str) -> None:
+    def add_memory(self: Self, step: int, memory_type: str, content: str) -> None:
         """
         Adds a memory to the agent's short-term memory.
 
         Args:
             step (int): The simulation step in which the memory occurred
-            memory_type (str): Type of memory (e.g., 'thought', 'broadcast_sent', 'broadcast_received')
+            memory_type (str): Type of memory (e.g., 'thought',
+                'broadcast_sent',
+                'broadcast_received')
             content (str): The content of the memory
         """
         memory_entry = {"step": step, "type": memory_type, "content": content}
@@ -239,7 +288,7 @@ class Agent:
         logger.debug(f"Added {memory_type} memory for agent {self.agent_id}")
 
     def update_relationship(
-        self, other_agent_id: str, delta: float, is_targeted: bool = False
+        self: Self, other_agent_id: str, delta: float, is_targeted: bool = False
     ) -> None:
         """
         Updates the relationship score with another agent using a non-linear formula that considers
@@ -248,7 +297,8 @@ class Agent:
         Args:
             other_agent_id (str): ID of the other agent
             delta (float): Change in relationship score (positive or negative) based on sentiment
-            is_targeted (bool): Whether this update is from a targeted message (True) or broadcast (False)
+            is_targeted (bool): Whether this update is from a targeted message (True)
+                or broadcast (False)
         """
         current_score = self._state.relationships.get(other_agent_id, 0.0)
 
@@ -277,7 +327,7 @@ class Agent:
         # Update the relationship score in the state
         self._state.relationships[other_agent_id] = new_score
 
-    def update_mood(self, sentiment_score: float) -> None:
+    def update_mood(self: Self, sentiment_score: float) -> None:
         """
         Updates the agent's mood based on a sentiment score.
 
@@ -305,7 +355,12 @@ class Agent:
 
         # Update state
         self._state.mood = new_mood
-        self._state.mood_history.append((self._state.last_action_step, new_mood))
+        self._state.mood_history.append(
+            (
+                (self._state.last_action_step if self._state.last_action_step is not None else 0),
+                new_mood,
+            )
+        )
 
         if mood_changed:
             logger.info(
@@ -313,19 +368,19 @@ class Agent:
             )
 
     async def run_turn(
-        self,
+        self: Self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
-        vector_store_manager: object = None,  # ruff: noqa: ANN401 # Accepts any vector store manager implementation
-        knowledge_board: "KnowledgeBoard" = None,
+        vector_store_manager: object = None,  # Accepts any vector store manager implementation
+        knowledge_board: Optional["KnowledgeBoard"] = None,
     ) -> dict[str, Any]:
         """
         Executes the agent's internal graph for one turn, passing the previous thought.
 
         Args:
             simulation_step (int): The current step number from the simulation.
-            environment_perception (Dict[str, Any], optional): Perception data from the environment.
-                Defaults to an empty dict if not provided.
+            environment_perception (Dict[str, Any], optional): Perception data from the
+                environment.
             vector_store_manager (Optional[object], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
@@ -411,15 +466,26 @@ class Agent:
             "knowledge_board": knowledge_board,  # Pass the knowledge board instance
             "scenario_description": scenario_description,  # Pass the simulation scenario
             "current_role": self._state.role,  # Pass the agent's current role
-            "influence_points": self._state.ip,  # Pass the agent's influence points
-            "steps_in_current_role": self._state.steps_in_current_role,  # Pass the agent's steps in current role
-            "data_units": self._state.du,  # Pass the agent's data units
+            "influence_points": int(self._state.ip),  # Cast to int for TypedDict compliance
+            "steps_in_current_role": self._state.steps_in_current_role,
+            # Pass the agent's steps in current role
+            "data_units": int(self._state.du),  # Cast to int for TypedDict compliance
             "state": self._state,  # Pass the AgentState object directly
+            "current_project_affiliation": getattr(
+                self._state, "current_project_affiliation", None
+            ),
+            "available_projects": getattr(self._state, "available_projects", {}),
+            "collective_ip": getattr(self._state, "collective_ip", None),
+            "collective_du": getattr(self._state, "collective_du", None),
         }
 
+        if self.graph is None:
+            logger.error(f"Agent {self.agent_id} has no graph assigned.")
+            return {"message_content": None, "message_recipient_id": None, "action_intent": "idle"}
+        graph = cast(Callable[[AgentTurnState], object], self.graph)
         try:
             # Invoke the graph asynchronously for the turn
-            final_result_state = await self.graph.ainvoke(initial_turn_state)
+            final_result_state = await graph.ainvoke(initial_turn_state)
 
             # Add debug logging to inspect the graph.ainvoke result
             logger.debug(
@@ -447,7 +513,8 @@ class Agent:
                 updated_state = final_result_state.get("state")
                 self._state = updated_state
                 logger.debug(
-                    f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new AgentState object."
+                    f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new "
+                    f"AgentState object."
                 )
 
                 # Return turn output dict (messages, etc.)
@@ -460,7 +527,8 @@ class Agent:
                 return turn_output
             else:
                 logger.warning(
-                    f"RUN_TURN_UPDATE_FAIL :: Agent {self.agent_id}: No 'state' found in graph result. "
+                    f"RUN_TURN_UPDATE_FAIL :: Agent {self.agent_id}: No 'state' found in graph "
+                    f"result. "
                     f"self._state NOT updated."
                 )
                 return {
@@ -476,148 +544,125 @@ class Agent:
             )
             return {"message_content": None, "message_recipient_id": None, "action_intent": "idle"}
 
-    def __str__(self) -> str:
+    def __str__(self: Self) -> str:
         """Returns a string representation of the agent."""
         return f"Agent(id={self.agent_id}, role={self._state.role})"
 
-    def __repr__(self) -> str:
+    def __repr__(self: Self) -> str:
         """Returns a detailed string representation for debugging."""
         return (
             f"Agent(agent_id='{self.agent_id}', role='{self._state.role}', "
             f"ip={self._state.ip}, du={self._state.du})"
         )
 
-    # --- Placeholder Methods for Future Functionality ---
-
-    # def perceive(self, environment_state: Dict[str, Any]):
-    #     """Placeholder for how the agent perceives the environment."""
-    #     logger.warning(f"Agent {self.agent_id}: perceive() method not implemented.")
-    #     pass
-
-    # def decide(self) -> str:
-    #     """Placeholder for the agent's decision-making process."""
-    #     logger.warning(f"Agent {self.agent_id}: decide() method not implemented.")
-    #     return "idle" # Default action
-
-    # def act(self, action: str, environment: Any):
-    #     """Placeholder for executing the chosen action."""
-    #     logger.warning(
-    #         f"Agent {self.agent_id}: act() method not implemented for action '{action}'."
-    #     )
-    #     pass
-
-    # --- AsyncDSPyManager Example Usage (Conceptual) ---
-    # from src.utils.async_dspy_manager import AsyncDSPyManager
-    # async_dspy_manager = AsyncDSPyManager()
-    # # Submit a DSPy action selection call asynchronously
-    # future = await async_dspy_manager.submit(self.action_selector, agent_role, current_situation, agent_goal, available_actions)
-    # # ... do other work or await result immediately
-    # result = await async_dspy_manager.get_result(future, default_value={"chosen_action_intent": "idle"}, dspy_callable=self.action_selector)
-    # # Use result (could be a DSPy output or the default)
-
     # --- Async DSPy Methods ---
     async def async_generate_role_prefixed_thought(
-        self, agent_role: str, current_situation: str
-    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
+        self: Self, agent_role: str, current_situation: str
+    ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously generate a role-prefixed thought using a DSPy program.
-        Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
+        Uses AsyncDSPyManager for non-blocking execution. On timeout or error,
+        returns a failsafe output and logs the issue.
         Must be awaited.
         """
         from src.agents.dspy_programs.role_thought_generator import generate_role_prefixed_thought
+        from src.agents.dspy_programs.role_thought_generator import (
+            get_failsafe_output as role_thought_failsafe,
+        )
 
         future = await self.async_dspy_manager.submit(
-            generate_role_prefixed_thought,
+            cast(Callable[..., object], generate_role_prefixed_thought),
             agent_role=agent_role,
             current_situation=current_situation,
         )
         result = await self.async_dspy_manager.get_result(
             future,
-            default_value=generate_role_prefixed_thought.get_failsafe_output(
-                agent_role, current_situation
-            ),
-            dspy_callable_name="generate_role_prefixed_thought",
+            default_value=role_thought_failsafe(agent_role, current_situation),
+            dspy_callable=cast(Callable[..., object], generate_role_prefixed_thought),
         )
         return result
 
     async def async_select_action_intent(
-        self,
+        self: Self,
         agent_role: str,
         current_situation: str,
         agent_goal: str,
         available_actions: list[str],
-    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
+    ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously select an action intent using a DSPy program.
-        Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
+        Uses AsyncDSPyManager for non-blocking execution. On timeout or error,
+        returns a failsafe output and logs the issue.
         Must be awaited.
         """
         from src.agents.dspy_programs import action_intent_selector
 
         selector = action_intent_selector.get_optimized_action_selector()
+        selector_callable = cast(Callable[..., object], selector)
         future = await self.async_dspy_manager.submit(
-            selector,
+            selector_callable,
             agent_role=agent_role,
             current_situation=current_situation,
             agent_goal=agent_goal,
             available_actions=available_actions,
         )
-        # Use the correct failsafe: if selector has get_failsafe_output, use it; else use module-level
-        if hasattr(selector, "get_failsafe_output"):
-            default_value = selector.get_failsafe_output(
-                agent_role, current_situation, agent_goal, available_actions
-            )
-        else:
-            default_value = action_intent_selector.get_failsafe_output(
-                agent_role, current_situation, agent_goal, available_actions
-            )
+        default_value = action_intent_selector.get_failsafe_output(
+            agent_role, current_situation, agent_goal, available_actions
+        )
         result = await self.async_dspy_manager.get_result(
             future,
             default_value=default_value,
-            dspy_callable_name=getattr(selector, "__name__", selector.__class__.__name__),
+            dspy_callable=selector_callable,
         )
         return result
 
     async def async_generate_l1_summary(
-        self, agent_role: str, recent_events: str, current_mood: str | None = None
-    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
+        self: Self,
+        agent_role: str,
+        recent_events: str,
+        current_mood: str | None = None,
+    ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously generate an L1 summary using a DSPy program.
-        Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
+        Uses AsyncDSPyManager for non-blocking execution. On timeout or error,
+        returns a failsafe output and logs the issue.
         Must be awaited.
         """
         from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 
         l1_gen = L1SummaryGenerator()
+        l1_callable = cast(Callable[..., object], l1_gen.generate_summary)
         future = await self.async_dspy_manager.submit(
-            l1_gen.generate_summary, agent_role, recent_events, current_mood
+            l1_callable, agent_role, recent_events, current_mood
         )
         result = await self.async_dspy_manager.get_result(
             future,
             default_value=L1SummaryGenerator.get_failsafe_output(
                 agent_role, recent_events, current_mood
             ),
-            dspy_callable_name="L1SummaryGenerator",
+            dspy_callable=l1_callable,
         )
         return result
 
     async def async_generate_l2_summary(
-        self,
+        self: Self,
         agent_role: str,
         l1_summaries_context: str,
         overall_mood_trend: str | None = None,
         agent_goals: str | None = None,
-    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
+    ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously generate an L2 summary using a DSPy program.
-        Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
+        Uses AsyncDSPyManager for non-blocking execution. On timeout or error,
+        returns a failsafe output and logs the issue.
         Must be awaited.
         """
         from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 
         l2_gen = L2SummaryGenerator()
+        l2_callable = cast(Callable[..., object], l2_gen.generate_summary)
         future = await self.async_dspy_manager.submit(
-            l2_gen.generate_summary,
+            l2_callable,
             agent_role,
             l1_summaries_context,
             overall_mood_trend,
@@ -628,28 +673,36 @@ class Agent:
             default_value=L2SummaryGenerator.get_failsafe_output(
                 agent_role, l1_summaries_context, overall_mood_trend, agent_goals
             ),
-            dspy_callable_name="L2SummaryGenerator",
+            dspy_callable=l2_callable,
         )
         return result
 
     async def async_update_relationship(
-        self,
+        self: Self,
         current_relationship_score: float,
         interaction_summary: str,
         agent1_persona: str,
         agent2_persona: str,
         interaction_sentiment: float,
-    ) -> object:  # ruff: noqa: ANN401 # DSPy async output is dynamic
+    ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously update a relationship score using a DSPy program.
-        Uses AsyncDSPyManager for non-blocking execution. On timeout or error, returns a failsafe output and logs the issue.
+        Uses AsyncDSPyManager for non-blocking execution. On timeout or error,
+        returns a failsafe output and logs the issue.
         Must be awaited.
         """
+        from src.agents.dspy_programs.relationship_updater import (
+            get_failsafe_output as relationship_failsafe,
+        )
         from src.agents.dspy_programs.relationship_updater import get_relationship_updater
 
         updater = get_relationship_updater()
+        # Ensure updater is callable, else fallback to failsafe
+        if not callable(updater):
+            updater = relationship_failsafe
+        updater_callable = cast(Callable[..., object], updater)
         future = await self.async_dspy_manager.submit(
-            updater,
+            updater_callable,
             current_relationship_score,
             interaction_summary,
             agent1_persona,
@@ -658,19 +711,13 @@ class Agent:
         )
         result = await self.async_dspy_manager.get_result(
             future,
-            default_value=updater.get_failsafe_output(
-                current_relationship_score,
-                interaction_summary,
-                agent1_persona,
-                agent2_persona,
-                interaction_sentiment,
-            ),
-            dspy_callable_name=updater.__class__.__name__,
+            default_value=relationship_failsafe(current_relationship_score),
+            dspy_callable=updater_callable,
         )
         return result
 
     async def _broadcast_message(
-        self,
+        self: Self,
         content: str,
         step: int,
         recipient_id: str | None = None,

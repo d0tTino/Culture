@@ -10,8 +10,11 @@ import logging
 import time
 import unittest
 from datetime import datetime
+from typing import Optional
 
 import pytest
+from pytest import FixtureRequest
+from typing_extensions import Self
 
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from tests.utils.mock_llm import MockLLM
@@ -34,40 +37,39 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
     """Tests for MUS-based memory pruning in the agent memory system."""
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self, request: pytest.FixtureRequest, chroma_test_dir: str) -> None:
+    def _inject_fixtures(self: Self, request: FixtureRequest, chroma_test_dir: str) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 
-    def setUp(self):
+    def setUp(self: Self) -> None:
         self.mock_llm_cm = MockLLM({"default": "Mocked response for MUS pruning tests"})
         self.mock_llm_cm.__enter__()
-        self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
+        self.vector_store: Optional[ChromaVectorStoreManager] = ChromaVectorStoreManager(
+            persist_directory=self.chroma_test_dir
+        )
         self.agent_id = "test_mus_pruning_agent"
         self.create_test_memories()
 
-    def tearDown(self):
+    def tearDown(self: Self) -> None:
         self.mock_llm_cm.__exit__(None, None, None)
 
         try:
             # Clean up vector store resources
-            if hasattr(self, "vector_store") and self.vector_store:
+            if self.vector_store is not None:
                 if hasattr(self.vector_store, "client") and self.vector_store.client:
-                    # Try to explicitly close connections
                     if hasattr(self.vector_store.client, "close"):
                         self.vector_store.client.close()
-                    self.vector_store = None
-
-            # Wait a moment to ensure resources are released
+                self.vector_store = None
             time.sleep(0.5)
         except Exception as e:
             logger.warning(f"Error during test cleanup: {e}")
 
-    def create_test_memories(self):
+    def create_test_memories(self: Self) -> None:
         """Create test memories with different MUS characteristics."""
         logger.info("Creating test memories with different MUS characteristics...")
 
         # Storage for memory IDs by category
-        self.memory_ids = {
+        self.memory_ids: dict[str, list[str]] = {
             "l1_high_mus": [],
             "l1_medium_mus": [],
             "l1_low_mus": [],
@@ -76,6 +78,7 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
             "l2_low_mus": [],
         }
 
+        assert self.vector_store is not None
         # 1. Create L1 memories (consolidated_summary)
         # High MUS memory (frequently accessed, high relevance)
         for i in range(3):
@@ -226,14 +229,14 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
             f"Created test memories: {sum(len(ids) for ids in self.memory_ids.values())} total"
         )
 
-    def _simulate_retrieval(self, memory_id: str, relevance_score: float = 0.5) -> None:
+    def _simulate_retrieval(self: Self, memory_id: str, relevance_score: float = 0.5) -> None:
         """Simulate retrieving a memory to update its usage statistics."""
-        # Manually update memory usage statistics
+        assert self.vector_store is not None
         self.vector_store._update_memory_usage_stats(
             memory_ids=[memory_id], relevance_scores=[relevance_score], increment_count=True
         )
 
-    def _calculate_expected_mus(self, memory_category: str) -> float:
+    def _calculate_expected_mus(self: Self, memory_category: str) -> float:
         """
         Calculate the expected Memory Utility Score (MUS) range for a category.
         Based on the formula: MUS = (0.4 * RFS) + (0.4 * RS) + (0.2 * RecS)
@@ -258,8 +261,9 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
         # We're ignoring RecS as it's time-dependent
         return params["min_mus"]  # Return minimum expected MUS
 
-    def test_a_l1_mus_calculation(self):
+    def test_a_l1_mus_calculation(self: Self) -> None:
         """Test the calculation of MUS for L1 memories."""
+        assert self.vector_store is not None
         # Get MUS scores for L1 memories
         l1_high_id = self.memory_ids["l1_high_mus"][0] if self.memory_ids["l1_high_mus"] else None
         l1_low_id = self.memory_ids["l1_low_mus"][0] if self.memory_ids["l1_low_mus"] else None
@@ -275,12 +279,12 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
 
             if high_results and high_results.get("metadatas") and high_results["metadatas"]:
                 high_metadata = high_results["metadatas"][0]
-                high_mus = self.vector_store._calculate_mus(high_metadata)
+                high_mus = self.vector_store._calculate_mus(dict(high_metadata))
                 logger.info(f"High MUS L1 memory: {high_mus:.3f}")
 
             if low_results and low_results.get("metadatas") and low_results["metadatas"]:
                 low_metadata = low_results["metadatas"][0]
-                low_mus = self.vector_store._calculate_mus(low_metadata)
+                low_mus = self.vector_store._calculate_mus(dict(low_metadata))
                 logger.info(f"Low MUS L1 memory: {low_mus:.3f}")
 
             # If we have both scores, verify high > low
@@ -291,8 +295,9 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "High MUS memory should have higher score than low MUS memory",
                 )
 
-    def test_b_l2_mus_calculation(self):
+    def test_b_l2_mus_calculation(self: Self) -> None:
         """Test the calculation of MUS for L2 memories."""
+        assert self.vector_store is not None
         # Get MUS scores for L2 memories
         l2_high_id = self.memory_ids["l2_high_mus"][0] if self.memory_ids["l2_high_mus"] else None
         l2_low_id = self.memory_ids["l2_low_mus"][0] if self.memory_ids["l2_low_mus"] else None
@@ -308,12 +313,12 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
 
             if high_results and high_results.get("metadatas") and high_results["metadatas"]:
                 high_metadata = high_results["metadatas"][0]
-                high_mus = self.vector_store._calculate_mus(high_metadata)
+                high_mus = self.vector_store._calculate_mus(dict(high_metadata))
                 logger.info(f"High MUS L2 memory: {high_mus:.3f}")
 
             if low_results and low_results.get("metadatas") and low_results["metadatas"]:
                 low_metadata = low_results["metadatas"][0]
-                low_mus = self.vector_store._calculate_mus(low_metadata)
+                low_mus = self.vector_store._calculate_mus(dict(low_metadata))
                 logger.info(f"Low MUS L2 memory: {low_mus:.3f}")
 
             # If we have both scores, verify high > low
@@ -324,8 +329,9 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
                     "High MUS memory should have higher score than low MUS memory",
                 )
 
-    def test_z_memory_deletion(self):
+    def test_z_memory_deletion(self: Self) -> None:
         """Test that memories can be deleted by IDs."""
+        assert self.vector_store is not None
         # Get IDs of memories to delete
         memories_to_delete = []
 

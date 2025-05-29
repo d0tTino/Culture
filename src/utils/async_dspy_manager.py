@@ -4,6 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Callable
 
+from typing_extensions import Self
+
 logger = logging.getLogger(__name__)
 
 
@@ -13,7 +15,7 @@ class AsyncDSPyManager:
     Provides async submit, result retrieval with timeout, and robust error handling.
     """
 
-    def __init__(self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
+    def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
         self.executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=max_workers)
         self.max_workers: int = max_workers
         self.default_timeout: float = default_timeout
@@ -23,7 +25,7 @@ class AsyncDSPyManager:
         )
 
     async def submit(
-        self,
+        self: Self,
         dspy_callable: Callable[..., object],
         *args: object,
         timeout: float | None = None,
@@ -49,7 +51,7 @@ class AsyncDSPyManager:
         return loop.run_in_executor(self.executor, func)
 
     async def get_result(
-        self,
+        self: Self,
         future: asyncio.Future[object],
         default_value: object = None,
         timeout: float | None = None,
@@ -59,22 +61,35 @@ class AsyncDSPyManager:
         Await and retrieve the result of a submitted DSPy call.
         Returns the result, or default_value on timeout/error.
         """
-        timeout = timeout if timeout is not None else self.default_timeout
+        timeout_val = timeout if timeout is not None else self.default_timeout
         callable_name = (
-            getattr(dspy_callable, "__name__", str(dspy_callable)) if dspy_callable else None
+            getattr(dspy_callable, "__name__", str(dspy_callable))
+            if dspy_callable
+            else "Unnamed DSPy call"
         )
+
+        logger.debug(f"Awaiting result for {callable_name} with timeout {timeout_val:.2f}s.")
         try:
-            result = await asyncio.wait_for(future, timeout=timeout)
-            logger.info(f"DSPy call completed successfully: {callable_name}")
+            result = await asyncio.wait_for(future, timeout=timeout_val)
+            logger.info(f"{callable_name} completed successfully within timeout.")
             return result
         except asyncio.TimeoutError:
-            logger.warning(f"DSPy call timed out: {callable_name} (timeout={timeout}s)")
+            logger.warning(
+                f"AsyncDSPyManager.get_result: Timeout awaiting result for {callable_name} after {timeout_val:.2f}s."
+            )
+            if not future.done():
+                if future.cancel():
+                    logger.debug(f"Cancelled underlying task for {callable_name} due to timeout.")
+                else:
+                    logger.debug(
+                        f"Failed to cancel underlying task for {callable_name} (might have already completed or started running)."
+                    )
             return default_value
         except Exception as e:
-            logger.error(f"DSPy call raised exception: {callable_name} - {e}")
+            logger.error(f"Exception retrieving result for {callable_name}: {e}", exc_info=True)
             return default_value
 
-    def shutdown(self, wait: bool = True) -> None:
+    def shutdown(self: Self, wait: bool = True) -> None:
         """
         Gracefully shut down the thread pool executor.
         """
@@ -82,10 +97,53 @@ class AsyncDSPyManager:
         self.executor.shutdown(wait=wait)
 
     def _handle_timeout(
-        self,
+        self: Self,
         future: asyncio.Future[object],
         default_value: object = None,
         timeout: float | None = None,
         dspy_callable: Callable[..., object] | None = None,
     ) -> object:
         pass
+
+    async def run_with_timeout_async(
+        self: Self,
+        program_callable: Callable[..., object],
+        *args: object,
+        timeout: float | None = None,
+        **kwargs: object,
+    ) -> object:
+        """
+        Run a DSPy program asynchronously with a timeout.
+
+        Args:
+            program_callable (Callable): The callable to execute.
+            *args (object): Positional arguments for the callable.
+            timeout (float | None, optional): Timeout for the callable.
+            **kwargs (object): Keyword arguments for the callable.
+
+        Returns:
+            object: The result of the executed program.
+        """
+        program_name = getattr(program_callable, "__name__", str(program_callable))
+        effective_timeout = timeout if timeout is not None else self.default_timeout
+
+        logger.debug(
+            f"RUN_WITH_TIMEOUT: Executing {program_name} with timeout {effective_timeout:.2f}s. Args: {args}, Kwargs: {kwargs}"
+        )
+
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(program_callable, *args, **kwargs), timeout=effective_timeout
+            )
+            logger.debug(
+                f"RUN_WITH_TIMEOUT: {program_name} completed successfully within timeout."
+            )
+            return result
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"RUN_WITH_TIMEOUT: Timeout for {program_name} after {effective_timeout:.2f}s."
+            )
+            return None
+        except Exception as e:
+            logger.error(f"RUN_WITH_TIMEOUT: Error for {program_name}: {e}", exc_info=True)
+            return None

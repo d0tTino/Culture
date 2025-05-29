@@ -2,36 +2,44 @@
 Pytest fixtures for use across test files.
 """
 
-# Import warning filters to suppress third-party dependency warnings
-# This needs to be done early before other imports
 import os
 import pathlib
 import shutil
+import socket
 import sys
 import tempfile
+from collections.abc import Generator
+from typing import Optional
+from unittest.mock import MagicMock, patch
+
+import pytest
+from pytest import FixtureRequest, MonkeyPatch
 
 # Add the project root to path to allow importing src modules
 project_root = str(pathlib.Path(__file__).parent.parent.absolute())
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Import our warning filters
-from src.infra.warning_filters import configure_warning_filters
+
+from src.infra.llm_mock_helper import patch_ollama_functions  # noqa: E402
+from src.infra.warning_filters import configure_warning_filters  # noqa: E402
+from tests.utils.mock_llm import MockLLM  # noqa: E402
+
+# # Add these imports and filter # Removed for now
+# import warnings
+# from pydantic import PydanticDeprecatedSince20
+#
+# warnings.filterwarnings(
+#     "error",
+#     category=PydanticDeprecatedSince20,
+#     message=r".*extra keys: 'required'.*") # Broadened regex
+
 
 configure_warning_filters()  # Apply filters
-
-from typing import Optional
-from unittest.mock import patch
-
-import pytest
-
-from tests.utils.mock_llm import MockLLM
 
 
 def is_ollama_running() -> Optional[bool]:
     """Check if Ollama server is running by attempting to connect to localhost:11434"""
-    import socket
-
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(0.1)  # Short timeout for quick check
@@ -49,7 +57,7 @@ require_ollama = pytest.mark.skipif(
 
 
 @pytest.fixture
-def mock_llm_client():
+def mock_llm_client() -> Generator[MagicMock, None, None]:
     """Fixture to provide a mocked LLMClient"""
     with patch("src.infra.llm_client.LLMClient") as MockLLMClient:
         mock_client = MockLLM()
@@ -58,7 +66,7 @@ def mock_llm_client():
 
 
 @pytest.fixture(autouse=True)
-def mock_ollama_by_default(request, monkeypatch):
+def mock_ollama_by_default(request: FixtureRequest, monkeypatch: MonkeyPatch) -> None:
     """
     Automatically mock Ollama functions unless the test is explicitly marked with require_ollama.
 
@@ -71,13 +79,11 @@ def mock_ollama_by_default(request, monkeypatch):
         return
 
     # If test is not explicitly requiring Ollama, mock all Ollama functions
-    from src.infra.llm_mock_helper import patch_ollama_functions
-
     patch_ollama_functions(monkeypatch)
 
 
 @pytest.fixture(scope="session")
-def chroma_test_dir(request):
+def chroma_test_dir(request: FixtureRequest) -> Generator[str, None, None]:
     """
     Provides a unique ChromaDB test directory for each pytest-xdist worker.
     On Linux, uses /dev/shm/chroma_tests/{worker_id}/ for tmpfs speed.

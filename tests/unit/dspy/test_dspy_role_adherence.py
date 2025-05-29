@@ -1,9 +1,11 @@
 import logging
 import sys
+from typing import cast
 
 import dspy
 import ollama
 import pytest
+from typing_extensions import Self
 
 # Configure logging
 logging.basicConfig(
@@ -15,18 +17,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class OllamaLM(dspy.LM):
+class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
     """A simple wrapper for Ollama to use with DSPy."""
 
     model_name = "ollama/mistral:latest"
     temperature = 0.1
 
-    def __init__(self):
+    def __init__(self: Self) -> None:
         # Pass model parameter to the superclass
         super().__init__(model=self.model_name)
         logger.info(f"Initialized OllamaLM with model: {self.model_name}")
 
-    def basic_request(self, prompt: str, **kwargs: object) -> str:
+    def basic_request(self: Self, prompt: str, **kwargs: object) -> str:
         """Required method from dspy.LM that handles the basic request to the LM."""
         try:
             logger.info(f"Calling Ollama with prompt length: {len(prompt)} chars")
@@ -37,7 +39,7 @@ class OllamaLM(dspy.LM):
                 stream=False,
             )
             logger.info("Received response from Ollama")
-            return response["message"]["content"]
+            return cast(str, response["message"]["content"])
         except Exception as e:
             logger.error(f"Error calling Ollama API: {e}")
             return f"Error: {e}"
@@ -50,7 +52,7 @@ logger.info("DSPy configured with OllamaLM")
 
 
 # Define the signature for role-prefixed thoughts
-class RolePrefixedThought(dspy.Signature):
+class RolePrefixedThought(dspy.Signature):  # type: ignore[no-any-unimported]
     """Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or
     'As an [ROLE],'
     and reflects the agent's role and current situation.
@@ -61,14 +63,14 @@ class RolePrefixedThought(dspy.Signature):
     )
     current_situation = dspy.InputField(
         desc=(
-            "A detailed description of the agent's current situation, including previous thoughts, perceptions, "
-            "goals, and relevant environmental information."
+            "A detailed description of the agent's current situation, including previous "
+            "thoughts, perceptions, goals, and relevant environmental information."
         )
     )
     thought_process = dspy.OutputField(
         desc=(
-            "The agent's internal thought process. CRITICAL: This MUST start with 'As a {agent_role},' "
-            "or 'As an {agent_role},'."
+            "The agent's internal thought process. CRITICAL: This MUST start with 'As a "
+            "{agent_role},' or 'As an {agent_role},'."
         )
     )
 
@@ -79,7 +81,7 @@ generate_role_prefixed_thought = dspy.Predict(RolePrefixedThought)
 
 @pytest.mark.unit
 @pytest.mark.dspy
-def test_role_prefix_adherence():
+def test_role_prefix_adherence() -> None:
     """Test that the DSPy program correctly generates thoughts with role prefixes."""
 
     # Test roles (including ones that need "an" instead of "a")

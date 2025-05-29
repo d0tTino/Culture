@@ -7,9 +7,17 @@ import importlib.util
 import os
 import traceback
 import warnings
+from typing import Optional, TextIO, Union
 
 
-def warning_handler(message, category, filename, lineno, file=None, line=None):
+def warning_handler(
+    message: Union[Warning, str],
+    category: type[Warning],
+    filename: str,
+    lineno: int,
+    file: Optional[TextIO] = None,
+    line: Optional[str] = None,
+) -> None:
     """Custom warning handler that prints the full stack trace."""
     print("\n=== WARNING DETECTED ===")
     print(f"Warning: {message}")
