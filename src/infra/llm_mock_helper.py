@@ -7,10 +7,37 @@ import logging
 import socket
 from unittest.mock import MagicMock
 
-import ollama  # Added import
+# Handle optional Ollama dependency
+try:
+    import ollama
+except ImportError:
+    logging.getLogger(__name__).warning(
+        "ollama package not installed; using MagicMock stub for ollama"
+    )
+    ollama = MagicMock()
 
-# import dspy # type: ignore[import-untyped] # Removed as OllamaLocal is used directly
-from dspy.predict.ollama import OllamaLocal  # type: ignore[import-untyped]
+# Handle optional DSPy OllamaLocal dependency
+try:
+    from dspy.predict.ollama import OllamaLocal  # type: ignore[import-untyped]
+except ImportError:
+    logging.getLogger(__name__).warning(
+        "dspy.predict.ollama not available; using stub OllamaLocal"
+    )
+
+    class OllamaLocal:  # type: ignore
+        """
+        Stub for DSPy OllamaLocal when dspy.predict.ollama is unavailable.
+        """
+
+        def __init__(self, *args, **kwargs):
+            # Stub initializer
+            pass
+
+        def __call__(self, prompt, *args, **kwargs):
+            # Return a list of stubbed responses to mimic OllamaLocal interface
+            return [f"Stubbed OllamaLocal response to prompt: {prompt}"]
+
+
 from pytest import MonkeyPatch
 from typing_extensions import Self
 

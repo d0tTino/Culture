@@ -384,6 +384,52 @@ class TestDynamicRoleChange(unittest.TestCase):
                 f"AgentC DU out of range. Expected {initial_du_c - cost_du_propose_idea + (0.5 * du_gen_rate_c):.2f}-{initial_du_c - cost_du_propose_idea + (1.5 * du_gen_rate_c):.2f}, Got {self.agent_c.state.du}",
             )
 
+        # --- Step 4: AgentA observes the conflict and requests role change ---
+        logger.info("Step 4: AgentA decides to change role to Facilitator...")
+        self.assertEqual(
+            self.simulation.agents[self.simulation.current_agent_index].agent_id,
+            self.agent_a.agent_id,
+        )
+        mock_agent_a_role_change_output = AgentActionOutput(
+            thought="I see the disagreement between AnalyzerAgentB_Dynamic and AnalyzerAgentC_Dynamic. To mediate effectively, I will change my role to Facilitator.",
+            message_content=None,
+            message_recipient_id=None,
+            action_intent=AgentActionIntent.IDLE.value,
+            requested_role_change=roles.ROLE_FACILITATOR,
+            project_name_to_create=None,
+            project_description_for_creation=None,
+            project_id_to_join_or_leave=None,
+        )
+        with patch(
+            "src.agents.graphs.basic_agent_graph.generate_structured_output",
+            return_value=mock_agent_a_role_change_output,
+        ) as mock_gen_struct_output_role_change:
+            initial_ip_a = self.agent_a.state.ip
+            await self.simulation.run_step()  # AgentA's second turn
+
+            self.assertEqual(
+                self.agent_a.state.role,
+                roles.ROLE_FACILITATOR,
+                f"AgentA role should have changed to {roles.ROLE_FACILITATOR}",
+            )
+            self.assertEqual(
+                self.agent_a.state.steps_in_current_role,
+                0,
+                "AgentA steps_in_current_role should be reset to 0 after role change",
+            )
+            expected_ip_after_change = initial_ip_a - config.ROLE_CHANGE_IP_COST
+            self.assertEqual(
+                self.agent_a.state.ip,
+                expected_ip_after_change,
+                f"AgentA IP should have been decremented by ROLE_CHANGE_IP_COST ({config.ROLE_CHANGE_IP_COST})",
+            )
+            self.assertTrue(
+                any(r == roles.ROLE_FACILITATOR for _, r in self.agent_a.state.role_history),
+                "AgentA role_history should include the Facilitator role change",
+            )
+            mock_gen_struct_output_role_change.assert_called_once()
+        logger.info("Step 4 (AgentA role change) completed.")
+
 
 if __name__ == "__main__":
     unittest.main()
