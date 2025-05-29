@@ -597,6 +597,8 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             logger.info(
                 f"Agent {agent_id}: Generated {generated_du} DU. Total DU: {agent_state_obj.du:.1f}"
             )
+        # Increment steps taken in current role after performing an action
+        agent_state_obj.steps_in_current_role += 1
 
     if (
         len(agent_state_obj.short_term_memory) >= 3
@@ -847,6 +849,8 @@ def handle_propose_idea_node(state: AgentTurnState) -> dict[str, Any]:
 
 
 def handle_continue_collaboration_node(state: AgentTurnState) -> dict[str, Any]:
+    agent_state_obj = state["state"]  # Deduct IP cost for broadcasting a message
+    agent_state_obj.ip -= agent_state_obj.ip_cost_per_message
     return dict(state)
 
 

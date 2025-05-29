@@ -151,3 +151,28 @@ archives/*.zip
 final_test_suite_output.txt
 pytest_*.txt
 coverage_*.txt
+
+# Archives and experiments
+archives/
+scripts/archive/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Editor directories and files
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+**/__pycache__/
+*.pytest_cache/
+
+# Ignore root-level text log files
+/*.txt

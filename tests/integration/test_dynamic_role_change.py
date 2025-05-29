@@ -430,6 +430,53 @@ class TestDynamicRoleChange(unittest.TestCase):
             mock_gen_struct_output_role_change.assert_called_once()
         logger.info("Step 4 (AgentA role change) completed.")
 
+        # --- Step 5: AgentA (Facilitator) attempts mediation ---
+        logger.info("Step 5: AgentA (Facilitator) attempts mediation...")
+        self.assertEqual(
+            self.simulation.agents[self.simulation.current_agent_index].agent_id,
+            self.agent_a.agent_id,
+        )
+        mediation_message_a = "AgentB and AgentC, I see strong points from both of you. Perhaps we can find some common ground or clarify the core disagreements? What's one aspect AgentB feels is non-negotiable, and AgentC, what's a primary concern you'd like addressed?"
+        mock_agent_a_mediation_output = AgentActionOutput(
+            thought="As Facilitator, I will encourage both sides to clarify their positions and seek mutual understanding.",
+            message_content=mediation_message_a,
+            message_recipient_id=None,
+            action_intent=AgentActionIntent.CONTINUE_COLLABORATION.value,
+            requested_role_change=None,
+        )
+        with patch(
+            "src.agents.graphs.basic_agent_graph.generate_structured_output",
+            return_value=mock_agent_a_mediation_output,
+        ) as mock_gen_struct_output_mediation:
+            initial_ip = self.agent_a.state.ip
+            initial_du = self.agent_a.state.du
+            await self.simulation.run_step()  # AgentA's third turn
+
+            # Ensure mediation message was sent
+            mock_gen_struct_output_mediation.assert_called_once()
+            # IP cost deduction for broadcasting
+            expected_ip = initial_ip - self.agent_a.state.ip_cost_per_message
+            self.assertEqual(
+                self.agent_a.state.ip,
+                expected_ip,
+                f"AgentA IP incorrect after mediation. Expected {expected_ip}, Got {self.agent_a.state.ip}",
+            )
+            # DU generation for Facilitator role
+            du_gen_rate_fac = config.ROLE_DU_GENERATION.get(roles.ROLE_FACILITATOR, 1.0)
+            min_expected_du = initial_du + (0.5 * du_gen_rate_fac)
+            max_expected_du = initial_du + (1.5 * du_gen_rate_fac)
+            self.assertTrue(
+                min_expected_du <= self.agent_a.state.du <= max_expected_du,
+                f"AgentA DU out of range after mediation. Expected {min_expected_du:.2f}-{max_expected_du:.2f}, Got {self.agent_a.state.du}",
+            )
+            # Steps in current role should increment to 1
+            self.assertEqual(
+                self.agent_a.state.steps_in_current_role,
+                1,
+                "AgentA steps_in_current_role should be 1 after first facilitation turn",
+            )
+        logger.info("Step 5 (AgentA mediation) completed.")
+
 
 if __name__ == "__main__":
     unittest.main()
