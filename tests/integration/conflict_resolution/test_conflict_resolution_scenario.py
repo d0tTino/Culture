@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import dspy  # ADDED
 import pytest
+from src.infra.logging_config import setup_logging # MOVED UP
+from src.sim.simulation import Simulation # MOVED UP
 
 # Add project root to sys.path to allow importing src modules
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -23,8 +25,8 @@ from src.agents.memory.vector_store import ChromaVectorStoreManager
 
 # KnowledgeBoard is part of Simulation, access via self.simulation.knowledge_board
 from src.infra import config
-from src.infra.logging_config import setup_logging  # CHANGED: Import setup_logging
-from src.sim.simulation import Simulation
+# from src.infra.logging_config import setup_logging  # CHANGED: Import setup_logging # MOVED UP
+# from src.sim.simulation import Simulation # MOVED UP
 
 # Configure logging for tests
 root_logger, _ = setup_logging()  # CHANGED: Call setup_logging and get the root_logger
@@ -32,7 +34,7 @@ logger = root_logger  # CHANGED: Assign root_logger to logger, or use root_logge
 
 # Constants
 CHROMA_DB_PATH_CONFLICT = "./chroma_db_test_conflict"
-SCENARIO_CONFLICT = (
+SCENARIO_CONFLICT = ( # SPLIT
     "A multi-agent simulation where agents with opposing viewpoints interact, "
     "leading to a conflict that a facilitator attempts to manage."
 )
@@ -54,7 +56,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
                 logger.debug(f"Removed old ChromaDB path: {CHROMA_DB_PATH_CONFLICT}")
             except Exception as e:
                 logger.warning(
-                    f"Could not remove old ChromaDB path {CHROMA_DB_PATH_CONFLICT}: {e}"
+                    f"Could not remove old ChromaDB path {CHROMA_DB_PATH_CONFLICT}: {e}" # Potential E501, but let's see what Black/Ruff does
                 )
 
         self.vector_store = ChromaVectorStoreManager(persist_directory=CHROMA_DB_PATH_CONFLICT)
@@ -71,7 +73,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
                 "current_role": "Innovator",
                 "goals": [
                     {
-                        "description": "Promote radical transparency in all communications.",
+                        "description": "Promote radical transparency in all communications.", # Potential E501
                         "priority": "high",
                     }
                 ],
@@ -178,7 +180,10 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
 
         # --- Step 1: AgentA posts controversial idea ---
         logger.info("Step 1: AgentA (Innovator) posts controversial idea...")
-        controversial_idea_content = "All inter-agent communications should be publicly logged for maximum transparency."  # AgentA's stance
+        controversial_idea_content = ( # SPLIT
+            "All inter-agent communications should be publicly logged for maximum "
+            "transparency."
+        )  # AgentA's stance
 
         initial_ip_a = self.agent_a.state.ip
         initial_du_a = self.agent_a.state.du
@@ -190,7 +195,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
         )
 
         # New mocking strategy for Agent A's first turn
-        agent_a_turn1_thought_str = (
+        agent_a_turn1_thought_str = ( # SPLIT
             "To promote radical transparency, I will propose that all communications be public."
         )
         agent_a_turn1_action_output = AgentActionOutput(
