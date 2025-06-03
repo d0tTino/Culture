@@ -1006,3 +1006,10 @@ except Exception as e:
         exc_info=True,
     )
     agent_graph_executor_instance = None  # Ensure it's defined even on failure
+
+
+def compile_agent_graph() -> Any:
+    """
+    Compiles and returns the Basic Agent Graph executor.
+    """
+    return agent_graph_executor_instance

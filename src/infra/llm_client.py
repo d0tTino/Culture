@@ -296,7 +296,7 @@ def summarize_memory_context(
 
 
 @monitor_llm_call(model_param="model", context="sentiment_analysis")
-def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[str]:
+def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[float]:
     """
     Analyzes the sentiment of a given text using Ollama.
 
@@ -305,14 +305,13 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[str]
         model (str): The Ollama model to use.
 
     Returns:
-        str | None: The sentiment classification ('positive', 'negative', 'neutral')
-                   or None if analysis fails.
+        float | None: The sentiment score (0.0 to 1.0) or None if analysis fails.
     """
     # In mock mode, return a mock sentiment
     if _MOCK_ENABLED:
         logger.debug("Using mock response for sentiment analysis")
         val = _MOCK_RESPONSES.get("sentiment_analysis", "neutral")
-        return str(val) if isinstance(val, str) else "neutral"
+        return float(val) if isinstance(val, str) else 0.0
 
     ollama_client = get_ollama_client()
     if not ollama_client or not text:
@@ -323,40 +322,58 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[str]
         f"Analyze the sentiment of the following message. Respond with only one word: "
         f"'positive', 'negative', or 'neutral'.\n\nMessage: \"{text}\"\n\nSentiment:"
     )
+    messages = [{"role": "user", "content": prompt}]
+    logger.debug(f"LLM_CLIENT_ANALYZE_SENTIMENT --- Constructed prompt: '''{prompt}'''")
 
-    try:
-        logger.debug(f'Sending sentiment analysis request for text: "{text}"')
-        response = ollama_client.chat(
+    def call() -> object:
+        return ollama_client.chat(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             options={"temperature": 0.1},  # Low temperature for classification
         )
 
-        if (
-            isinstance(response, dict)
-            and "message" in response
-            and "content" in response["message"]
-        ):
-            sentiment = str(response["message"]["content"]).strip().lower()
-            # Basic validation
-            if sentiment in ["positive", "negative", "neutral"]:
-                logger.debug(f"Sentiment analysis result: '{sentiment}' for text: \"{text}\"")
-                return sentiment
+    response, error = _retry_with_backoff(call)
+    if error:
+        logger.error(f"Failed to analyze sentiment after retries: {error}")
+        return None
+    if isinstance(response, dict) and "message" in response and "content" in response["message"]:
+        response_content_str = str(response["message"]["content"])
+        logger.debug(f"Sentiment analysis: received content string: '{response_content_str}'")
+        try:
+            sentiment_data = json.loads(response_content_str)
+            if isinstance(sentiment_data, dict) and "sentiment_score" in sentiment_data:
+                score = float(sentiment_data["sentiment_score"])
+                logger.debug(f"Sentiment analysis result: score '{score}' for text: \"{text}\"")
+                return score
             else:
                 logger.warning(
-                    f"Sentiment analysis returned unexpected result: '{sentiment}'. "
-                    "Defaulting to neutral."
+                    f"Sentiment analysis JSON response missing 'sentiment_score': '{response_content_str}'. "
+                    "Defaulting to 0.0."
                 )
-                return "neutral"
-        else:
-            logger.error(
-                f"Unexpected response structure from Ollama during sentiment analysis: {response}"
+                return 0.0  # Default float score
+        except json.JSONDecodeError:
+            logger.warning(
+                f"Sentiment analysis failed to parse JSON from response: '{response_content_str}'. "
+                "Attempting direct string interpretation or defaulting to 0.0."
             )
-            return None
-
-    except Exception as e:
-        logger.error(f"Error during Ollama sentiment analysis call: {e}", exc_info=True)
-        return None
+            # Fallback for direct string if previous mock version sent that.
+            # This part may need removal if mocks are consistently JSON.
+            sentiment_label_direct = response_content_str.strip().lower()
+            if sentiment_label_direct == "positive":
+                return 1.0
+            if sentiment_label_direct == "negative":
+                return -1.0
+            if sentiment_label_direct == "neutral":
+                return 0.0
+            logger.warning(
+                f"Could not interpret '{sentiment_label_direct}' as sentiment. Defaulting to 0.0"
+            )
+            return 0.0  # Default float score
+    else:
+        logger.error(
+            f"Unexpected response structure from Ollama during sentiment analysis: {response}"
+        )
+        return None  # Or 0.0 if float is always expected
 
 
 @monitor_llm_call(model_param="model", context="structured_output")

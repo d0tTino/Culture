@@ -3,21 +3,32 @@
 Defines the base class for all agents in the Culture simulation.
 """
 
+import copy
 import logging
 import uuid
-from collections import deque
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, cast
 
 from typing_extensions import Self
 
-from src.agents.graphs.basic_agent_graph import AgentTurnState
+# LangGraph imports
+# from langgraph.graph import StateGraph, END # No longer needed here
+# Import node functions and router from basic_agent_graph
+from src.agents.graphs.basic_agent_graph import (
+    compile_agent_graph,  # NEW: Import the graph compiler function
+)
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra import config
+from src.infra.config import get_config
+from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
 from src.utils.async_dspy_manager import AsyncDSPyManager
 
-from .agent_state import AgentState
+# Import graph types from the new file
+from .agent_graph_types import AgentActionOutput, AgentTurnState  # RESTORE THIS IMPORT
+
+# Import AgentState and AgentActionIntent first (no circular dependency)
+from .agent_state import AgentActionIntent, AgentState
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
@@ -25,6 +36,12 @@ if TYPE_CHECKING:
     from src.sim.knowledge_board import KnowledgeBoard
 
 logger = logging.getLogger(__name__)
+
+# --- REMOVE MOVED Graph State Definitions ---
+# class AgentActionOutput(BaseModel):
+#     ...
+# class AgentTurnState(TypedDict):
+#     ...
 
 # Corrected imports for DSPy program getters
 from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector
@@ -83,7 +100,10 @@ class Agent:
             "agent_goal", "Contribute to the simulation as effectively as possible."
         )
 
-        # Get values from config or use defaults
+        # LLM Client Initialization - MOVED EARLIER
+        self.llm_client = get_ollama_client()
+
+        # Get values from config or use defaults for fields AgentState doesn't get from default_factory
         ip = initial_state.get(
             "influence_points",
             (
@@ -141,80 +161,80 @@ class Agent:
             goal_text = initial_state["goal"]
             goals = [{"description": goal_text, "priority": "high"}]
 
-        # Create the AgentState object
-        self._state = AgentState(
-            agent_id=self.agent_id,
-            name=name,
-            role=role,
-            steps_in_current_role=steps_in_role,
-            mood=mood,
-            descriptive_mood=initial_state.get("descriptive_mood", "neutral"),
-            ip=ip,
-            du=du,
-            # Initialize deques and dictionaries with default empty values
-            # (using default_factory in model)
-            # Import specific values from initial_state if provided
-            relationships=initial_state.get("relationships", {}),
-            short_term_memory=deque(
-                initial_state.get("memory_history", []), maxlen=max_short_term_memory
+        # This overrides any default_factory behavior in AgentState for these specific fields.
+        constructor_args_from_config = {
+            "positive_relationship_learning_rate": get_config(
+                "POSITIVE_RELATIONSHIP_LEARNING_RATE"
             ),
-            goals=goals,  # Use the processed goals from above
-            agent_goal=agent_goal,  # Set the agent_goal field
-            current_project_id=current_project,
-            current_project_affiliation=current_project,  # Keep these two fields in sync
-            messages_sent_count=initial_state.get("messages_sent_count", 0),
-            messages_received_count=initial_state.get("messages_received_count", 0),
-            actions_taken_count=initial_state.get("actions_taken_count", 0),
-            available_action_intents=initial_state.get("available_action_intents", []),
-            step_counter=initial_state.get("step_counter", 0),
-            # Configuration fields
-            max_short_term_memory=max_short_term_memory,
-            short_term_memory_decay_rate=short_term_memory_decay_rate,
-            relationship_decay_rate=relationship_decay_rate,
-            min_relationship_score=min_relationship_score,
-            max_relationship_score=max_relationship_score,
-            mood_decay_rate=mood_decay_rate,
-            mood_update_rate=mood_update_rate,
-            ip_cost_per_message=ip_cost_per_message,
-            du_cost_per_action=du_cost_per_action,
-            role_change_cooldown=role_change_cooldown,
-            role_change_ip_cost=role_change_ip_cost,
-            # New relationship dynamics parameters
-            positive_relationship_learning_rate=initial_state.get(
-                "positive_relationship_learning_rate",
-                (
-                    config.POSITIVE_RELATIONSHIP_LEARNING_RATE
-                    if hasattr(config, "POSITIVE_RELATIONSHIP_LEARNING_RATE")
-                    else 0.3
-                ),
+            "negative_relationship_learning_rate": get_config(
+                "NEGATIVE_RELATIONSHIP_LEARNING_RATE"
             ),
-            negative_relationship_learning_rate=initial_state.get(
-                "negative_relationship_learning_rate",
-                (
-                    config.NEGATIVE_RELATIONSHIP_LEARNING_RATE
-                    if hasattr(config, "NEGATIVE_RELATIONSHIP_LEARNING_RATE")
-                    else 0.4
-                ),
-            ),
-            targeted_message_multiplier=initial_state.get(
-                "targeted_message_multiplier",
-                (
-                    config.TARGETED_MESSAGE_MULTIPLIER
-                    if hasattr(config, "TARGETED_MESSAGE_MULTIPLIER")
-                    else 3.0
-                ),
-            ),
-        )
+            "neutral_relationship_learning_rate": get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE"),
+            "targeted_message_multiplier": get_config("TARGETED_MESSAGE_MULTIPLIER"),
+            "relationship_decay_rate": get_config("RELATIONSHIP_DECAY_FACTOR"),
+            "mood_decay_rate": get_config("MOOD_DECAY_FACTOR"),
+            "mood_update_rate": get_config("MOOD_UPDATE_RATE"),
+            "max_short_term_memory": get_config("MAX_SHORT_TERM_MEMORY"),
+            "short_term_memory_decay_rate": get_config("SHORT_TERM_MEMORY_DECAY_RATE"),
+            "min_relationship_score": get_config("MIN_RELATIONSHIP_SCORE"),
+            "max_relationship_score": get_config("MAX_RELATIONSHIP_SCORE"),
+            "ip_cost_per_message": get_config("IP_COST_SEND_DIRECT_MESSAGE"),
+            "du_cost_per_action": get_config("DU_COST_PER_ACTION"),
+            "role_change_cooldown": get_config("ROLE_CHANGE_COOLDOWN"),
+            "role_change_ip_cost": get_config("ROLE_CHANGE_IP_COST"),
+            "ip": get_config("INITIAL_INFLUENCE_POINTS"),  # Use 'ip' as AgentState field name
+            "du": get_config("INITIAL_DATA_UNITS"),  # Use 'du' as AgentState field name
+        }
 
-        # Initialize the agent's Lang Graph
-        # TODO: Replace with actual compiled LangGraph when available
-        self.graph = None
-        logger.info(
-            f"Agent {self.agent_id} initialized with basic LangGraph, role: {self._state.role}, "
-            f"mood: {self._state.mood}"
-        )
+        # Start with config-derived values
+        agent_state_kwargs = constructor_args_from_config.copy()
 
-        # Vector store backend selection
+        # Layer explicit initial_state values over them.
+        # Pydantic will ignore extra keys in initial_state if not defined in AgentState.
+        # initial_state can override values from constructor_args_from_config.
+        if initial_state:  # Ensure initial_state is not None
+            # Handle specific remapping from initial_state keys to AgentState field names
+            if "influence_points" in initial_state:
+                agent_state_kwargs["ip"] = initial_state.pop("influence_points")  # Use and remove
+            if "data_units" in initial_state:
+                agent_state_kwargs["du"] = initial_state.pop("data_units")  # Use and remove
+
+            # Update with the rest of initial_state; Pydantic handles what it needs.
+            agent_state_kwargs.update(initial_state)
+
+        # Add/override mandatory/always-set fields AFTER initial_state processing
+        agent_state_kwargs["agent_id"] = self.agent_id
+        agent_state_kwargs["name"] = name  # name is derived above
+        agent_state_kwargs["role"] = role  # role is derived above
+        agent_state_kwargs["steps_in_current_role"] = steps_in_role  # derived above
+        agent_state_kwargs["mood"] = mood  # derived above
+        agent_state_kwargs["agent_goal"] = agent_goal  # derived above
+        agent_state_kwargs["llm_client"] = self.llm_client  # NOW self.llm_client is initialized
+
+        # Handle 'goals' separately if it was a single string in initial_state (already handled when deriving 'goals' var)
+        # The 'goals' variable prepared earlier (either from initial_state['goals'] or converted from initial_state['goal'])
+        # should be used here if it's not already covered by agent_state_kwargs.update(initial_state)
+        # If initial_state had 'goals' or 'goal', it's already in agent_state_kwargs.
+        # If not, AgentState's default for 'goals' (e.g., empty list) should apply.
+        # We can ensure 'goals' is set if it was prepared:
+        if goals:  # 'goals' variable from earlier logic
+            agent_state_kwargs["goals"] = goals
+        elif "goals" not in agent_state_kwargs:  # Ensure it has a default if not provided at all
+            agent_state_kwargs["goals"] = []
+
+        # Remove any None values for keys that AgentState expects a default for if not provided,
+        # to let Pydantic's field defaults take effect.
+        # This is only necessary if get_config() could return None for keys in constructor_args_from_config
+        # AND AgentState fields for those keys are Optional without a default_factory or direct default.
+        # Given current get_config logic (falls back to DEFAULT_CONFIG), Nones should be rare for these.
+        # agent_state_kwargs = {k: v for k, v in agent_state_kwargs.items() if v is not None} # Risky if None is valid for some fields
+
+        self._state = AgentState(**agent_state_kwargs)
+
+        # Initialize Langchain graph by calling the compiler function
+        self.graph = compile_agent_graph()  # MODIFIED: Call imported function
+
+        # Vector Store Manager Initialization
         if vector_store_manager:
             self.vector_store_manager = vector_store_manager
         else:
@@ -235,9 +255,16 @@ class Agent:
                     persist_directory=getattr(config, "VECTOR_STORE_DIR", "./chroma_db")
                 )
 
+        # Async DSPy Manager Initialization
         if async_dspy_manager:
             self.async_dspy_manager = async_dspy_manager
         else:
+            # Configure the global DSPy LM instance first
+            # configure_dspy_with_ollama() # This is called at a higher level, or should be ensured it's called once globally
+            # For now, let's assume it's configured globally elsewhere (e.g. main application setup or conftest for tests)
+            # If not, it needs to be called here, but carefully to avoid reconfiguring on every Agent init.
+
+            # Initialize AsyncDSPyManager without the lm argument
             self.async_dspy_manager = AsyncDSPyManager()
 
         self.action_intent_selector_program = get_optimized_action_selector()
@@ -447,15 +474,16 @@ class Agent:
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
-            "current_state": state_dict,  # Pass the state as a dictionary for now
+            "current_state": self._state.model_dump(exclude_none=True),  # Current full state
             "simulation_step": simulation_step,
-            "previous_thought": previous_thought,  # Pass previous thought into graph state
-            "environment_perception": environment_perception,  # Pass environment perception data
-            "perceived_messages": perceived_messages,  # Pass perceived messages list
-            "memory_history_list": list(
-                self._state.short_term_memory
-            ),  # Pass history list as a list
-            "turn_sentiment_score": 0,  # Initialize sentiment score for this turn
+            "previous_thought": self._state.last_thought,
+            "environment_perception": environment_perception,
+            "perceived_messages": copy.deepcopy(
+                environment_perception.get("perceived_messages", [])
+            ),  # MODIFIED
+            "memory_history_list": [],  # Placeholder
+            "turn_sentiment_score": 0,  # Placeholder
+            "individual_message_sentiments": [],  # Initialize empty list for per-message sentiments
             "prompt_modifier": "",  # Initialize prompt modifier
             "structured_output": None,  # Initialize as None for this turn
             "agent_goal": agent_goal,  # Use the extracted agent goal
@@ -471,6 +499,7 @@ class Agent:
             # Pass the agent's steps in current role
             "data_units": int(self._state.du),  # Cast to int for TypedDict compliance
             "state": self._state,  # Pass the AgentState object directly
+            "agent_instance": self,  # Pass the agent instance itself for DSPy calls
             "current_project_affiliation": getattr(
                 self._state, "current_project_affiliation", None
             ),
@@ -481,11 +510,34 @@ class Agent:
 
         if self.graph is None:
             logger.error(f"Agent {self.agent_id} has no graph assigned.")
-            return {"message_content": None, "message_recipient_id": None, "action_intent": "idle"}
-        graph = cast(Callable[[AgentTurnState], object], self.graph)
+            # Ensure the return type matches run_turn's annotation: dict[str, Any]
+            # Also, ensure AgentActionOutput is available for creating structured_output if needed by other logic.
+            # For now, returning a simpler dict consistent with other error returns.
+            return {
+                "message_content": None,
+                "message_recipient_id": None,
+                "action_intent": "idle",
+                "structured_output": None,
+            }
+
+        # The cast below was to object, which is too generic.
+        # It should be cast to a Callable that accepts AgentTurnState and returns a state-like dict or AgentTurnState.
+        # Langchain/Langgraph graphs usually return the full state or a dict to update it.
+        # graph_callable = cast(Callable[[AgentTurnState], Union[AgentTurnState, dict[str, Any]]], self.graph.ainvoke)
+        # Simpler: LangGraph's ainvoke on a CompiledStateGraph should return the full state (AgentTurnState).
+        graph_ainvoke_callable = cast(
+            Callable[[AgentTurnState], Awaitable[AgentTurnState]], self.graph.ainvoke
+        )
+
         try:
             # Invoke the graph asynchronously for the turn
-            final_result_state = await graph.ainvoke(initial_turn_state)
+            logger.debug(
+                f"Agent {self.agent_id} invoking graph. Type of graph: {type(self.graph)}"
+            )
+            logger.debug(
+                f"Agent {self.agent_id} initial_turn_state before invoke: {initial_turn_state.keys()}"
+            )
+            final_result_state: AgentTurnState = await graph_ainvoke_callable(initial_turn_state)
 
             # Add debug logging to inspect the graph.ainvoke result
             logger.debug(
@@ -510,19 +562,93 @@ class Agent:
 
             # Extract the updated state from the AgentState object
             if "state" in final_result_state:
-                updated_state = final_result_state.get("state")
-                self._state = updated_state
-                logger.debug(
-                    f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new "
-                    f"AgentState object."
-                )
+                updated_agent_state_obj = final_result_state.get("state")
+                if isinstance(updated_agent_state_obj, AgentState):
+                    if self.agent_id == "agent_b_analyzer_conflict":  # Check for Agent B
+                        logger.debug(
+                            f"DEBUG_GRAPH_OUTPUT (Agent B): BEFORE self._state update. "
+                            f"final_graph_output['state'].targeted_message_multiplier type: {type(updated_agent_state_obj.targeted_message_multiplier)}, "
+                            f"value: {updated_agent_state_obj.targeted_message_multiplier}"
+                        )
+                    self._state = updated_agent_state_obj
+                    if self.agent_id == "agent_b_analyzer_conflict":  # Check for Agent B
+                        logger.debug(
+                            f"DEBUG_GRAPH_OUTPUT (Agent B): AFTER self._state update. "
+                            f"self._state.targeted_message_multiplier type: {type(self._state.targeted_message_multiplier)}, "
+                            f"value: {self._state.targeted_message_multiplier}"
+                        )
+                    logger.debug(  # Keep this log for state update confirmation
+                        f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new "
+                        f"AgentState object (Role: {self._state.role}, Mood: {self._state.mood})."
+                    )
+                else:
+                    logger.warning(
+                        f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: 'state' in graph result is not "
+                        f"an AgentState object (type: {type(updated_agent_state_obj)}). self._state NOT updated."
+                    )
 
-                # Return turn output dict (messages, etc.)
+                # Extract message and action details from the 'structured_output' field
+                structured_output_from_graph = final_result_state.get("structured_output")
+                message_content = None
+                message_recipient_id = None
+                action_intent = AgentActionIntent.IDLE.value  # Default
+
+                if isinstance(structured_output_from_graph, AgentActionOutput):
+                    message_content = structured_output_from_graph.message_content
+                    message_recipient_id = structured_output_from_graph.message_recipient_id
+                    action_intent = structured_output_from_graph.action_intent
+                    logger.debug(
+                        f"Extracted from AgentActionOutput: msg='{message_content}', "
+                        f"recip='{message_recipient_id}', intent='{action_intent}'"
+                    )
+                elif isinstance(
+                    structured_output_from_graph, dict
+                ):  # If it was already a dict from the graph
+                    message_content = structured_output_from_graph.get("message_content")
+                    message_recipient_id = structured_output_from_graph.get("message_recipient_id")
+                    action_intent = structured_output_from_graph.get(
+                        "action_intent", AgentActionIntent.IDLE.value
+                    )
+                    logger.debug(
+                        f"Extracted from dict: msg='{message_content}', "
+                        f"recip='{message_recipient_id}', intent='{action_intent}'"
+                    )
+                else:
+                    logger.warning(
+                        f"Agent {self.agent_id}: 'structured_output' in graph result is not "
+                        f"AgentActionOutput or dict: {type(structured_output_from_graph)}. "
+                        f"Content: {structured_output_from_graph}"
+                    )
+                    # Ensure action_intent has a valid default
+                    if not isinstance(action_intent, str) or action_intent not in [
+                        item.value for item in AgentActionIntent
+                    ]:
+                        action_intent = AgentActionIntent.IDLE.value
+
                 turn_output = {
-                    "message_content": final_result_state.get("message_content"),
-                    "message_recipient_id": final_result_state.get("message_recipient_id"),
-                    "action_intent": final_result_state.get("action_intent", "idle"),
+                    "message_content": message_content,
+                    "message_recipient_id": message_recipient_id,
+                    "action_intent": action_intent,
                 }
+                logger.debug(f"Agent {self.agent_id} run_turn returning: {turn_output}")
+
+                # Update last_action_intent on the agent's state
+                if (
+                    turn_output
+                    and isinstance(turn_output, dict)
+                    and "action_intent" in turn_output
+                ):
+                    self._state.last_action_intent = turn_output["action_intent"]
+                    logger.debug(
+                        f"Agent {self.agent_id} updated last_action_intent to: {self._state.last_action_intent}"
+                    )
+                elif turn_output and hasattr(
+                    turn_output, "action_intent"
+                ):  # If it's an AgentActionOutput object
+                    self._state.last_action_intent = turn_output.action_intent
+                    logger.debug(
+                        f"Agent {self.agent_id} updated last_action_intent to: {self._state.last_action_intent}"
+                    )
 
                 return turn_output
             else:
@@ -587,7 +713,7 @@ class Agent:
         agent_role: str,
         current_situation: str,
         agent_goal: str,
-        available_actions: list[str],
+        available_actions: str,
     ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously select an action intent using a DSPy program.
@@ -745,3 +871,180 @@ class Agent:
             await message_sse_queue.put(msg)
         except Exception as e:
             logging.error(f"Failed to broadcast message to dashboard SSE: {e}")
+
+    def apply_action_costs_and_awards(
+        self: Self,
+        action_intent: str | None,
+        message_content: str | None,
+        recipient_id: str | None,
+        state: AgentState,
+    ) -> None:
+        """
+        Applies IP/DU costs and awards based on the action intent and message.
+        This method directly modifies the passed 'state' object.
+        """
+        if not action_intent:
+            return
+
+        # --- IP Costs/Awards ---
+        ip_change = 0.0
+        if message_content:
+            if recipient_id is None:  # Broadcast message
+                ip_change -= state.ip_cost_per_message
+                logger.debug(
+                    f"Agent {self.agent_id}: Applied IP cost for broadcast: {state.ip_cost_per_message}"
+                )
+            else:  # Targeted message
+                ip_change -= getattr(config, "IP_COST_TARGETED_MESSAGE", state.ip_cost_per_message)
+                logger.debug(
+                    f"Agent {self.agent_id}: Applied IP cost for targeted message: {getattr(config, 'IP_COST_TARGETED_MESSAGE', state.ip_cost_per_message)}"
+                )
+
+        if action_intent == AgentActionIntent.CREATE_PROJECT.value:
+            ip_change -= getattr(config, "IP_COST_CREATE_PROJECT", 10.0)
+        # Other intent-specific IP awards/costs can be added here.
+        # Example: Proposing an idea might have an award, but cost to post is in graph.
+        # if action_intent == AgentActionIntent.PROPOSE_IDEA.value:
+        #     ip_change += getattr(config, "IP_AWARD_FOR_PROPOSAL", 0.0) # Typically cost is in graph
+
+        state.ip += ip_change
+        if ip_change != 0:
+            logger.info(
+                f"Agent {self.agent_id}: IP changed by {ip_change:.2f} due to action/message. New IP: {state.ip:.2f}"
+            )
+
+        # --- DU Costs/Awards ---
+        du_change = 0.0
+        # Apply a generic DU cost for taking any action, if configured (can be 0)
+        # Many specific DU costs (like PROPOSE_DETAILED_IDEA_DU_COST) are handled in graph nodes.
+        # This cost here would be *additional* or for actions not covered by specific graph node costs.
+        if state.du_cost_per_action > 0 and action_intent != AgentActionIntent.IDLE.value:
+            du_change -= state.du_cost_per_action
+
+        # Intent-specific DU generation/costs from ACTION_DU_GENERATION_V2
+        action_du_config = config.ACTION_DU_GENERATION_V2.get(action_intent, {})
+        base_du_generation = action_du_config.get("base_amount", 0.0)
+        role_bonus_factor = action_du_config.get("role_bonus_factor", 0.0)
+
+        # Get the role-specific generation dictionary (e.g., {"base": 1.0, "bonus_factor": 0.2})
+        role_specific_generation_dict = config.ROLE_DU_GENERATION.get(state.role, {})
+        # Extract the 'base' DU generation for the role, to be multiplied by the action's role_bonus_factor
+        role_base_generation_for_action_bonus = role_specific_generation_dict.get("base", 0.0)
+
+        # --- Start Debug Logging ---
+        logger.debug(f"DU Calc: action_intent='{action_intent}', agent_role='{state.role}'")
+        logger.debug(f"DU Calc: action_du_config='{action_du_config}'")
+        logger.debug(
+            f"DU Calc: base_du_generation (type: {type(base_du_generation)})='{base_du_generation}'"
+        )
+        logger.debug(f"DU Calc: role_specific_generation_dict='{role_specific_generation_dict}'")
+        logger.debug(
+            f"DU Calc: role_base_generation_for_action_bonus (type: {type(role_base_generation_for_action_bonus)})='{role_base_generation_for_action_bonus}'"
+        )
+        logger.debug(
+            f"DU Calc: role_bonus_factor (type: {type(role_bonus_factor)})='{role_bonus_factor}'"
+        )
+        # --- End Debug Logging ---
+
+        # Calculate DU generated from action's base amount and role-modified bonus
+        generated_du_for_action = base_du_generation + (
+            role_base_generation_for_action_bonus * role_bonus_factor
+        )
+
+        du_change += generated_du_for_action
+
+        # Apply fixed DU costs for specific intents if not handled by the generative config or if additive
+        if action_intent == AgentActionIntent.PERFORM_DEEP_ANALYSIS.value:
+            du_change -= getattr(config, "DU_COST_DEEP_ANALYSIS", 10.0)
+        # Example: Cost for ASK_CLARIFICATION is usually in the graph node.
+        # elif action_intent == AgentActionIntent.ASK_CLARIFICATION.value:
+        #     du_change -= getattr(config, "DU_COST_REQUEST_CLARIFICATION", 1.0)
+
+        state.du += du_change
+        if du_change != 0:
+            logger.info(
+                f"Agent {self.agent_id}: DU changed by {du_change:.2f} due to action. New DU: {state.du:.2f}"
+            )
+
+        # Clamp IP and DU to non-negative values
+        state.ip = max(0, state.ip)
+        state.du = max(0, state.du)
+
+    def perceive_messages(self, messages: list[dict]):
+        """Allows the agent to perceive messages from other agents or the environment."""
+        if not messages:
+            return
+
+        logger.debug(f"Agent {self.agent_id} perceiving {len(messages)} messages.")
+
+        enriched_messages_for_state_update = []
+        for msg_data in messages:
+            enriched_msg = msg_data.copy()
+            if "sentiment_score" not in enriched_msg:  # If sentiment not already present
+                content = enriched_msg.get("content", "").lower()
+                mock_sentiment = 0.0  # Default
+                if "disagree" in content or "problematic" in content or "concern" in content:
+                    mock_sentiment = -0.7
+                elif "agree" in content or "great idea" in content or "support" in content:
+                    mock_sentiment = 0.6
+                elif "question" in content or "clarify" in content:
+                    mock_sentiment = 0.0
+                else:
+                    mock_sentiment = 0.05  # Slight positive for generic
+                enriched_msg["sentiment_score"] = mock_sentiment
+                logger.debug(
+                    f"Agent {self.agent_id} (perceive_messages fallback): Applied mock_sentiment {mock_sentiment} to message from {enriched_msg.get('sender_id')}"
+                )
+            enriched_messages_for_state_update.append(enriched_msg)
+
+        # Option 1: Directly update state (if no complex graph logic needed for perception)
+        # This is the most direct way if the graph isn't invoked for perception-only updates.
+        logger.debug(
+            f"Agent {self.agent_id} (perceive_messages): About to call self.state.process_perceived_messages with: {enriched_messages_for_state_update}"
+        )
+        logger.debug(
+            f"BaseAgent ({self.agent_id}): id(self.state) before process_perceived_messages: {id(self.state)}"
+        )
+        self.state.process_perceived_messages(
+            enriched_messages_for_state_update, self.vector_store_manager
+        )
+        logger.info(
+            f"Agent {self.agent_id} processed {len(enriched_messages_for_state_update)} messages directly in perceive_messages, updating mood/relationships."
+        )
+        logger.debug(
+            f"BaseAgent ({self.agent_id}): id(self.state) after process_perceived_messages: {id(self.state)}, relationships: {self.state.relationships}"
+        )
+
+        # Option 2: Invoke a specific part of the graph (e.g., update_state_node)
+        # This requires careful setup of initial_graph_state_for_perception
+        # and ensuring the graph node correctly handles this limited-scope invocation.
+        # if self.graph and hasattr(self.graph, "nodes") and "update_state_node" in self.graph.nodes:
+        #     try:
+        #         initial_graph_state_for_perception = {
+        #             "agent_id": self.agent_id,
+        #             "state": self.state,
+        #             "perceived_messages": enriched_messages_for_state_update, # Use enriched messages
+        #             "simulation_step": self.state.last_action_step if self.state.last_action_step is not None else 0,
+        #             "knowledge_board": None, # Pass if needed by update_state_node
+        #             "vector_store_manager": self.vector_store_manager,
+        #             "structured_output": None,
+        #             "current_role": self.state.role,
+        #             "steps_in_current_role": self.state.steps_in_current_role,
+        #             "turn_sentiment_score": sum(m.get("sentiment_score", 0) for m in enriched_messages_for_state_update) / len(enriched_messages_for_state_update) if enriched_messages_for_state_update else 0.0
+        #         }
+        #         logger.debug(f"Agent {self.agent_id} (perceive_messages): Invoking update_state_node for perception.")
+        #         updated_graph_state = self.graph.nodes["update_state_node"].invoke(initial_graph_state_for_perception)
+        #         if "state" in updated_graph_state and isinstance(updated_graph_state["state"], AgentState):
+        #             self._state = updated_graph_state["state"]
+        #             logger.info(f"Agent {self.agent_id} (perceive_messages): State updated via graph node after perception.")
+        #         else:
+        #             logger.warning(f"Agent {self.agent_id} (perceive_messages): Graph node did not return expected state output.")
+        #     except Exception as e:
+        #         logger.error(f"Agent {self.agent_id} (perceive_messages): Error invoking graph node for perception: {e}")
+        #         # Fallback to direct state update if graph invocation fails
+        #         self.state.process_perceived_messages(enriched_messages_for_state_update, self.vector_store_manager)
+        # else:
+        #     # Fallback if graph or node not available
+        #     self.state.process_perceived_messages(enriched_messages_for_state_update, self.vector_store_manager)
+
+        # Consolidate memories after processing perceptions, if significant new info gained

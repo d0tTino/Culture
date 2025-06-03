@@ -8,7 +8,7 @@ from pytest import LogCaptureFixture
 
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent
-from src.agents.graphs.basic_agent_graph import AgentTurnState, agent_graph_executor_instance
+from src.agents.graphs.basic_agent_graph import AgentTurnState
 from src.utils.async_dspy_manager import AsyncDSPyManager
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,6 @@ async def test_dspy_call_timeout_in_graph(
             },
         )()
 
-    simple_agent.graph = agent_graph_executor_instance  # Assign the imported graph
     simple_agent.async_dspy_manager = async_manager
 
     # The action_intent_selector_program is what gets called by the AsyncDSPyManager
@@ -71,9 +70,9 @@ async def test_dspy_call_timeout_in_graph(
     mock_program_callable = AsyncMock(side_effect=mock_slow_dspy_call)
 
     logger.info(f"Simple agent dict before hasattr: {simple_agent.__dict__}")
-    assert hasattr(simple_agent, "action_intent_selector_program"), (
-        "Agent should have action_intent_selector_program before patch"
-    )
+    assert hasattr(
+        simple_agent, "action_intent_selector_program"
+    ), "Agent should have action_intent_selector_program before patch"
 
     # Prepare a minimal AgentTurnState
     initial_turn_state = AgentTurnState(
@@ -110,7 +109,8 @@ async def test_dspy_call_timeout_in_graph(
 
     with patch.object(simple_agent, "async_select_action_intent", mock_program_callable):
         # Execute the graph
-        final_state = await agent_graph_executor_instance.ainvoke(initial_turn_state)
+        assert simple_agent.graph is not None, "Agent graph should be initialized by BaseAgent"
+        final_state = await simple_agent.graph.ainvoke(initial_turn_state)
 
         # Assertions:
         # 1. Check if the graph completed (it should, even with internal timeout)
@@ -121,9 +121,9 @@ async def test_dspy_call_timeout_in_graph(
         final_structured_output = final_state.get("structured_output")
         assert final_structured_output is not None, "Final state should have structured_output"
         # Default fallback is often 'idle'
-        assert final_structured_output.action_intent == AgentActionIntent.IDLE.value, (
-            f"Expected fallback action_intent to be IDLE due to timeout, got {final_structured_output.action_intent}"
-        )
+        assert (
+            final_structured_output.action_intent == AgentActionIntent.IDLE.value
+        ), f"Expected fallback action_intent to be IDLE due to timeout, got {final_structured_output.action_intent}"
         assert (
             "timeout" in final_structured_output.thought.lower()
             or "fallback" in final_structured_output.thought.lower()
@@ -151,8 +151,7 @@ async def test_dspy_call_exception_in_graph(
         logger.error("MOCK_ERROR_DSPY_CALL: Raising ValueError now...")
         raise ValueError("Simulated DSPy Program Error during graph execution")
 
-    simple_agent.graph = agent_graph_executor_instance  # Assign the imported graph
-    simple_agent.async_dspy_manager = async_manager  # Assign manager
+    simple_agent.async_dspy_manager = async_manager
 
     mock_program_callable_err = AsyncMock(side_effect=mock_error_dspy_call)
 
@@ -191,7 +190,8 @@ async def test_dspy_call_exception_in_graph(
 
     with patch.object(simple_agent, "async_select_action_intent", mock_program_callable_err):
         # Execute the graph
-        final_state = await agent_graph_executor_instance.ainvoke(initial_turn_state)
+        assert simple_agent.graph is not None, "Agent graph should be initialized by BaseAgent"
+        final_state = await simple_agent.graph.ainvoke(initial_turn_state)
 
         # Assertions:
         # 1. Graph completed
@@ -200,21 +200,19 @@ async def test_dspy_call_exception_in_graph(
         #    The generate_thought_and_message_node should produce a default/fallback
         #    AgentActionOutput if async_select_action_intent raises an exception.
         final_structured_output_exc = final_state.get("structured_output")
-        assert final_structured_output_exc is not None, (
-            "Final state should have structured_output after exception"
-        )
+        assert (
+            final_structured_output_exc is not None
+        ), "Final state should have structured_output after exception"
         # Default fallback is often 'idle'
-        assert final_structured_output_exc.action_intent == AgentActionIntent.IDLE.value, (
-            f"Expected fallback action_intent to be IDLE due to exception, got {final_structured_output_exc.action_intent}"
-        )
+        assert (
+            final_structured_output_exc.action_intent == AgentActionIntent.IDLE.value
+        ), f"Expected fallback action_intent to be IDLE due to exception, got {final_structured_output_exc.action_intent}"
         assert (
             "error" in final_structured_output_exc.thought.lower()
             or "fallback" in final_structured_output_exc.thought.lower()
             or "exception" in final_structured_output_exc.thought.lower()
             or "default" in final_structured_output_exc.thought.lower()
-        ), (
-            f"Expected thought to indicate error/fallback, got: {final_structured_output_exc.thought}"
-        )
+        ), f"Expected thought to indicate error/fallback, got: {final_structured_output_exc.thought}"
 
         # 3. Optional: Verify the specific error log from the mock if it appears, but don't fail if not,
         #    as primary check is the fallback action.

@@ -118,6 +118,9 @@ class L1SummaryGenerator:
         current_mood: Optional[str] = None,
     ) -> str:
         try:
+            logger.debug(
+                f"L1SummaryGenerator inputs: agent_role='{agent_role}' (type: {type(agent_role)}), recent_events='{recent_events[:200]}...' (type: {type(recent_events)}), current_mood='{current_mood}' (type: {type(current_mood)})"
+            )
             if not self.l1_predictor:
                 logger.warning("DSPy L1 predictor not available, using failsafe fallback.")
                 return self.failsafe.generate_summary(agent_role, recent_events, current_mood)

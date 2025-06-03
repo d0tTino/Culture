@@ -4,10 +4,10 @@ Configuration module for Culture simulation.
 Manages environment variables and configuration settings.
 """
 
-import json
 import logging
 import os
-from typing import Optional
+from typing import Optional, Any
+import importlib
 
 try:
     from dotenv import load_dotenv
@@ -26,15 +26,121 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG: dict[str, object] = {
     "OLLAMA_API_BASE": "http://localhost:11434",
     "DEFAULT_LLM_MODEL": "mistral:latest",
+    "DEFAULT_TEMPERATURE": 0.7,
     "MEMORY_THRESHOLD_L1": 0.2,
     "MEMORY_THRESHOLD_L2": 0.3,
     "VECTOR_STORE_DIR": "./chroma_db",
     "VECTOR_STORE_BACKEND": "chroma",  # chroma or weaviate
     "WEAVIATE_URL": "http://localhost:8080",
+    "TARGETED_MESSAGE_MULTIPLIER": 3.0,
+    "POSITIVE_RELATIONSHIP_LEARNING_RATE": 0.3,
+    "NEGATIVE_RELATIONSHIP_LEARNING_RATE": 0.4,
+    "RELATIONSHIP_DECAY_FACTOR": 0.01,
+    "MOOD_DECAY_FACTOR": 0.02,
+    "ROLE_CHANGE_IP_COST": 5.0,
+    "NEUTRAL_RELATIONSHIP_LEARNING_RATE": 0.1,
+    "INITIAL_INFLUENCE_POINTS": 10.0,
+    "INITIAL_DATA_UNITS": 20.0,
+    "MAX_SHORT_TERM_MEMORY": 10,
+    "SHORT_TERM_MEMORY_DECAY_RATE": 0.1,
+    "MIN_RELATIONSHIP_SCORE": -1.0,
+    "MAX_RELATIONSHIP_SCORE": 1.0,
+    "MOOD_UPDATE_RATE": 0.2,
+    "IP_COST_SEND_DIRECT_MESSAGE": 1.0,
+    "DU_COST_PER_ACTION": 1.0,
+    "ROLE_CHANGE_COOLDOWN": 3,
+    "IP_AWARD_FOR_PROPOSAL": 5,
+    "IP_COST_TO_POST_IDEA": 2,
+    "IP_COST_CREATE_PROJECT": 10,
+    "IP_COST_JOIN_PROJECT": 1,
+    "IP_AWARD_FACILITATION_ATTEMPT": 3,
+    "PROPOSE_DETAILED_IDEA_DU_COST": 5,
+    "DU_AWARD_IDEA_ACKNOWLEDGED": 3,
+    "DU_AWARD_SUCCESSFUL_ANALYSIS": 4,
+    "DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE": 1,
+    "MEMORY_PRUNING_L1_DELAY_STEPS": 10,
+    "MEMORY_PRUNING_L2_MAX_AGE_DAYS": 30,
+    "MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS": 100,
+    "MEMORY_PRUNING_L1_MUS_THRESHOLD": 0.3,
+    "MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION": 7,
+    "MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS": 50,
+    "MEMORY_PRUNING_L2_MUS_THRESHOLD": 0.25,
+    "MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION": 14,
+    "MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS": 150,
+    "REDIS_HOST": "localhost",
+    "REDIS_PORT": 6379,
+    "REDIS_DB": 0,
+    "DISCORD_BOT_TOKEN": "",
+    "DISCORD_CHANNEL_ID": None,
+    "OPENAI_API_KEY": "",
+    "ANTHROPIC_API_KEY": "",
+    "DEFAULT_LOG_LEVEL": "INFO",
+    "MEMORY_PRUNING_ENABLED": False,
+    "MEMORY_PRUNING_L2_ENABLED": True,
+    "MEMORY_PRUNING_L1_MUS_ENABLED": False,
+    "MEMORY_PRUNING_L2_MUS_ENABLED": False,
+    "MAX_PROJECT_MEMBERS": 3,
+    "DEFAULT_MAX_SIMULATION_STEPS": 50,
+    "MAX_KB_ENTRIES_FOR_PERCEPTION": 10,
 }
 
 # Global config dictionary
 _CONFIG: dict[str, object] = {}
+
+# Define keys that should be floats and ints for type conversion
+FLOAT_CONFIG_KEYS = [
+    "MEMORY_THRESHOLD_L1",
+    "MEMORY_THRESHOLD_L2",
+    "TARGETED_MESSAGE_MULTIPLIER",
+    "POSITIVE_RELATIONSHIP_LEARNING_RATE",
+    "NEGATIVE_RELATIONSHIP_LEARNING_RATE",
+    "RELATIONSHIP_DECAY_FACTOR",
+    "MOOD_DECAY_FACTOR",
+    "DEFAULT_TEMPERATURE",
+    "MEMORY_PRUNING_L1_MUS_THRESHOLD",
+    "MEMORY_PRUNING_L2_MUS_THRESHOLD",
+    "NEUTRAL_RELATIONSHIP_LEARNING_RATE",
+    "INITIAL_INFLUENCE_POINTS",
+    "INITIAL_DATA_UNITS",
+    "SHORT_TERM_MEMORY_DECAY_RATE",
+    "MIN_RELATIONSHIP_SCORE",
+    "MAX_RELATIONSHIP_SCORE",
+    "MOOD_UPDATE_RATE",
+    "IP_COST_SEND_DIRECT_MESSAGE",
+    "DU_COST_PER_ACTION",
+    "ROLE_CHANGE_IP_COST",
+]
+INT_CONFIG_KEYS = [
+    "IP_AWARD_FOR_PROPOSAL",
+    "IP_COST_TO_POST_IDEA",
+    "IP_COST_CREATE_PROJECT",
+    "IP_COST_JOIN_PROJECT",
+    "IP_AWARD_FACILITATION_ATTEMPT",
+    "PROPOSE_DETAILED_IDEA_DU_COST",
+    "DU_AWARD_IDEA_ACKNOWLEDGED",
+    "DU_AWARD_SUCCESSFUL_ANALYSIS",
+    "DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE",
+    "MEMORY_PRUNING_L1_DELAY_STEPS",
+    "MEMORY_PRUNING_L2_MAX_AGE_DAYS",
+    "MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS",
+    "MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION",
+    "MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS",
+    "MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION",
+    "MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS",
+    "REDIS_PORT",
+    "REDIS_DB",
+    "MAX_SHORT_TERM_MEMORY",
+    "ROLE_CHANGE_COOLDOWN",
+    "MAX_PROJECT_MEMBERS",
+    "DEFAULT_MAX_SIMULATION_STEPS",
+    "MAX_KB_ENTRIES_FOR_PERCEPTION",
+]
+BOOL_CONFIG_KEYS = [
+    "MEMORY_PRUNING_ENABLED",
+    "MEMORY_PRUNING_L2_ENABLED",
+    "MEMORY_PRUNING_L1_MUS_ENABLED",
+    "MEMORY_PRUNING_L2_MUS_ENABLED",
+]
 
 
 def load_config() -> dict[str, object]:
@@ -49,32 +155,71 @@ def load_config() -> dict[str, object]:
     # Start with default config
     _CONFIG = DEFAULT_CONFIG.copy()
 
-    # Override with environment variables
-    for key in DEFAULT_CONFIG:
-        try:
-            env_value = os.environ.get(key)
-            if env_value:
-                # Convert string values to appropriate types
-                if key in ["MEMORY_THRESHOLD_L1", "MEMORY_THRESHOLD_L2"]:
-                    try:
-                        _CONFIG[key] = float(env_value)
-                    except ValueError:
-                        logger.warning(
-                            f"Could not convert {key}={env_value} to float. "
-                            f"Using default {_CONFIG[key]}"
-                        )
-                else:
-                    _CONFIG[key] = env_value
-        except (KeyError, FileNotFoundError, json.JSONDecodeError) as e:
-            logger.error(f"Error loading config key {key}: {e}", exc_info=True)
+    # Process all keys that might be set in environment, converting known types
+    # Iterate over a combined set of keys: DEFAULT_CONFIG keys + known float/int keys
+    # This ensures that if an env var is set for a known float/int key not in DEFAULT_CONFIG,
+    # it's still processed and type-converted.
+    all_potential_keys = (
+        set(DEFAULT_CONFIG.keys())
+        | set(FLOAT_CONFIG_KEYS)
+        | set(INT_CONFIG_KEYS)
+        | set(BOOL_CONFIG_KEYS)
+    )
 
-    # Add support for VECTOR_STORE_BACKEND and WEAVIATE_URL
-    for key in ["VECTOR_STORE_BACKEND", "WEAVIATE_URL"]:
+    for key in all_potential_keys:
         env_value = os.environ.get(key)
         if env_value:
-            _CONFIG[key] = env_value
+            try:
+                if key in FLOAT_CONFIG_KEYS:
+                    _CONFIG[key] = float(env_value)
+                elif key in INT_CONFIG_KEYS:
+                    # Special handling for DISCORD_CHANNEL_ID as it can be None
+                    if key == "DISCORD_CHANNEL_ID":
+                        if env_value.isdigit():
+                            _CONFIG[key] = int(env_value)
+                        else:
+                            _CONFIG[key] = None  # Or handle as error/warning
+                            logger.warning(
+                                f"DISCORD_CHANNEL_ID '{env_value}' is not a digit. Setting to None."
+                            )
+                    else:
+                        _CONFIG[key] = int(env_value)
+                elif key in BOOL_CONFIG_KEYS:
+                    _CONFIG[key] = env_value.lower() in ("true", "1", "t", "yes", "y")
+                else:  # For keys in DEFAULT_CONFIG but not explicitly float/int (e.g. strings)
+                    _CONFIG[key] = env_value
+            except ValueError:
+                logger.warning(
+                    f"Could not convert env var {key}='{env_value}' to its target type. "
+                    f"Using default: {_CONFIG.get(key, DEFAULT_CONFIG.get(key))}"
+                )
+        # If env_value is not set, but key is in DEFAULT_CONFIG, it's already set from the copy.
+        # If env_value is not set and key is a known float/int key NOT in DEFAULT_CONFIG,
+        # we might want to explicitly set it to None or a sensible default if not already covered.
+        # However, AgentState fields using these should have their own defaults or handle None.
+        # For now, if not in env and not in DEFAULT_CONFIG, it won't be in _CONFIG.
+        # Pydantic fields in AgentState will use their `default_factory=lambda: get_config(KEY)`
+        # which will then pull from DEFAULT_CONFIG if get_config(KEY) from _CONFIG is None.
 
-    logger.info(f"Configuration loaded: {_CONFIG}")
+    # Special handling for ROLE_DU_GENERATION if it can be overridden by ENV
+    # For now, it's taken from DEFAULT_CONFIG. If it needs to be env-configurable,
+    # it would require parsing a JSON string from the env var.
+    _CONFIG["ROLE_DU_GENERATION"] = {  # Define it directly here based on DEFAULT_CONFIG structure
+        "Facilitator": {
+            "base": _CONFIG.get("ROLE_DU_GENERATION_FACILITATOR_BASE", 1.0),
+            "bonus_factor": _CONFIG.get("ROLE_DU_GENERATION_FACILITATOR_BONUS", 0.0),
+        },
+        "Innovator": {
+            "base": _CONFIG.get("ROLE_DU_GENERATION_INNOVATOR_BASE", 1.0),
+            "bonus_factor": _CONFIG.get("ROLE_DU_GENERATION_INNOVATOR_BONUS", 0.5),
+        },
+        "Analyzer": {
+            "base": _CONFIG.get("ROLE_DU_GENERATION_ANALYZER_BASE", 1.0),
+            "bonus_factor": _CONFIG.get("ROLE_DU_GENERATION_ANALYZER_BONUS", 0.5),
+        },
+    }
+
+    logger.info(f"Configuration loaded. _CONFIG contains: {_CONFIG}")
     # Fail fast if critical config is missing
     if not _CONFIG.get("OLLAMA_API_BASE"):
         logger.critical("OLLAMA_API_BASE is missing from configuration. Exiting.")
@@ -105,6 +250,8 @@ def get_config(key: Optional[str] = None) -> object:
 
 
 # Initialize the configuration on module import
+load_config()
+
 OLLAMA_API_BASE = get_config("OLLAMA_API_BASE")
 DEFAULT_LLM_MODEL = get_config("DEFAULT_LLM_MODEL")
 MEMORY_THRESHOLD_L1 = get_config("MEMORY_THRESHOLD_L1")
@@ -114,14 +261,14 @@ VECTOR_STORE_BACKEND = get_config("VECTOR_STORE_BACKEND")
 WEAVIATE_URL = get_config("WEAVIATE_URL")
 
 # --- Basic Configuration ---
-DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+DEFAULT_LOG_LEVEL = get_config("DEFAULT_LOG_LEVEL")
 
 # --- API Keys ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # OpenAI API key
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")  # Anthropic API key
+OPENAI_API_KEY = get_config("OPENAI_API_KEY")
+ANTHROPIC_API_KEY = get_config("ANTHROPIC_API_KEY")
 
 # --- LLM Settings ---
-DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
+DEFAULT_TEMPERATURE = get_config("DEFAULT_TEMPERATURE")
 
 # --- Ollama Settings ---
 
@@ -229,6 +376,12 @@ IP_COST_CREATE_PROJECT = int(
 IP_COST_JOIN_PROJECT = int(
     os.getenv("IP_COST_JOIN_PROJECT", "1")
 )  # Cost in IP to join an existing project
+IP_COST_SEND_DIRECT_MESSAGE = int(
+    os.getenv("IP_COST_SEND_DIRECT_MESSAGE", "1")
+)  # Cost in IP to send a direct message
+IP_AWARD_FACILITATION_ATTEMPT = int(
+    os.getenv("IP_AWARD_FACILITATION_ATTEMPT", "3")
+)  # IP award for attempting facilitation
 
 # --- Data Units (DU) Settings ---
 INITIAL_DATA_UNITS = int(os.getenv("INITIAL_DATA_UNITS", "20"))  # Starting DU for new agents
@@ -249,7 +402,7 @@ DU_COST_DEEP_ANALYSIS = int(
 )  # Cost for an Analyzer to perform a "deep analysis"
 DU_COST_REQUEST_DETAILED_CLARIFICATION = int(
     os.getenv("DU_COST_REQUEST_DETAILED_CLARIFICATION", "2")
-)  # Cost to ask detailed clarification
+)  # DU cost for asking for detailed clarification
 DU_COST_CREATE_PROJECT = int(
     os.getenv("DU_COST_CREATE_PROJECT", "10")
 )  # Cost in DU to create a new project
@@ -259,10 +412,10 @@ DU_COST_JOIN_PROJECT = int(
 
 # --- Role Settings ---
 ROLE_DU_GENERATION = {
-    "Innovator": int(os.getenv("ROLE_DU_GENERATION_INNOVATOR", "2")),
-    "Analyzer": int(os.getenv("ROLE_DU_GENERATION_ANALYZER", "1")),
-    "Facilitator": int(os.getenv("ROLE_DU_GENERATION_FACILITATOR", "1")),
-    "Default Contributor": int(os.getenv("ROLE_DU_GENERATION_DEFAULT", "0")),
+    "Facilitator": {"base": 1.0, "bonus_factor": 0.0},
+    "Innovator": {"base": 1.0, "bonus_factor": 0.5},
+    "Analyzer": {"base": 1.0, "bonus_factor": 0.5},
+    # Add other roles here if they have different DU generation patterns
 }
 ROLE_CHANGE_COOLDOWN = int(
     os.getenv("ROLE_CHANGE_COOLDOWN", "3")
@@ -272,6 +425,17 @@ ROLE_CHANGE_COOLDOWN = int(
 MAX_PROJECT_MEMBERS = int(
     os.getenv("MAX_PROJECT_MEMBERS", "3")
 )  # Maximum number of members in a project
+
+# Vector Store Configuration
+WEAVIATE_URL = os.getenv("WEAVIATE_URL", "http://localhost:8080")
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
+DEFAULT_VECTOR_STORE = os.getenv("DEFAULT_VECTOR_STORE", "chroma")  # "chroma" or "weaviate"
+
+# Knowledge Board
+MAX_KB_ENTRIES_FOR_PERCEPTION = int(os.getenv("MAX_KB_ENTRIES_FOR_PERCEPTION", "10"))
+
+# Simulation Parameters
+DEFAULT_MAX_SIMULATION_STEPS = int(os.getenv("DEFAULT_MAX_SIMULATION_STEPS", "50"))
 
 
 # --- Helper Functions ---
@@ -325,3 +489,27 @@ logger = logging.getLogger(__name__)
 
 # Log loaded configuration for verification (optional, be careful with sensitive data)
 logger.info("Configuration loaded successfully")
+
+def get_config_value_with_override(key: str, default: Any = None, module_name: str = "src.infra.config_default") -> Any:
+    """Fetches a config value, trying overrides first, then primary, then default."""
+    # Dynamically import the configuration module
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError:
+        logger.error(f"Failed to import configuration module: {module_name}")
+        return default
+
+    # Try to get from overrides
+    if CONFIG_OVERRIDES.get(key) is not None:
+        # logger.debug(f"Config key '{key}' found in overrides.")
+        return CONFIG_OVERRIDES[key]
+    else:
+        # If not in overrides, try to get from the primary config module
+        primary_value = getattr(module, str(key), None) # Ensure key is string for getattr
+        if primary_value is not None:
+            # logger.debug(f"Config key '{key}' found in primary config module '{module_name}'.")
+            return primary_value
+        else:
+            # If not in primary, return default
+            # logger.debug(f"Config key '{key}' not found. Returning default value: {default}")
+            return default

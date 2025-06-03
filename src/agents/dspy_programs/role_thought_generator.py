@@ -1,9 +1,13 @@
 # ruff: noqa: E501, ANN101, ANN401
 import logging
+import os
 
 import dspy
 
-logger = logging.getLogger(__name__)
+# from src.infra.dspy_ollama_integration import OllamaLM, configure_dspy_ollama_async # REMOVED
+
+# from src.utils.logging_utils import get_logger # REMOVED
+logger = logging.getLogger(__name__)  # ADDED Standard Python Logger
 
 
 class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
@@ -49,19 +53,14 @@ def get_role_thought_generator() -> object:
     Returns the optimized module if available, else the base, else a failsafe.
     """
     try:
-        import os
+        # For now, assume DSPy is configured globally by conftest.py or similar
+        if not dspy.settings.lm:
+            logger.error(
+                "DSPy LM not configured prior to calling async_generate_role_prefixed_thought. This will likely fail."
+            )
+            # Attempt a last-ditch configuration, though this is not ideal
+            # await configure_dspy_ollama_async() # Still keep this part commented for now to see if global config holds
 
-        import dspy
-
-        from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
-
-        logger.info("Attempting to configure DSPy with Ollama...")
-        # Try to configure DSPy
-        try:
-            configure_dspy_with_ollama()
-            logger.info(f"DSPy configured. LM set to: {getattr(dspy.settings, 'lm', None)}")
-        except Exception as e:
-            logger.error(f"ROLE THOUGHT GENERATOR: Error configuring DSPy with Ollama: {e}")
         # Try to load optimized/compiled version
         compiled_path = os.path.join(
             os.path.dirname(__file__), "compiled", "optimized_role_thought_generator.json"
@@ -96,6 +95,9 @@ def generate_role_prefixed_thought(agent_role: str, current_situation: str) -> s
     Returns a string thought process (for compatibility with agent graph).
     """
     generator = get_role_thought_generator()
+    logger.debug(
+        f"RoleThoughtGenerator inputs: agent_role='{agent_role}' (type: {type(agent_role)}), current_situation='{current_situation[:200]}...' (type: {type(current_situation)})"
+    )
     if callable(generator):
         dspy_result = generator(role_name=agent_role, context=current_situation)
         return str(

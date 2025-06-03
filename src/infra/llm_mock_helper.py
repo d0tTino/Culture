@@ -3,8 +3,10 @@
 Provides mock helpers for LLM-dependent tests.
 """
 
+import json
 import logging
 import socket
+from typing import Any
 from unittest.mock import MagicMock
 
 # Handle optional Ollama dependency
@@ -43,6 +45,10 @@ from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
+# Module-level mock responses for broader access
+mock_text_global = "This is a mock generated text (global)"
+mock_summary_global = "This is a mock memory summary (global)"
+
 
 def is_ollama_running() -> bool:
     """Check if Ollama server is running by attempting to connect to localhost:11434"""
@@ -71,14 +77,162 @@ class MockLLMResponse:
 
 def create_mock_ollama_client() -> object:
     """Create a mock Ollama client"""
-    mock_client = MagicMock()
+    mock_client = MagicMock(spec=ollama.Client)  # Use spec for better mocking
 
-    # Mock the chat method
-    mock_response = {"message": {"content": "This is a mock Ollama response"}}
-    mock_client.chat.return_value = mock_response
+    # Mock the chat method with more specific behavior for sentiment
+    def mock_chat_for_sentiment_and_general(
+        *args: Any, **kwargs: Any
+    ) -> dict[str, dict[str, str]]:
+        messages = kwargs.get("messages", [])
+        prompt_content = ""
+        if (
+            messages
+            and isinstance(messages, list)
+            and len(messages) > 0
+            and isinstance(messages[0], dict)
+        ):
+            prompt_content = messages[0].get("content", "")
+        logger.debug(f"MOCK_CHAT_HELPER --- Received prompt_content: '''{prompt_content}'''")
 
-    # Mock the generate method
-    mock_client.generate.return_value = {"response": "This is a mock Ollama generation"}
+        # Check if it's a sentiment analysis prompt (more specific check)
+        if "Analyze the sentiment of the following message." in prompt_content:
+            if "Strongly disagree" in prompt_content:
+                logger.debug("Mock ollama.Client.chat: returning -0.7 sentiment for disagreement")
+                return {
+                    "message": {
+                        "content": '{"sentiment_score": -0.7, "sentiment_label": "negative"}'
+                    }
+                }
+            elif (
+                "vital discussion" in prompt_content
+                or "perspectives constructively" in prompt_content
+            ):
+                logger.debug("Mock ollama.Client.chat: returning 0.2 sentiment for facilitation")
+                return {
+                    "message": {
+                        "content": '{"sentiment_score": 0.2, "sentiment_label": "neutral"}'
+                    }
+                }
+            else:
+                logger.debug(
+                    f"Mock ollama.Client.chat: returning 0.0 sentiment for: {prompt_content[:30]}..."
+                )
+                return {
+                    "message": {
+                        "content": '{"sentiment_score": 0.0, "sentiment_label": "neutral"}'
+                    }
+                }
+
+        # Fallback for other chat calls (e.g., from DSPy OllamaLM not directly using generate_structured_output)
+        # This is the part that might be causing the "expected string or buffer" if DSPy gets this
+        # For now, let's assume DSPy structured calls go through the more specific ollama.generate mock later
+        logger.debug(
+            f"Mock ollama.Client.chat: returning generic mock for other prompt: {prompt_content[:50]}..."
+        )
+        # Ensure this default response is what other direct .chat() users might expect if not sentiment.
+        # The original code had "This is a mock Ollama response". Let's stick to that for non-sentiment.
+        return {"message": {"content": "This is a mock Ollama response"}}
+
+    mock_client.chat.side_effect = mock_chat_for_sentiment_and_general
+
+    # Mock the generate method - this is often used by DSPy
+    # Keep the existing heuristic for generate, but ensure it returns a dict with "response" key
+    # as ollama.Client.generate does.
+    mock_thought_response_str_for_generate = (
+        '{"thought": "As a MockRole, this is a generic mocked thought for generate."}'
+    )
+    mock_action_intent_response_str_for_generate = '{"action_intent": "idle", "message_content": "Mocked action intent message for generate.", "thought": "Mocked thought for action intent for generate."}'
+
+    def mock_generate(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        prompt_content = str(kwargs.get("prompt", ""))  # Ensure prompt_content is a string
+        logger.debug(f"MOCK_GENERATE_PROMPT_CONTENT_DEBUG: '''{prompt_content}'''")
+
+        # Determine which DSPy program this prompt is for based on unique field combinations
+        is_l1_summary_prompt = (
+            "Your output fields are:" in prompt_content
+            and "`l1_summary` (str)" in prompt_content
+            and "`recent_events` (str)" in prompt_content
+            and "`agent_role` (str)" in prompt_content
+        )
+        is_action_intent_prompt = (
+            "Your output fields are:" in prompt_content
+            and "`chosen_action_intent` (str)" in prompt_content
+            and "`justification_thought` (str)" in prompt_content
+            and "`available_actions` (str)" in prompt_content  # Added for specificity
+        )
+        is_role_thought_prompt = (
+            "Your output fields are:" in prompt_content
+            and "`thought` (str)" in prompt_content
+            and "`role_name` (str)" in prompt_content
+            and "`context` (str)" in prompt_content
+        )
+
+        if is_l1_summary_prompt:
+            logger.debug(
+                "Mock ollama.Client.generate: returning JSON structure for L1SummaryGenerator"
+            )
+            summary_value_str = "Mock L1 Summary from global: " + mock_summary_global
+            response_json_str = json.dumps({"l1_summary": summary_value_str})
+            return {
+                "response": response_json_str,
+                "done": True,
+                "eval_count": 10,
+                "total_duration": 100,
+            }
+
+        elif is_action_intent_prompt:
+            logger.debug(
+                "Mock ollama.Client.generate: returning action intent structure for ActionIntentSelector"
+            )
+            action_intent_content = {
+                "chosen_action_intent": "send_direct_message",  # Mocked action
+                "justification_thought": "This is a mock justification for selecting send_direct_message from mock_generate.",
+            }
+            response_json_str = json.dumps(action_intent_content)
+            return {
+                "response": response_json_str,
+                "done": True,
+                "eval_count": 10,
+                "total_duration": 100,
+            }
+
+        elif is_role_thought_prompt:
+            logger.debug(
+                "Mock ollama.Client.generate: returning thought structure for RoleThoughtGenerator"
+            )
+            thought_content = {
+                "thought": "As a MockRole, this is a generic mocked thought for RoleThoughtGenerator from mock_generate."
+            }
+            response_json_str = json.dumps(thought_content)
+            return {
+                "response": response_json_str,
+                "done": True,
+                "eval_count": 10,
+                "total_duration": 100,
+            }
+
+        # Fallback for any other direct ollama.generate calls that don't match DSPy signatures
+        # This might also catch DSPy prompts if the above conditions are not met perfectly.
+        else:
+            logger.warning(
+                f"Mock ollama.Client.generate: FALLBACK for unrecognized prompt structure. Prompt content: {prompt_content[:200]}..."
+            )
+            # Generic JSON response that might or might not work depending on caller
+            fallback_content = {
+                "detail": "Fallback mock response from generate",
+                "prompt_received": prompt_content[:100],
+            }
+            response_json_str = json.dumps(fallback_content)
+            return {
+                "response": response_json_str,
+                "done": True,
+                "eval_count": 5,
+                "total_duration": 50,
+            }
+
+    mock_client.generate = MagicMock(side_effect=mock_generate)
+    # Add other common methods if needed, e.g., pull, list
+    mock_client.list.return_value = []
 
     return mock_client
 
@@ -93,59 +247,62 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
     # Import here to avoid circular imports
     from src.infra import llm_client
 
-    # Create mock responses
-    mock_text = "This is a mock generated text"
-    mock_sentiment = "neutral"
-    mock_summary = "This is a mock memory summary"
+    # Create mock responses (these are now global, but can be referenced here if needed for clarity or local overrides)
+    # mock_text = mock_text_global (no, lambdas below will capture the global directly)
+    # mock_summary = mock_summary_global
 
-    # Patch the main functions
-    monkeypatch.setattr(llm_client, "generate_text", lambda *args, **kwargs: mock_text)
-    monkeypatch.setattr(llm_client, "analyze_sentiment", lambda *args, **kwargs: mock_sentiment)
+    # Remove the direct patch of llm_client.analyze_sentiment
+    # The logic is now handled by the more sophisticated mock_client.chat side_effect
+
+    # Patch the main functions that DON'T rely on llm_client.client directly
+    # if they have their own logic or simpler mock needs.
+    monkeypatch.setattr(llm_client, "generate_text", lambda *args, **kwargs: mock_text_global)
     monkeypatch.setattr(
-        llm_client, "summarize_memory_context", lambda *args, **kwargs: mock_summary
+        llm_client, "summarize_memory_context", lambda *args, **kwargs: mock_summary_global
     )
-    monkeypatch.setattr(
-        llm_client,
-        "generate_structured_output",
-        lambda *args, **kwargs: {
-            "thought": "Mock thought",
-            "message_content": "Mock message",
-            "action_intent": "idle",
-        },
-    )
+    # generate_structured_output in llm_client uses llm_client.client.generate, so it will use the mock_client's generate.
+    # We don't need to patch generate_structured_output directly unless we want to bypass its internal logic.
 
-    # Create a mock client
-    mock_client = create_mock_ollama_client()
-    monkeypatch.setattr(llm_client, "client", mock_client)
-    monkeypatch.setattr(llm_client, "get_ollama_client", lambda: mock_client)
+    # Create and set the more intelligent mock client for llm_client.py
+    intelligent_mock_client = create_mock_ollama_client()
+    monkeypatch.setattr(llm_client, "client", intelligent_mock_client)
+    monkeypatch.setattr(llm_client, "get_ollama_client", lambda: intelligent_mock_client)
 
-    # Correctly mock the ollama.Client instance and its methods
-    mock_ollama_client_instance = MagicMock(spec=ollama.Client)
+    # Correctly mock the ollama.Client constructor to return our intelligent_mock_client
+    # This ensures any *new* instance of ollama.Client gets this behavior.
+    monkeypatch.setattr("ollama.Client", lambda *args, **kwargs: intelligent_mock_client)
 
-    # Mock the 'chat' method to return a dictionary with the expected structure
-    mock_ollama_client_instance.chat.return_value = {
-        "message": {"content": "Mocked Ollama response"}
-    }
-    # Mock other methods if they are called, e.g., pull, list, etc.
-    mock_ollama_client_instance.list.return_value = []  # Example for 'list'
-
-    # Patch the ollama.Client constructor to return our mocked instance
-    monkeypatch.setattr("ollama.Client", lambda *args, **kwargs: mock_ollama_client_instance)
-
-    # Mock top-level functions from the ollama package
+    # Mock top-level functions from the ollama package that might be used by DSPy adapters directly
     monkeypatch.setattr("ollama.list", MagicMock(return_value=[]))
+    monkeypatch.setattr("ollama.pull", MagicMock())
+    monkeypatch.setattr(
+        "ollama.show", MagicMock(return_value={})
+    )  # Added show as it was in previous version
+
+    # For ollama.chat and ollama.generate at the package level (used by DSPy)
+    # they should also use the sophisticated logic from intelligent_mock_client.
+    # We can achieve this by making them delegate to the methods of an instance of intelligent_mock_client.
+    # Note: This is a bit tricky because intelligent_mock_client is already a MagicMock itself.
+    # We want ollama.chat to behave like intelligent_mock_client.chat
+
+    # The most robust way is to ensure ollama.Client always returns our configured mock,
+    # and that dspy.OllamaLocal (if used) also gets this configured client or is mocked appropriately.
+
+    # The setattr("ollama.Client", ...) above should cover cases where dspy instantiates its own Ollama client.
+    # If dspy calls ollama.chat or ollama.generate directly (as static/module functions),
+    # we need to patch those too, to use the same logic.
+
+    # Use the side_effects from the intelligent_mock_client for the package level mocks
     monkeypatch.setattr(
         "ollama.chat",
-        MagicMock(return_value={"message": {"content": "Mocked Ollama chat response"}}),
+        MagicMock(side_effect=intelligent_mock_client.chat.side_effect),
     )
-    monkeypatch.setattr("ollama.show", MagicMock(return_value={}))
-    monkeypatch.setattr("ollama.pull", MagicMock())
-    monkeypatch.setattr("ollama.generate", MagicMock(return_value=iter([{"response": "mock"}])))
+    monkeypatch.setattr(
+        "ollama.generate",
+        MagicMock(side_effect=intelligent_mock_client.generate.side_effect),
+    )
 
     # Mock dspy.OllamaLocal directly if it's used for dspy.settings.configure(lm=...)
-    # This is a more direct approach if dspy.OllamaLocal is instantiated.
-    # If dspy.OllamaLocal uses ollama.Client internally, mocking ollama.Client might suffice.
-    # For robustness, let's also mock dspy.OllamaLocal if it exists.
     try:
         # Check if dspy and OllamaLocal are available before attempting to patch
         # import dspy
@@ -173,3 +330,21 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
         )
 
     logger.info("Global Ollama functions and client have been mocked.")
+
+
+async def get_mock_sentiment_analysis(
+    text: str, agent_id: str, current_step: int
+) -> dict[str, Any]:
+    """
+    Mock sentiment analysis function.
+    """
+    logger.debug(
+        f"Mock sentiment analysis called for agent {agent_id} at step {current_step} with text: '{text[:50]}...'"
+    )
+    # Simulate some processing if needed, or just return a mock value
+    # await asyncio.sleep(0) # Optional: if you want to ensure it's treated as a coroutine
+    return {
+        "sentiment_score": 0.1,
+        "sentiment_label": "slightly_positive",
+        "analysis_source": "mock_helper",
+    }

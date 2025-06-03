@@ -110,6 +110,7 @@ class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
             response = self.client.generate(
                 model=self.model_name, prompt=prompt, options=request_kwargs
             )
+            logger.debug(f"OLLAMA_RAW_RESPONSE ({self.model_name}): {response}")
 
             # Extract the response text and metadata
             response_text = response.get("response", "")
@@ -179,7 +180,13 @@ class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
         # Extract the completion text
         if response.get("choices"):
             completion = response["choices"][0]["text"]
-            return [completion]  # DSPy expects a list of completions
+            completions = [completion]
+
+            # Cache the completions if a cache is configured
+            if self.cache and hasattr(self.cache, "store"):
+                self.cache.store(prompt, completions)
+
+            return completions
         else:
             logger.warning("Empty or invalid response from Ollama")
             return [""]  # Return empty string as fallback
@@ -233,6 +240,11 @@ class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
         else:
             # Handle single prompt
             return self.__call__(prompt=prompt)
+
+    def _try_load_compiled_program(self: Self, program_path: str) -> bool:
+        # Implementation of _try_load_compiled_program method
+        # This method should return a boolean indicating whether the program was loaded successfully
+        return False  # Placeholder return, actual implementation needed
 
 
 def configure_dspy_with_ollama(

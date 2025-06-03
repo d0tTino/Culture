@@ -20,6 +20,13 @@ from chromadb.api.types import Documents, EmbeddingFunction
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
+import asyncio
+import arrow
+from langchain_community.vectorstores.weaviate import Weaviate
+from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
+from langchain_core.vectorstores import VectorStoreRetriever
+from sentence_transformers import SentenceTransformer
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
@@ -445,8 +452,6 @@ class ChromaVectorStoreManager:
     async def aretrieve_relevant_memories(
         self: Self, agent_id: str, query: str, k: int = 3, include_usage_stats: bool = False
     ) -> list[dict[str, Any]]:
-        import asyncio
-
         return await asyncio.to_thread(
             self.retrieve_relevant_memories, agent_id, query, k, include_usage_stats
         )
