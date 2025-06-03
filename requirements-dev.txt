@@ -3,5 +3,4 @@ mypy==1.10.0
 pytest==7.4.0
 pytest-cov==4.1.0
 black==23.7.0
-types-requests==2.31.0
-types-weaviate==3.0.0 
+types-requests==2.31.0 
