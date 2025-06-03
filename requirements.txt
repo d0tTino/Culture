@@ -1,5 +1,5 @@
 fastapi==0.105.0
-uvicorn==0.25.2
+uvicorn==0.25.0
 discord.py==2.3.0
 weaviate-client==3.25.0
 chromadb==0.3.21
