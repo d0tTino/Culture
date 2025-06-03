@@ -131,6 +131,7 @@ htmlcov/
 *.log
 *.txt
 *.out
+!requirements-dev.txt
 
 # Data, logs, and temp files
 logs/
