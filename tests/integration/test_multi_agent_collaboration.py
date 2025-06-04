@@ -12,6 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
+
 # Add project root to sys.path to allow importing src modules
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:

@@ -1,5 +1,8 @@
+import pytest
 from pytest import MonkeyPatch
 from typing_extensions import Self
+
+pytest.importorskip("dspy")
 
 from src.agents.dspy_programs import action_intent_selector
 

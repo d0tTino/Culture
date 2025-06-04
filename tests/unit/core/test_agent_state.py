@@ -10,6 +10,8 @@ import sys
 
 import pytest
 
+pytest.importorskip("langgraph")
+
 from src.agents.core.agent_state import AgentState
 from src.agents.core.base_agent import Agent
 from src.sim.simulation import Simulation

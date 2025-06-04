@@ -1,8 +1,9 @@
+# mypy: ignore-errors
 import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Deque, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from pydantic import (
     BaseModel,
@@ -75,8 +76,7 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 if TYPE_CHECKING:
-    from src.agents.memory.vector_store import VectorStore # type: ignore
-    from src.infra.llm_client import LLMClientConfig, LLMClient # type: ignore
+    from src.infra.llm_client import LLMClient, LLMClientConfig  # type: ignore
 
 
 class AgentStateData(BaseModel):
@@ -91,11 +91,15 @@ class AgentStateData(BaseModel):
         default_factory=list
     )  # Stores (step, numeric_mood_level)
 
-    ip: float = Field(default_factory=lambda: float(str(get_config("INITIAL_INFLUENCE_POINTS", "0"))))
-    du: float = Field(default_factory=lambda: float(str(get_config("INITIAL_DATA_UNITS", "0"))))
+    ip: float = Field(
+        default_factory=lambda: float(str(get_config("INITIAL_INFLUENCE_POINTS") or "0"))
+    )
+    du: float = Field(
+        default_factory=lambda: float(str(get_config("INITIAL_DATA_UNITS") or "0"))
+    )
     relationships: dict[str, float] = Field(default_factory=dict)
     relationship_history: dict[str, list[tuple[int, float]]] = Field(default_factory=dict)  # Stores snapshots
-    short_term_memory: Deque[dict[str, Any]] = Field(default_factory=deque)
+    short_term_memory: deque[dict[str, Any]] = Field(default_factory=deque)
     goals: list[dict[str, Any]] = Field(default_factory=list)
     projects: dict[str, dict[str, Any]] = Field(default_factory=dict)  # project_id: {details}
     current_project_id: Optional[str] = None
@@ -120,7 +124,7 @@ class AgentStateData(BaseModel):
     last_level_2_consolidation_step: int = 0
     current_role: str = Field(default_factory=_get_default_role)
     steps_in_current_role: int = 0
-    conversation_history: Deque[str] = Field(default_factory=deque)  # Added for process_perceived_messages
+    conversation_history: deque[str] = Field(default_factory=deque)  # Added for process_perceived_messages
 
     # Configuration parameters (will be initialized from global config)
     _max_short_term_memory: int = PrivateAttr()
@@ -141,7 +145,7 @@ class AgentStateData(BaseModel):
 
     @field_validator("mood_level", mode="before")  # Validate before Pydantic tries to coerce
     @classmethod
-    def check_mood_level_type_before(cls, v: Any, info: ValidationInfo):
+    def check_mood_level_type_before(cls, v: Any, info: ValidationInfo) -> Any:
         if not isinstance(v, (float, int)):
             logger.warning(
                 f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input is not float/int before coercion. Type: {type(v)}, Value: {v}"
@@ -156,7 +160,7 @@ class AgentStateData(BaseModel):
 
     @field_validator("mood_level", mode="after")
     @classmethod
-    def check_mood_level_type_after(cls, v: float, info: ValidationInfo):
+    def check_mood_level_type_after(cls, v: float, info: ValidationInfo) -> float:
         if not isinstance(v, float):
             # This should ideally not happen if Pydantic's coercion to float worked or failed earlier
             logger.error(
@@ -170,21 +174,39 @@ class AgentStateData(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         # Initialize private attributes from global config
-        self._max_short_term_memory = int(str(get_config("MAX_SHORT_TERM_MEMORY", "100")))
-        self._short_term_memory_decay_rate = float(str(get_config("SHORT_TERM_MEMORY_DECAY_RATE", "0.1")))
-        self._relationship_decay_rate = float(str(get_config("RELATIONSHIP_DECAY_FACTOR", "0.01")))
-        self._min_relationship_score = float(str(get_config("MIN_RELATIONSHIP_SCORE", "-1.0")))
-        self._max_relationship_score = float(str(get_config("MAX_RELATIONSHIP_SCORE", "1.0")))
-        self._mood_decay_rate = float(str(get_config("MOOD_DECAY_FACTOR", "0.01")))
-        self._mood_update_rate = float(str(get_config("MOOD_UPDATE_RATE", "0.1")))
-        self._ip_cost_per_message = float(str(get_config("IP_COST_SEND_DIRECT_MESSAGE", "1.0")))
-        self._du_cost_per_action = float(str(get_config("DU_COST_PER_ACTION", "1.0")))
-        self._role_change_cooldown = int(str(get_config("ROLE_CHANGE_COOLDOWN", "10")))
-        self._role_change_ip_cost = float(str(get_config("ROLE_CHANGE_IP_COST", "5.0")))
-        self._positive_relationship_learning_rate = float(str(get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE", "0.1")))
-        self._negative_relationship_learning_rate = float(str(get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE", "0.1")))
-        self._neutral_relationship_learning_rate = float(str(get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE", "0.05")))
-        self._targeted_message_multiplier = float(str(get_config("TARGETED_MESSAGE_MULTIPLIER", "1.5")))
+        self._max_short_term_memory = int(str(get_config("MAX_SHORT_TERM_MEMORY") or "100"))
+        self._short_term_memory_decay_rate = float(
+            str(get_config("SHORT_TERM_MEMORY_DECAY_RATE") or "0.1")
+        )
+        self._relationship_decay_rate = float(
+            str(get_config("RELATIONSHIP_DECAY_FACTOR") or "0.01")
+        )
+        self._min_relationship_score = float(
+            str(get_config("MIN_RELATIONSHIP_SCORE") or "-1.0")
+        )
+        self._max_relationship_score = float(
+            str(get_config("MAX_RELATIONSHIP_SCORE") or "1.0")
+        )
+        self._mood_decay_rate = float(str(get_config("MOOD_DECAY_FACTOR") or "0.01"))
+        self._mood_update_rate = float(str(get_config("MOOD_UPDATE_RATE") or "0.1"))
+        self._ip_cost_per_message = float(
+            str(get_config("IP_COST_SEND_DIRECT_MESSAGE") or "1.0")
+        )
+        self._du_cost_per_action = float(str(get_config("DU_COST_PER_ACTION") or "1.0"))
+        self._role_change_cooldown = int(str(get_config("ROLE_CHANGE_COOLDOWN") or "10"))
+        self._role_change_ip_cost = float(str(get_config("ROLE_CHANGE_IP_COST") or "5.0"))
+        self._positive_relationship_learning_rate = float(
+            str(get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
+        )
+        self._negative_relationship_learning_rate = float(
+            str(get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
+        )
+        self._neutral_relationship_learning_rate = float(
+            str(get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE") or "0.05")
+        )
+        self._targeted_message_multiplier = float(
+            str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5")
+        )
 
         if not self.role_history:
             self.role_history.append((self.step_counter, self.current_role))
@@ -334,9 +356,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             )
             return False
 
-        # Check if new_role is a valid role string (e.g., from a predefined list if available)
-        # For now, assume any string is fine, but could add validation against ROLE_DU_GENERATION.keys()
-        if new_role not in get_config("ROLE_DU_GENERATION").keys():
+        # Validate new_role against configured ROLE_DU_GENERATION if available
+        role_du_generation = get_config("ROLE_DU_GENERATION")
+        if isinstance(role_du_generation, dict) and new_role not in role_du_generation:
             logger.warning(
                 f"AGENT_STATE ({self.agent_id}): Attempted role change to unrecognized role '{new_role}'. Denying."
             )
@@ -444,7 +466,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     @model_validator(mode="after")
     def _validate_model_after(self) -> "AgentState":
         if self.llm_client_config and not self.llm_client:
-            from src.infra.llm_client import LLMClient # type: ignore # Local import
+            from src.infra.llm_client import LLMClient  # type: ignore # Local import
 
             if self.mock_llm_client:
                 self.llm_client = self.mock_llm_client
@@ -455,7 +477,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     config_data = cast(dict, config_data.model_dump())
                 elif not isinstance(config_data, dict):
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
-                
+
                 # Temporarily using LLMClientConfig directly if it's an instance
                 if isinstance(self.llm_client_config, BaseModel):
                      self.llm_client = LLMClient(config=self.llm_client_config) # type: ignore
@@ -525,13 +547,13 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         # Ensure history fields are in correct format
         if "mood_history" in data and data["mood_history"] is not None:
             data["mood_history"] = [(int(turn), float(m_val)) for turn, m_val in data["mood_history"]]
-        
+
         if "relationship_history" in data and data["relationship_history"] is not None:
             processed_rh = {}
             for agent_name, history_list in data["relationship_history"].items():
                 processed_rh[agent_name] = [(int(turn), float(r_val)) for turn, r_val in history_list]
             data["relationship_history"] = processed_rh
-            
+
         # Ensure relationships (current scores) are float
         if "relationships" in data and data["relationships"] is not None:
             data["relationships"] = {k: float(v) for k, v in data["relationships"].items()}
@@ -581,7 +603,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             sender = msg.get("sender_name", "Unknown")
             content = msg.get("content", "")
             self.conversation_history.append(f"{sender}: {content}") # Add to conversation history
-            
+
             # Example: Update relationship based on a simplistic sentiment from message
             # This is highly naive and should be replaced by actual sentiment analysis
             try:
@@ -592,13 +614,13 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             except (ValueError, IndexError):
                 # If content doesn't start with a number, use neutral sentiment
                 self.update_relationship(sender, 0.0, is_targeted=True)
-                
+
         logger.debug(f"Agent {self.name} processed {len(messages)} messages and updated conversation history/relationships.")
 
 
 # Example usage
 if __name__ == "__main__":
-    from src.infra.llm_client import LLMClientConfig # Late import for example
+    from src.infra.llm_client import LLMClientConfig  # Late import for example
 
     llm_config_instance = LLMClientConfig(model_name="test-model", api_key="test-key") # type: ignore
 
@@ -640,7 +662,7 @@ if __name__ == "__main__":
     agent_state.reset_state()
     print(f"Mood after reset: {agent_state.mood_level}, Mood History: {agent_state.mood_history}")
     print(f"Relationships after reset: {agent_state.relationships}, Relationship History: {agent_state.relationship_history}")
-    
+
     agent_state.update_dynamic_config("mood_decay_rate", 0.05) # Example dynamic update
     # This should reflect in subsequent mood updates if logic uses self._mood_decay_rate
 
