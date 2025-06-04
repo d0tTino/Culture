@@ -6,6 +6,7 @@ This module is part of the agent memory system, handling persistence and retriev
 of agent memories using vector embeddings for semantic search capabilities.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -20,13 +21,6 @@ from chromadb.api.types import Documents, EmbeddingFunction
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
-import asyncio
-import arrow
-from langchain_community.vectorstores.weaviate import Weaviate
-from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
-from langchain_core.vectorstores import VectorStoreRetriever
-from sentence_transformers import SentenceTransformer
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:

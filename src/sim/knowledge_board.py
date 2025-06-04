@@ -4,7 +4,7 @@ Defines the Knowledge Board class for maintaining shared knowledge among agents.
 
 import logging
 import uuid
-from typing import Any, TypeVar, Generic
+from typing import Any, Generic, TypeVar
 
 from typing_extensions import Self
 
@@ -28,7 +28,7 @@ class LoggingList(list[T], Generic[T]):
             f"LOGGING_LIST_DEBUG: Initializing new LoggingList instance ({id(self)}) from args: {args}"
         )
         super().__init__(*args, **kwargs)
-    
+
     # For MyPy, if we override methods that are checked for type hints:
     def append(self: Self, item: T) -> None:
         super().append(item)
@@ -53,7 +53,7 @@ class KnowledgeBoard:
         if entries is not None:
             self.entries = LoggingList(entries)
         else:
-            self.entries = LoggingList() 
+            self.entries = LoggingList()
         logger.info(
             f"KnowledgeBoard initialized. Instance ID: {id(self)}. Entries list ID: {id(self.entries)} type: {type(self.entries)}"
         )

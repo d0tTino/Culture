@@ -120,7 +120,7 @@ def calculate_mus(metadata: dict[str, Any]) -> float:
     return float(mus)
 
 
-def first_list_element(x: Any) -> Any:  # noqa: ANN401
+def first_list_element(x: Any) -> Any:
     return x[0] if x and isinstance(x, list) and len(x) > 0 else []
 
 
