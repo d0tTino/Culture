@@ -262,10 +262,6 @@ class TestMultiAgentCollaboration(unittest.IsolatedAsyncioTestCase):
 
         # --- AgentB perceives AgentA's idea and provides positive feedback (Turn 2 in Round 1) ---
         logger.info("Round 1, Turn 2: AgentB perceives and provides feedback...")
-        initial_mood_value_a_before_b_acts = self.agent_a.state.mood_value
-        initial_relationship_a_to_b_before_b_acts = self.agent_a.state.relationships.get(
-            self.agent_b.agent_id, 0.0
-        )
 
         feedback_content = "An insightful idea by @agent_a_innovator! How do you envision handling potential semantic drift in long-running decentralized systems?"
 
