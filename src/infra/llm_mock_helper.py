@@ -140,10 +140,6 @@ def create_mock_ollama_client() -> MagicMock:
     # Mock the generate method - this is often used by DSPy
     # Keep the existing heuristic for generate, but ensure it returns a dict with "response" key
     # as ollama.Client.generate does.
-    mock_thought_response_str_for_generate = (
-        '{"thought": "As a MockRole, this is a generic mocked thought for generate."}'
-    )
-    mock_action_intent_response_str_for_generate = '{"action_intent": "idle", "message_content": "Mocked action intent message for generate.", "thought": "Mocked thought for action intent for generate."}'
 
     def mock_generate(*args: Any, **kwargs: Any) -> dict[str, Any]:
         prompt_content = str(kwargs.get("prompt", ""))  # Ensure prompt_content is a string
