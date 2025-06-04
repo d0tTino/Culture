@@ -20,23 +20,21 @@ except ImportError:
 
 # Handle optional DSPy OllamaLocal dependency
 try:
-    from dspy.predict.ollama import OllamaLocal  # type: ignore[import-untyped]
+    from dspy.predict.ollama import OllamaLocal
 except ImportError:
     logging.getLogger(__name__).warning(
         "dspy.predict.ollama not available; using stub OllamaLocal"
     )
 
-    class OllamaLocal:  # type: ignore
+    class OllamaLocal:  # type: ignore[no-redef]
         """
         Stub for DSPy OllamaLocal when dspy.predict.ollama is unavailable.
         """
 
-        def __init__(self, *args, **kwargs):
-            # Stub initializer
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def __call__(self, prompt, *args, **kwargs):
-            # Return a list of stubbed responses to mimic OllamaLocal interface
+        def __call__(self, prompt: str, *args: Any, **kwargs: Any) -> list[str]:
             return [f"Stubbed OllamaLocal response to prompt: {prompt}"]
 
 
@@ -75,9 +73,13 @@ class MockLLMResponse:
         self.message: dict[str, str] = {"content": content}
 
 
-def create_mock_ollama_client() -> object:
+def create_mock_ollama_client() -> MagicMock:
     """Create a mock Ollama client"""
-    mock_client = MagicMock(spec=ollama.Client)  # Use spec for better mocking
+    original_client = getattr(ollama, "Client", MagicMock)
+    if isinstance(original_client, MagicMock):  # If already mocked, avoid spec
+        mock_client = MagicMock()
+    else:
+        mock_client = MagicMock(spec=original_client)  # Use spec for better mocking
 
     # Mock the chat method with more specific behavior for sentiment
     def mock_chat_for_sentiment_and_general(
@@ -264,7 +266,7 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
     # We don't need to patch generate_structured_output directly unless we want to bypass its internal logic.
 
     # Create and set the more intelligent mock client for llm_client.py
-    intelligent_mock_client = create_mock_ollama_client()
+    intelligent_mock_client: MagicMock = create_mock_ollama_client()
     monkeypatch.setattr(llm_client, "client", intelligent_mock_client)
     monkeypatch.setattr(llm_client, "get_ollama_client", lambda: intelligent_mock_client)
 

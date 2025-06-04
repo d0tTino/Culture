@@ -11,10 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# Add project root to sys.path to allow importing src modules
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
 
 from src.agents.core import roles
 from src.agents.core.agent_state import AgentActionIntent

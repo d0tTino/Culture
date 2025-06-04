@@ -4,6 +4,8 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+pytest.importorskip("weaviate")
 import weaviate.classes as wvc  # For types if needed
 
 from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
@@ -45,7 +47,7 @@ def mock_weaviate_client_fixture() -> MagicMock:
     mock_collections_api = MagicMock()
     mock_client.collections = mock_collections_api
 
-    def get_side_effect(collection_name_arg: str):
+    def get_side_effect(collection_name_arg: str) -> MagicMock:
         mock_collection_object = MagicMock(name=collection_name_arg)
         current_schema = mock_collection_schema_dict.copy()
         current_schema["class"] = collection_name_arg

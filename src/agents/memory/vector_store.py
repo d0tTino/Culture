@@ -6,6 +6,7 @@ This module is part of the agent memory system, handling persistence and retriev
 of agent memories using vector embeddings for semantic search capabilities.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -16,23 +17,15 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, TypeVar, Union, cast
 
 import chromadb
-from chromadb.api.types import Documents, EmbeddingFunction
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
-import asyncio
-import arrow
-from langchain_community.vectorstores.weaviate import Weaviate
-from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
-from langchain_core.vectorstores import VectorStoreRetriever
-from sentence_transformers import SentenceTransformer
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException
 except ImportError:
-    ChromaDBException = Exception  # type: ignore
+    ChromaDBException = Exception
 
 # Constants for memory usage tracking
 USAGE_TRACKING_FIELDS = [
@@ -86,8 +79,8 @@ class ChromaVectorStoreManager:
         os.makedirs(persist_directory, exist_ok=True)
 
         # Initialize embedding function using sentence-transformers
-        self.embedding_function: EmbeddingFunction[Documents] = (
-            SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        self.embedding_function: Any = SentenceTransformerEmbeddingFunction(
+            model_name="all-MiniLM-L6-v2"
         )
 
         # Initialize the persistent ChromaDB client

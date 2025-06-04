@@ -13,6 +13,8 @@ from typing import Any, Optional, cast
 import pytest
 from typing_extensions import Self
 
+pytest.importorskip("chromadb")
+
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from tests.utils.mock_llm import MockLLM
 
