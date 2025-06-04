@@ -103,53 +103,7 @@ class Agent:
         # LLM Client Initialization - MOVED EARLIER
         self.llm_client = get_ollama_client()
 
-        # Get values from config or use defaults for fields AgentState doesn't get from default_factory
-        ip = initial_state.get(
-            "influence_points",
-            (
-                config.INITIAL_INFLUENCE_POINTS
-                if hasattr(config, "INITIAL_INFLUENCE_POINTS")
-                else 10.0
-            ),
-        )
-        du = initial_state.get(
-            "data_units",
-            config.INITIAL_DATA_UNITS if hasattr(config, "INITIAL_DATA_UNITS") else 20.0,
-        )
-        max_short_term_memory = (
-            config.MAX_SHORT_TERM_MEMORY if hasattr(config, "MAX_SHORT_TERM_MEMORY") else 10
-        )
-        short_term_memory_decay_rate = (
-            config.SHORT_TERM_MEMORY_DECAY_RATE
-            if hasattr(config, "SHORT_TERM_MEMORY_DECAY_RATE")
-            else 0.1
-        )
-        relationship_decay_rate = (
-            config.RELATIONSHIP_DECAY_RATE if hasattr(config, "RELATIONSHIP_DECAY_RATE") else 0.01
-        )
-        min_relationship_score = (
-            config.MIN_RELATIONSHIP_SCORE if hasattr(config, "MIN_RELATIONSHIP_SCORE") else -1.0
-        )
-        max_relationship_score = (
-            config.MAX_RELATIONSHIP_SCORE if hasattr(config, "MAX_RELATIONSHIP_SCORE") else 1.0
-        )
-        mood_decay_rate = config.MOOD_DECAY_RATE if hasattr(config, "MOOD_DECAY_RATE") else 0.02
-        mood_update_rate = config.MOOD_UPDATE_RATE if hasattr(config, "MOOD_UPDATE_RATE") else 0.2
-        ip_cost_per_message = (
-            config.IP_COST_PER_MESSAGE if hasattr(config, "IP_COST_PER_MESSAGE") else 1.0
-        )
-        du_cost_per_action = (
-            config.DU_COST_PER_ACTION if hasattr(config, "DU_COST_PER_ACTION") else 1.0
-        )
-        role_change_cooldown = (
-            config.ROLE_CHANGE_COOLDOWN if hasattr(config, "ROLE_CHANGE_COOLDOWN") else 3
-        )
-        role_change_ip_cost = (
-            config.ROLE_CHANGE_IP_COST if hasattr(config, "ROLE_CHANGE_IP_COST") else 5.0
-        )
-
         # Get project id and ensure current_project_id and current_project_affiliation are in sync
-        current_project = initial_state.get("current_project_id", None)
 
         # Check for goal in initial_state - handle the case where it's a string instead of dict
         # list
@@ -429,10 +383,9 @@ class Agent:
             logger.debug(f"  Received environment perception: {environment_perception}")
 
         # --- Retrieve previous thought ---
-        previous_thought = None
         for memory in self._state.short_term_memory:
             if memory["type"] == "thought":
-                previous_thought = memory["content"]
+                environment_perception["previous_thought"] = memory["content"]
                 break
         # --- End Retrieve ---
 
