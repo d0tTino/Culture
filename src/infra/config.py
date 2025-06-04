@@ -4,10 +4,10 @@ Configuration module for Culture simulation.
 Manages environment variables and configuration settings.
 """
 
+import importlib
 import logging
 import os
-from typing import Optional, Any
-import importlib
+from typing import Any, Optional
 
 try:
     from dotenv import load_dotenv
@@ -21,6 +21,9 @@ except Exception as e:
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Allow runtime overrides of configuration values. Used in testing.
+CONFIG_OVERRIDES: dict[str, Any] = {}
 
 # Default values
 DEFAULT_CONFIG: dict[str, object] = {
