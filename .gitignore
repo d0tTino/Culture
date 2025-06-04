@@ -175,6 +175,7 @@ Thumbs.db
 coverage/
 **/__pycache__/
 *.pytest_cache/
+tests/ruff_errors.json
 
 # Logs folder for test outputs
 logs/
