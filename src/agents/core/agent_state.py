@@ -640,6 +640,3 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         )
 
 
-# Example usage
-if __name__ == "__main__":
-    pass
