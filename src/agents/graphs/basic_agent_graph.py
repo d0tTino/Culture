@@ -24,6 +24,9 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 from src.infra import config  # Import config for role change parameters
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
 
+# Module logger
+logger = logging.getLogger(__name__)
+
 # At the top of the file, after other DSPy imports
 try:
     import os  # Redundant but harmless
@@ -49,19 +52,7 @@ try:
         _optimized_relationship_updater = None
 except Exception as e:
     _optimized_relationship_updater = None
-    # Define logger here if it's used before global definition, or ensure global is defined first
-    # For safety, let's get a logger instance here if needed, though it's defined globally later.
-    # This specific logger instance won't be the global one if this runs before the global def.
-    # However, the global `logger = logging.getLogger(__name__)` is defined before this block is problematic.
-    # The issue was `logger` might not be defined if `logging.getLogger` itself failed.
-    # It's better to ensure the global logger is defined before any usage.
-    # Initial file had logger = logging.getLogger(__name__) after this block.
-    # If an error happens here, the logger used might not be the intended global one.
-    # This is a subtle point but not the cause of the ImportError.
-    temp_logger = logging.getLogger(
-        "REPLACE_WITH_MODULE_NAME.relationship_updater_loader"
-    )  # Use __name__ if possible
-    temp_logger.error(f"Failed to load OptimizedRelationshipUpdater: {e}")
+    logger.error("Failed to load OptimizedRelationshipUpdater: %s", e)
 
 
 # Add dspy imports with detailed error handling
@@ -109,10 +100,6 @@ except Exception as e:  # Catch any other exception during DSPy setup
     DSPY_ACTION_SELECTOR_AVAILABLE = False
     optimized_action_selector = None
     dspy = None
-
-
-# Ensure logger is defined globally and early
-logger = logging.getLogger(__name__)
 
 
 # Use TYPE_CHECKING to avoid circular import issues

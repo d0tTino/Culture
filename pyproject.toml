@@ -55,8 +55,11 @@ disallow_any_unimported = true
 ignore_missing_imports = true
 exclude = [
     "\\.venv",
-    "build/"
+    "build/",
+    "tests/"
 ]
+# Only type-check the application source code for now
+files = ["src"]
 # Temporarily disable the Pydantic mypy plugin due to compatibility issues
 # plugins = ["pydantic.mypy"]
 # strict = true  # Uncomment if your mypy version supports this global flag

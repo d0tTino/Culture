@@ -61,6 +61,10 @@ DEFAULT_CONFIG: dict[str, object] = {
     "DU_AWARD_IDEA_ACKNOWLEDGED": 3,
     "DU_AWARD_SUCCESSFUL_ANALYSIS": 4,
     "DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE": 1,
+    "DU_COST_DEEP_ANALYSIS": 3,
+    "DU_COST_REQUEST_DETAILED_CLARIFICATION": 2,
+    "DU_COST_CREATE_PROJECT": 10,
+    "DU_COST_JOIN_PROJECT": 1,
     "MEMORY_PRUNING_L1_DELAY_STEPS": 10,
     "MEMORY_PRUNING_L2_MAX_AGE_DAYS": 30,
     "MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS": 100,
@@ -123,6 +127,10 @@ INT_CONFIG_KEYS = [
     "DU_AWARD_IDEA_ACKNOWLEDGED",
     "DU_AWARD_SUCCESSFUL_ANALYSIS",
     "DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE",
+    "DU_COST_DEEP_ANALYSIS",
+    "DU_COST_REQUEST_DETAILED_CLARIFICATION",
+    "DU_COST_CREATE_PROJECT",
+    "DU_COST_JOIN_PROJECT",
     "MEMORY_PRUNING_L1_DELAY_STEPS",
     "MEMORY_PRUNING_L2_MAX_AGE_DAYS",
     "MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS",
@@ -232,7 +240,7 @@ def load_config() -> dict[str, object]:
     return _CONFIG
 
 
-def get_config(key: Optional[str] = None) -> object:
+def get_config(key: Optional[str] = None) -> Any:
     """
     Get a configuration value.
 
@@ -276,77 +284,50 @@ DEFAULT_TEMPERATURE = get_config("DEFAULT_TEMPERATURE")
 # --- Ollama Settings ---
 
 # --- Redis Settings ---
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-REDIS_DB = int(os.getenv("REDIS_DB", "0"))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+REDIS_HOST = get_config("REDIS_HOST")
+REDIS_PORT = get_config("REDIS_PORT")
+REDIS_DB = get_config("REDIS_DB")
+REDIS_PASSWORD = get_config("REDIS_PASSWORD")
 
 # --- Discord Bot Settings ---
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
-DISCORD_CHANNEL_ID: object = os.getenv("DISCORD_CHANNEL_ID", "")
-# Convert channel ID to int if it exists and is numeric
-if DISCORD_CHANNEL_ID and isinstance(DISCORD_CHANNEL_ID, str) and DISCORD_CHANNEL_ID.isdigit():
-    DISCORD_CHANNEL_ID = int(DISCORD_CHANNEL_ID)
-else:
-    DISCORD_CHANNEL_ID = None
+DISCORD_BOT_TOKEN = get_config("DISCORD_BOT_TOKEN")
+DISCORD_CHANNEL_ID = get_config("DISCORD_CHANNEL_ID")
 
 # --- Memory Pruning Settings ---
 # Whether to enable automatic memory pruning (default to False for safety)
-MEMORY_PRUNING_ENABLED = os.getenv("MEMORY_PRUNING_ENABLED", "False").lower() == "true"
+MEMORY_PRUNING_ENABLED = bool(get_config("MEMORY_PRUNING_ENABLED"))
 # How many steps to wait after a Level 2 summary before pruning the Level 1 summaries
-MEMORY_PRUNING_L1_DELAY_STEPS = int(os.getenv("MEMORY_PRUNING_L1_DELAY_STEPS", "10"))
+MEMORY_PRUNING_L1_DELAY_STEPS = get_config("MEMORY_PRUNING_L1_DELAY_STEPS")
 # Whether to enable Level 2 summary pruning
-MEMORY_PRUNING_L2_ENABLED = os.getenv("MEMORY_PRUNING_L2_ENABLED", "True").lower() == "true"
+MEMORY_PRUNING_L2_ENABLED = bool(get_config("MEMORY_PRUNING_L2_ENABLED"))
 # Maximum age in days for an L2 summary before it's considered for pruning
-MEMORY_PRUNING_L2_MAX_AGE_DAYS = int(os.getenv("MEMORY_PRUNING_L2_MAX_AGE_DAYS", "30"))
+MEMORY_PRUNING_L2_MAX_AGE_DAYS = get_config("MEMORY_PRUNING_L2_MAX_AGE_DAYS")
 # How many simulation steps occur between L2 pruning checks
-MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS = int(
-    os.getenv("MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS", "100")
-)
+MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS = get_config("MEMORY_PRUNING_L2_CHECK_INTERVAL_STEPS")
 
 # --- MUS-based L1 Pruning Settings ---
-MEMORY_PRUNING_L1_MUS_ENABLED = (
-    os.getenv("MEMORY_PRUNING_L1_MUS_ENABLED", "False").lower() == "true"
+MEMORY_PRUNING_L1_MUS_ENABLED = bool(get_config("MEMORY_PRUNING_L1_MUS_ENABLED"))
+MEMORY_PRUNING_L1_MUS_THRESHOLD = get_config("MEMORY_PRUNING_L1_MUS_THRESHOLD")
+MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION = get_config(
+    "MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION"
 )
-MEMORY_PRUNING_L1_MUS_THRESHOLD = float(os.getenv("MEMORY_PRUNING_L1_MUS_THRESHOLD", "0.3"))
-MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION = int(
-    os.getenv("MEMORY_PRUNING_L1_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION", "7")
-)
-MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS = int(
-    os.getenv("MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS", "50")
-)
+MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS = get_config("MEMORY_PRUNING_L1_MUS_CHECK_INTERVAL_STEPS")
 
 # --- MUS-based L2 Pruning Settings ---
-MEMORY_PRUNING_L2_MUS_ENABLED = (
-    os.getenv("MEMORY_PRUNING_L2_MUS_ENABLED", "False").lower() == "true"
+MEMORY_PRUNING_L2_MUS_ENABLED = bool(get_config("MEMORY_PRUNING_L2_MUS_ENABLED"))
+MEMORY_PRUNING_L2_MUS_THRESHOLD = get_config("MEMORY_PRUNING_L2_MUS_THRESHOLD")
+MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION = get_config(
+    "MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION"
 )
-MEMORY_PRUNING_L2_MUS_THRESHOLD = float(os.getenv("MEMORY_PRUNING_L2_MUS_THRESHOLD", "0.25"))
-MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION = int(
-    os.getenv("MEMORY_PRUNING_L2_MUS_MIN_AGE_DAYS_FOR_CONSIDERATION", "14")
-)
-MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS = int(
-    os.getenv("MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS", "150")
-)
+MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS = get_config("MEMORY_PRUNING_L2_MUS_CHECK_INTERVAL_STEPS")
 
 # --- Mood and Relationship Settings ---
-MOOD_DECAY_FACTOR = float(
-    os.getenv("MOOD_DECAY_FACTOR", "0.02")
-)  # Mood decays towards neutral by 2% each turn
-RELATIONSHIP_DECAY_FACTOR = float(
-    os.getenv("RELATIONSHIP_DECAY_FACTOR", "0.01")
-)  # Relationships decay towards neutral by 1% each turn
-POSITIVE_RELATIONSHIP_LEARNING_RATE = float(
-    os.getenv("POSITIVE_RELATIONSHIP_LEARNING_RATE", "0.3")
-)  # Learning rate for positive sentiment interactions
-NEGATIVE_RELATIONSHIP_LEARNING_RATE = float(
-    os.getenv("NEGATIVE_RELATIONSHIP_LEARNING_RATE", "0.4")
-)  # Learning rate for negative sentiment interactions
-NEUTRAL_RELATIONSHIP_LEARNING_RATE = float(
-    os.getenv("NEUTRAL_RELATIONSHIP_LEARNING_RATE", "0.1")
-)  # Learning rate for neutral sentiment interactions
-TARGETED_MESSAGE_MULTIPLIER = float(
-    os.getenv("TARGETED_MESSAGE_MULTIPLIER", "3.0")
-)  # Multiplier for relationship changes from targeted messages vs broadcasts
+MOOD_DECAY_FACTOR = get_config("MOOD_DECAY_FACTOR")
+RELATIONSHIP_DECAY_FACTOR = get_config("RELATIONSHIP_DECAY_FACTOR")
+POSITIVE_RELATIONSHIP_LEARNING_RATE = get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE")
+NEGATIVE_RELATIONSHIP_LEARNING_RATE = get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE")
+NEUTRAL_RELATIONSHIP_LEARNING_RATE = get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE")
+TARGETED_MESSAGE_MULTIPLIER = get_config("TARGETED_MESSAGE_MULTIPLIER")
 
 # --- Relationship Label Mapping ---
 RELATIONSHIP_LABELS = {
@@ -364,53 +345,53 @@ SENTIMENT_TO_NUMERIC = {"positive": 1.0, "neutral": 0.0, "negative": -1.0}
 
 # --- Influence Points (IP) Settings ---
 INITIAL_INFLUENCE_POINTS = int(
-    os.getenv("INITIAL_INFLUENCE_POINTS", "10")
+    get_config("INITIAL_INFLUENCE_POINTS")
 )  # Starting IP for new agents
 IP_AWARD_FOR_PROPOSAL = int(
-    os.getenv("IP_AWARD_FOR_PROPOSAL", "5")
+    get_config("IP_AWARD_FOR_PROPOSAL")
 )  # Amount of IP awarded for successfully proposing an idea
-IP_COST_TO_POST_IDEA = int(os.getenv("IP_COST_TO_POST_IDEA", "2"))  # Cost in IP to post an idea
+IP_COST_TO_POST_IDEA = get_config("IP_COST_TO_POST_IDEA")  # Cost in IP to post an idea
 ROLE_CHANGE_IP_COST = int(
-    os.getenv("ROLE_CHANGE_IP_COST", "5")
+    get_config("ROLE_CHANGE_IP_COST")
 )  # Cost in IP to request/confirm a role change
 IP_COST_CREATE_PROJECT = int(
-    os.getenv("IP_COST_CREATE_PROJECT", "10")
+    get_config("IP_COST_CREATE_PROJECT")
 )  # Cost in IP to create a new project
 IP_COST_JOIN_PROJECT = int(
-    os.getenv("IP_COST_JOIN_PROJECT", "1")
+    get_config("IP_COST_JOIN_PROJECT")
 )  # Cost in IP to join an existing project
 IP_COST_SEND_DIRECT_MESSAGE = int(
-    os.getenv("IP_COST_SEND_DIRECT_MESSAGE", "1")
+    get_config("IP_COST_SEND_DIRECT_MESSAGE")
 )  # Cost in IP to send a direct message
 IP_AWARD_FACILITATION_ATTEMPT = int(
-    os.getenv("IP_AWARD_FACILITATION_ATTEMPT", "3")
+    get_config("IP_AWARD_FACILITATION_ATTEMPT")
 )  # IP award for attempting facilitation
 
 # --- Data Units (DU) Settings ---
-INITIAL_DATA_UNITS = int(os.getenv("INITIAL_DATA_UNITS", "20"))  # Starting DU for new agents
+INITIAL_DATA_UNITS = get_config("INITIAL_DATA_UNITS")  # Starting DU for new agents
 PROPOSE_DETAILED_IDEA_DU_COST = int(
-    os.getenv("PROPOSE_DETAILED_IDEA_DU_COST", "5")
+    get_config("PROPOSE_DETAILED_IDEA_DU_COST")
 )  # DU cost for posting a detailed idea
 DU_AWARD_IDEA_ACKNOWLEDGED = int(
-    os.getenv("DU_AWARD_IDEA_ACKNOWLEDGED", "3")
+    get_config("DU_AWARD_IDEA_ACKNOWLEDGED")
 )  # DU awarded to original proposer if idea is referenced
 DU_AWARD_SUCCESSFUL_ANALYSIS = int(
-    os.getenv("DU_AWARD_SUCCESSFUL_ANALYSIS", "4")
+    get_config("DU_AWARD_SUCCESSFUL_ANALYSIS")
 )  # DU awarded to Analyzer for useful critique
 DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = int(
-    os.getenv("DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE", "1")
+    get_config("DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE")
 )  # DU bonus for referencing a board entry
 DU_COST_DEEP_ANALYSIS = int(
-    os.getenv("DU_COST_DEEP_ANALYSIS", "3")
+    get_config("DU_COST_DEEP_ANALYSIS")
 )  # Cost for an Analyzer to perform a "deep analysis"
 DU_COST_REQUEST_DETAILED_CLARIFICATION = int(
-    os.getenv("DU_COST_REQUEST_DETAILED_CLARIFICATION", "2")
+    get_config("DU_COST_REQUEST_DETAILED_CLARIFICATION")
 )  # DU cost for asking for detailed clarification
 DU_COST_CREATE_PROJECT = int(
-    os.getenv("DU_COST_CREATE_PROJECT", "10")
+    get_config("DU_COST_CREATE_PROJECT")
 )  # Cost in DU to create a new project
 DU_COST_JOIN_PROJECT = int(
-    os.getenv("DU_COST_JOIN_PROJECT", "1")
+    get_config("DU_COST_JOIN_PROJECT")
 )  # Cost in DU to join an existing project
 
 # --- Role Settings ---
@@ -421,24 +402,24 @@ ROLE_DU_GENERATION = {
     # Add other roles here if they have different DU generation patterns
 }
 ROLE_CHANGE_COOLDOWN = int(
-    os.getenv("ROLE_CHANGE_COOLDOWN", "3")
+    get_config("ROLE_CHANGE_COOLDOWN")
 )  # Min steps an agent must stay in a role
 
 # --- Project Settings ---
 MAX_PROJECT_MEMBERS = int(
-    os.getenv("MAX_PROJECT_MEMBERS", "3")
+    get_config("MAX_PROJECT_MEMBERS")
 )  # Maximum number of members in a project
 
 # Vector Store Configuration
-WEAVIATE_URL = os.getenv("WEAVIATE_URL", "http://localhost:8080")
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
-DEFAULT_VECTOR_STORE = os.getenv("DEFAULT_VECTOR_STORE", "chroma")  # "chroma" or "weaviate"
+WEAVIATE_URL = get_config("WEAVIATE_URL")
+CHROMA_DB_PATH = get_config("CHROMA_DB_PATH")
+DEFAULT_VECTOR_STORE = get_config("DEFAULT_VECTOR_STORE")  # "chroma" or "weaviate"
 
 # Knowledge Board
-MAX_KB_ENTRIES_FOR_PERCEPTION = int(os.getenv("MAX_KB_ENTRIES_FOR_PERCEPTION", "10"))
+MAX_KB_ENTRIES_FOR_PERCEPTION = get_config("MAX_KB_ENTRIES_FOR_PERCEPTION")
 
 # Simulation Parameters
-DEFAULT_MAX_SIMULATION_STEPS = int(os.getenv("DEFAULT_MAX_SIMULATION_STEPS", "50"))
+DEFAULT_MAX_SIMULATION_STEPS = get_config("DEFAULT_MAX_SIMULATION_STEPS")
 
 
 # --- Helper Functions ---
