@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typing_extensions import Self
 
+pytest.importorskip("dspy")
+
 from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
 
 

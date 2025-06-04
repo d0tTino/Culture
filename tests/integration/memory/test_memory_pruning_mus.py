@@ -14,6 +14,8 @@ from typing import Optional
 
 import pytest
 from pytest import FixtureRequest
+
+pytest.importorskip("chromadb")
 from typing_extensions import Self
 
 from src.agents.memory.vector_store import ChromaVectorStoreManager

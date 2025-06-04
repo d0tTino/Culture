@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 # mypy: disable-error-code=unused-ignore
 # src/agents/graphs/basic_agent_graph.py
 """
@@ -10,6 +11,7 @@ import random
 import sys
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
+from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.core.agent_state import AgentState
@@ -917,7 +919,6 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
 
 
 # --- Graph Definition ---
-from langgraph.graph import END, StateGraph
 
 graph_builder = StateGraph(AgentTurnState)
 

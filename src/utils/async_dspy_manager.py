@@ -75,14 +75,20 @@ class AsyncDSPyManager:
             return result
         except asyncio.TimeoutError:
             logger.warning(
-                f"AsyncDSPyManager.get_result: Timeout awaiting result for {callable_name} after {timeout_val:.2f}s."
+
+                    "AsyncDSPyManager.get_result: Timeout awaiting result for "
+                    f"{callable_name} after {timeout_val:.2f}s."
+
             )
             if not future.done():
                 if future.cancel():
                     logger.debug(f"Cancelled underlying task for {callable_name} due to timeout.")
                 else:
                     logger.debug(
-                        f"Failed to cancel underlying task for {callable_name} (might have already completed or started running)."
+
+                            "Failed to cancel underlying task for "
+                            f"{callable_name} (might have already completed or started running)."
+
                     )
             return default_value
         except Exception as e:
@@ -128,7 +134,10 @@ class AsyncDSPyManager:
         effective_timeout = timeout if timeout is not None else self.default_timeout
 
         logger.debug(
-            f"RUN_WITH_TIMEOUT: Executing {program_name} with timeout {effective_timeout:.2f}s. Args: {args}, Kwargs: {kwargs}"
+
+                f"RUN_WITH_TIMEOUT: Executing {program_name} with timeout "
+                f"{effective_timeout:.2f}s. Args: {args}, Kwargs: {kwargs}"
+
         )
 
         try:
