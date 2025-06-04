@@ -2,6 +2,15 @@
 
 This document explains how to run, select, and optimize tests in the Culture.ai codebase.
 
+
+## Installing Test Dependencies
+
+To run the tests, install dependencies from both `requirements.txt` and `requirements-dev.txt`:
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+The development requirements include `pytest-asyncio` and `requests` for asynchronous tests and HTTP utilities.
+
 ## Test Markers and Suite Structure
 
 Tests are categorized using pytest markers:
