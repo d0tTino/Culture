@@ -43,12 +43,16 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         return {"rag_summary": "(No memory retrieval)"}
     memories = await manager.aretrieve_relevant_memories(state["agent_id"], query="", k=5)
     memories_content = [m.get("content", "") for m in memories]
-    summary_result = await agent.async_generate_l1_summary(state.get("current_role", ""), "\n".join(memories_content), "")
+    summary_result = await agent.async_generate_l1_summary(
+        state.get("current_role", ""), "\n".join(memories_content), ""
+    )
     summary = getattr(summary_result, "summary", "")
     return {"rag_summary": summary}
 
 
-async def generate_thought_and_message_node(state: AgentTurnState) -> dict[str, AgentActionOutput | None]:
+async def generate_thought_and_message_node(
+    state: AgentTurnState,
+) -> dict[str, AgentActionOutput | None]:
     agent = state.get("agent_instance")
     thought = "Thinking..."
     action_intent = "idle"
@@ -63,7 +67,12 @@ async def generate_thought_and_message_node(state: AgentTurnState) -> dict[str, 
 async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
     output = state.get("structured_output")
     if not output:
-        return {"message_content": None, "message_recipient_id": None, "action_intent": "idle", "updated_agent_state": state["state"]}
+        return {
+            "message_content": None,
+            "message_recipient_id": None,
+            "action_intent": "idle",
+            "updated_agent_state": state["state"],
+        }
     return {
         "message_content": output.message_content,
         "message_recipient_id": output.message_recipient_id,
@@ -75,7 +84,10 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
 
 # Helper formatters
 
-def _format_other_agents(other_agents_info: list[dict[str, Any]], relationships: dict[str, float]) -> str:
+
+def _format_other_agents(
+    other_agents_info: list[dict[str, Any]], relationships: dict[str, float]
+) -> str:
     if not other_agents_info:
         return "None"
     lines = []
