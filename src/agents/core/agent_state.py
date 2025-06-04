@@ -344,8 +344,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 last_change_step = self.role_history[-1][0] if self.role_history else 0
 
         if (
-            current_step - last_change_step
-        ) < self._role_change_cooldown and last_change_step != -1:  # Make sure last_change_step is valid
+            (current_step - last_change_step) < self._role_change_cooldown
+            and last_change_step != -1
+        ):  # Make sure last_change_step is valid
             logger.debug(
                 f"AGENT_STATE ({self.agent_id}): Role change to {new_role} denied (cooldown period). Current step: {current_step}, Last change: {last_change_step}, Cooldown: {self._role_change_cooldown}"
             )
@@ -637,67 +638,3 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         logger.debug(
             f"Agent {self.name} processed {len(messages)} messages and updated conversation history/relationships."
         )
-
-
-# Example usage
-if __name__ == "__main__":
-    from src.infra.llm_client import LLMClientConfig  # Late import for example
-
-    llm_config_instance = LLMClientConfig(model_name="test-model", api_key="test-key")  # type: ignore
-
-    agent_data_example = {
-        "agent_id": "agent1",
-        "name": "TestAgent",
-        "current_role": "Innovator",  # Matches default factory if not provided
-        "mood_level": 0.5,
-        "mood_history": [(0, 0.5), (1, 0.6)],
-        "relationships": {"agent2": 0.8, "agent3": -0.2},
-        "relationship_history": {"agent2": [(0, 0.7), (1, 0.8)], "agent3": [(0, -0.1), (1, -0.2)]},
-        "ip": 100.0,
-        "du": 50.0,
-        "llm_client_config": llm_config_instance.model_dump(),  # Pass as dict
-        # other fields can use defaults
-    }
-
-    agent_state = AgentState(**agent_data_example)
-    print(
-        f"AgentState created: {agent_state.name}, Role: {agent_state.current_role}, Mood: {agent_state.mood_level:.2f}"
-    )
-    print(f"LLM Client from state: {agent_state.get_llm_client()}")
-
-    serialized = agent_state.to_dict()
-    print(f"Serialized state: {serialized}")
-
-    # Test deserialization with overrides
-    new_llm_config = LLMClientConfig(model_name="override-model", api_key="override-key")  # type: ignore
-    deserialized_state = AgentState.from_dict(
-        serialized, llm_client_config_override=new_llm_config.model_dump()
-    )
-    print(f"Deserialized state: {deserialized_state.name}, LLM Model: {deserialized_state.get_llm_client().config.model_name if deserialized_state.get_llm_client() else 'None'}")  # type: ignore
-
-    agent_state.update_mood(sentiment_score=0.5)
-    print(f"Mood after update: {agent_state.mood_level:.2f}, History: {agent_state.mood_history}")
-
-    agent_state.update_relationship("agent2", sentiment_score=-0.3)
-    print(
-        f"Relationship with agent2: {agent_state.relationships.get('agent2'):.2f}, History: {agent_state.relationship_history.get('agent2')}"
-    )
-
-    agent_state.reset_state()
-    print(f"Mood after reset: {agent_state.mood_level}, Mood History: {agent_state.mood_history}")
-    print(
-        f"Relationships after reset: {agent_state.relationships}, Relationship History: {agent_state.relationship_history}"
-    )
-
-    agent_state.update_dynamic_config("mood_decay_rate", 0.05)  # Example dynamic update
-    # This should reflect in subsequent mood updates if logic uses self._mood_decay_rate
-
-    agent_state.process_perceived_messages(
-        [
-            {"sender_name": "agent2", "content": "0.9 Great idea!"},
-            {"sender_name": "agent3", "content": "-0.5 I disagree."},
-        ]
-    )
-    print(f"Conversation history: {agent_state.conversation_history}")
-    print(f"Relationships with agent2 after msg: {agent_state.relationships.get('agent2'):.2f}")
-    print(f"Relationships with agent3 after msg: {agent_state.relationships.get('agent3'):.2f}")
