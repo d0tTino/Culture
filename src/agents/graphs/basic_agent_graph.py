@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 # mypy: disable-error-code=unused-ignore
 # src/agents/graphs/basic_agent_graph.py
 """

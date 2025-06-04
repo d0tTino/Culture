@@ -10,9 +10,9 @@ import time
 from typing import Any, Callable, Optional, TypeVar, cast
 
 import ollama
-import requests
+import requests  # type: ignore
 from pydantic import BaseModel, ValidationError
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException  # type: ignore
 
 from src.utils.decorators import monitor_llm_call
 
@@ -80,8 +80,8 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
-        return response.status_code == 200
+        response: Any = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+        return bool(getattr(response, "status_code", 0) == 200)
     except Exception as e:
         logger.debug(f"Ollama is not available: {e}")
         return False
@@ -413,7 +413,7 @@ def generate_structured_output(
                 mock_data = _MOCK_RESPONSES[model_name]
                 if isinstance(mock_data, dict):
                     field_dict: dict[str, Any] = {}
-                    for field_name, field in response_model.model_fields.items():
+                    for field_name, field in response_model.model_fields.items():  # type: ignore[attr-defined]
                         if field.is_required():
                             if field.annotation is str:
                                 field_dict[field_name] = str(
@@ -447,7 +447,7 @@ def generate_structured_output(
                         pass
             # Only define field_dict if not already defined
             field_dict = {}
-            for field_name, field in response_model.model_fields.items():
+            for field_name, field in response_model.model_fields.items():  # type: ignore[attr-defined]
                 if field.is_required():
                     if field.annotation is str:
                         field_dict[field_name] = f"Mock {field_name}"
@@ -473,9 +473,9 @@ def generate_structured_output(
     # Ensure response_model is a subclass of BaseModel for type safety
     if not issubclass(response_model, BaseModel):
         raise TypeError("response_model must be a subclass of BaseModel")
-    schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+    schema_json = json.dumps(response_model.model_json_schema(), indent=2)  # type: ignore[attr-defined]
     example: dict[str, Any] = {}
-    for field_name, field in response_model.model_fields.items():
+    for field_name, field in response_model.model_fields.items():  # type: ignore[attr-defined]
         if field.annotation is str:
             example[field_name] = "Example text for " + field_name
         elif field.annotation is str or field.annotation is None:

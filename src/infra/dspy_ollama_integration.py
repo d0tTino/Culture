@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-import requests
+import requests  # type: ignore
 from typing_extensions import Self
 
 # Import DSPy and Ollama
@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dspy_ollama")
 
 
-class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
+class OllamaLM(dspy.LM):  # type: ignore[misc, no-any-unimported]
     """
     A DSPy-compatible language model implementation for Ollama.
 

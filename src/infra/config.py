@@ -7,7 +7,7 @@ Manages environment variables and configuration settings.
 import importlib
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 try:
     from dotenv import load_dotenv
@@ -486,7 +486,8 @@ def get_redis_config() -> dict[str, object]:
 
 # Configure basic logging
 logging.basicConfig(
-    level=getattr(logging, DEFAULT_LOG_LEVEL), format="%(asctime)s - %(levelname)s - %(message)s"
+    level=getattr(logging, cast(str, DEFAULT_LOG_LEVEL)),
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 

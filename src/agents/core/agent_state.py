@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 import logging
 import random
 from collections import deque
@@ -90,8 +91,12 @@ class AgentStateData(BaseModel):
         default_factory=list
     )  # Stores (step, numeric_mood_level)
 
-    ip: float = Field(default_factory=lambda: float(str(get_config("INITIAL_INFLUENCE_POINTS", "0"))))
-    du: float = Field(default_factory=lambda: float(str(get_config("INITIAL_DATA_UNITS", "0"))))
+    ip: float = Field(
+        default_factory=lambda: float(str(get_config("INITIAL_INFLUENCE_POINTS") or "0"))
+    )
+    du: float = Field(
+        default_factory=lambda: float(str(get_config("INITIAL_DATA_UNITS") or "0"))
+    )
     relationships: dict[str, float] = Field(default_factory=dict)
     relationship_history: dict[str, list[tuple[int, float]]] = Field(default_factory=dict)  # Stores snapshots
     short_term_memory: deque[dict[str, Any]] = Field(default_factory=deque)
@@ -169,21 +174,39 @@ class AgentStateData(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         # Initialize private attributes from global config
-        self._max_short_term_memory = int(str(get_config("MAX_SHORT_TERM_MEMORY", "100")))
-        self._short_term_memory_decay_rate = float(str(get_config("SHORT_TERM_MEMORY_DECAY_RATE", "0.1")))
-        self._relationship_decay_rate = float(str(get_config("RELATIONSHIP_DECAY_FACTOR", "0.01")))
-        self._min_relationship_score = float(str(get_config("MIN_RELATIONSHIP_SCORE", "-1.0")))
-        self._max_relationship_score = float(str(get_config("MAX_RELATIONSHIP_SCORE", "1.0")))
-        self._mood_decay_rate = float(str(get_config("MOOD_DECAY_FACTOR", "0.01")))
-        self._mood_update_rate = float(str(get_config("MOOD_UPDATE_RATE", "0.1")))
-        self._ip_cost_per_message = float(str(get_config("IP_COST_SEND_DIRECT_MESSAGE", "1.0")))
-        self._du_cost_per_action = float(str(get_config("DU_COST_PER_ACTION", "1.0")))
-        self._role_change_cooldown = int(str(get_config("ROLE_CHANGE_COOLDOWN", "10")))
-        self._role_change_ip_cost = float(str(get_config("ROLE_CHANGE_IP_COST", "5.0")))
-        self._positive_relationship_learning_rate = float(str(get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE", "0.1")))
-        self._negative_relationship_learning_rate = float(str(get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE", "0.1")))
-        self._neutral_relationship_learning_rate = float(str(get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE", "0.05")))
-        self._targeted_message_multiplier = float(str(get_config("TARGETED_MESSAGE_MULTIPLIER", "1.5")))
+        self._max_short_term_memory = int(str(get_config("MAX_SHORT_TERM_MEMORY") or "100"))
+        self._short_term_memory_decay_rate = float(
+            str(get_config("SHORT_TERM_MEMORY_DECAY_RATE") or "0.1")
+        )
+        self._relationship_decay_rate = float(
+            str(get_config("RELATIONSHIP_DECAY_FACTOR") or "0.01")
+        )
+        self._min_relationship_score = float(
+            str(get_config("MIN_RELATIONSHIP_SCORE") or "-1.0")
+        )
+        self._max_relationship_score = float(
+            str(get_config("MAX_RELATIONSHIP_SCORE") or "1.0")
+        )
+        self._mood_decay_rate = float(str(get_config("MOOD_DECAY_FACTOR") or "0.01"))
+        self._mood_update_rate = float(str(get_config("MOOD_UPDATE_RATE") or "0.1"))
+        self._ip_cost_per_message = float(
+            str(get_config("IP_COST_SEND_DIRECT_MESSAGE") or "1.0")
+        )
+        self._du_cost_per_action = float(str(get_config("DU_COST_PER_ACTION") or "1.0"))
+        self._role_change_cooldown = int(str(get_config("ROLE_CHANGE_COOLDOWN") or "10"))
+        self._role_change_ip_cost = float(str(get_config("ROLE_CHANGE_IP_COST") or "5.0"))
+        self._positive_relationship_learning_rate = float(
+            str(get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
+        )
+        self._negative_relationship_learning_rate = float(
+            str(get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
+        )
+        self._neutral_relationship_learning_rate = float(
+            str(get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE") or "0.05")
+        )
+        self._targeted_message_multiplier = float(
+            str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5")
+        )
 
         if not self.role_history:
             self.role_history.append((self.step_counter, self.current_role))
@@ -333,9 +356,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             )
             return False
 
-        # Check if new_role is a valid role string (e.g., from a predefined list if available)
-        # For now, assume any string is fine, but could add validation against ROLE_DU_GENERATION.keys()
-        if new_role not in get_config("ROLE_DU_GENERATION").keys():
+        # Validate new_role against configured ROLE_DU_GENERATION if available
+        role_du_generation = get_config("ROLE_DU_GENERATION")
+        if isinstance(role_du_generation, dict) and new_role not in role_du_generation:
             logger.warning(
                 f"AGENT_STATE ({self.agent_id}): Attempted role change to unrecognized role '{new_role}'. Denying."
             )

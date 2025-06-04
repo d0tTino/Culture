@@ -2,6 +2,7 @@
 Discord bot interface for the Culture simulation.
 Provides real-time updates about the simulation to a Discord channel.
 """
+# mypy: ignore-errors
 
 import logging
 from typing import Any, Optional

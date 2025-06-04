@@ -4,7 +4,7 @@ Defines the Knowledge Board class for maintaining shared knowledge among agents.
 
 import logging
 import uuid
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
 
@@ -18,7 +18,7 @@ class LoggingList(list[T], Generic[T]):
         logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): clear() called")
         super().clear()
 
-    def __delitem__(self: Self, key: Any) -> None: # key can be int or slice
+    def __delitem__(self: Self, key: SupportsIndex | slice[Any, Any, Any]) -> None:
         if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
             logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): __delitem__[:] called (del self[:])")
         super().__delitem__(key)
@@ -33,8 +33,7 @@ class LoggingList(list[T], Generic[T]):
     def append(self: Self, item: T) -> None:
         super().append(item)
 
-    def __setitem__(self: Self, key: Any, value: T) -> None: # key can be int or slice
-        super().__setitem__(key, value)
+    # __setitem__ is not overridden to keep superclass type checking intact
 
 
 class KnowledgeBoard:

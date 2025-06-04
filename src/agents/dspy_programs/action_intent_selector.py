@@ -32,7 +32,7 @@ except ImportError as e:
     raise
 
 
-class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
+class ActionIntentSelection(dspy.Signature):  # type: ignore[misc, no-any-unimported]  # Mypy cannot follow dspy.Signature import
     """
     Given the agent's role, current situation, overarching goal, and available actions,
     select the most appropriate action intent and provide a brief justification.

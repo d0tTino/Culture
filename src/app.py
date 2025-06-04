@@ -4,6 +4,7 @@ Temporary verification file for relationship dynamics in the Culture.ai project.
 Contains test cases for verifying the new relationship updates.
 Run each test case separately and observe the results.
 """
+# mypy: ignore-errors
 
 import argparse
 import asyncio

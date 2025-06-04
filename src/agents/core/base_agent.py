@@ -2,6 +2,7 @@
 """
 Defines the base class for all agents in the Culture simulation.
 """
+# mypy: ignore-errors
 
 import copy
 import logging

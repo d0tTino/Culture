@@ -17,7 +17,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, TypeVar, Union, cast
 
 import chromadb
-from chromadb.api.types import Documents, EmbeddingFunction
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
@@ -26,7 +25,7 @@ from typing_extensions import Self
 try:
     from chromadb.exceptions import ChromaDBException
 except ImportError:
-    ChromaDBException = Exception  # type: ignore
+    ChromaDBException = Exception
 
 # Constants for memory usage tracking
 USAGE_TRACKING_FIELDS = [
@@ -80,8 +79,8 @@ class ChromaVectorStoreManager:
         os.makedirs(persist_directory, exist_ok=True)
 
         # Initialize embedding function using sentence-transformers
-        self.embedding_function: EmbeddingFunction[Documents] = (
-            SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        self.embedding_function: Any = SentenceTransformerEmbeddingFunction(
+            model_name="all-MiniLM-L6-v2"
         )
 
         # Initialize the persistent ChromaDB client
