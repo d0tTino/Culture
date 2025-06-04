@@ -17,6 +17,19 @@ python scripts/cleanup_temp_db.py --dry-run
 python scripts/cleanup_temp_db.py
 ```
 
+### `query_agent_memory.py`
+
+Queries an agent's ChromaDB memory store and synthesizes a short answer.
+
+Usage:
+```bash
+PYTHONPATH=. python scripts/query_agent_memory.py \
+    --agent_id <agent_id> \
+    --query_file path/to/query.txt \
+    [--chroma_dir ./chroma_db] [--ollama_model llama3:8b] \
+    [--max_context_items 10]
+```
+
 # Culture.ai Scripts
 
 ## Code Quality & Compliance
