@@ -6,7 +6,8 @@ Defines the base class for all agents in the Culture simulation.
 import copy
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, cast
+from collections.abc import Awaitable
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from typing_extensions import Self
 
@@ -35,8 +36,6 @@ if TYPE_CHECKING:
     from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.sim.knowledge_board import KnowledgeBoard
 
-logger = logging.getLogger(__name__)
-
 # --- REMOVE MOVED Graph State Definitions ---
 # class AgentActionOutput(BaseModel):
 #     ...
@@ -48,6 +47,7 @@ from src.agents.dspy_programs.action_intent_selector import get_optimized_action
 from src.agents.dspy_programs.relationship_updater import get_relationship_updater
 from src.agents.dspy_programs.role_thought_generator import get_role_thought_generator
 
+logger = logging.getLogger(__name__)
 
 class Agent:
     """
