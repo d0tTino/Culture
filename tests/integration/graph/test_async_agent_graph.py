@@ -7,6 +7,7 @@ import pytest
 from pytest import LogCaptureFixture
 
 pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
 
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent

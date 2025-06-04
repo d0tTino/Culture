@@ -11,6 +11,7 @@ import sys
 import pytest
 
 pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
 
 from src.agents.core.agent_state import AgentState
 from src.agents.core.base_agent import Agent
