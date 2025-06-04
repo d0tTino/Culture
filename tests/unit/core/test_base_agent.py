@@ -3,6 +3,8 @@ from unittest.mock import AsyncMock
 import pytest
 from pytest import MonkeyPatch
 
+pytest.importorskip("langgraph")
+
 from src.agents.core.base_agent import Agent
 
 

@@ -2,9 +2,13 @@ import logging
 import sys
 from typing import cast
 
+import pytest
+
+pytest.importorskip("dspy")
+pytest.importorskip("ollama")
+
 import dspy
 import ollama
-import pytest
 from typing_extensions import Self
 
 # Configure logging

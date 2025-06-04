@@ -3,6 +3,9 @@ import math  # Added for isnan
 
 import pytest
 
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
+
 from src.agents.core import roles
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
