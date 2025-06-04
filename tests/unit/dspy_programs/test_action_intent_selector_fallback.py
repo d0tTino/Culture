@@ -1,6 +1,13 @@
+import pytest
 from pytest import MonkeyPatch
 from typing_extensions import Self
 
+pytest.importorskip("dspy")
+
+import dspy
+
+if not hasattr(dspy, "Predict"):
+    pytest.skip("dspy Predict not available", allow_module_level=True)
 from src.agents.dspy_programs import action_intent_selector
 
 

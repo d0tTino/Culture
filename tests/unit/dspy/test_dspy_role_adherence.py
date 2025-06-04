@@ -2,9 +2,16 @@ import logging
 import sys
 from typing import cast
 
+import pytest
+
+pytest.importorskip("dspy")
+pytest.importorskip("ollama")
+
 import dspy
 import ollama
-import pytest
+
+if not hasattr(dspy, "Predict"):
+    pytest.skip("dspy Predict not available", allow_module_level=True)
 from typing_extensions import Self
 
 # Configure logging

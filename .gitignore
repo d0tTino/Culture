@@ -178,3 +178,7 @@ coverage/
 
 # Logs folder for test outputs
 logs/
+
+# Profiler output
+prof/
+*.prof

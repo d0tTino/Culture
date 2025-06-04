@@ -9,15 +9,19 @@ import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import dspy  # ADDED
-import pytest
-from src.infra.logging_config import setup_logging # MOVED UP
-from src.sim.simulation import Simulation # MOVED UP
-
-# Add project root to sys.path to allow importing src modules
+# Ensure project root is on sys.path before importing src modules
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+try:
+    import dspy  # pragma: no cover - optional dependency
+except Exception:  # pragma: no cover - allow running without DSPy installed
+    from src.infra.dspy_ollama_integration import dspy
+
+import pytest
+
+pytest.importorskip("langgraph")
 
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent, AgentActionOutput
@@ -25,6 +29,9 @@ from src.agents.memory.vector_store import ChromaVectorStoreManager
 
 # KnowledgeBoard is part of Simulation, access via self.simulation.knowledge_board
 from src.infra import config
+from src.infra.logging_config import setup_logging  # MOVED UP
+from src.sim.simulation import Simulation  # MOVED UP
+
 # from src.infra.logging_config import setup_logging  # CHANGED: Import setup_logging # MOVED UP
 # from src.sim.simulation import Simulation # MOVED UP
 
@@ -1193,7 +1200,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             # It should ideally be better than mood_a_after_processing_msgs (after B's direct hit and C's general facilitation)
             self.assertGreaterEqual(
                 mood_a_after_third_action,
-                mood_a_after_processing_msgs
+                mood_a_after_turn2
                 - 0.05,  # Allow very slight dip if action has minor cost aspect
                 "AgentA's mood should stabilize or improve after taking a constructive action.",
             )

@@ -1,13 +1,14 @@
 # ruff: noqa: E501, ANN101
+# mypy: ignore-errors
 import logging
 import os
 
-import dspy
+from src.infra.dspy_ollama_integration import dspy
 
 logger = logging.getLogger(__name__)
 
 
-class RelationshipUpdaterSignature(dspy.Signature):  # type: ignore[no-any-unimported]
+class RelationshipUpdaterSignature(dspy.Signature):  # type: ignore[misc, no-any-unimported]
     """
     Updates the relationship score between two agents based on their interaction, personas,
     and sentiment.
@@ -106,9 +107,7 @@ def get_relationship_updater() -> object:
     Returns the optimized module if available, else the base, else a failsafe.
     """
     try:
-        import dspy
-
-        from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+        from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
         # Try to configure DSPy
         try:

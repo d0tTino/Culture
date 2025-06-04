@@ -15,6 +15,8 @@ from datetime import datetime
 import pytest
 from typing_extensions import Self
 
+pytest.importorskip("chromadb")
+
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 
 

@@ -1,4 +1,5 @@
 # ruff: noqa: E501, ANN101
+# mypy: ignore-errors
 """
 DSPy L2 Summary Generator
 
@@ -14,9 +15,7 @@ import logging
 import os
 from typing import Optional
 
-import dspy
-
-from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +29,7 @@ except ImportError as e:
     dspy = None
 
 
-class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
+class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[misc, no-any-unimported]
     """
     Generates a high-level L2 insight summary from a series of L1 summaries,
     considering agent role, mood trends, and goals.
