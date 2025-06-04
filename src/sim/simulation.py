@@ -175,32 +175,9 @@ class Simulation:
             current_collective_ip = sum(agent.state.ip for agent in self.agents)
             current_collective_du = sum(agent.state.du for agent in self.agents)
             for agent_instance in self.agents:
-                if (
-                    agent_instance.agent_id == "agent_a_innovator_conflict"
-                ):  # Specific log for Agent A
-                    logger.debug(f"SIM_COLLECTIVE_METRICS_UPDATE for {agent_instance.agent_id}: ")
-                    logger.debug(f"  - قبل agent_instance.state ID: {id(agent_instance.state)}")
-                    logger.debug(
-                        f"  - قبل agent_instance.state.relationships ID: {id(agent_instance.state.relationships)}"
-                    )
-                    logger.debug(
-                        f"  - قبل relationships content: {agent_instance.state.relationships}"
-                    )
-
                 agent_instance.state.update_collective_metrics(
                     current_collective_ip, current_collective_du
                 )
-
-                if (
-                    agent_instance.agent_id == "agent_a_innovator_conflict"
-                ):  # Specific log for Agent A
-                    logger.debug(f"  - بعد agent_instance.state ID: {id(agent_instance.state)}")
-                    logger.debug(
-                        f"  - بعد agent_instance.state.relationships ID: {id(agent_instance.state.relationships)}"
-                    )
-                    logger.debug(
-                        f"  - بعد relationships content: {agent_instance.state.relationships}"
-                    )
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
