@@ -1,10 +1,5 @@
-# src/app.py - Modified for relationship dynamics verification
-"""
-Temporary verification file for relationship dynamics in the Culture.ai project.
-Contains test cases for verifying the new relationship updates.
-Run each test case separately and observe the results.
-"""
-# mypy: ignore-errors
+# src/app.py
+"""Entry point for running a simple multi-agent simulation."""
 
 import argparse
 import asyncio
@@ -28,16 +23,6 @@ except ImportError:
     logging.warning("Discord bot module not found, will run without Discord integration.")
     simulation_discord_bot_class = None
 
-# === TEMPORARY: Force agent-to-agent messages for DSPy relationship updater spot-check ===
-FORCED_INTERACTION_SCENARIO = (
-    "Agents Alice, Bob, and Carol must discuss and agree on a topic for their next group project. "
-    "Alice should initiate by asking Bob for his ideas. Bob should respond to Alice. "
-    "Carol should then comment on Bob's idea to Alice. All agents should address each other "
-    "directly in their first message."
-)
-
-# Replace the default scenario for this test run
-DEFAULT_SCENARIO = FORCED_INTERACTION_SCENARIO
 
 # Test scenario for relationship verification
 VERIFICATION_SCENARIO = (
