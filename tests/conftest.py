@@ -21,8 +21,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 
-from src.infra.llm_mock_helper import patch_ollama_functions  # noqa: E402
 from src.infra.warning_filters import configure_warning_filters  # noqa: E402
+from src.shared.llm_mocks import patch_ollama_functions  # noqa: E402
 from tests.utils.mock_llm import MockLLM  # noqa: E402
 
 # # Add these imports and filter # Removed for now
