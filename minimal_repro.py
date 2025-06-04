@@ -1,33 +1,34 @@
 import uuid
-from typing import Dict, Any, Union
+from typing import Any, cast
+
 from langgraph.graph import StateGraph
 
 
-def simple_condition(state: Dict[str, Any]) -> str:
+def simple_condition(state: dict[str, Any]) -> str:
     # Pick option based on state value
     choice = state.get("choice")
-    if choice not in ["option_a", "option_b"]:
+    if choice not in {"option_a", "option_b"}:
         # Default or error handling for unexpected choice
-        return "__END__" # Or raise an error, or a default path
-    return choice
+        return "__END__"
+    return cast(str, choice)
 
 
 # Create minimal StateGraph using dict as state type
-graph = StateGraph(Dict[str, Any]) # Use Dict[str, Any] for state type
+graph = StateGraph(dict[str, Any])
 # Define nodes
 
 
-def start_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def start_node(state: dict[str, Any]) -> dict[str, Any]:
     # Pass through state so 'choice' persists
     return state
 
 
-def option_a_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def option_a_node(state: dict[str, Any]) -> dict[str, Any]:
     print("Routed to option_a_node")
     return {} # Return empty dict or updated state
 
 
-def option_b_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def option_b_node(state: dict[str, Any]) -> dict[str, Any]:
     print("Routed to option_b_node")
     return {} # Return empty dict or updated state
 
