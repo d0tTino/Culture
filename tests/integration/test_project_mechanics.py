@@ -13,6 +13,9 @@ import time
 import pytest
 from typing_extensions import Self
 
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
+
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.infra import config

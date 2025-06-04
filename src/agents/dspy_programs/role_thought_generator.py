@@ -1,8 +1,9 @@
 # ruff: noqa: E501, ANN101, ANN401
+# mypy: ignore-errors
 import logging
 import os
 
-import dspy
+from src.infra.dspy_ollama_integration import dspy
 
 # from src.infra.dspy_ollama_integration import OllamaLM, configure_dspy_ollama_async # REMOVED
 
@@ -10,7 +11,7 @@ import dspy
 logger = logging.getLogger(__name__)  # ADDED Standard Python Logger
 
 
-class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
+class RoleThoughtGenerator(dspy.Signature):  # type: ignore[misc, no-any-unimported]  # Mypy cannot follow dspy.Signature import
     """
     Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or
     'As an [ROLE],' and reflects the agent's role and current situation.

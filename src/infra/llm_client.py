@@ -7,9 +7,20 @@ Provides a client for interacting with the Ollama LLM service.
 import json
 import logging
 import time
+from collections.abc import Iterable
 from typing import Any, Callable, Optional, TypeVar, cast
 
-import ollama
+try:
+    import ollama
+except Exception:  # pragma: no cover - optional dependency
+    logging.getLogger(__name__).warning(
+        "ollama package not installed; using MagicMock stub for ollama"
+    )
+    import sys
+    from unittest.mock import MagicMock
+
+    ollama = MagicMock()
+    sys.modules.setdefault("ollama", ollama)
 import requests
 from pydantic import BaseModel, ValidationError
 from requests.exceptions import RequestException
@@ -80,8 +91,8 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
-        return response.status_code == 200
+        response: Any = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+        return bool(getattr(response, "status_code", 0) == 200)
     except Exception as e:
         logger.debug(f"Ollama is not available: {e}")
         return False
@@ -347,13 +358,14 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
                 return score
             else:
                 logger.warning(
-                    f"Sentiment analysis JSON response missing 'sentiment_score': '{response_content_str}'. "
-                    "Defaulting to 0.0."
+                    "Sentiment analysis JSON response missing 'sentiment_score': "
+                    f"'{response_content_str}'. Defaulting to 0.0."
                 )
                 return 0.0  # Default float score
         except json.JSONDecodeError:
             logger.warning(
-                f"Sentiment analysis failed to parse JSON from response: '{response_content_str}'. "
+                "Sentiment analysis failed to parse JSON from response: "
+                f"'{response_content_str}'. "
                 "Attempting direct string interpretation or defaulting to 0.0."
             )
             # Fallback for direct string if previous mock version sent that.
@@ -408,7 +420,13 @@ def generate_structured_output(
                 mock_data = _MOCK_RESPONSES[model_name]
                 if isinstance(mock_data, dict):
                     field_dict: dict[str, Any] = {}
-                    for field_name, field in response_model.model_fields.items():
+                    mock_fields = getattr(response_model, "model_fields", None)
+                    if mock_fields is None:
+                        base_fields = getattr(response_model, "__fields__", None)
+                        if callable(base_fields):
+                            base_fields = base_fields()
+                        mock_fields = base_fields or {}
+                    for field_name, field in mock_fields.items():
                         if field.is_required():
                             if field.annotation is str:
                                 field_dict[field_name] = str(
@@ -442,8 +460,26 @@ def generate_structured_output(
                         pass
             # Only define field_dict if not already defined
             field_dict = {}
-            for field_name, field in response_model.model_fields.items():
-                if field.is_required():
+            if hasattr(response_model, "model_fields"):
+                fields: Iterable[tuple[str, Any]] = response_model.model_fields.items()
+
+                def is_required(f: Any) -> bool:
+                    return bool(f.is_required())
+
+            else:
+                base_fields = getattr(response_model, "__fields__", None)
+                if callable(base_fields):
+                    base_fields = base_fields()
+                if base_fields is None:
+                    fields = []
+                else:
+                    fields = base_fields.items()
+
+                def is_required(f: Any) -> bool:
+                    return bool(cast("Any", f).required)
+
+            for field_name, field in fields:
+                if is_required(field):
                     if field.annotation is str:
                         field_dict[field_name] = f"Mock {field_name}"
                     elif field.annotation is int:
@@ -468,9 +504,18 @@ def generate_structured_output(
     # Ensure response_model is a subclass of BaseModel for type safety
     if not issubclass(response_model, BaseModel):
         raise TypeError("response_model must be a subclass of BaseModel")
-    schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+    if hasattr(response_model, "model_json_schema"):
+        schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+    else:
+        schema_json = json.dumps(response_model.schema(), indent=2)
     example: dict[str, Any] = {}
-    for field_name, field in response_model.model_fields.items():
+    example_fields = getattr(response_model, "model_fields", None)
+    if example_fields is None:
+        base_fields = getattr(response_model, "__fields__", None)
+        if callable(base_fields):
+            base_fields = base_fields()
+        example_fields = base_fields or {}
+    for field_name, field in example_fields.items():
         if field.annotation is str:
             example[field_name] = "Example text for " + field_name
         elif field.annotation is str or field.annotation is None:

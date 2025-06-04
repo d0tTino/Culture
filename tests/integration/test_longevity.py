@@ -3,6 +3,9 @@ import math  # Added for isnan
 
 import pytest
 
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
+
 from src.agents.core import roles
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -204,9 +207,7 @@ class TestLongevity:
             ), f"Agent {agent.agent_id} DU is NaN ({test_id})"
             assert (
                 agent.state.ip > -500
-            ), (
-                f"Agent {agent.agent_id} IP too low: {agent.state.ip} ({test_id})"
-            )  # More lenient for longevity
+            ), f"Agent {agent.agent_id} IP too low: {agent.state.ip} ({test_id})"  # More lenient for longevity
             assert (
                 agent.state.du > -500
             ), f"Agent {agent.agent_id} DU too low: {agent.state.du} ({test_id})"  # More lenient

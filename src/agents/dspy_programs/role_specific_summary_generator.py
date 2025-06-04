@@ -19,8 +19,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
-    import dspy
-
     from src.agents.dspy_programs.l1_summary_generator import (
         GenerateL1SummarySignature,
         L1SummaryGenerator,
@@ -29,7 +27,7 @@ try:
         GenerateL2SummarySignature,
         L2SummaryGenerator,
     )
-    from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+    from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
     # Configure DSPy with Ollama LM
     configure_dspy_with_ollama(model_name="mistral:latest", temperature=0.1)

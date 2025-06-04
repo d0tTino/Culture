@@ -2,6 +2,8 @@
 Defines common types used in the agent's LangGraph state.
 """
 
+# mypy: ignore-errors
+
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field

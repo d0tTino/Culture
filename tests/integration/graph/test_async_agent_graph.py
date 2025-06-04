@@ -6,6 +6,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pytest import LogCaptureFixture
 
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
+
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent
 from src.agents.graphs.basic_agent_graph import AgentTurnState

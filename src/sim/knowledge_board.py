@@ -4,21 +4,22 @@ Defines the Knowledge Board class for maintaining shared knowledge among agents.
 
 import logging
 import uuid
-from typing import Any, TypeVar, Generic
+from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class LoggingList(list[T], Generic[T]):
     def clear(self: Self) -> None:
         logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): clear() called")
         super().clear()
 
-    def __delitem__(self: Self, key: Any) -> None: # key can be int or slice
+    def __delitem__(self: Self, key: SupportsIndex | slice) -> None:
         if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
             logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): __delitem__[:] called (del self[:])")
         super().__delitem__(key)
@@ -28,13 +29,12 @@ class LoggingList(list[T], Generic[T]):
             f"LOGGING_LIST_DEBUG: Initializing new LoggingList instance ({id(self)}) from args: {args}"
         )
         super().__init__(*args, **kwargs)
-    
+
     # For MyPy, if we override methods that are checked for type hints:
     def append(self: Self, item: T) -> None:
         super().append(item)
 
-    def __setitem__(self: Self, key: Any, value: T) -> None: # key can be int or slice
-        super().__setitem__(key, value)
+    # __setitem__ is not overridden to keep superclass type checking intact
 
 
 class KnowledgeBoard:
@@ -53,7 +53,7 @@ class KnowledgeBoard:
         if entries is not None:
             self.entries = LoggingList(entries)
         else:
-            self.entries = LoggingList() 
+            self.entries = LoggingList()
         logger.info(
             f"KnowledgeBoard initialized. Instance ID: {id(self)}. Entries list ID: {id(self.entries)} type: {type(self.entries)}"
         )

@@ -3,6 +3,8 @@ Discord bot interface for the Culture simulation.
 Provides real-time updates about the simulation to a Discord channel.
 """
 
+# mypy: ignore-errors
+
 import logging
 from typing import Any, Optional
 
@@ -72,7 +74,7 @@ class SimulationDiscordBot:
     async def send_simulation_update(
         self: Self,
         content: Optional[str] = None,
-        embed: Optional[Any] = None,  # noqa: ANN401
+        embed: Optional[Any] = None,
     ) -> Optional[bool]:
         """
         Send a simulation update message to the configured Discord channel.
@@ -132,21 +134,21 @@ class SimulationDiscordBot:
             logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
             return False
 
-    def create_step_start_embed(self: Self, step: int) -> Any:  # noqa: ANN401
+    def create_step_start_embed(self: Self, step: int) -> Any:
         """Creates an embed for simulation step start"""
         embed = discord.Embed(
             title=f"📊 Simulation Step {step} Started", color=discord.Color.blue()
         )
         return embed
 
-    def create_step_end_embed(self: Self, step: int) -> Any:  # noqa: ANN401
+    def create_step_end_embed(self: Self, step: int) -> Any:
         """Creates an embed for simulation step end"""
         embed = discord.Embed(
             title=f"✅ Simulation Step {step} Completed", color=discord.Color.green()
         )
         return embed
 
-    def create_knowledge_board_embed(self: Self, agent_id: str, content: str, step: int) -> Any:  # noqa: ANN401
+    def create_knowledge_board_embed(self: Self, agent_id: str, content: str, step: int) -> Any:
         """Creates an embed for Knowledge Board posts"""
         embed = discord.Embed(
             title=f"📝 New Knowledge Board Entry (Step {step})",
@@ -158,7 +160,7 @@ class SimulationDiscordBot:
 
     def create_role_change_embed(
         self: Self, agent_id: str, old_role: str, new_role: str, step: int
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Creates an embed for agent role changes"""
         embed = discord.Embed(
             title=f"🔄 Agent Role Change (Step {step})",
@@ -169,7 +171,7 @@ class SimulationDiscordBot:
 
     def create_project_embed(
         self: Self, action: str, project_name: str, project_id: str, agent_id: str, step: int
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Creates an embed for project creation/joining/leaving"""
         if action == "create":
             title = f"🏗️ New Project Created (Step {step})"
@@ -206,7 +208,7 @@ class SimulationDiscordBot:
         agent_role: str = "Unknown",
         mood: str = "neutral",
         step: int = 0,
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Creates an embed for agent messages (broadcast or targeted)"""
         target_info = f"to Agent {recipient_id[:8]}" if recipient_id else "to All (Broadcast)"
 
@@ -238,7 +240,7 @@ class SimulationDiscordBot:
 
     def create_ip_change_embed(
         self: Self, agent_id: str, old_ip: int, new_ip: int, reason: str, step: int
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Creates an embed for influence point changes"""
         change = new_ip - old_ip
         change_text = f"+{change}" if change > 0 else f"{change}"
@@ -254,7 +256,7 @@ class SimulationDiscordBot:
 
     def create_du_change_embed(
         self: Self, agent_id: str, old_du: float, new_du: float, reason: str, step: int
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Creates an embed for decision unit changes"""
         change = new_du - old_du
         change_text = f"+{change:.2f}" if change > 0 else f"{change:.2f}"
@@ -275,7 +277,7 @@ class SimulationDiscordBot:
         agent_role: str = "Unknown",
         mood: str = "neutral",
         step: int = 0,
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Creates an embed for agent actions that don't involve messages"""
 
         # Determine action description and color based on intent

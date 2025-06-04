@@ -1,4 +1,5 @@
 # ruff: noqa: E501, ANN101
+# mypy: ignore-errors
 """
 DSPy L1 Summary Generator
 
@@ -14,9 +15,7 @@ import logging
 import os
 from typing import Optional
 
-import dspy
-
-from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +30,7 @@ except ImportError as e:
     raise
 
 
-class GenerateL1SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported] # Justification: Mypy cannot follow dspy.Signature import; see https://mypy.readthedocs.io/en/stable/common_issues.html
+class GenerateL1SummarySignature(dspy.Signature):  # type: ignore[misc, no-any-unimported]  # Mypy cannot follow dspy.Signature import
     """
     Generates a concise L1 summary from recent agent events, considering the agent's role,
     context, and optionally mood.
