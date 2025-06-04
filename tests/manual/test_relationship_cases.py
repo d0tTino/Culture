@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
-import pytest
-pytest.skip("Manual verification module", allow_module_level=True)
 """Manual verification tests for relationship dynamics."""
-
 import argparse
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from collections.abc import Awaitable
+from pathlib import Path
 from typing import Callable, Optional
+
+import pytest
 
 # Allow running as standalone script
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.agents.core.base_agent import Agent
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+try:
+    from src.agents.core.base_agent import Agent
+except ImportError:  # pragma: no cover - optional dependency
+    Agent = None
+
+try:
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
+except ImportError:  # pragma: no cover - optional dependency
+    ChromaVectorStoreManager = None
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.sim.knowledge_board import KnowledgeBoard
@@ -23,10 +29,13 @@ from src.sim.simulation import Simulation
 
 try:
     from src.interfaces.discord_bot import SimulationDiscordBot
+
     simulation_discord_bot_class: Optional[type[SimulationDiscordBot]] = SimulationDiscordBot
 except ImportError:  # pragma: no cover - optional dependency
     logging.warning("Discord bot module not found, running without Discord integration.")
     simulation_discord_bot_class = None
+
+pytest.skip("Manual verification module", allow_module_level=True)
 
 FORCED_INTERACTION_SCENARIO = (
     "Agents Alice, Bob, and Carol must discuss and agree on a topic for their next group project. "
@@ -94,7 +103,9 @@ def create_base_simulation(
     sim = Simulation(
         agents=agents,
         vector_store_manager=(
-            None if not use_vector_store else ChromaVectorStoreManager(persist_directory=vector_store_dir)
+            None
+            if not use_vector_store
+            else ChromaVectorStoreManager(persist_directory=vector_store_dir)
         ),
         scenario=scenario,
         discord_bot=discord_bot,
@@ -163,8 +174,12 @@ async def test_case_3_neutral_targeted(use_discord: bool = False) -> None:
     logging.info(f"Updated relationship label: {updated_label}")
     await sim.async_run(5)
     logging.info("TEST CASE 3 VERIFICATION: FINAL RELATIONSHIP STATES")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
-    logging.info(f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
+    logging.info(
+        f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}"
+    )
     logging.info("TEST CASE 3 COMPLETED")
 
 
@@ -176,8 +191,12 @@ async def test_case_4_broadcast(use_discord: bool = False) -> None:
     sim.agents[0].state.relationships["agent_2"] = 0.0
     sim.agents[0].state.relationships["agent_3"] = 0.0
     logging.info("INITIAL RELATIONSHIP STATES:")
-    logging.info(f"Agent agent_1 -> agent_2: {sim.agents[0].state.relationships.get('agent_2', 0.0)}")
-    logging.info(f"Agent agent_1 -> agent_3: {sim.agents[0].state.relationships.get('agent_3', 0.0)}")
+    logging.info(
+        f"Agent agent_1 -> agent_2: {sim.agents[0].state.relationships.get('agent_2', 0.0)}"
+    )
+    logging.info(
+        f"Agent agent_1 -> agent_3: {sim.agents[0].state.relationships.get('agent_3', 0.0)}"
+    )
     logging.info("PERFORMING TARGETED POSITIVE UPDATE TO AGENT_2")
     sim.agents[0].update_relationship("agent_2", 1.0, True)
     logging.info("PERFORMING BROADCAST POSITIVE UPDATE (AFFECTING AGENT_3)")
@@ -200,7 +219,9 @@ async def test_case_4_broadcast(use_discord: bool = False) -> None:
         )
     await sim.async_run(5)
     logging.info("TEST CASE 4 VERIFICATION: FINAL RELATIONSHIP STATES")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
     logging.info("TEST CASE 4 COMPLETED")
 
 
@@ -260,16 +281,24 @@ async def test_case_1_forced_direct_message(use_discord: bool = False) -> None:
     logging.info("STARTING TEST CASE 1 (FORCED): POSITIVE TARGETED INTERACTION")
     sim = create_base_simulation(num_agents=2, steps=1, use_discord=use_discord)
     logging.info("INITIAL RELATIONSHIP STATES:")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
-    logging.info(f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
+    logging.info(
+        f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}"
+    )
     logging.info("DIRECTLY MODIFYING RELATIONSHIP SCORES...")
     sim.agents[0].state.relationships["agent_2"] = 0.5
     logging.info("Set agent_1->agent_2 relationship to 0.5")
     sim.agents[1].state.relationships["agent_1"] = 0.3
     logging.info("Set agent_2->agent_1 relationship to 0.3")
     logging.info("FINAL RELATIONSHIP STATES AFTER DIRECT UPDATES:")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
-    logging.info(f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
+    logging.info(
+        f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}"
+    )
     sim.agents[0].state.update_relationship_history(1, sim.agents[0].state.relationships.copy())
     sim.agents[1].state.update_relationship_history(1, sim.agents[1].state.relationships.copy())
     from src.infra.config import get_relationship_label
@@ -277,8 +306,12 @@ async def test_case_1_forced_direct_message(use_discord: bool = False) -> None:
     agent1_to_agent2_label = get_relationship_label(sim.agents[0].state.relationships["agent_2"])
     agent2_to_agent1_label = get_relationship_label(sim.agents[1].state.relationships["agent_1"])
     logging.info("Relationship Labels:")
-    logging.info(f"Agent {sim.agents[0].agent_id} -> {sim.agents[1].agent_id}: {agent1_to_agent2_label}")
-    logging.info(f"Agent {sim.agents[1].agent_id} -> {sim.agents[0].agent_id}: {agent2_to_agent1_label}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} -> {sim.agents[1].agent_id}: {agent1_to_agent2_label}"
+    )
+    logging.info(
+        f"Agent {sim.agents[1].agent_id} -> {sim.agents[0].agent_id}: {agent2_to_agent1_label}"
+    )
     logging.info("TEST CASE 1 (FORCED) COMPLETED")
 
 
@@ -296,8 +329,12 @@ async def test_case_decay_verification(use_discord: bool = False) -> None:
     sim.agents[0].state.relationship_decay_rate = decay_rate
     sim.agents[1].state.relationship_decay_rate = decay_rate
     logging.info("INITIAL RELATIONSHIP STATES:")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
-    logging.info(f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
+    logging.info(
+        f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}"
+    )
     predicted_values = []
     agent1_score = 0.8
     for step in range(1, 7):
@@ -309,8 +346,12 @@ async def test_case_decay_verification(use_discord: bool = False) -> None:
         logging.info(f"  Step {step}: {value:.4f}")
     await sim.async_run(6)
     logging.info("FINAL RELATIONSHIP STATES AFTER DECAY:")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
-    logging.info(f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
+    logging.info(
+        f"Agent {sim.agents[1].agent_id} relationships: {sim.agents[1].state.relationships}"
+    )
     logging.info("RELATIONSHIP HISTORY (DECAY PROGRESSION):")
     for agent_idx, agent in enumerate(sim.agents):
         logging.info(f"Agent {agent.agent_id} relationship history:")
@@ -360,12 +401,16 @@ async def test_case_4_broadcast_vs_targeted(use_discord: bool = False) -> None:
         if abs(observed_multiplier - targeted_multiplier) < 0.1:
             logging.info("✅ VERIFICATION PASSED: Targeted message multiplier is working correctly")
         else:
-            logging.info("❌ VERIFICATION FAILED: Targeted message multiplier not applying correctly")
+            logging.info(
+                "❌ VERIFICATION FAILED: Targeted message multiplier not applying correctly"
+            )
     else:
         logging.info("Unable to calculate multiplier - broadcast change was 0")
     await sim.async_run(5)
     logging.info("TEST CASE 4 VERIFICATION: FINAL RELATIONSHIP STATES")
-    logging.info(f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}")
+    logging.info(
+        f"Agent {sim.agents[0].agent_id} relationships: {sim.agents[0].state.relationships}"
+    )
     logging.info("TEST CASE 4 COMPLETED")
 
 
@@ -384,16 +429,24 @@ async def test_case_10_targeted_multiplier_comprehensive(use_discord: bool = Fal
     sim.agents[0].update_relationship("agent_2", delta, is_targeted=False)
     broadcast_score = sim.agents[0].state.relationships["agent_2"]
     broadcast_change = broadcast_score - initial_score
-    logging.info(f"Broadcast positive change: {initial_score:.4f} → {broadcast_score:.4f} (change: {broadcast_change:.4f})")
+    logging.info(
+        f"Broadcast positive change: {initial_score:.4f} → {broadcast_score:.4f} (change: {broadcast_change:.4f})"
+    )
     sim.agents[0].state.relationships["agent_2"] = initial_score
-    logging.info(f"Sending targeted positive message (delta = 0.20, multiplier = {targeted_multiplier})")
+    logging.info(
+        f"Sending targeted positive message (delta = 0.20, multiplier = {targeted_multiplier})"
+    )
     sim.agents[0].update_relationship("agent_2", delta, is_targeted=True)
     targeted_score = sim.agents[0].state.relationships["agent_2"]
     targeted_change = targeted_score - initial_score
-    logging.info(f"Targeted positive change: {initial_score:.4f} → {targeted_score:.4f} (change: {targeted_change:.4f})")
+    logging.info(
+        f"Targeted positive change: {initial_score:.4f} → {targeted_score:.4f} (change: {targeted_change:.4f})"
+    )
     if broadcast_change != 0:
         positive_ratio = targeted_change / broadcast_change
-        logging.info(f"Positive ratio: {positive_ratio:.2f}x (Expected: {targeted_multiplier:.2f}x)")
+        logging.info(
+            f"Positive ratio: {positive_ratio:.2f}x (Expected: {targeted_multiplier:.2f}x)"
+        )
         if abs(positive_ratio - targeted_multiplier) < 0.1:
             logging.info("✅ POSITIVE TEST PASSED: Targeted multiplier is working correctly")
         else:
@@ -406,16 +459,24 @@ async def test_case_10_targeted_multiplier_comprehensive(use_discord: bool = Fal
     sim.agents[0].update_relationship("agent_3", delta, is_targeted=False)
     broadcast_score = sim.agents[0].state.relationships["agent_3"]
     broadcast_change = broadcast_score - initial_score
-    logging.info(f"Broadcast negative change: {initial_score:.4f} → {broadcast_score:.4f} (change: {broadcast_change:.4f})")
+    logging.info(
+        f"Broadcast negative change: {initial_score:.4f} → {broadcast_score:.4f} (change: {broadcast_change:.4f})"
+    )
     sim.agents[0].state.relationships["agent_3"] = initial_score
-    logging.info(f"Sending targeted negative message (delta = -0.25, multiplier = {targeted_multiplier})")
+    logging.info(
+        f"Sending targeted negative message (delta = -0.25, multiplier = {targeted_multiplier})"
+    )
     sim.agents[0].update_relationship("agent_3", delta, is_targeted=True)
     targeted_score = sim.agents[0].state.relationships["agent_3"]
     targeted_change = targeted_score - initial_score
-    logging.info(f"Targeted negative change: {initial_score:.4f} → {targeted_score:.4f} (change: {targeted_change:.4f})")
+    logging.info(
+        f"Targeted negative change: {initial_score:.4f} → {targeted_score:.4f} (change: {targeted_change:.4f})"
+    )
     if broadcast_change != 0:
         negative_ratio = targeted_change / broadcast_change
-        logging.info(f"Negative ratio: {negative_ratio:.2f}x (Expected: {targeted_multiplier:.2f}x)")
+        logging.info(
+            f"Negative ratio: {negative_ratio:.2f}x (Expected: {targeted_multiplier:.2f}x)"
+        )
         if abs(negative_ratio - targeted_multiplier) < 0.1:
             logging.info("✅ NEGATIVE TEST PASSED: Targeted multiplier is working correctly")
         else:
@@ -427,7 +488,9 @@ async def test_case_11_dark_forest(use_discord: bool = False) -> None:
     """Test Case 11: Dark Forest Hypothesis Scenario."""
 
     logging.info("STARTING TEST CASE 11: DARK FOREST HYPOTHESIS SCENARIO")
-    sim = create_base_simulation(scenario=DARK_FOREST_SCENARIO, num_agents=4, steps=8, use_discord=use_discord)
+    sim = create_base_simulation(
+        scenario=DARK_FOREST_SCENARIO, num_agents=4, steps=8, use_discord=use_discord
+    )
     await sim.async_run(8)
     logging.info("TEST CASE 11 COMPLETED: See logs for agent strategies and outcomes.")
 

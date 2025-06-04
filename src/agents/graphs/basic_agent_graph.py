@@ -23,8 +23,6 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 from src.infra import config  # Import config for role change parameters
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
 
-from .agent_graph_builder import build_graph
-
 # Module logger
 logger = logging.getLogger(__name__)
 
@@ -907,6 +905,7 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
 
 
 # --- Graph Definition ---
+
 
 def compile_agent_graph() -> Any:
     """Compile and return the Basic Agent Graph executor."""

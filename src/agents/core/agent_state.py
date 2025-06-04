@@ -344,9 +344,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 last_change_step = self.role_history[-1][0] if self.role_history else 0
 
         if (
-            (current_step - last_change_step) < self._role_change_cooldown
-            and last_change_step != -1
-        ):  # Make sure last_change_step is valid
+            current_step - last_change_step
+        ) < self._role_change_cooldown and last_change_step != -1:  # Make sure last_change_step is valid
             logger.debug(
                 f"AGENT_STATE ({self.agent_id}): Role change to {new_role} denied (cooldown period). Current step: {current_step}, Last change: {last_change_step}, Cooldown: {self._role_change_cooldown}"
             )
@@ -638,5 +637,3 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         logger.debug(
             f"Agent {self.name} processed {len(messages)} messages and updated conversation history/relationships."
         )
-
-
