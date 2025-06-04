@@ -25,7 +25,6 @@ ignore = [
     "ANN101",  # Missing type annotation for self in method
     # "ANN102",  # Missing type annotation for cls in classmethod
 ]
-show-source = true
 
 [tool.ruff.flake8-annotations]
 mypy-init-return = true
