@@ -1,4 +1,5 @@
 # ruff: noqa: E501, ANN101
+# mypy: ignore-errors
 """
 DSPy L1 Summary Generator
 

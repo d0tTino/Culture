@@ -10,9 +10,9 @@ import time
 from typing import Any, Callable, Optional, TypeVar, cast
 
 import ollama
-import requests  # type: ignore
+import requests
 from pydantic import BaseModel, ValidationError
-from requests.exceptions import RequestException  # type: ignore
+from requests.exceptions import RequestException
 
 from src.utils.decorators import monitor_llm_call
 

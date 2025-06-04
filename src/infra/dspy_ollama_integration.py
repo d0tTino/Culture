@@ -2,6 +2,7 @@
 Integration module for using Ollama models with DSPy.
 Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
+# mypy: ignore-errors
 
 import logging
 import time

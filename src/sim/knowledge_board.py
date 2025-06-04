@@ -18,7 +18,7 @@ class LoggingList(list[T], Generic[T]):
         logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): clear() called")
         super().clear()
 
-    def __delitem__(self: Self, key: SupportsIndex | slice[Any, Any, Any]) -> None:
+    def __delitem__(self: Self, key: SupportsIndex | slice) -> None:
         if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
             logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): __delitem__[:] called (del self[:])")
         super().__delitem__(key)
