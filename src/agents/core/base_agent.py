@@ -24,7 +24,7 @@ from src.infra import config
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
-from src.utils.async_dspy_manager import AsyncDSPyManager
+from src.shared.async_utils import AsyncDSPyManager
 
 # Import graph types from the new file
 from .agent_graph_types import AgentActionOutput, AgentTurnState  # RESTORE THIS IMPORT

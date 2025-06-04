@@ -11,7 +11,6 @@ import random
 import sys
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
-from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.core.agent_state import AgentState
@@ -23,6 +22,8 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
 from src.infra import config  # Import config for role change parameters
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
+
+from .agent_graph_builder import build_graph
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -907,83 +908,8 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
 
 # --- Graph Definition ---
 
-graph_builder = StateGraph(AgentTurnState)
-
-graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
-graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
-graph_builder.add_node("retrieve_and_summarize_memories", retrieve_and_summarize_memories_node)
-graph_builder.add_node("generate_thought_and_message", generate_thought_and_message_node)
-
-graph_builder.add_node("handle_propose_idea", handle_propose_idea_node)
-graph_builder.add_node("handle_ask_clarification", handle_ask_clarification_node)
-graph_builder.add_node("handle_continue_collaboration", handle_continue_collaboration_node)
-graph_builder.add_node("handle_idle", handle_idle_node)
-graph_builder.add_node("handle_deep_analysis", handle_deep_analysis_node)
-graph_builder.add_node("handle_create_project", handle_create_project_node)
-graph_builder.add_node("handle_join_project", handle_join_project_node)
-graph_builder.add_node("handle_leave_project", handle_leave_project_node)
-graph_builder.add_node("handle_send_direct_message", handle_send_direct_message_node)
-
-graph_builder.add_node("update_state", update_state_node)
-graph_builder.add_node("finalize_message_agent", finalize_message_agent_node)
-graph_builder.add_node("maybe_consolidate_memories", _maybe_consolidate_memories)
-graph_builder.add_node("maybe_prune_l1_memories", _maybe_prune_l1_memories)
-graph_builder.add_node("maybe_prune_l2_memories", _maybe_prune_l2_memories)
-
-graph_builder.set_entry_point("analyze_perception_sentiment")
-graph_builder.add_edge("analyze_perception_sentiment", "prepare_relationship_prompt")
-graph_builder.add_conditional_edges(
-    "prepare_relationship_prompt",
-    route_relationship_context,
-    {
-        "has_relationships": "retrieve_and_summarize_memories",
-        "no_relationships": "retrieve_and_summarize_memories",
-    },
-)
-graph_builder.add_edge("retrieve_and_summarize_memories", "generate_thought_and_message")
-graph_builder.add_conditional_edges(
-    "generate_thought_and_message",
-    route_action_intent,
-    {
-        "handle_propose_idea": "handle_propose_idea",
-        "handle_ask_clarification": "handle_ask_clarification",
-        "handle_continue_collaboration": "handle_continue_collaboration",
-        "handle_idle": "handle_idle",
-        "handle_deep_analysis": "handle_deep_analysis",
-        "handle_create_project": "handle_create_project",
-        "handle_join_project": "handle_join_project",
-        "handle_leave_project": "handle_leave_project",
-        "handle_send_direct_message": "handle_send_direct_message",
-        "update_state": "update_state",
-    },
-)
-
-graph_builder.add_edge("handle_propose_idea", "update_state")
-graph_builder.add_edge("handle_ask_clarification", "update_state")
-graph_builder.add_edge("handle_continue_collaboration", "update_state")
-graph_builder.add_edge("handle_idle", "update_state")
-graph_builder.add_edge("handle_deep_analysis", "update_state")
-graph_builder.add_edge("handle_create_project", "update_state")
-graph_builder.add_edge("handle_join_project", "update_state")
-graph_builder.add_edge("handle_leave_project", "update_state")
-graph_builder.add_edge("handle_send_direct_message", "update_state")
-
-graph_builder.add_edge("update_state", "maybe_consolidate_memories")
-graph_builder.add_edge("maybe_consolidate_memories", "maybe_prune_l1_memories")
-graph_builder.add_edge("maybe_prune_l1_memories", "maybe_prune_l2_memories")
-graph_builder.add_edge("maybe_prune_l2_memories", "finalize_message_agent")
-
-graph_builder.add_conditional_edges(
-    "finalize_message_agent",
-    route_broadcast_decision,
-    {
-        "broadcast": END,
-        "exit": END,
-    },
-)
-
-# Compile the graph (this is the primary, correct compilation)
 try:
+    graph_builder = build_graph()
     agent_graph_executor_instance = graph_builder.compile()
     logger.info(
         "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to agent_graph_executor_instance."
@@ -993,11 +919,8 @@ except Exception as e:
         f"AGENT_GRAPH_COMPILATION_ERROR: CRITICAL ERROR during graph compilation in basic_agent_graph.py: {e}",
         exc_info=True,
     )
-    agent_graph_executor_instance = None  # Ensure it's defined even on failure
+    agent_graph_executor_instance = None
 
 
 def compile_agent_graph() -> Any:
-    """
-    Compiles and returns the Basic Agent Graph executor.
-    """
     return agent_graph_executor_instance
