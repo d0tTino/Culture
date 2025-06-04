@@ -358,19 +358,15 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
                 return score
             else:
                 logger.warning(
-
-                        "Sentiment analysis JSON response missing 'sentiment_score': "
-                        f"'{response_content_str}'. Defaulting to 0.0."
-
+                    "Sentiment analysis JSON response missing 'sentiment_score': "
+                    f"'{response_content_str}'. Defaulting to 0.0."
                 )
                 return 0.0  # Default float score
         except json.JSONDecodeError:
             logger.warning(
-
-                    "Sentiment analysis failed to parse JSON from response: "
-                    f"'{response_content_str}'. "
-                    "Attempting direct string interpretation or defaulting to 0.0."
-
+                "Sentiment analysis failed to parse JSON from response: "
+                f"'{response_content_str}'. "
+                "Attempting direct string interpretation or defaulting to 0.0."
             )
             # Fallback for direct string if previous mock version sent that.
             # This part may need removal if mocks are consistently JSON.

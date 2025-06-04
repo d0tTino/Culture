@@ -50,6 +50,7 @@ from src.agents.dspy_programs.role_thought_generator import get_role_thought_gen
 
 logger = logging.getLogger(__name__)
 
+
 class Agent:
     """
     Represents a basic agent in the simulation environment.

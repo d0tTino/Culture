@@ -2,6 +2,7 @@
 Integration module for using Ollama models with DSPy.
 Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
+
 # mypy: ignore-errors
 
 import logging
@@ -17,12 +18,11 @@ from typing_extensions import Self
 # Import DSPy and Ollama, providing fallbacks when unavailable
 try:
     import dspy
+
     BaseLM = dspy.LM
     DSPY_AVAILABLE = True
 except Exception as e:  # pragma: no cover - optional dependency
-    logging.getLogger(__name__).warning(
-        "DSPy not available; using stub implementations"
-    )
+    logging.getLogger(__name__).warning("DSPy not available; using stub implementations")
 
     class BaseLM:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -55,9 +55,7 @@ except Exception as e:  # pragma: no cover - optional dependency
 try:
     import ollama
 except Exception:  # pragma: no cover - optional dependency
-    logging.getLogger(__name__).warning(
-        "ollama package not installed; using MagicMock stub"
-    )
+    logging.getLogger(__name__).warning("ollama package not installed; using MagicMock stub")
     ollama = MagicMock()
 
 

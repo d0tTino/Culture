@@ -26,12 +26,12 @@ def start_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def option_a_node(state: dict[str, Any]) -> dict[str, Any]:
     print("Routed to option_a_node")
-    return {} # Return empty dict or updated state
+    return {}  # Return empty dict or updated state
 
 
 def option_b_node(state: dict[str, Any]) -> dict[str, Any]:
     print("Routed to option_b_node")
-    return {} # Return empty dict or updated state
+    return {}  # Return empty dict or updated state
 
 
 # Add nodes

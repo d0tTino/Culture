@@ -42,7 +42,7 @@ logger = root_logger  # CHANGED: Assign root_logger to logger, or use root_logge
 
 # Constants
 CHROMA_DB_PATH_CONFLICT = "./chroma_db_test_conflict"
-SCENARIO_CONFLICT = ( # SPLIT
+SCENARIO_CONFLICT = (  # SPLIT
     "A multi-agent simulation where agents with opposing viewpoints interact, "
     "leading to a conflict that a facilitator attempts to manage."
 )
@@ -64,7 +64,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
                 logger.debug(f"Removed old ChromaDB path: {CHROMA_DB_PATH_CONFLICT}")
             except Exception as e:
                 logger.warning(
-                    f"Could not remove old ChromaDB path {CHROMA_DB_PATH_CONFLICT}: {e}" # Potential E501, but let's see what Black/Ruff does
+                    f"Could not remove old ChromaDB path {CHROMA_DB_PATH_CONFLICT}: {e}"  # Potential E501, but let's see what Black/Ruff does
                 )
 
         self.vector_store = ChromaVectorStoreManager(persist_directory=CHROMA_DB_PATH_CONFLICT)
@@ -81,7 +81,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
                 "current_role": "Innovator",
                 "goals": [
                     {
-                        "description": "Promote radical transparency in all communications.", # Potential E501
+                        "description": "Promote radical transparency in all communications.",  # Potential E501
                         "priority": "high",
                     }
                 ],
@@ -188,9 +188,8 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
 
         # --- Step 1: AgentA posts controversial idea ---
         logger.info("Step 1: AgentA (Innovator) posts controversial idea...")
-        controversial_idea_content = ( # SPLIT
-            "All inter-agent communications should be publicly logged for maximum "
-            "transparency."
+        controversial_idea_content = (  # SPLIT
+            "All inter-agent communications should be publicly logged for maximum " "transparency."
         )  # AgentA's stance
 
         initial_ip_a = self.agent_a.state.ip
@@ -203,7 +202,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
         )
 
         # New mocking strategy for Agent A's first turn
-        agent_a_turn1_thought_str = ( # SPLIT
+        agent_a_turn1_thought_str = (  # SPLIT
             "To promote radical transparency, I will propose that all communications be public."
         )
         agent_a_turn1_action_output = AgentActionOutput(
@@ -900,7 +899,9 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             # Agent A's turn was step 3 of the simulation (0-indexed overall steps).
 
             agent_a_message_to_c_found = False
-            for msg in (
+            for (
+                msg
+            ) in (
                 self.simulation.pending_messages_for_next_round
             ):  # Check messages generated THIS turn
                 if (
@@ -1201,8 +1202,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             # It should ideally be better than mood_a_after_processing_msgs (after B's direct hit and C's general facilitation)
             self.assertGreaterEqual(
                 mood_a_after_third_action,
-                mood_a_after_turn2
-                - 0.05,  # Allow very slight dip if action has minor cost aspect
+                mood_a_after_turn2 - 0.05,  # Allow very slight dip if action has minor cost aspect
                 "AgentA's mood should stabilize or improve after taking a constructive action.",
             )
 

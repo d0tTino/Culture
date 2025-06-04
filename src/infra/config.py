@@ -494,7 +494,10 @@ logger = logging.getLogger(__name__)
 # Log loaded configuration for verification (optional, be careful with sensitive data)
 logger.info("Configuration loaded successfully")
 
-def get_config_value_with_override(key: str, default: Any = None, module_name: str = "src.infra.config_default") -> Any:
+
+def get_config_value_with_override(
+    key: str, default: Any = None, module_name: str = "src.infra.config_default"
+) -> Any:
     """Fetches a config value, trying overrides first, then primary, then default."""
     # Dynamically import the configuration module
     try:
@@ -509,7 +512,7 @@ def get_config_value_with_override(key: str, default: Any = None, module_name: s
         return CONFIG_OVERRIDES[key]
     else:
         # If not in overrides, try to get from the primary config module
-        primary_value = getattr(module, str(key), None) # Ensure key is string for getattr
+        primary_value = getattr(module, str(key), None)  # Ensure key is string for getattr
         if primary_value is not None:
             # logger.debug(f"Config key '{key}' found in primary config module '{module_name}'.")
             return primary_value

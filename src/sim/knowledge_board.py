@@ -11,7 +11,8 @@ from typing_extensions import Self
 # Configure logger
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class LoggingList(list[T], Generic[T]):
     def clear(self: Self) -> None:

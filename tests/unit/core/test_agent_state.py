@@ -75,9 +75,9 @@ async def test_agent_state() -> None:
         # Verify the agents have been created with AgentState objects
         for i, agent in enumerate(agents):
             logger.info(f"Verifying agent {i} state structure")
-            assert isinstance(agent.state, AgentState), (
-                f"Agent {i} state is not an AgentState object"
-            )
+            assert isinstance(
+                agent.state, AgentState
+            ), f"Agent {i} state is not an AgentState object"
             logger.info(f"Agent {i} state: {agent.state}")
 
             # Verify the state has the expected fields
@@ -115,9 +115,9 @@ async def test_agent_state() -> None:
             initial_du = agent.state.du
 
             # Verify state object is still valid
-            assert isinstance(agent.state, AgentState), (
-                f"Agent {i} state is not an AgentState object"
-            )
+            assert isinstance(
+                agent.state, AgentState
+            ), f"Agent {i} state is not an AgentState object"
 
             # Check that history fields have been updated
             # Note: We use logging.info instead of assertions here as exact values

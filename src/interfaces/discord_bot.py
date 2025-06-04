@@ -2,6 +2,7 @@
 Discord bot interface for the Culture simulation.
 Provides real-time updates about the simulation to a Discord channel.
 """
+
 # mypy: ignore-errors
 
 import logging
@@ -147,9 +148,7 @@ class SimulationDiscordBot:
         )
         return embed
 
-    def create_knowledge_board_embed(
-        self: Self, agent_id: str, content: str, step: int
-    ) -> Any:
+    def create_knowledge_board_embed(self: Self, agent_id: str, content: str, step: int) -> Any:
         """Creates an embed for Knowledge Board posts"""
         embed = discord.Embed(
             title=f"📝 New Knowledge Board Entry (Step {step})",

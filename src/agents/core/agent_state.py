@@ -42,7 +42,7 @@ def _get_default_role() -> str:
             "AGENT_STATE_DEBUG: ROLE_DU_GENERATION.keys() is empty after list conversion! Cannot choose a default role."
         )
         return "Innovator"
-    chosen_role = str(random.choice(keys_list)) # Cast to str
+    chosen_role = str(random.choice(keys_list))  # Cast to str
     logger.debug(
         f"AGENT_STATE_DEBUG (in _get_default_role): Chosen role by random.choice: {chosen_role}"
     )
@@ -94,11 +94,11 @@ class AgentStateData(BaseModel):
     ip: float = Field(
         default_factory=lambda: float(str(get_config("INITIAL_INFLUENCE_POINTS") or "0"))
     )
-    du: float = Field(
-        default_factory=lambda: float(str(get_config("INITIAL_DATA_UNITS") or "0"))
-    )
+    du: float = Field(default_factory=lambda: float(str(get_config("INITIAL_DATA_UNITS") or "0")))
     relationships: dict[str, float] = Field(default_factory=dict)
-    relationship_history: dict[str, list[tuple[int, float]]] = Field(default_factory=dict)  # Stores snapshots
+    relationship_history: dict[str, list[tuple[int, float]]] = Field(
+        default_factory=dict
+    )  # Stores snapshots
     short_term_memory: deque[dict[str, Any]] = Field(default_factory=deque)
     goals: list[dict[str, Any]] = Field(default_factory=list)
     projects: dict[str, dict[str, Any]] = Field(default_factory=dict)  # project_id: {details}
@@ -124,7 +124,9 @@ class AgentStateData(BaseModel):
     last_level_2_consolidation_step: int = 0
     current_role: str = Field(default_factory=_get_default_role)
     steps_in_current_role: int = 0
-    conversation_history: deque[str] = Field(default_factory=deque)  # Added for process_perceived_messages
+    conversation_history: deque[str] = Field(
+        default_factory=deque
+    )  # Added for process_perceived_messages
 
     # Configuration parameters (will be initialized from global config)
     _max_short_term_memory: int = PrivateAttr()
@@ -181,17 +183,11 @@ class AgentStateData(BaseModel):
         self._relationship_decay_rate = float(
             str(get_config("RELATIONSHIP_DECAY_FACTOR") or "0.01")
         )
-        self._min_relationship_score = float(
-            str(get_config("MIN_RELATIONSHIP_SCORE") or "-1.0")
-        )
-        self._max_relationship_score = float(
-            str(get_config("MAX_RELATIONSHIP_SCORE") or "1.0")
-        )
+        self._min_relationship_score = float(str(get_config("MIN_RELATIONSHIP_SCORE") or "-1.0"))
+        self._max_relationship_score = float(str(get_config("MAX_RELATIONSHIP_SCORE") or "1.0"))
         self._mood_decay_rate = float(str(get_config("MOOD_DECAY_FACTOR") or "0.01"))
         self._mood_update_rate = float(str(get_config("MOOD_UPDATE_RATE") or "0.1"))
-        self._ip_cost_per_message = float(
-            str(get_config("IP_COST_SEND_DIRECT_MESSAGE") or "1.0")
-        )
+        self._ip_cost_per_message = float(str(get_config("IP_COST_SEND_DIRECT_MESSAGE") or "1.0"))
         self._du_cost_per_action = float(str(get_config("DU_COST_PER_ACTION") or "1.0"))
         self._role_change_cooldown = int(str(get_config("ROLE_CHANGE_COOLDOWN") or "10"))
         self._role_change_ip_cost = float(str(get_config("ROLE_CHANGE_IP_COST") or "5.0"))
@@ -348,9 +344,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 last_change_step = self.role_history[-1][0] if self.role_history else 0
 
         if (
-            (current_step - last_change_step) < self._role_change_cooldown
-            and last_change_step != -1
-        ):  # Make sure last_change_step is valid
+            current_step - last_change_step
+        ) < self._role_change_cooldown and last_change_step != -1:  # Make sure last_change_step is valid
             logger.debug(
                 f"AGENT_STATE ({self.agent_id}): Role change to {new_role} denied (cooldown period). Current step: {current_step}, Last change: {last_change_step}, Cooldown: {self._role_change_cooldown}"
             )
@@ -473,16 +468,16 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             else:
                 # Ensure llm_client_config is a dict if it's from Pydantic model
                 config_data = self.llm_client_config
-                if hasattr(config_data, 'model_dump'): # Check if it's a Pydantic model
+                if hasattr(config_data, "model_dump"):  # Check if it's a Pydantic model
                     config_data = cast(dict, config_data.model_dump())
                 elif not isinstance(config_data, dict):
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
                 # Temporarily using LLMClientConfig directly if it's an instance
                 if isinstance(self.llm_client_config, BaseModel):
-                     self.llm_client = LLMClient(config=self.llm_client_config) # type: ignore
-                else: # Assumes it's a dict
-                     self.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+                    self.llm_client = LLMClient(config=self.llm_client_config)  # type: ignore
+                else:  # Assumes it's a dict
+                    self.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
         return self
 
@@ -491,25 +486,25 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             raise ValueError("LLMClient not initialized")
         return cast("LLMClient", self.llm_client)
 
-    def get_memory_retriever(self) -> Any: #VectorStoreRetriever:
+    def get_memory_retriever(self) -> Any:  # VectorStoreRetriever:
         """Returns the memory retriever for the agent."""
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
-        return self.memory_store_manager.get_retriever() # type: ignore
+        return self.memory_store_manager.get_retriever()  # type: ignore
 
     def add_memory(self, memory_text: str, metadata: Optional[dict[str, Any]] = None) -> None:
         """Adds a memory to the agent's memory store."""
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized to add memory.")
-        self.memory_store_manager.add_memory(memory_text, metadata=metadata) # type: ignore
+        self.memory_store_manager.add_memory(memory_text, metadata=metadata)  # type: ignore
 
     async def aretrieve_relevant_memories(
         self, query: str, top_k: int = 5
-    ) -> list[tuple[Any, float]]: # list[tuple[Document, float]]
+    ) -> list[tuple[Any, float]]:  # list[tuple[Document, float]]
         """Retrieves relevant memories for the agent."""
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized to retrieve memories.")
-        return await self.memory_store_manager.aretrieve_relevant_memories(query, top_k=top_k) # type: ignore
+        return await self.memory_store_manager.aretrieve_relevant_memories(query, top_k=top_k)  # type: ignore
 
     def reset_state(self) -> None:
         """Resets the agent's state to its initial configuration."""
@@ -532,26 +527,42 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         # Exclude fields that are not easily serializable or not needed for persistence
         # or rehydration
         return self.model_dump(
-            exclude={"llm_client", "memory_store_manager", "action_intent_model", "thought_model", "l1_summary_model", "mock_llm_client"}
+            exclude={
+                "llm_client",
+                "memory_store_manager",
+                "action_intent_model",
+                "thought_model",
+                "l1_summary_model",
+                "mock_llm_client",
+            }
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], llm_client_config_override: Optional[Any] = None, memory_store_manager_override: Optional[Any] = None) -> "AgentState": # memory_store_manager: Optional["VectorStoreManager"]
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        llm_client_config_override: Optional[Any] = None,
+        memory_store_manager_override: Optional[Any] = None,
+    ) -> "AgentState":  # memory_store_manager: Optional["VectorStoreManager"]
         """Deserializes an agent state from a dictionary."""
         # Use overrides if provided, otherwise use from data or let Pydantic handle defaults
         if llm_client_config_override:
-            data['llm_client_config'] = llm_client_config_override
+            data["llm_client_config"] = llm_client_config_override
         if memory_store_manager_override:
-            data['memory_store_manager'] = memory_store_manager_override
+            data["memory_store_manager"] = memory_store_manager_override
 
         # Ensure history fields are in correct format
         if "mood_history" in data and data["mood_history"] is not None:
-            data["mood_history"] = [(int(turn), float(m_val)) for turn, m_val in data["mood_history"]]
+            data["mood_history"] = [
+                (int(turn), float(m_val)) for turn, m_val in data["mood_history"]
+            ]
 
         if "relationship_history" in data and data["relationship_history"] is not None:
             processed_rh = {}
             for agent_name, history_list in data["relationship_history"].items():
-                processed_rh[agent_name] = [(int(turn), float(r_val)) for turn, r_val in history_list]
+                processed_rh[agent_name] = [
+                    (int(turn), float(r_val)) for turn, r_val in history_list
+                ]
             data["relationship_history"] = processed_rh
 
         # Ensure relationships (current scores) are float
@@ -591,85 +602,102 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 current_val = getattr(self, private_attr_name)
                 casted_value = type(current_val)(value)
                 setattr(self, private_attr_name, casted_value)
-                logger.info(f"AGENT_STATE ({self.agent_id}): Updated dynamic config '{key}' to '{casted_value}'.")
+                logger.info(
+                    f"AGENT_STATE ({self.agent_id}): Updated dynamic config '{key}' to '{casted_value}'."
+                )
             except (ValueError, TypeError) as e:
-                logger.error(f"AGENT_STATE ({self.agent_id}): Failed to update dynamic config '{key}' with value '{value}'. Error: {e}")
+                logger.error(
+                    f"AGENT_STATE ({self.agent_id}): Failed to update dynamic config '{key}' with value '{value}'. Error: {e}"
+                )
         else:
-            logger.warning(f"AGENT_STATE ({self.agent_id}): Attempted to update non-existent or non-private dynamic config '{key}'.")
+            logger.warning(
+                f"AGENT_STATE ({self.agent_id}): Attempted to update non-existent or non-private dynamic config '{key}'."
+            )
 
     def process_perceived_messages(self, messages: list[dict[str, Any]]) -> None:
         """Processes perceived messages and updates agent state (placeholder)."""
         for msg in messages:
             sender = msg.get("sender_name", "Unknown")
             content = msg.get("content", "")
-            self.conversation_history.append(f"{sender}: {content}") # Add to conversation history
+            self.conversation_history.append(f"{sender}: {content}")  # Add to conversation history
 
             # Example: Update relationship based on a simplistic sentiment from message
             # This is highly naive and should be replaced by actual sentiment analysis
             try:
                 # Attempt to parse a numeric value from content as sentiment
                 # This is just for demonstrating relationship update, not a real approach
-                sentiment_value = float(content.split()[0]) # Naive: assumes first word is a number
+                sentiment_value = float(
+                    content.split()[0]
+                )  # Naive: assumes first word is a number
                 self.update_relationship(sender, sentiment_value, is_targeted=True)
             except (ValueError, IndexError):
                 # If content doesn't start with a number, use neutral sentiment
                 self.update_relationship(sender, 0.0, is_targeted=True)
 
-        logger.debug(f"Agent {self.name} processed {len(messages)} messages and updated conversation history/relationships.")
+        logger.debug(
+            f"Agent {self.name} processed {len(messages)} messages and updated conversation history/relationships."
+        )
 
 
 # Example usage
 if __name__ == "__main__":
     from src.infra.llm_client import LLMClientConfig  # Late import for example
 
-    llm_config_instance = LLMClientConfig(model_name="test-model", api_key="test-key") # type: ignore
+    llm_config_instance = LLMClientConfig(model_name="test-model", api_key="test-key")  # type: ignore
 
     agent_data_example = {
         "agent_id": "agent1",
         "name": "TestAgent",
-        "current_role": "Innovator", # Matches default factory if not provided
+        "current_role": "Innovator",  # Matches default factory if not provided
         "mood_level": 0.5,
         "mood_history": [(0, 0.5), (1, 0.6)],
         "relationships": {"agent2": 0.8, "agent3": -0.2},
-        "relationship_history": {
-            "agent2": [(0, 0.7), (1, 0.8)],
-            "agent3": [(0, -0.1), (1, -0.2)]
-        },
+        "relationship_history": {"agent2": [(0, 0.7), (1, 0.8)], "agent3": [(0, -0.1), (1, -0.2)]},
         "ip": 100.0,
         "du": 50.0,
-        "llm_client_config": llm_config_instance.model_dump(), # Pass as dict
+        "llm_client_config": llm_config_instance.model_dump(),  # Pass as dict
         # other fields can use defaults
     }
 
     agent_state = AgentState(**agent_data_example)
-    print(f"AgentState created: {agent_state.name}, Role: {agent_state.current_role}, Mood: {agent_state.mood_level:.2f}")
+    print(
+        f"AgentState created: {agent_state.name}, Role: {agent_state.current_role}, Mood: {agent_state.mood_level:.2f}"
+    )
     print(f"LLM Client from state: {agent_state.get_llm_client()}")
 
     serialized = agent_state.to_dict()
     print(f"Serialized state: {serialized}")
 
     # Test deserialization with overrides
-    new_llm_config = LLMClientConfig(model_name="override-model", api_key="override-key") # type: ignore
-    deserialized_state = AgentState.from_dict(serialized, llm_client_config_override=new_llm_config.model_dump())
-    print(f"Deserialized state: {deserialized_state.name}, LLM Model: {deserialized_state.get_llm_client().config.model_name if deserialized_state.get_llm_client() else 'None'}") # type: ignore
+    new_llm_config = LLMClientConfig(model_name="override-model", api_key="override-key")  # type: ignore
+    deserialized_state = AgentState.from_dict(
+        serialized, llm_client_config_override=new_llm_config.model_dump()
+    )
+    print(f"Deserialized state: {deserialized_state.name}, LLM Model: {deserialized_state.get_llm_client().config.model_name if deserialized_state.get_llm_client() else 'None'}")  # type: ignore
 
     agent_state.update_mood(sentiment_score=0.5)
     print(f"Mood after update: {agent_state.mood_level:.2f}, History: {agent_state.mood_history}")
 
     agent_state.update_relationship("agent2", sentiment_score=-0.3)
-    print(f"Relationship with agent2: {agent_state.relationships.get('agent2'):.2f}, History: {agent_state.relationship_history.get('agent2')}")
+    print(
+        f"Relationship with agent2: {agent_state.relationships.get('agent2'):.2f}, History: {agent_state.relationship_history.get('agent2')}"
+    )
 
     agent_state.reset_state()
     print(f"Mood after reset: {agent_state.mood_level}, Mood History: {agent_state.mood_history}")
-    print(f"Relationships after reset: {agent_state.relationships}, Relationship History: {agent_state.relationship_history}")
+    print(
+        f"Relationships after reset: {agent_state.relationships}, Relationship History: {agent_state.relationship_history}"
+    )
 
-    agent_state.update_dynamic_config("mood_decay_rate", 0.05) # Example dynamic update
+    agent_state.update_dynamic_config("mood_decay_rate", 0.05)  # Example dynamic update
     # This should reflect in subsequent mood updates if logic uses self._mood_decay_rate
 
-    agent_state.process_perceived_messages([
-        {"sender_name": "agent2", "content": "0.9 Great idea!"},
-        {"sender_name": "agent3", "content": "-0.5 I disagree."}
-    ])
+    agent_state.process_perceived_messages(
+        [
+            {"sender_name": "agent2", "content": "0.9 Great idea!"},
+            {"sender_name": "agent3", "content": "-0.5 I disagree."},
+        ]
+    )
     print(f"Conversation history: {agent_state.conversation_history}")
     print(f"Relationships with agent2 after msg: {agent_state.relationships.get('agent2'):.2f}")
     print(f"Relationships with agent3 after msg: {agent_state.relationships.get('agent3'):.2f}")

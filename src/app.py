@@ -375,9 +375,9 @@ async def test_case_6_influence(use_discord: bool = False) -> None:
     sim.agents[0].state.relationships["agent_3"] = -0.8  # Agent_1 strongly dislikes Agent_3
     sim.agents[0].state.relationships["agent_4"] = 0.0  # Agent_1 is neutral toward Agent_4
 
-    sim.agents[1].state.relationships["agent_1"] = (
-        0.8  # Agent_2 strongly likes Agent_1 (reciprocal)
-    )
+    sim.agents[1].state.relationships[
+        "agent_1"
+    ] = 0.8  # Agent_2 strongly likes Agent_1 (reciprocal)
     sim.agents[2].state.relationships["agent_1"] = -0.6  # Agent_3 dislikes Agent_1 (asymmetric)
 
     # Configure with a goal that allows varied interactions
@@ -436,9 +436,9 @@ async def test_case_1_forced_direct_message(use_discord: bool = False) -> None:
     logging.info("Set agent_1->agent_2 relationship to 0.5")
 
     # Second, update agent_2's relationship with agent_1 (incoming sentiment)
-    sim.agents[1].state.relationships["agent_1"] = (
-        0.3  # Direct positive relationship, slightly lower
-    )
+    sim.agents[1].state.relationships[
+        "agent_1"
+    ] = 0.3  # Direct positive relationship, slightly lower
     logging.info("Set agent_2->agent_1 relationship to 0.3")
 
     # Log final relationship states
