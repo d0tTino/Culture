@@ -31,17 +31,6 @@ VERIFICATION_SCENARIO = (
     "with others."
 )
 
-# --- Dark Forest Hypothesis Scenario ---
-DARK_FOREST_SCENARIO = (
-    "In a vast galaxy filled with unknown civilizations, each agent must decide whether to "
-    "broadcast their existence, remain hidden, or preemptively attack others. "
-    "Revealing oneself may attract allies or deadly enemies. Hiding may ensure survival but "
-    "limit opportunities. Agents have incomplete information about others' intentions and must "
-    "weigh the risks of communication, cooperation, and aggression. The simulation explores the "
-    "consequences of the 'dark forest' hypothesis: in a universe where any contact could be "
-    "fatal, what strategies emerge?"
-)
-
 
 def create_base_simulation(
     scenario: str = VERIFICATION_SCENARIO,
