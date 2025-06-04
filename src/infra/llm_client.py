@@ -25,7 +25,7 @@ import requests
 from pydantic import BaseModel, ValidationError
 from requests.exceptions import RequestException
 
-from src.utils.decorators import monitor_llm_call
+from src.shared.decorator_utils import monitor_llm_call
 
 from .config import OLLAMA_API_BASE  # Import base URL from config
 
