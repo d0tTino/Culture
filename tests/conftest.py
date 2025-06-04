@@ -41,10 +41,9 @@ configure_warning_filters()  # Apply filters
 def is_ollama_running() -> Optional[bool]:
     """Check if Ollama server is running by attempting to connect to localhost:11434"""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.1)  # Short timeout for quick check
-        s.connect(("localhost", 11434))
-        s.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)  # Short timeout for quick check
+            s.connect(("localhost", 11434))
         return True
     except (OSError, socket.timeout):
         return False
