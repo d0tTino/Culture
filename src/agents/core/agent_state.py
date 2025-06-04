@@ -638,3 +638,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         logger.debug(
             f"Agent {self.name} processed {len(messages)} messages and updated conversation history/relationships."
         )
+
+
+# Example usage
+if __name__ == "__main__":
+    pass
