@@ -215,6 +215,9 @@ Culture.ai/
 │   ├── dspy_action_intent_experiment.py  # DSPy experiment for action intent selection
 │   ├── dspy_action_intent_report.md      # Report on DSPy action intent experiment
 │   └── test_dspy_ollama_optimizer_integration.py  # DSPy-Ollama integration tests
+├── examples/                  # Usage examples and small scripts
+│   ├── minimal_repro.py
+│   └── test_synthesizer.py
 ├── scripts/                   # Utility scripts for project management
 │   └── cleanup_temp_db.py     # Script to clean up temporary ChromaDB directories
 ├── src/                       # Source code
@@ -510,6 +513,7 @@ python -m pytest --cov=src --cov-report=term-missing tests/
 - `docs/` — Documentation (architecture, testing, coding standards)
 - `scripts/` — Utility and migration scripts
 - `experiments/` — Research and optimization scripts
+- `examples/` — Small runnable examples
 
 ### Contributing
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
