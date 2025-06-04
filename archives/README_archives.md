@@ -1,5 +1,7 @@
 # MUS Tuning RAG Assessment Process
 
+**Historical:** This document is preserved for reference and may not reflect the current project layout.
+
 This directory contains all the files needed for evaluating the RAG performance of different MUS pruning configurations.
 
 ## Step 1: Understand the Assessment Process

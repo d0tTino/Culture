@@ -514,8 +514,7 @@ python -m pytest --cov=src --cov-report=term-missing tests/
 - `docs/` — Documentation (architecture, testing, coding standards)
 - `scripts/` — Utility and migration scripts
 - `experiments/` — Research and optimization scripts
-- `examples/` — Sample scripts demonstrating basic usage
-
+- `archives/` — Historical documents (e.g., [README_archives.md](archives/README_archives.md))
 
 ### Contributing
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
