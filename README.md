@@ -211,6 +211,7 @@ Culture.ai/
 ├── data/                      # Data files and logs
 │   └── logs/                  # Log files from app and tests
 ├── docs/                      # Documentation files
+├── examples/                  # Example scripts
 ├── experiments/               # Experiment scripts and reports
 │   ├── dspy_action_intent_experiment.py  # DSPy experiment for action intent selection
 │   ├── dspy_action_intent_report.md      # Report on DSPy action intent experiment
@@ -513,7 +514,8 @@ python -m pytest --cov=src --cov-report=term-missing tests/
 - `docs/` — Documentation (architecture, testing, coding standards)
 - `scripts/` — Utility and migration scripts
 - `experiments/` — Research and optimization scripts
-- `examples/` — Small runnable examples
+- `examples/` — Sample scripts demonstrating basic usage
+
 
 ### Contributing
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
