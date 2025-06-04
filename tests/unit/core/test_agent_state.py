@@ -217,6 +217,12 @@ def test_agent_state():
             logger.info(f"DU history: {len(agent.state.du_history)} entries")
             logger.info(f"Role history: {len(agent.state.role_history)} entries")
             logger.info(f"Project history: {len(agent.state.project_history)} entries")
+
+            # Ensure critical histories have at least one entry after the simulation
+            assert len(agent.state.mood_history) > 0, "Mood history should not be empty after simulation"
+            assert len(agent.state.ip_history) > 0, "IP history should not be empty after simulation"
+            assert len(agent.state.du_history) > 0, "DU history should not be empty after simulation"
+            assert len(agent.state.role_history) > 0, "Role history should not be empty after simulation"
             
             # Verify role history is correctly tracking the current role
             if agent.state.role_history:
