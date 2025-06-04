@@ -519,7 +519,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         # This part depends on how models are loaded and if they need to be reset or reloaded.
         # For now, we'll assume they are stateless or reloaded as needed.
         # If models have internal state that needs resetting, add that logic here.
-        print(f"Agent {self.name} state has been reset.")
+        logger.info(f"Agent {self.name} state has been reset.")
 
     def to_dict(self) -> dict[str, Any]:
         """Serializes the agent state to a dictionary."""
