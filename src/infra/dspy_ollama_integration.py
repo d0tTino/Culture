@@ -65,6 +65,12 @@ except Exception:  # pragma: no cover - optional dependency
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dspy_ollama")
 
+__all__ = [
+    "dspy",
+    "configure_dspy_with_ollama",
+    "OllamaLM",
+]
+
 
 class OllamaLM(BaseLM):  # type: ignore[misc]
     """

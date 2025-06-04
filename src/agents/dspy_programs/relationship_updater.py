@@ -3,7 +3,7 @@
 import logging
 import os
 
-import dspy
+from src.infra.dspy_ollama_integration import dspy
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +107,7 @@ def get_relationship_updater() -> object:
     Returns the optimized module if available, else the base, else a failsafe.
     """
     try:
-        import dspy
-
-        from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+        from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
         # Try to configure DSPy
         try:

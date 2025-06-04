@@ -21,9 +21,7 @@ logger = logging.getLogger(__name__)
 logger.info("====== IMPORTING DSPY RAG CONTEXT SYNTHESIZER MODULE ======")
 
 try:
-    import dspy
-
-    from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+    from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
     logger.info("Successfully imported DSPy module")
 except ImportError as e:

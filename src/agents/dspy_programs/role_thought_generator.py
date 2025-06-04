@@ -3,7 +3,7 @@
 import logging
 import os
 
-import dspy
+from src.infra.dspy_ollama_integration import dspy
 
 # from src.infra.dspy_ollama_integration import OllamaLM, configure_dspy_ollama_async # REMOVED
 

@@ -15,9 +15,7 @@ import logging
 import os
 from typing import Optional
 
-import dspy
-
-from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
+from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -423,7 +423,7 @@ def generate_structured_output(
                 mock_data = _MOCK_RESPONSES[model_name]
                 if isinstance(mock_data, dict):
                     field_dict: dict[str, Any] = {}
-                    for field_name, field in response_model.model_fields.items():
+                    for field_name, field in response_model.model_fields.items():  # type: ignore[attr-defined]
                         if field.is_required():
                             if field.annotation is str:
                                 field_dict[field_name] = str(
@@ -464,7 +464,7 @@ def generate_structured_output(
                     return bool(f.is_required())
 
             else:
-                fields = response_model.__fields__.items()  # type: ignore[attr-defined]
+                fields = response_model.__fields__.items()
 
                 def is_required(f: Any) -> bool:
                     return bool(cast("Any", f).required)
@@ -500,7 +500,7 @@ def generate_structured_output(
     else:
         schema_json = json.dumps(response_model.schema(), indent=2)
     example: dict[str, Any] = {}
-    for field_name, field in response_model.model_fields.items():
+    for field_name, field in response_model.model_fields.items():  # type: ignore[attr-defined]
         if field.annotation is str:
             example[field_name] = "Example text for " + field_name
         elif field.annotation is str or field.annotation is None:
