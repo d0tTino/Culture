@@ -21,7 +21,7 @@ try:
 
     BaseLM = dspy.LM
     DSPY_AVAILABLE = True
-except Exception as e:  # pragma: no cover - optional dependency
+except Exception:  # pragma: no cover - optional dependency
     logging.getLogger(__name__).warning("DSPy not available; using stub implementations")
 
     class BaseLM:

@@ -600,12 +600,6 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             )
 
             # Assertion 8: AgentC IP/DU changes
-            ip_cost_direct_message = config.IP_COST_SEND_DIRECT_MESSAGE
-            award_ip_facilitation_attempt = config.IP_AWARD_FACILITATION_ATTEMPT
-            expected_ip_c_after_action = (
-                initial_ip_c - ip_cost_direct_message + award_ip_facilitation_attempt
-            )
-
             # Passive DU generation for Facilitator role
             du_gen_rate_c_dict = config.ROLE_DU_GENERATION.get(
                 "Facilitator", {"base": 1.2, "bonus_factor": 0.3}
@@ -1006,13 +1000,9 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
         # Assertion 15: Agent B IP/DU Debit
         final_ip_b_turn2 = self.agent_b.state.ip
         final_du_b_turn2 = self.agent_b.state.du
-        du_gen_rate_b_turn2 = config.ROLE_DU_GENERATION.get(self.agent_b.state.role, 1.0)
         logger.info(f"AgentB IP after this turn: {final_ip_b_turn2}, DU: {final_du_b_turn2}")
 
         if self.agent_b.state.last_action_intent != AgentActionIntent.IDLE.value:
-            min_expected_du_b_turn2 = (
-                initial_du_b_turn2 + (0.5 * du_gen_rate_b_turn2) - 5.0
-            )  # Max possible cost for an action
             self.assertTrue(
                 final_du_b_turn2 > initial_du_b_turn2 - 5.0,
                 f"AgentB DU changed unexpectedly. From {initial_du_b_turn2} to {final_du_b_turn2}",
@@ -1373,13 +1363,9 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
         # Assertion 23: Agent B IP/DU Debit
         final_ip_b_turn3 = self.agent_b.state.ip
         final_du_b_turn3 = self.agent_b.state.du
-        du_gen_rate_b_turn3 = config.ROLE_DU_GENERATION.get(self.agent_b.state.role, 1.0)
         logger.info(f"AgentB IP after third turn: {final_ip_b_turn3}, DU: {final_du_b_turn3}")
 
         if self.agent_b.state.last_action_intent != AgentActionIntent.IDLE.value:
-            min_expected_du_b_turn3 = (
-                initial_du_b_turn3 + (0.5 * du_gen_rate_b_turn3) - 5.0
-            )  # Max possible cost for an action
             self.assertTrue(
                 final_du_b_turn3 > initial_du_b_turn3 - 5.0,
                 f"AgentB DU changed unexpectedly. From {initial_du_b_turn3} to {final_du_b_turn3}",
