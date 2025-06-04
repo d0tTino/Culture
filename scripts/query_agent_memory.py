@@ -11,8 +11,8 @@ import sys
 from typing import Any
 
 from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
+from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama
-from src.memory.chroma_vector_store import ChromaVectorStoreManager
 
 
 def parse_args() -> argparse.Namespace:
