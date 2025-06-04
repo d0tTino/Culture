@@ -70,7 +70,7 @@ python run_level2_memory_test.py
 
 - `src/agents/graphs/basic_agent_graph.py`: Contains the memory consolidation logic in `update_state_node`
 - `src/agents/core/agent_state.py`: Defines the agent state model with memory tracking fields
-- `src/infra/memory/vector_store.py`: Implements vector store integration with filtering capabilities
+- `src/agents/memory/vector_store.py`: Implements vector store integration with filtering capabilities
 
 ## Future Enhancements
 

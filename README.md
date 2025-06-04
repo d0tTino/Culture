@@ -196,10 +196,10 @@ python -m src.app --discord
 
 ### Configuring a Simulation Scenario
 
-You can modify the `SIMULATION_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
+You can modify the `DEFAULT_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
 
 ```python
-SIMULATION_SCENARIO = "The team's objective is to collaboratively design a specification for a decentralized communication protocol suitable for autonomous AI agents operating in a resource-constrained environment. Key considerations are efficiency, security, and scalability."
+DEFAULT_SCENARIO = "The team's objective is to collaboratively design a specification for a decentralized communication protocol suitable for autonomous AI agents operating in a resource-constrained environment. Key considerations are efficiency, security, and scalability."
 ```
 
 ## Project Structure
@@ -211,11 +211,6 @@ Culture.ai/
 ├── data/                      # Data files and logs
 │   └── logs/                  # Log files from app and tests
 ├── docs/                      # Documentation files
-├── examples/                  # Example scripts
-├── experiments/               # Experiment scripts and reports
-│   ├── dspy_action_intent_experiment.py  # DSPy experiment for action intent selection
-│   ├── dspy_action_intent_report.md      # Report on DSPy action intent experiment
-│   └── test_dspy_ollama_optimizer_integration.py  # DSPy-Ollama integration tests
 ├── examples/                  # Usage examples and small scripts
 │   ├── minimal_repro.py
 │   └── test_synthesizer.py
@@ -429,9 +424,6 @@ The framework leverages DSPy for optimizing agent action intent selection:
 - **BootstrapFewShot Optimization**: Optimized action intent selection using BootstrapFewShot to learn from examples
 - **Role-Appropriate Actions**: Demonstrated that optimized decision-making resulted in actions aligned with agent roles (Facilitator, Analyzer, Innovator)
 - **Result Validation**: Verified that optimized selections consistently produced justifications showing understanding of role, goals, and current situation
-
-Detailed documentation is available in `experiments/dspy_action_intent_report.md`.
-
 ### Asynchronous DSPy Program Management (AsyncDSPyManager)
 
 All DSPy program calls (for memory summarization, action intent selection, and relationship updating) are now managed asynchronously via the `AsyncDSPyManager`. This enables non-blocking, parallel DSPy execution for all agents, with robust timeout and error handling—if a DSPy call is slow or fails, a failsafe output is returned and the simulation continues smoothly.
@@ -495,7 +487,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
 ### Running the Simulation
 Run a basic simulation (default parameters):
 ```bash
-python -m src.app --simulation_steps 5
+python -m src.app --steps 5
 ```
 
 ### Running Tests
@@ -513,7 +505,7 @@ python -m pytest --cov=src --cov-report=term-missing tests/
 - `tests/` — Unit and integration tests
 - `docs/` — Documentation (architecture, testing, coding standards)
 - `scripts/` — Utility and migration scripts
-- `experiments/` — Research and optimization scripts
+- `examples/` — Example and experimental scripts
 - `archives/` — Historical documents (e.g., [README_archives.md](archives/README_archives.md))
 
 ### Contributing

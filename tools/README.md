@@ -68,7 +68,7 @@ python tools/visualize_agent_memory.py --agent_id agent_1 --output_format html -
 ### Dependencies
 
 The tool depends on:
-- The ChromaVectorStoreManager class from src/infra/memory/vector_store.py
+- The ChromaVectorStoreManager class from src/agents/memory/vector_store.py
 - Python standard libraries (argparse, logging, etc.)
 - Access to a valid ChromaDB instance with agent memories
 
