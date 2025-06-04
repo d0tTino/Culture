@@ -908,19 +908,20 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
 
 # --- Graph Definition ---
 
-try:
-    graph_builder = build_graph()
-    agent_graph_executor_instance = graph_builder.compile()
-    logger.info(
-        "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to agent_graph_executor_instance."
-    )
-except Exception as e:
-    logger.critical(
-        f"AGENT_GRAPH_COMPILATION_ERROR: CRITICAL ERROR during graph compilation in basic_agent_graph.py: {e}",
-        exc_info=True,
-    )
-    agent_graph_executor_instance = None
-
-
 def compile_agent_graph() -> Any:
-    return agent_graph_executor_instance
+    """Compile and return the Basic Agent Graph executor."""
+    from .agent_graph_builder import build_graph
+
+    try:
+        graph_builder = build_graph()
+        executor = graph_builder.compile()
+        logger.info(
+            "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to executor."
+        )
+        return executor
+    except Exception as e:  # pragma: no cover - compilation rarely fails
+        logger.critical(
+            f"AGENT_GRAPH_COMPILATION_ERROR: CRITICAL ERROR during graph compilation in basic_agent_graph.py: {e}",
+            exc_info=True,
+        )
+        return None
