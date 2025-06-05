@@ -7,14 +7,21 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-try:  # Support pydantic < 2 if accidentally installed
+try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
     from typing import Any as ValidationInfo
 
-    from pydantic import validator as field_validator
+    from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
+
+    def field_validator(*fields: str, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
+        """Shim to mimic the pydantic v2 ``field_validator`` API."""
+        mode = kwargs.pop("mode", "after")
+        if mode == "before":
+            kwargs["pre"] = True
+        return _pydantic_validator(*fields, **kwargs)
 
     def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore
         def decorator(fn: Any) -> Any:
