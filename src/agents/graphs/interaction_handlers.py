@@ -49,6 +49,9 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
 # --- Simple vertical slice handlers ---
 
 _RELATIONSHIP_INCREMENT = 0.1
+_RELATIONSHIP_REPAIR_BOOST = 1.5
+_UNLOCK_THRESHOLD = 0.5
+_UNLOCKED_CAPABILITY = "collaborate"
 
 
 def handle_propose_idea(
@@ -71,4 +74,18 @@ def handle_retrieve_and_update(agent: AgentAttributes, memory_store: ChromaMemor
     author = meta.get("author")
     if not author:
         return
-    agent.relationships[author] = agent.relationships.get(author, 0.0) + _RELATIONSHIP_INCREMENT
+    previous = agent.relationships.get(author, 0.0)
+    delta = _RELATIONSHIP_INCREMENT
+    if previous < 0.0 and delta > 0.0:
+        delta *= _RELATIONSHIP_REPAIR_BOOST
+
+    new_score = max(-1.0, min(1.0, previous + delta))
+    agent.relationships[author] = new_score
+
+    # Update momentum
+    momentum_prev = agent.relationship_momentum.get(author, 0.0)
+    agent.relationship_momentum[author] = momentum_prev + delta
+
+    # Unlock capability based on threshold
+    if new_score >= _UNLOCK_THRESHOLD:
+        agent.unlocked_capabilities.add(_UNLOCKED_CAPABILITY)
