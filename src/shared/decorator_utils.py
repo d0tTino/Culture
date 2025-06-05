@@ -1,13 +1,14 @@
 import functools
 import json
-import logging
 import sys
 import time
 import uuid
 from typing import Any, Callable, Optional, ParamSpec, TypeVar
 
+from src.shared.logging_utils import get_logger
+
 # Setup a dedicated logger for LLM performance metrics
-llm_perf_logger = logging.getLogger("llm_performance")
+llm_perf_logger = get_logger("llm_performance")
 
 P = ParamSpec("P")
 R = TypeVar("R")
