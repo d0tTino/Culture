@@ -68,26 +68,50 @@ class ChromaVectorStoreManager:
     - Usage statistics tracking for advanced memory pruning
     """
 
-    def __init__(self: Self, persist_directory: str = "./chroma_db"):
-        """
-        Initialize the vector store manager with a persistent ChromaDB client.
+    def __init__(
+        self: Self,
+        persist_directory: str = "./chroma_db",
+        embedding_function: Any | None = None,
+    ) -> None:
+        """Initialize the vector store manager.
 
         Args:
-            persist_directory (str): Path where ChromaDB will persist data
+            persist_directory: Path where ChromaDB will persist data.
+            embedding_function: Optional embedding function to use. If not
+                provided, ``SentenceTransformerEmbeddingFunction`` is used. This
+                parameter allows tests to provide a lightweight stub so that the
+                heavy ``sentence-transformers`` dependency isn't required.
         """
         # Ensure the directory exists
         os.makedirs(persist_directory, exist_ok=True)
 
-        # Initialize embedding function using sentence-transformers
-        self.embedding_function: Any = SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
-        )
+        if embedding_function is None:
+            try:
+                embedding_function = SentenceTransformerEmbeddingFunction(
+                    model_name="all-MiniLM-L6-v2"
+                )
+            except Exception:  # pragma: no cover - dependency missing
+                logger.warning("sentence-transformers not available, using dummy embeddings")
+
+                def _dummy_embedding(texts: Sequence[str]) -> list[list[float]]:
+                    return [[0.0] * 384 for _ in texts]
+
+                embedding_function = _dummy_embedding
+
+        self.embedding_function: Any = embedding_function
 
         # Initialize the persistent ChromaDB client
         logger.info(
             f"Initializing ChromaDB client with persistence directory: {persist_directory}"
         )
-        self.client: Any = chromadb.PersistentClient(path=persist_directory)
+        if hasattr(chromadb, "PersistentClient"):
+            self.client = chromadb.PersistentClient(path=persist_directory)
+        else:  # pragma: no cover - old chromadb
+            from chromadb.config import Settings
+
+            self.client = chromadb.Client(
+                Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory)
+            )
 
         # Get or create a collection for agent memories
         collection_name = "agent_memories"
@@ -1213,6 +1237,32 @@ class ChromaVectorStoreManager:
             f"{len(ids_to_prune)} candidates."
         )
         return ids_to_prune
+
+    def prune_memories_hybrid(
+        self: Self,
+        l1_mus_threshold: float = 0.2,
+        l2_mus_threshold: float = 0.3,
+        l2_age_days: int = 30,
+        l1_min_age_days: int = 0,
+        l2_min_age_days: int = 0,
+    ) -> int:
+        """Prune memories using both MUS and age-based criteria."""
+
+        ids_to_delete: list[str] = []
+
+        l1_ids = self.get_l1_memories_for_mus_pruning(l1_mus_threshold, l1_min_age_days)
+        ids_to_delete.extend(l1_ids)
+
+        l2_ids = self.get_l2_memories_for_mus_pruning(l2_mus_threshold, l2_min_age_days)
+        ids_to_delete.extend(l2_ids)
+
+        old_l2 = self.get_l2_summaries_older_than(l2_age_days)
+        ids_to_delete.extend([i for i in old_l2 if i not in ids_to_delete])
+
+        if ids_to_delete:
+            self.delete_memories_by_ids(ids_to_delete)
+
+        return len(ids_to_delete)
 
     def get_embedding(self: Self, text: str) -> list[float]:
         """
