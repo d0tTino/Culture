@@ -54,6 +54,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "ROLE_CHANGE_COOLDOWN": 3,
     "IP_AWARD_FOR_PROPOSAL": 5,
     "IP_COST_TO_POST_IDEA": 2,
+    "DU_AWARD_FOR_PROPOSAL": 1,
     "IP_COST_CREATE_PROJECT": 10,
     "IP_COST_JOIN_PROJECT": 1,
     "IP_AWARD_FACILITATION_ATTEMPT": 3,
@@ -120,6 +121,7 @@ FLOAT_CONFIG_KEYS = [
 INT_CONFIG_KEYS = [
     "IP_AWARD_FOR_PROPOSAL",
     "IP_COST_TO_POST_IDEA",
+    "DU_AWARD_FOR_PROPOSAL",
     "IP_COST_CREATE_PROJECT",
     "IP_COST_JOIN_PROJECT",
     "IP_AWARD_FACILITATION_ATTEMPT",
@@ -382,6 +384,9 @@ DU_AWARD_IDEA_ACKNOWLEDGED = int(
 DU_AWARD_SUCCESSFUL_ANALYSIS = int(
     get_config("DU_AWARD_SUCCESSFUL_ANALYSIS")
 )  # DU awarded to Analyzer for useful critique
+DU_AWARD_FOR_PROPOSAL = int(
+    get_config("DU_AWARD_FOR_PROPOSAL")
+)  # DU awarded when an agent proposes an idea
 DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = int(
     get_config("DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE")
 )  # DU bonus for referencing a board entry

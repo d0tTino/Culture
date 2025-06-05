@@ -9,6 +9,7 @@ import logging
 from typing import Any, Optional
 
 import discord
+from discord.ext import commands
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ class SimulationDiscordBot:
     role changes, and other significant state changes.
     """
 
-    def __init__(self, bot_token: str, channel_id: int) -> None:
+    def __init__(self: Self, bot_token: str, channel_id: int) -> None:
         """
         Initialize the Discord bot with token and target channel.
 
@@ -348,3 +349,34 @@ class SimulationDiscordBot:
             logger.info("Discord bot stopped")
         except Exception as e:
             logger.error(f"Error stopping Discord bot: {e}")
+
+
+# --- Minimal command interface for manual testing ---
+
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+def get_llm_latency() -> int:
+    """Stub metric for LLM latency in milliseconds."""
+    return 0
+
+
+def get_kb_size() -> int:
+    """Stub metric for Knowledge Board size."""
+    return 0
+
+
+@bot.command(name="say")
+async def say(ctx: commands.Context, *, message: str) -> None:
+    """Echo a user-provided message for smoke testing."""
+    await ctx.send(f"Simulated message received: {message}")
+
+
+@bot.command(name="stats")
+async def stats(ctx: commands.Context) -> None:
+    """Return basic runtime statistics."""
+    stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
+    await ctx.send(stats_text)
