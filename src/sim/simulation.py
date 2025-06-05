@@ -26,18 +26,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-# Test DSPy import
-try:
-    logging.info("SIMULATION: Attempting to import DSPy role_thought_generator as a test...")
-
-    logging.info("SIMULATION: Successfully imported DSPy role_thought_generator!")
-except ImportError as e:
-    logging.error(f"SIMULATION: Failed to import DSPy role_thought_generator: {e}")
-    import traceback
-
-    logging.error(f"SIMULATION: Import traceback: {traceback.format_exc()}")
-
-# Regular imports follow...
 
 # Configure the logger for this module
 logger = logging.getLogger(__name__)

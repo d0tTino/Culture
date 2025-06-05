@@ -5,10 +5,9 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Any
 
-project_root = str(Path(__file__).parent.parent)
-sys.path.append(project_root)
+# Add the project root to the Python path for direct script execution
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
