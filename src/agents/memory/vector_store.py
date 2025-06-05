@@ -1214,6 +1214,32 @@ class ChromaVectorStoreManager:
         )
         return ids_to_prune
 
+    def prune_memories_hybrid(
+        self: Self,
+        l1_mus_threshold: float = 0.2,
+        l2_mus_threshold: float = 0.3,
+        l2_age_days: int = 30,
+        l1_min_age_days: int = 0,
+        l2_min_age_days: int = 0,
+    ) -> int:
+        """Prune memories using both MUS and age-based criteria."""
+
+        ids_to_delete: list[str] = []
+
+        l1_ids = self.get_l1_memories_for_mus_pruning(l1_mus_threshold, l1_min_age_days)
+        ids_to_delete.extend(l1_ids)
+
+        l2_ids = self.get_l2_memories_for_mus_pruning(l2_mus_threshold, l2_min_age_days)
+        ids_to_delete.extend(l2_ids)
+
+        old_l2 = self.get_l2_summaries_older_than(l2_age_days)
+        ids_to_delete.extend([i for i in old_l2 if i not in ids_to_delete])
+
+        if ids_to_delete:
+            self.delete_memories_by_ids(ids_to_delete)
+
+        return len(ids_to_delete)
+
     def get_embedding(self: Self, text: str) -> list[float]:
         """
         Get the embedding for a piece of text using the embedding function.
