@@ -479,7 +479,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```
 6. **Configure environment variables:**
    - Copy `.env.example` to `.env` and edit as needed:
-     - `OLLAMA_BASE_URL` (e.g., http://localhost:11434)
+    - `OLLAMA_API_BASE` (e.g., http://localhost:11434)
      - `WEAVIATE_URL` (e.g., http://localhost:8080)
      - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
    - See `.env.example` and `docs/testing.md` for details.
@@ -489,6 +489,14 @@ Run a basic simulation (default parameters):
 ```bash
 python -m src.app --steps 5
 ```
+
+### Walking Vertical Slice
+To verify your local setup with actual LLM calls, run the minimal demo script:
+```bash
+python -m examples.walking_vertical_slice
+```
+This spins up two agents for a few steps using your local Ollama instance. See
+[docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
 
 ### Running Tests
 Run the full test suite:

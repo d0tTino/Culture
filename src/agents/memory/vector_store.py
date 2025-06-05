@@ -13,13 +13,15 @@ import os
 import time
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, TypeVar, Union, cast
 
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
+
+from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
@@ -132,6 +134,9 @@ class ChromaVectorStoreManager:
             f"'{role_collection_name}' loaded/created from "
             f"'{persist_directory}'."
         )
+
+        # Initialize usage tracking manager
+        self.tracking_manager = MemoryTrackingManager(self.collection)
 
         # For tracking memory retrieval performance
         self.retrieval_times: list[float] = []
@@ -275,99 +280,11 @@ class ChromaVectorStoreManager:
             increment_count (bool): Whether to increment the retrieval count
                 (set to False for metadata-only lookups)
         """
-        if not memory_ids:
-            return
-
-        try:
-            # Get the current metadata for all memories
-            results = self.collection.get(ids=memory_ids, include=["metadatas"])
-
-            if not results or "metadatas" not in results or not results["metadatas"]:
-                logger.warning(f"No metadata found for memories: {memory_ids}")
-                return
-
-            current_time = datetime.utcnow().isoformat()
-            updated_metadatas = []
-
-            # Update each memory's usage statistics
-            for i, memory_id in enumerate(memory_ids):
-                if results["metadatas"] is not None and i < len(results["metadatas"]):
-                    metadata = dict(results["metadatas"][i])
-
-                    # Increment retrieval count only if this is a true retrieval
-                    if increment_count:
-                        retrieval_count = int(metadata.get("retrieval_count", 0)) + 1
-                        metadata["retrieval_count"] = retrieval_count
-                        if "first_retrieved_at" not in metadata:
-                            metadata["first_retrieved_at"] = (
-                                datetime.now().astimezone(timezone.utc).isoformat()
-                            )
-                        metadata["last_retrieved_at"] = (
-                            datetime.now().astimezone(timezone.utc).isoformat()
-                        )
-
-                    # Update last retrieved timestamp
-                    metadata["last_retrieved_timestamp"] = current_time
-
-                    # Update relevance score if provided and this is a true retrieval
-                    if (
-                        increment_count
-                        and relevance_scores
-                        and i < len(relevance_scores)
-                        and relevance_scores[i] is not None
-                    ):
-                        relevance_score = float(relevance_scores[i])
-                        accumulated_score = (
-                            float(metadata.get("accumulated_relevance_score", 0.0))
-                            + relevance_score
-                        )
-                        relevance_count = int(metadata.get("retrieval_relevance_count", 0)) + 1
-
-                        metadata["accumulated_relevance_score"] = accumulated_score
-                        metadata["retrieval_relevance_count"] = relevance_count
-
-                        # Log detailed tracking information at debug level
-                        logger.debug(
-                            f"Memory {memory_id}: Updated relevance stats - score: "
-                            f"{relevance_score:.3f}, new total: {accumulated_score:.3f}, "
-                            f"count: {relevance_count}"
-                        )
-
-                    updated_metadatas.append(metadata)
-
-            # Update the metadata in ChromaDB
-            if updated_metadatas:
-                self.collection.update(
-                    ids=memory_ids,
-                    metadatas=cast(list[ChromaMeta], updated_metadatas),
-                )
-
-                # Log more detailed update information
-                if increment_count:
-                    logger.debug(
-                        f"Updated usage statistics for {len(memory_ids)} "
-                        f"memories at {current_time}"
-                    )
-                    # Log a sample memory update for verification
-                    if updated_metadatas:
-                        sample = updated_metadatas[0]
-                        logger.debug(
-                            f"Sample memory update - ID: {memory_ids[0]}, "
-                            f"retrieval_count: {sample.get('retrieval_count')}, "
-                            f"relevance_count: {sample.get('retrieval_relevance_count', 0)}"
-                        )
-
-        except Exception as e:
-            logger.error(f"Error updating memory usage statistics: {e}", exc_info=True)
-
-            # Attempt more detailed error diagnosis
-            try:
-                if memory_ids:
-                    logger.error(f"Memory IDs that failed update: {memory_ids[:5]}...")
-                if relevance_scores:
-                    logger.error(f"Relevance scores sample: {relevance_scores[:5]}...")
-            except Exception:
-                pass  # Suppress any errors in the error handling itself
+        self.tracking_manager.update_usage_stats(
+            memory_ids,
+            relevance_scores,
+            increment_count=increment_count,
+        )
 
     def retrieve_relevant_memories(
         self: Self, agent_id: str, query: str, k: int = 3, include_usage_stats: bool = False
@@ -1046,65 +963,10 @@ class ChromaVectorStoreManager:
             return []
 
     def _calculate_mus(self: Self, metadata: dict[str, Any]) -> float:
-        """
-        Calculates the Memory Utility Score (MUS) for a memory.
-        MUS = (0.4 x Retrieval Frequency Score) + (0.4 x Relevance Score) + (0.2 x Recency Score)
-        Thresholds: L1=0.2, L2=0.3 (see docs/architecture.md)
-        """
-        import math
-        from datetime import datetime
-
-        # Get values with defaults if missing
-        try:
-            retrieval_count = int(metadata.get("retrieval_count", 0))
-            accumulated_relevance_score = float(metadata.get("accumulated_relevance_score", 0.0))
-            retrieval_relevance_count = int(metadata.get("retrieval_relevance_count", 0))
-            last_retrieved = str(metadata.get("last_retrieved_timestamp", ""))
-        except Exception:
-            return 0.0
-
-        # RFS - Retrieval Frequency Score
-        rfs = math.log(1 + retrieval_count)
-
-        # RS - Relevance Score
-        rs = (
-            (accumulated_relevance_score / retrieval_relevance_count)
-            if retrieval_relevance_count > 0
-            else 0.0
-        )
-
-        # RecS - Recency Score
-        recs = 0.0
-        if last_retrieved:
-            try:
-                last_dt = datetime.fromisoformat(last_retrieved)
-                now = datetime.utcnow()
-
-                # Special handling for test environments:
-                # If the last_retrieved_timestamp is in the future compared to current time,
-                # it may be because we're in a test with mocked dates.
-                # In that case, use a very small days_since value to give it a high recency score.
-                if last_dt > now:
-                    days_since = 0.01  # Very recent - practically just accessed
-                else:
-                    days_since = (now - last_dt).total_seconds() / (24 * 3600)
-                days_since = max(0, days_since)
-
-                recs = 1.0 / (1.0 + days_since)
-            except Exception as e:
-                logger.warning(f"Invalid last_retrieved_timestamp format: {last_retrieved} ({e})")
-                recs = 0.0
-
-        # MUS - Memory Utility Score
-        mus = (0.4 * rfs) + (0.4 * rs) + (0.2 * recs)
-
-        # Debugging output for important memories
-        if retrieval_count > 5 or rs > 0.7:
-            logger.debug(
-                f"High-usage memory MUS calculation: rfs={rfs:.3f}, rs={rs:.3f}, "
-                f"recs={recs:.3f}, final mus={mus:.3f}"
-            )
-
+        """Calculate the Memory Utility Score (MUS) for a memory."""
+        mus = self.tracking_manager.calculate_mus(metadata)
+        if metadata.get("retrieval_count", 0) > 5 or mus > 0.7:
+            logger.debug("High-usage memory MUS calculation: %.3f", mus)
         return mus
 
     def get_l1_memories_for_mus_pruning(
