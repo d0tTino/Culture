@@ -53,13 +53,14 @@ def generate_text(prompt, model="mistral:latest", temperature=0.7):
     """Generate text completion from Ollama."""
     import time
     import logging
+    from src.shared.logging_utils import get_logger
     import uuid
     
     # Create unique request ID for correlation
     request_id = str(uuid.uuid4())[:8]
     
     # Setup logging
-    llm_logger = logging.getLogger("llm_performance")
+    llm_logger = get_logger("llm_performance")
     
     # Capture start time with high precision
     start_time = time.perf_counter()
@@ -152,6 +153,7 @@ import functools
 import time
 import logging
 import json
+from src.shared.logging_utils import get_logger
 import uuid
 from typing import Callable, Any
 
@@ -167,7 +169,7 @@ def monitor_llm_call(model_param: str = "model", context: str = None):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Setup logging
-            llm_logger = logging.getLogger("llm_performance")
+            llm_logger = get_logger("llm_performance")
             
             # Create request ID and get start time
             request_id = str(uuid.uuid4())[:8]
@@ -270,6 +272,7 @@ import json
 import statistics
 import threading
 from typing import Dict, List, Optional
+from src.shared.logging_utils import get_logger
 from contextlib import contextmanager
 
 class LLMPerformanceMonitor:
@@ -278,7 +281,7 @@ class LLMPerformanceMonitor:
     def __init__(self, aggregation_interval: int = 60):
         self.metrics_store: List[Dict] = []
         self.lock = threading.Lock()
-        self.logger = logging.getLogger("llm_performance")
+        self.logger = get_logger("llm_performance")
         self.aggregation_interval = aggregation_interval
         self.last_aggregation = time.time()
     
