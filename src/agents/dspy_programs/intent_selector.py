@@ -24,7 +24,7 @@ class _StubLM(dspy.LM):
 class _CallableLM(dspy.LM):
     """Wrap a simple callable so it can be used as a DSPy LM."""
 
-    def __init__(self: Self, fn: Callable[[str | None], object]) -> None:
+    def __init__(self: Self, fn: Callable[[str | None], str | list[str]]) -> None:
         super().__init__(model="callable-lm")
         self.fn = fn
 
@@ -48,7 +48,10 @@ class IntentPrompt(dspy.Signature):
 class IntentSelectorProgram:
     """Minimal DSPy program that selects an intent."""
 
-    def __init__(self: Self, lm: dspy.LM | Callable[[str | None], object] | None = None) -> None:
+    def __init__(
+        self: Self,
+        lm: dspy.LM | Callable[[str | None], str | list[str]] | None = None,
+    ) -> None:
         if lm is None:
             self.lm = _StubLM()
         elif isinstance(lm, dspy.LM):  # type: ignore[misc]
