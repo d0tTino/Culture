@@ -86,8 +86,21 @@ To add a new warning filter:
 3. Document it in this file
 4. Verify the filter works by running the tests
 
+## Command-Line Control
+
+You can enable or disable these filters when running the simulation:
+
+```bash
+python -m src.app --no-warning-filters        # show all warnings
+python -m src.app --log-suppressed-warnings   # keep filters but log them
+```
+
+Use `--no-warning-filters` for debugging noisy dependencies, and
+`--log-suppressed-warnings` to record suppressed messages without
+polluting the console.
+
 ## Potential Future Improvements
 
 - Add command-line flag to enable/disable warning filtering for debugging
 - Implement more granular filtering by module or specific warning location
-- Add warning reporting tools to collect statistics on suppressed warnings 
+- Add warning reporting tools to collect statistics on suppressed warnings

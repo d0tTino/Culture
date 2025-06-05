@@ -8,6 +8,7 @@ from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
+from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
@@ -48,7 +49,7 @@ def create_simulation(
             else:
                 logging.warning("Discord bot not ready, running without integration.")
 
-    agents = [Agent(agent_id=f"agent_{i+1}", name=f"Agent_{i+1}") for i in range(num_agents)]
+    agents = [Agent(agent_id=f"agent_{i + 1}", name=f"Agent_{i + 1}") for i in range(num_agents)]
 
     sim = Simulation(
         agents=agents,
@@ -80,12 +81,27 @@ def parse_args() -> argparse.Namespace:
         default="./chroma_db",
         help="Directory for vector store persistence.",
     )
+    parser.add_argument(
+        "--no-warning-filters",
+        action="store_true",
+        help="Disable default warning filters.",
+    )
+    parser.add_argument(
+        "--log-suppressed-warnings",
+        action="store_true",
+        help="Log warnings that would otherwise be suppressed.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
+
+    configure_warning_filters(
+        apply_filters=not args.no_warning_filters,
+        log_suppressed=args.log_suppressed_warnings,
+    )
 
     sim = create_simulation(
         num_agents=args.agents,
