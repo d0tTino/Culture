@@ -12,9 +12,7 @@ class _StubLM(dspy.LM):
     def __init__(self: Self) -> None:
         super().__init__(model="stub-model")
 
-    def __call__(
-        self: Self, prompt: str | None = None, *args: object, **kwargs: object
-    ) -> str:
+    def __call__(self: Self, prompt: str | None = None, *args: object, **kwargs: object) -> str:
         return "PROPOSE_IDEA"
 
 
