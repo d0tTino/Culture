@@ -56,8 +56,10 @@ class IntentSelectorProgram:
             self.lm = _StubLM()
         elif isinstance(lm, dspy.LM):  # type: ignore[misc]
             self.lm = lm
-        else:
+        elif callable(lm):
             self.lm = _CallableLM(lm)
+        else:
+            raise TypeError("lm must be a dspy.LM instance or callable")
 
         dspy.settings.configure(lm=self.lm)
         self._predict = dspy.Predict(IntentPrompt)
