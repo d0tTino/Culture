@@ -12,8 +12,11 @@ def test_agent_b_retrieve_and_update(tmp_path: Path) -> None:
     memory = ChromaMemoryStore(persist_directory=str(tmp_path))
     memory.add_documents(["Idea from A"], [{"author": "A", "timestamp": 0}])
 
-    state_b = AgentAttributes(id="B", mood=0.0, goals=[], resources={}, relationships={"A": 0.0})
+    state_b = AgentAttributes(id="B", mood=0.0, goals=[], resources={}, relationships={"A": -0.4})
 
-    handle_retrieve_and_update(state_b, memory)
+    for _ in range(8):
+        handle_retrieve_and_update(state_b, memory)
 
-    assert state_b.relationships["A"] > 0.0
+    assert state_b.relationships["A"] >= 0.2
+    assert state_b.relationship_momentum["A"] > 0.0
+    assert "collaborate" in state_b.unlocked_capabilities

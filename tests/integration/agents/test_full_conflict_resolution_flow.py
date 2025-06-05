@@ -13,10 +13,11 @@ def test_full_a_then_b(tmp_path: Path) -> None:
     state_a = AgentAttributes(
         id="A", mood=0.0, goals=["innovate"], resources={}, relationships={"B": 0.0}
     )
-    state_b = AgentAttributes(id="B", mood=0.0, goals=[], resources={}, relationships={"A": 0.0})
+    state_b = AgentAttributes(id="B", mood=0.0, goals=[], resources={}, relationships={"A": -0.5})
 
     handle_propose_idea(state_a, memory, memory)
     assert state_a.relationships["B"] == 0.0
 
     handle_retrieve_and_update(state_b, memory)
-    assert state_b.relationships["A"] > 0.0
+    assert state_b.relationships["A"] > -0.5
+    assert state_b.relationship_momentum["A"] > 0.0

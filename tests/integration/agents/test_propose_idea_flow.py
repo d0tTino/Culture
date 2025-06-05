@@ -21,3 +21,4 @@ def test_agent_a_propose_idea_roundtrip(tmp_path: Path) -> None:
 
     results = memory.query("All inter-agent communications", top_k=1)
     assert len(results) == 1
+    assert not state_a.unlocked_capabilities
