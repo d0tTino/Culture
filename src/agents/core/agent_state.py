@@ -3,17 +3,25 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    ValidationInfo,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, Field, PrivateAttr
+
+try:  # Support pydantic < 2 if accidentally installed
+    from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
+except ImportError:  # pragma: no cover - fallback for old pydantic
+    from typing import Any as ValidationInfo
+
+    from pydantic import validator as field_validator
+
+    ConfigDict = dict  # type: ignore[misc]
+
+    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore
+        def decorator(fn: Any) -> Any:
+            return fn
+
+        return decorator
+
 
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
