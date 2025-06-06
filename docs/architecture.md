@@ -353,7 +353,7 @@ All DSPy program modules in `src/agents/dspy_programs/` are strictly compliant w
 
 ### Overview
 
-The `AsyncDSPyManager` (`src/utils/async_dspy_manager.py`) is a core infrastructure component that manages all DSPy program calls asynchronously using a thread pool. It provides:
+The `AsyncDSPyManager` (`src/shared/async_utils.py`) is a core infrastructure component that manages all DSPy program calls asynchronously using a thread pool. It provides:
 - **Non-blocking execution** of DSPy programs, improving simulation responsiveness and throughput.
 - **Timeout handling**: If a DSPy call exceeds the allowed time, the manager returns a failsafe output.
 - **Graceful error recovery**: Exceptions in DSPy calls are caught, logged, and replaced with safe fallback results.

@@ -49,7 +49,7 @@ async def test_dspy_call_timeout_in_graph(
     simple_agent: Agent, async_manager: AsyncDSPyManager, caplog: LogCaptureFixture
 ) -> None:
     caplog.set_level(
-        logging.WARNING, logger="src.utils.async_dspy_manager"
+        logging.WARNING, logger="src.shared.async_utils"
     )  # For timeout test, we expect WARNING
     caplog.set_level(logging.DEBUG)  # General debug for other logs if needed
 

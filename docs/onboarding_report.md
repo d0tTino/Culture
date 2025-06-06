@@ -34,7 +34,7 @@ Culture.ai employs a modular architecture. The main components are:
     *   The agent's turn is a graph with nodes for perception analysis, memory retrieval (RAG), thought generation, action selection, and state updates.
     *   DSPy is increasingly used for core logic within these nodes, such as `L1SummaryGenerator` and `action_intent_selector`.
 *   **Simulation Environment (`src/sim/simulation.py`):** Manages the overall simulation, agent scheduling, and interactions with shared resources like the `KnowledgeBoard`.
-*   **Infrastructure (`src/infra/`):** Contains supporting modules for configuration (`config.py`), LLM client interaction (`llm_client.py`, `dspy_ollama_integration.py`), logging (`logging_config.py`), and LLM mocking for tests (`llm_mock_helper.py`).
+*   **Infrastructure (`src/infra/`):** Contains supporting modules for configuration (`config.py`), LLM client interaction (`llm_client.py`, `dspy_ollama_integration.py`), logging (`logging_config.py`), and LLM mocking for tests (`llm_mocks.py`).
 *   **DSPy Programs (`src/agents/dspy_programs/`):** Houses DSPy programs for various agent tasks like summary generation, thought generation, and action/intent selection. Compiled/optimized versions are often used.
 
 ## 4. Coding Standards & Practices
@@ -67,7 +67,7 @@ Adherence to coding standards is crucial for maintaining a clean and collaborati
 *   **Testing:**
     *   Unit tests (`tests/unit/`) and integration tests (`tests/integration/`) are vital.
     *   Follow naming conventions like `test_{feature}_{scenario}`.
-    *   `unittest` is the primary framework, with mocking utilities in `tests/utils/mock_llm.py` and `src/infra/llm_mock_helper.py`.
+    *   `unittest` is the primary framework, with mocking utilities in `tests/utils/mock_llm.py` and `src/shared/llm_mocks.py`.
 *   **Git & Version Control:** (Assumed standard practices, but a `code_review_process.md` exists in `docs/`)
 
 ## 5. Key Files & Directories

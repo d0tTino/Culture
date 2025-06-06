@@ -4,7 +4,9 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 
+import json
 import logging
 import sys
 import time
@@ -45,12 +47,36 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
+    class Settings(SimpleNamespace):
+        def configure(self, **kwargs: Any) -> None:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    settings = Settings()
+
+    class Predict:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, *args: Any, **kwargs: Any) -> SimpleNamespace:
+            lm = getattr(settings, "lm", BaseLM())
+            result = lm(*args, **kwargs)
+            if isinstance(result, list):
+                result = result[0]
+            try:
+                data = json.loads(str(result))
+                intent = data.get("intent", str(result))
+            except Exception:
+                intent = str(result)
+            return SimpleNamespace(intent=intent)
+
     dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=lambda **_: None),
+        settings=settings,
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
+        Predict=Predict,
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
