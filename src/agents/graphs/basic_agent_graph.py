@@ -24,6 +24,13 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
 from src.infra import config  # Import config for role change parameters
 
+from .interaction_handlers import (  # noqa: F401 - imported for re-export
+    handle_create_project_node,
+    handle_join_project_node,
+    handle_leave_project_node,
+    handle_send_direct_message_node,
+)
+
 # Module logger
 logger = logging.getLogger(__name__)
 
@@ -390,22 +397,6 @@ def route_relationship_context(state: AgentTurnState) -> str:
     if agent_state_obj and agent_state_obj.relationships:
         return "has_relationships"
     return "no_relationships"
-
-
-def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
-    return dict(state)
-
-
-def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
-    return dict(state)
-
-
-def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
-    return dict(state)
-
-
-def handle_send_direct_message_node(state: AgentTurnState) -> dict[str, Any]:
-    return dict(state)
 
 
 def route_action_intent(state: AgentTurnState) -> str:
