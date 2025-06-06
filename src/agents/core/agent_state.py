@@ -8,9 +8,23 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import Self
 
-try:  # Support pydantic >= 2 if installed
-    from pydantic import ConfigDict, field_validator, model_validator
-except ImportError:  # pragma: no cover - fallback for old pydantic
+try:  # Prefer pydantic v2 APIs if available
+    import pydantic
+    from pydantic import ConfigDict, field_validator as _field_validator, model_validator
+
+    if pydantic.__version__.startswith("2"):
+
+        def field_validator(
+            *fields: str, **kwargs: Any
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            """Wrap pydantic v2 ``field_validator`` but ignore ``allow_reuse``."""
+
+            kwargs.pop("allow_reuse", None)
+            return _field_validator(*fields, **kwargs)
+
+    else:  # pragma: no cover - pydantic v1 will raise ImportError below
+        raise ImportError
+except Exception:  # pragma: no cover - fallback for pydantic v1
     from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
@@ -18,11 +32,12 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
     def field_validator(
         *fields: str, **kwargs: Any
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
-        """Shim to mimic the pydantic v2 ``field_validator`` API."""
+        """Shim to mimic the pydantic v2 ``field_validator`` API for v1."""
+
         mode = kwargs.pop("mode", "after")
         pre = mode == "before"
 
-        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        def decorator(fn: Callable[..., Any]) -> Callable[[type[object], Any], Any]:
             def wrapper(
                 cls: type[object],
                 value: Any,
