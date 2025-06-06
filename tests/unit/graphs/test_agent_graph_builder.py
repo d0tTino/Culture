@@ -2,7 +2,8 @@ import pytest
 
 pytest.importorskip("langgraph")
 
-from langgraph.graph.graph import START, END, Graph
+from langgraph.graph.graph import END, START, Graph
+
 from src.agents.graphs.agent_graph_builder import build_graph
 
 
