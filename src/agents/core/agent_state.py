@@ -163,7 +163,7 @@ class AgentStateData(BaseModel):
     _neutral_relationship_learning_rate: float = PrivateAttr()
     _targeted_message_multiplier: float = PrivateAttr()
 
-    @field_validator("mood_level", mode="before", allow_reuse=True)
+    @field_validator("mood_level", mode="before")
     @classmethod
     def check_mood_level_type_before(cls, v: Any) -> Any:
         if not isinstance(v, (float, int)):
@@ -180,7 +180,7 @@ class AgentStateData(BaseModel):
             # If it cannot be coerced, Pydantic will raise a validation error later if not a float
         return v
 
-    @field_validator("mood_level", mode="after", allow_reuse=True)
+    @field_validator("mood_level", mode="after")
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
@@ -307,9 +307,11 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return 0.0
         return self.relationship_history[-1][agent_name]
 
-    @field_validator("memory_store_manager", mode="before", allow_reuse=True)
+    @field_validator("memory_store_manager", mode="before")
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
+        if value is None:
+            return None
         if hasattr(value, "get_retriever"):  # Check for a specific method
             return value
         raise ValueError("Invalid memory_store_manager provided")
@@ -347,3 +349,16 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
+
+    # ------------------------------------------------------------------
+    # Serialization helpers
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a plain dictionary representation of the agent state."""
+        return self.model_dump()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AgentState":
+        """Reconstruct an AgentState from ``to_dict`` output."""
+        return cls.model_validate(data)
