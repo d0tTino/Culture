@@ -4,9 +4,12 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
-# ruff: noqa: ANN101, ANN102
+    class _BaseLM:
 
-import json
+    class _Predict:
+    BaseLM = _BaseLM
+    Predict = _Predict
+    Prediction = Prediction
 import logging
 import sys
 import time
