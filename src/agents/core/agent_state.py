@@ -6,6 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pydantic import BaseModel, Field, PrivateAttr
+from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
@@ -16,7 +17,9 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
 
     ConfigDict = dict  # type: ignore[misc]
 
-    def field_validator(*fields: str, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
+    def field_validator(
+        *fields: str, **kwargs: Any
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
         """Shim to mimic the pydantic v2 ``field_validator`` API."""
         mode = kwargs.pop("mode", "after")
         if mode == "before":
@@ -236,7 +239,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -280,7 +282,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             # Add other relevant metrics here if needed for collective tracking
         }
 
-
     def __hash__(self) -> int:
         # Pydantic models are not hashable by default if they have mutable fields like lists/dicts.
         # For use in sets or as dict keys, if needed, a specific hash can be implemented.
@@ -305,10 +306,21 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return 0.0
         return self.relationship_history[-1][agent_name]
 
+    def to_dict(self: Self) -> dict[str, Any]:
+        """Serialize state to a plain dictionary."""
+        return self.model_dump(exclude={"memory_store_manager"})
+
+    @classmethod
+    def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
+        """Deserialize state from a dictionary."""
+        return cls.model_validate(data)
+
     @field_validator("memory_store_manager", mode="before")
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
-        if hasattr(value, "get_retriever"):  # Check for a specific method
+        if value is None:
+            return None
+        if hasattr(value, "get_retriever"):
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
@@ -345,4 +357,3 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
-

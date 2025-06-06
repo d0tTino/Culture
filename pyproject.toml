@@ -39,6 +39,7 @@ suppress-none-returning = true
 "tests/integration/test_dynamic_role_change.py" = ["E501"]
 "tests/integration/**.py" = ["E402"]
 "src/shared/llm_mocks.py" = ["ANN001", "ANN002", "ANN003", "ANN204"]
+"src/agents/core/agent_state.py" = ["ANN101", "ANN102"]
 
 [tool.mypy]
 python_version = "3.10"
