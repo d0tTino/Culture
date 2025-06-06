@@ -348,53 +348,32 @@ def configure_dspy_with_ollama(
 
 # === AsyncDSPyManager Design (Task 137 Phase 2) ===
 
+# The AsyncDSPyManager class previously lived in this module as a placeholder
+# design. It has since been fully implemented in ``src.shared.async_utils`` and
+# all references have been updated to import it from there.  The stub below is
+# retained only for historical context and is commented out to avoid accidental
+# use.
 
-class AsyncDSPyManager:
-    """
-    Manages asynchronous execution of DSPy program calls with robust error handling and timeouts.
-    Intended to allow non-blocking DSPy calls from agents, with result retrieval and
-    fallback support.
-    """
-
-    def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
-        """
-        Initialize the async manager with a worker pool and default timeout.
-        Args:
-            max_workers (int): Maximum number of concurrent DSPy calls.
-            default_timeout (float): Default timeout for DSPy calls in seconds.
-        """
-
-    async def submit(
-        self: Self,
-        dspy_callable: object,
-        *args: object,
-        timeout: float | None = None,
-        **kwargs: object,
-    ) -> object:
-        """
-        Submit a DSPy program call to be executed asynchronously.
-        Args:
-            dspy_callable: The DSPy program or function to call.
-            *args, **kwargs: Arguments to pass to the DSPy call.
-            timeout (float, optional): Timeout for this call.
-        Returns:
-            An asyncio.Future or similar handle for result retrieval.
-        """
-
-    async def get_result(self: Self, future: object, default: object = None) -> object:
-        """
-        Await and retrieve the result of a submitted DSPy call.
-        Args:
-            future: The handle returned by submit().
-            default: Value to return if the call fails or times out.
-        Returns:
-            The result of the DSPy call, or the default value on error/timeout.
-        """
-
-    async def shutdown(self: Self) -> None:
-        """
-        Cleanly shut down the async manager, cancelling any pending tasks.
-        """
+# class AsyncDSPyManager:  # pragma: no cover - unused placeholder
+#     """Deprecated stub. Use :class:`src.shared.async_utils.AsyncDSPyManager`."""
+#
+#     def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
+#         pass
+#
+#     async def submit(
+#         self: Self,
+#         dspy_callable: object,
+#         *args: object,
+#         timeout: float | None = None,
+#         **kwargs: object,
+#     ) -> object:
+#         pass
+#
+#     async def get_result(self: Self, future: object, default: object = None) -> object:
+#         pass
+#
+#     async def shutdown(self: Self) -> None:
+#         pass
 
 
 # Usage Example (not implemented):
