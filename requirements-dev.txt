@@ -7,3 +7,4 @@ types-requests==2.31.0
 pytest-xdist==3.7.0
 pytest-asyncio
 requests
+pydantic-settings
