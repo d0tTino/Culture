@@ -34,7 +34,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **Hierarchical Memory System:** Agents possess a two-level memory system:
     * **Level 1 (Session Summaries):** Short-term memories are consolidated into session summaries.
     * **Level 2 (Chapter Summaries):** Level 1 summaries are further consolidated into longer-term chapter summaries.
-    * **Persistence & Retrieval:** Both memory levels are persisted in a ChromaDB vector store and are retrievable via RAG, with dedicated test suites validating this functionality.
+    * **Persistence & Retrieval:** Both memory levels are persisted through the `MemoryStore` interface (ChromaDB by default) and are retrievable via RAG, with dedicated test suites validating this functionality.
 * **Retrieval Augmented Generation (RAG):** Agents utilize RAG to inject relevant past memories and knowledge board content into their context for decision-making.
 * **Shared Knowledge Board (v1):** A central repository where agents can post ideas and information, which is then perceived by other agents.
 * **Resource Management (IP/DU):** Agents manage and utilize Influence Points (IP) and Data Units (DU) for actions like posting to the knowledge board, proposing projects, and changing roles.
@@ -98,7 +98,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **Core Language:** Python 3.10+
 * **Agent Orchestration:** LangChain / LangGraph
 * **LLM Hosting/Access:** Ollama (primarily for local LLMs like Mistral, Llama 3.2 variants)
-* **Vector Storage:** ChromaDB
+* **Memory Store:** `MemoryStore` interface (ChromaDB in-memory adapter by default; Weaviate adapter available)
 * **Embeddings:** Sentence Transformers
 * **State/Cache (Planned/Optional):** Redis
 * **Discord Integration:** discord.py
@@ -215,7 +215,7 @@ Culture.ai/
 │   ├── minimal_repro.py
 │   └── test_synthesizer.py
 ├── scripts/                   # Utility scripts for project management
-│   └── cleanup_temp_db.py     # Script to clean up temporary ChromaDB directories
+│   └── cleanup_temp_db.py     # Script to clean up temporary MemoryStore directories
 ├── src/                       # Source code
 │   ├── app.py                 # Main application entry point
 │   ├── agents/                # Agent implementation
@@ -242,7 +242,7 @@ Culture.ai/
 │   │   ├── logging_config.py  # Logging configuration
 │   │   └── memory/            # Memory infrastructure
 │   │       ├── __init__.py
-│   │       └── vector_store.py  # ChromaDB integration for memories
+│   │       └── vector_store.py  # MemoryStore adapters and utilities
 │   ├── interfaces/            # External interface implementations
 │   │   ├── __init__.py
 │   │   └── discord_bot.py     # Discord bot integration
@@ -390,7 +390,7 @@ This project is licensed under the **Apache License 2.0**. See the [LICENSE](LIC
 - [Ollama](https://ollama.ai/) for local LLM inference
 - [Discord.py](https://discordpy.readthedocs.io/) for Discord integration
 - [DSPy](https://github.com/stanfordnlp/dspy) for prompt optimization
-- [ChromaDB](https://www.trychroma.com/) for vector storage
+- [ChromaDB](https://www.trychroma.com/) and [Weaviate](https://weaviate.io/) for vector storage backends
 
 This project draws inspiration from various fields including Agent-Based Modeling (ABM), Multi-Agent Systems (MAS), artificial life, cognitive science, and the rapidly evolving landscape of Large Language Models.
 
@@ -438,7 +438,7 @@ Culture.ai uses pytest with marker-based test selection and parallelization for 
 
 - **Default run** (`pytest`): Runs only unit tests (fast, no external dependencies)
 - **Full suite** (`pytest -m "slow or dspy_program or integration" -v -n auto`): Runs all slow, DSPy, and integration tests in parallel
-- ChromaDB test DBs are stored in RAM (tmpfs) on Linux for speed; see `docs/testing.md` for details
+- Temporary MemoryStore directories are stored in RAM (tmpfs) on Linux for speed; see `docs/testing.md` for details
 
 See [docs/testing.md](docs/testing.md) for full instructions, marker definitions, and troubleshooting.
 
@@ -472,16 +472,16 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```bash
    ollama pull mistral:latest
    ```
-5. **Run Weaviate (for vector store, optional):**
+5. **Run Weaviate (optional memory store backend):**
    ```bash
    docker compose up -d  # See docs/testing.md for details
-   # Or use ChromaDB (default, file-based, no extra setup needed)
+   # Or use the default in-memory Chroma adapter (no extra setup needed)
    ```
 6. **Configure environment variables:**
    - Copy `.env.example` to `.env` and edit as needed:
     - `OLLAMA_API_BASE` (e.g., http://localhost:11434)
      - `WEAVIATE_URL` (e.g., http://localhost:8080)
-     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
+     - `MEMORY_STORE_BACKEND` ("chroma" or "weaviate")
    - See `.env.example` and `docs/testing.md` for details.
 
 ### Running the Simulation
@@ -496,7 +496,7 @@ To verify your local setup with actual LLM calls, run the minimal demo script:
 python -m examples.walking_vertical_slice
 ```
 This spins up three agents for a few steps using your local Ollama instance and
-persists their memories to ChromaDB. See
+persists their memories via the configured `MemoryStore`. See
 [docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
 
 ### Running Tests
