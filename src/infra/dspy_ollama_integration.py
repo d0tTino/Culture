@@ -370,10 +370,11 @@ def configure_dspy_with_ollama(
 
     # Check Ollama server availability
     try:
-# The ``AsyncDSPyManager`` class originally lived in this file as a placeholder
-# design. It now resides in ``src.shared.async_utils`` as a fully functional
-# implementation. All production code should import it from that module. The
-# commented stub below remains only for historical reference.
+        logger.info(f"Checking Ollama server availability at {api_base}...")
+        response = requests.get(api_base, timeout=2)
+        if response.status_code != 200:
+            logger.error(
+                f"Ollama server not accessible at {api_base}. "
                 f"Status code: {response.status_code}. "
                 "DSPy LM cannot be configured."
             )
