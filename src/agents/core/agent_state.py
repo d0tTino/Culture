@@ -11,7 +11,6 @@ from typing_extensions import Self
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict
 except ImportError:  # pragma: no cover - fallback for old pydantic
-
     ConfigDict = dict  # type: ignore[misc]
 
 
@@ -227,7 +226,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
