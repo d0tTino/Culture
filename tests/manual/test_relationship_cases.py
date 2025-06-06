@@ -10,6 +10,8 @@ from typing import Callable, Optional
 
 import pytest
 
+pytest.skip("Manual verification module", allow_module_level=True)
+
 # Allow running as standalone script
 sys.path.append(str(Path(__file__).parent.parent))
 

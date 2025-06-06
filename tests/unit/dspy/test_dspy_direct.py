@@ -19,15 +19,7 @@ logger = logging.getLogger(__name__)
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, project_root)
 
-pytestmark = pytest.mark.skip(reason="Requires specific local LLM configuration, deferred for now")
 
-
-@pytest.mark.skip(
-    reason=(
-        "Requires specific local LLM configuration (Ollama with mistral:latest "
-        "and correct ENV VARS), deferred for now"
-    )
-)
 @pytest.mark.unit
 @pytest.mark.dspy
 @pytest.mark.critical_path
