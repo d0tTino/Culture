@@ -15,9 +15,9 @@ from datetime import datetime
 import pytest
 from typing_extensions import Self
 
-pytest.importorskip("chromadb")
+from src.shared.memory_store import ChromaMemoryStore
 
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+pytest.importorskip("chromadb")
 
 
 @pytest.mark.integration
@@ -32,7 +32,7 @@ class TestHierarchicalMemoryPersistence(unittest.TestCase):
         self.chroma_test_dir = chroma_test_dir
 
     def setUp(self: Self) -> None:
-        self.vector_store = ChromaVectorStoreManager(persist_directory=self.chroma_test_dir)
+        self.vector_store = ChromaMemoryStore(persist_directory=self.chroma_test_dir)
 
     def tearDown(self: Self) -> None:
         try:

@@ -5,10 +5,10 @@ import sys
 from typing import Optional
 
 from src.agents.core.base_agent import Agent
-from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.infra.warning_filters import configure_warning_filters
+from src.shared.memory_store import ChromaMemoryStore, MemoryStore
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
@@ -51,11 +51,13 @@ def create_simulation(
 
     agents = [Agent(agent_id=f"agent_{i + 1}", name=f"Agent_{i + 1}") for i in range(num_agents)]
 
+    memory_store: MemoryStore | None = None
+    if use_vector_store:
+        memory_store = ChromaMemoryStore(persist_directory=vector_store_dir)
+
     sim = Simulation(
         agents=agents,
-        vector_store_manager=None
-        if not use_vector_store
-        else ChromaVectorStoreManager(persist_directory=vector_store_dir),
+        memory_store=memory_store,
         scenario=scenario,
         discord_bot=discord_bot,
     )
