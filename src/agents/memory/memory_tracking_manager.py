@@ -4,12 +4,9 @@ import logging
 import math
 from collections.abc import Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from typing_extensions import Self
-
-if TYPE_CHECKING:  # pragma: no cover - for type hints only
-    from .vector_store import ChromaVectorStoreManager
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +14,7 @@ logger = logging.getLogger(__name__)
 class MemoryTrackingManager:
     """Manage usage tracking metadata for agent memories."""
 
-    def __init__(self: Self, vector_store: ChromaVectorStoreManager) -> None:
+    def __init__(self: Self, vector_store: Any) -> None:
         self.vector_store = vector_store
 
     def record_retrieval(

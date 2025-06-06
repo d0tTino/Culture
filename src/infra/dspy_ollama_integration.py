@@ -5,6 +5,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 
 # mypy: ignore-errors
 
+import json
 import logging
 import sys
 import time
@@ -20,34 +21,78 @@ try:
     import dspy
 
     BaseLM = dspy.LM
+    Predict = dspy.Predict
+    Prediction = getattr(dspy, "Prediction", SimpleNamespace)
     DSPY_AVAILABLE = True
 except Exception:  # pragma: no cover - optional dependency
     logging.getLogger(__name__).warning("DSPy not available; using stub implementations")
 
     class BaseLM:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def __call__(self, *args: Any, **kwargs: Any) -> list[str]:
+        def __call__(self: Self, *args: Any, **kwargs: Any) -> list[str]:
             return ["DSPy unavailable"]
 
     class Signature:
         pass
 
     class InputField:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class OutputField:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+    class _Settings(SimpleNamespace):
+        def __init__(self: Self) -> None:
+            super().__init__()
+            self.lm: Any | None = None
+
+        def configure(self: Self, lm: Any | None = None, **_: object) -> None:
+            self.lm = lm
+
+    class Prediction(SimpleNamespace):
+        """Simple container mimicking DSPy's Prediction object."""
+
+    class Predict:
+        """Minimal stand-in for :class:`dspy.Predict`."""
+
+        def __init__(self: Self, signature: object) -> None:
+            self.signature = signature
+
+        def __call__(self: Self, *args: object, **kwargs: object) -> Prediction:
+            lm = getattr(dspy.settings, "lm", None)
+            result: object = "PROPOSE_IDEA"
+            if callable(lm):
+                try:
+                    result = lm("intent query")
+                except Exception:
+                    result = lm()
+            if isinstance(result, list):
+                text = str(result[0]) if result else ""
+            else:
+                text = str(result)
+            try:
+                data = json.loads(text)
+                if isinstance(data, dict):
+                    return Prediction(**data)
+            except Exception:
+                pass
+            return Prediction(intent=text)
+
+        def load(self: Self, _path: str) -> None:  # pragma: no cover - no-op for tests
             pass
 
     dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=lambda **_: None),
+        settings=_Settings(),
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
+        Predict=Predict,
+        Prediction=Prediction,
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
@@ -67,6 +112,8 @@ __all__ = [
     "OllamaLM",
     "configure_dspy_with_ollama",
     "dspy",
+    "Predict",
+    "Prediction",
 ]
 
 
@@ -79,7 +126,7 @@ class OllamaLM(BaseLM):  # type: ignore[misc]
     """
 
     def __init__(
-        self,
+        self: Self,
         model_name: str = "mistral:latest",
         api_base: str = "http://localhost:11434",
         temperature: float = 0.1,
