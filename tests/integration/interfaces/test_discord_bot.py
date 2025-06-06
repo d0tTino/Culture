@@ -2,6 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytest.importorskip("discord")
+
 from src.interfaces.discord_bot import SimulationDiscordBot, say, stats
 
 
