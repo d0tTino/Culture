@@ -341,6 +341,12 @@ To customize the simulation:
 
 ## Running Tests
 
+Before running tests, install both runtime and development dependencies:
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities.
+
 Run tests using the Python module format:
 
 ```bash
