@@ -9,7 +9,7 @@ from typing_extensions import Self
 pytest.importorskip("chromadb")
 
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.shared.memory_store import ChromaMemoryStore
 
 
 @pytest.mark.unit
@@ -23,10 +23,7 @@ class TestMemoryTrackingManager(unittest.TestCase):
         self.chroma_test_dir = chroma_test_dir
 
     def setUp(self: Self) -> None:
-        self.vector_store = ChromaVectorStoreManager(
-            persist_directory=self.chroma_test_dir,
-            embedding_function=lambda texts: [[float(len(t))] for t in texts],
-        )
+        self.vector_store = ChromaMemoryStore(persist_directory=self.chroma_test_dir)
         self.manager = MemoryTrackingManager(self.vector_store)
         self.agent_id = "tracking_test_agent"
 

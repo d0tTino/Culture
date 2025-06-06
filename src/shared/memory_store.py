@@ -101,3 +101,89 @@ class WeaviateMemoryStore(MemoryStore):
                 if hasattr(self.collection.data, "delete_by_id"):
                     self.collection.data.delete_by_id(entry["id"])
         self._store = remaining
+
+
+class ChromaVectorStoreAdapter(MemoryStore):
+    """Adapter to use :class:`ChromaVectorStoreManager` via the ``MemoryStore`` interface."""
+
+    def __init__(self: Self, manager: Any, agent_id: str = "memory_store") -> None:
+        self.manager = manager
+        self.agent_id = agent_id
+        self._step = 0
+
+    def add_documents(self: Self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+        for doc, meta in zip(documents, metadatas):
+            self._step += 1
+            self.manager.add_memory(
+                agent_id=meta.get("agent_id", self.agent_id),
+                step=meta.get("step", self._step),
+                event_type=meta.get("event_type", "note"),
+                content=doc,
+                memory_type=meta.get("memory_type"),
+                metadata=meta,
+            )
+
+    def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+        return self.manager.query_memories(
+            agent_id=self.agent_id, query=query, k=top_k, include_metadata=True
+        )
+
+    def prune(self: Self, ttl_seconds: int) -> None:
+        cutoff = time.time() - ttl_seconds
+        try:
+            results = self.manager.collection.get(include=["metadatas", "ids"])
+        except Exception:
+            return
+        ids_to_delete = []
+        metadatas = results.get("metadatas") or []
+        for i, meta in enumerate(metadatas):
+            ts = meta.get("timestamp")
+            if isinstance(ts, (int, float)) and ts < cutoff:
+                ids_to_delete.append(results["ids"][i])
+        if ids_to_delete:
+            try:
+                self.manager.delete_memories_by_ids(ids_to_delete)
+            except Exception:
+                pass
+
+
+class WeaviateVectorStoreAdapter(MemoryStore):
+    """Adapter for :class:`WeaviateVectorStoreManager` using the ``MemoryStore`` interface."""
+
+    def __init__(self: Self, manager: Any) -> None:
+        self.manager = manager
+        self.embed = getattr(manager, "embedding_function", None)
+
+    def add_documents(self: Self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+        if not self.embed:
+            raise RuntimeError("embedding_function is required for adding documents")
+        vectors = [self.embed(doc) for doc in documents]
+        self.manager.add_memories(documents, metadatas, vectors)
+
+    def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+        if not self.embed:
+            return []
+        vec = self.embed(query)
+        return self.manager.query_memories(vec, n_results=top_k)
+
+    def prune(self: Self, ttl_seconds: int) -> None:
+        # TTL pruning not implemented for Weaviate adapter
+        pass
+
+
+def create_chroma_adapter(persist_directory: str = "./chroma_db") -> ChromaVectorStoreAdapter:
+    """Convenience helper to build a ``ChromaVectorStoreAdapter``."""
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
+
+    manager = ChromaVectorStoreManager(persist_directory=persist_directory)
+    return ChromaVectorStoreAdapter(manager)
+
+
+def create_weaviate_adapter(
+    url: str = "http://localhost:8080", collection_name: str = "AgentMemory"
+) -> WeaviateVectorStoreAdapter:
+    """Convenience helper to build a ``WeaviateVectorStoreAdapter``."""
+    from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
+
+    manager = WeaviateVectorStoreManager(url=url, collection_name=collection_name)
+    return WeaviateVectorStoreAdapter(manager)

@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING, Any, Optional
 from typing_extensions import Self
 
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
+from src.shared.memory_store import MemoryStore
 from src.sim.knowledge_board import KnowledgeBoard
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
     from src.agents.core.base_agent import Agent
-    from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.interfaces.discord_bot import SimulationDiscordBot
 
 # Configure root logger to show all levels of messages to stdout
@@ -42,7 +42,7 @@ class Simulation:
     def __init__(
         self,
         agents: list["Agent"],
-        vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
+        memory_store: Optional[MemoryStore] = None,
         scenario: str = "",
         discord_bot: Optional["SimulationDiscordBot"] = None,
     ):
@@ -52,8 +52,8 @@ class Simulation:
         Args:
             agents (list[Agent]): A list of Agent instances participating
                                   in the simulation.
-            vector_store_manager (Optional[ChromaVectorStoreManager]): Manager for
-                                  vector-based agent memory storage and retrieval.
+            memory_store (Optional[MemoryStore]): Backend used for agent memory
+                persistence.
             scenario (str): Description of the simulation scenario that provides
                 context for agent interactions.
             discord_bot (Optional[SimulationDiscordBot]): Discord bot for sending
@@ -91,14 +91,13 @@ class Simulation:
         self.collective_du: float = 0.0
         logger.info("Simulation initialized with collective IP/DU tracking.")
 
-        # --- Store the vector store manager ---
-        self.vector_store_manager = vector_store_manager
-        if vector_store_manager:
-            logger.info("Simulation initialized with vector store manager for memory persistence.")
+        # --- Store the memory backend ---
+        self.memory_store = memory_store
+        if memory_store:
+            logger.info("Simulation initialized with memory store for persistence.")
         else:
             logger.warning(
-                "Simulation initialized without vector store manager. "
-                "Memory will not be persisted."
+                "Simulation initialized without memory store. Memory will not be persisted."
             )
 
         # --- Store Discord bot ---
@@ -246,9 +245,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -299,7 +296,7 @@ class Simulation:
             agent_output = await agent.run_turn(
                 simulation_step=self.current_step,
                 environment_perception=perception_data,
-                vector_store_manager=self.vector_store_manager,
+                memory_store=self.memory_store,
                 knowledge_board=self.knowledge_board,
             )
 
@@ -352,9 +349,9 @@ class Simulation:
             logger.info(f"  - DU: {current_agent_state.du:.1f} (from {current_agent_state.du})")
 
             # Update the agent state in the simulation's list of agents
-            self.agents[
-                agent_to_run_index
-            ] = agent  # Ensure the agent object itself is updated if it was replaced
+            self.agents[agent_to_run_index] = (
+                agent  # Ensure the agent object itself is updated if it was replaced
+            )
             self.agents[agent_to_run_index].update_state(current_agent_state)
 
             # Determine next agent index based on role change event this turn

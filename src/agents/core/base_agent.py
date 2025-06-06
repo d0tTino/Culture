@@ -18,13 +18,16 @@ from typing_extensions import Self
 from src.agents.graphs.basic_agent_graph import (
     compile_agent_graph,  # NEW: Import the graph compiler function
 )
-from src.agents.memory.vector_store import ChromaVectorStoreManager
-from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra import config
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
 from src.shared.async_utils import AsyncDSPyManager
+from src.shared.memory_store import (
+    MemoryStore,
+    create_chroma_adapter,
+    create_weaviate_adapter,
+)
 
 from .agent_controller import AgentController
 
@@ -36,7 +39,7 @@ from .agent_state import AgentActionIntent, AgentState
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
-    from src.agents.memory.vector_store import ChromaVectorStoreManager
+    from src.shared.memory_store import MemoryStore
     from src.sim.knowledge_board import KnowledgeBoard
 
 # --- REMOVE MOVED Graph State Definitions ---
@@ -68,7 +71,7 @@ class Agent:
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
-        vector_store_manager: Optional[object] = None,
+        memory_store: Optional[MemoryStore] = None,
         async_dspy_manager: Optional[AsyncDSPyManager] = None,
     ):
         """
@@ -81,15 +84,15 @@ class Agent:
                 If None is provided, default values will be used.
             name (str, optional): A name for the agent. If None is provided,
                 a default name based on agent_id will be used.
-            vector_store_manager (Optional[object], optional): Manager for vector-based memory
-                storage and retrieval. Used to persist memory events.
+            memory_store (Optional[MemoryStore], optional): Storage backend implementing
+                ``MemoryStore`` used to persist memory events.
             async_dspy_manager (Optional[AsyncDSPyManager], optional): Manager for DSPy program execution.
         """
         # Generate a unique ID if none provided
         self.agent_id = agent_id if agent_id else str(uuid.uuid4())
 
-        # Explicitly declare vector_store_manager as object for Mypy
-        # self.vector_store_manager: object # Declaration moved to parameter
+        # Store for persistent memory
+        self.memory_store: MemoryStore | None = None
 
         # Initialize as empty if not provided
         if initial_state is None:
@@ -192,9 +195,9 @@ class Agent:
         # Initialize Langchain graph by calling the compiler function
         self.graph = compile_agent_graph()  # MODIFIED: Call imported function
 
-        # Vector Store Manager Initialization
-        if vector_store_manager:
-            self.vector_store_manager = vector_store_manager
+        # Memory store initialization
+        if memory_store:
+            self.memory_store = memory_store
         else:
             backend = (
                 config.VECTOR_STORE_BACKEND
@@ -202,14 +205,12 @@ class Agent:
                 else "chroma"
             )
             if backend == "weaviate":
-                self.vector_store_manager = WeaviateVectorStoreManager(
+                self.memory_store = create_weaviate_adapter(
                     url=getattr(config, "WEAVIATE_URL", "http://localhost:8080"),
                     collection_name="AgentMemory",
-                    embedding_function=None,
-                    # Should be set to the SentenceTransformer instance if needed
                 )
             else:
-                self.vector_store_manager = ChromaVectorStoreManager(
+                self.memory_store = create_chroma_adapter(
                     persist_directory=getattr(config, "VECTOR_STORE_DIR", "./chroma_db")
                 )
 
@@ -356,7 +357,7 @@ class Agent:
         self: Self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
-        vector_store_manager: object = None,  # Accepts any vector store manager implementation
+        memory_store: MemoryStore | None = None,
         knowledge_board: Optional["KnowledgeBoard"] = None,
     ) -> dict[str, Any]:
         """
@@ -366,8 +367,8 @@ class Agent:
             simulation_step (int): The current step number from the simulation.
             environment_perception (Dict[str, Any], optional): Perception data from the
                 environment.
-            vector_store_manager (Optional[object], optional): Manager for vector-based memory
-                storage and retrieval. Used to persist memory events.
+            memory_store (Optional[MemoryStore], optional): Memory store backend used
+                for persistence.
             knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
                 that agents can read from and write to.
 
@@ -445,7 +446,7 @@ class Agent:
             "structured_output": None,  # Initialize as None for this turn
             "agent_goal": agent_goal,  # Use the extracted agent goal
             "updated_state": {},  # Initialize empty
-            "vector_store_manager": vector_store_manager,  # Pass the vector store manager
+            "memory_store": memory_store or self.memory_store,  # Memory interface
             "rag_summary": "(No memory summary available yet)",  # Initialize with default summary
             "knowledge_board_content": knowledge_board_content,  # Pass the knowledge board content
             "knowledge_board": knowledge_board,  # Pass the knowledge board instance
@@ -962,9 +963,7 @@ class Agent:
         logger.debug(
             f"BaseAgent ({self.agent_id}): id(self.state) before process_perceived_messages: {id(self.state)}"
         )
-        AgentController(self.state).process_perceived_messages(
-            enriched_messages_for_state_update
-        )
+        AgentController(self.state).process_perceived_messages(enriched_messages_for_state_update)
         logger.info(
             f"Agent {self.agent_id} processed {len(enriched_messages_for_state_update)} messages directly in perceive_messages, updating mood/relationships."
         )
