@@ -22,7 +22,7 @@ from pydantic import ValidationError
 from typing_extensions import Self
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
-    from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
+    pass
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:

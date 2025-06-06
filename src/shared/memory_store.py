@@ -85,7 +85,9 @@ class WeaviateMemoryStore(MemoryStore):
             props = getattr(obj, "properties", {})
             metadata = dict(props)
             content = metadata.pop("text", "")
-            docs.append({"content": content, "metadata": metadata, "id": str(getattr(obj, "uuid", ""))})
+            docs.append(
+                {"content": content, "metadata": metadata, "id": str(getattr(obj, "uuid", ""))}
+            )
         return docs
 
     def prune(self: Self, ttl_seconds: int) -> None:
