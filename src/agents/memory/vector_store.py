@@ -14,15 +14,12 @@ import time
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
+from typing import Any, TypeVar, Union, cast
 
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
-
-if TYPE_CHECKING:  # pragma: no cover - for type hints only
-    from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
