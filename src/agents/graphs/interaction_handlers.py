@@ -46,6 +46,22 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
     return dict(state)
 
 
+def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
+def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
+def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
+def handle_send_direct_message_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
 # --- Simple vertical slice handlers ---
 
 _RELATIONSHIP_INCREMENT = 0.1
