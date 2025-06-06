@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import Any, cast
 
 from typing_extensions import Self
@@ -175,16 +177,17 @@ class AgentController:
         state = self._require_state()
         if not state.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized to add memory.")
-        state.memory_store_manager.add_memory(memory_text, metadata=metadata)
+        meta = metadata or {"timestamp": time.time()}
+        state.memory_store_manager.add_documents([memory_text], [meta])
 
     async def aretrieve_relevant_memories(
         self: Self, query: str, top_k: int = 5
-    ) -> list[tuple[Any, float]]:
+    ) -> list[dict[str, Any]]:
         state = self._require_state()
         if not state.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized to retrieve memories.")
-        result = await state.memory_store_manager.aretrieve_relevant_memories(query, top_k=top_k)
-        return cast(list[tuple[Any, float]], result)
+        result = await asyncio.to_thread(state.memory_store_manager.query, query, top_k)
+        return cast(list[dict[str, Any]], result)
 
     def process_perceived_messages(self: Self, messages: list[dict[str, Any]]) -> None:
         state = self._require_state()

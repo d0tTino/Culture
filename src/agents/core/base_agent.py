@@ -25,6 +25,7 @@ from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
 from src.shared.async_utils import AsyncDSPyManager
+from src.shared.memory_store import MemoryStore
 
 from .agent_controller import AgentController
 
@@ -68,7 +69,7 @@ class Agent:
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
-        vector_store_manager: Optional[object] = None,
+        vector_store_manager: Optional[MemoryStore] = None,
         async_dspy_manager: Optional[AsyncDSPyManager] = None,
     ):
         """
@@ -81,15 +82,15 @@ class Agent:
                 If None is provided, default values will be used.
             name (str, optional): A name for the agent. If None is provided,
                 a default name based on agent_id will be used.
-            vector_store_manager (Optional[object], optional): Manager for vector-based memory
+            vector_store_manager (Optional[MemoryStore], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             async_dspy_manager (Optional[AsyncDSPyManager], optional): Manager for DSPy program execution.
         """
         # Generate a unique ID if none provided
         self.agent_id = agent_id if agent_id else str(uuid.uuid4())
 
-        # Explicitly declare vector_store_manager as object for Mypy
-        # self.vector_store_manager: object # Declaration moved to parameter
+        # Explicitly declare vector_store_manager for Mypy
+        # self.vector_store_manager: MemoryStore | None
 
         # Initialize as empty if not provided
         if initial_state is None:
@@ -326,7 +327,8 @@ class Agent:
         self: Self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
-        vector_store_manager: object = None,  # Accepts any vector store manager implementation
+        vector_store_manager: MemoryStore
+        | None = None,  # Accepts any vector store manager implementation
         knowledge_board: Optional["KnowledgeBoard"] = None,
     ) -> dict[str, Any]:
         """
@@ -336,7 +338,7 @@ class Agent:
             simulation_step (int): The current step number from the simulation.
             environment_perception (Dict[str, Any], optional): Perception data from the
                 environment.
-            vector_store_manager (Optional[object], optional): Manager for vector-based memory
+            vector_store_manager (Optional[MemoryStore], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
                 that agents can read from and write to.
