@@ -21,9 +21,8 @@ from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunct
 from pydantic import ValidationError
 from typing_extensions import Self
 
-# Forward reference import for type hints only
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
-    from src.agents.memory.memory_tracking_manager import MemoryTrackingManager  # noqa: F401
+    from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:

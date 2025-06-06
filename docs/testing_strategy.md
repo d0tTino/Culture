@@ -122,3 +122,45 @@ If your test is running slowly:
 ## Warning Management
 
 The project employs warning filters to manage warnings from third-party dependencies. See `docs/warning_management.md` for details. 
+
+## Archived Test Suites
+
+Legacy tests have been compressed in `archives/tests.zip`. These cover the original memory pipeline and DSPy summarizers and are not executed by default.
+
+### Key Archived Tests
+
+- `tests/integration/test_full_memory_pipeline.py`
+- `tests/integration/test_hierarchical_memory_persistence.py`
+- `tests/integration/test_memory_usage_tracking.py`
+- `tests/integration/test_collective_metrics.py`
+- `tests/unit/test_dspy_summary_generators.py`
+- `tests/unit/test_role_specific_summary_generator.py`
+
+## Restoration Priorities
+
+1. Restore the full memory pipeline and hierarchical persistence tests.
+2. Revive memory usage tracking and collective metrics tests.
+3. Update DSPy summarizer unit tests for the current APIs.
+4. Bring in remaining archived tests once these pass.
+
+## Coverage Goals
+
+Aim for:
+
+- **90%** line coverage for `src/agents/memory`
+- **80%** for `src/agents/graphs` and `src/sim`
+- **70%** for DSPy program wrappers
+
+Measure with `pytest --cov=src`.
+
+## Current Status
+
+The active suite covers serialization, vector store operations and LM injection. Archived tests remain zipped until refactored. Reintroducing the prioritized tests above is required before validating real LLM backends.
+
+
+## LLM Reliability Assessment
+
+A short review of DSPy-optimized components was performed. Several tests are skipped because `dspy.Predict` is missing, and the `walking_vertical_slice` demo cannot run due to missing dependencies. Fallback implementations for relationship updates do operate deterministically.
+
+See [docs/llm_reliability_report.md](llm_reliability_report.md) for details.
+
