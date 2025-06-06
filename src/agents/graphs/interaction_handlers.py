@@ -11,7 +11,7 @@ from src.infra.config import (
     IP_AWARD_FOR_PROPOSAL,
     IP_COST_TO_POST_IDEA,
 )
-from src.shared.memory_store import ChromaMemoryStore
+from src.shared.memory_store import MemoryStore
 
 try:
     from .basic_agent_graph import AgentTurnState
@@ -55,7 +55,7 @@ _UNLOCKED_CAPABILITY = "collaborate"
 
 
 def handle_propose_idea(
-    agent: AgentAttributes, memory_store: ChromaMemoryStore, knowledge_board: ChromaMemoryStore
+    agent: AgentAttributes, memory_store: MemoryStore, knowledge_board: MemoryStore
 ) -> None:
     """Post an idea to the knowledge board and update agent resources."""
     idea_text = f"Idea from {agent.id}"
@@ -65,7 +65,7 @@ def handle_propose_idea(
     agent.du += config.DU_AWARD_FOR_PROPOSAL
 
 
-def handle_retrieve_and_update(agent: AgentAttributes, memory_store: ChromaMemoryStore) -> None:
+def handle_retrieve_and_update(agent: AgentAttributes, memory_store: MemoryStore) -> None:
     """Retrieve latest idea and adjust relationship score."""
     results = memory_store.query("All inter-agent communications", top_k=1)
     if not results:
