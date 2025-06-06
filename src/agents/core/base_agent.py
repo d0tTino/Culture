@@ -67,7 +67,7 @@ class Agent:
     """
 
     def __init__(
-        self,
+        self: Self,
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
@@ -928,7 +928,7 @@ class Agent:
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
 
-    def perceive_messages(self, messages: list[dict]):
+    def perceive_messages(self: Self, messages: list[dict]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""
         if not messages:
             return

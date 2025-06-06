@@ -15,9 +15,9 @@ from datetime import datetime
 import pytest
 from typing_extensions import Self
 
-pytest.importorskip("chromadb")
-
 from src.shared.memory_store import ChromaMemoryStore
+
+pytest.importorskip("chromadb")
 
 
 @pytest.mark.integration

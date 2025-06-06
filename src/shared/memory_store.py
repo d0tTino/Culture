@@ -10,13 +10,13 @@ from typing_extensions import Self
 class MemoryStore(Protocol):
     """Protocol for simple memory stores used in tests."""
 
-    def add_documents(self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+    def add_documents(self: Self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
         """Add a batch of documents with associated metadata."""
 
-    def query(self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+    def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
         """Return the ``top_k`` most relevant documents."""
 
-    def prune(self, ttl_seconds: int) -> None:
+    def prune(self: Self, ttl_seconds: int) -> None:
         """Remove entries older than ``ttl_seconds`` based on ``timestamp`` metadata."""
 
 
@@ -124,9 +124,10 @@ class ChromaVectorStoreAdapter(MemoryStore):
             )
 
     def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
-        return self.manager.query_memories(
+        results = self.manager.query_memories(
             agent_id=self.agent_id, query=query, k=top_k, include_metadata=True
         )
+        return list(results)
 
     def prune(self: Self, ttl_seconds: int) -> None:
         cutoff = time.time() - ttl_seconds
@@ -164,7 +165,8 @@ class WeaviateVectorStoreAdapter(MemoryStore):
         if not self.embed:
             return []
         vec = self.embed(query)
-        return self.manager.query_memories(vec, n_results=top_k)
+        results = self.manager.query_memories(vec, n_results=top_k)
+        return list(results)
 
     def prune(self: Self, ttl_seconds: int) -> None:
         # TTL pruning not implemented for Weaviate adapter

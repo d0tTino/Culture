@@ -40,7 +40,7 @@ class Simulation:
     """
 
     def __init__(
-        self,
+        self: Self,
         agents: list["Agent"],
         memory_store: Optional[MemoryStore] = None,
         scenario: str = "",
