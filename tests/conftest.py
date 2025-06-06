@@ -101,3 +101,24 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[str, None, None]:
         shutil.rmtree(base_dir)
     except Exception as e:
         print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
+
+
+@pytest.fixture(autouse=True)
+def ensure_dspy_predict(monkeypatch: MonkeyPatch) -> None:
+    """Provide a simple dspy.Predict stub if DSPy is unavailable."""
+    try:
+        import dspy
+    except Exception:
+        return
+
+    if hasattr(dspy, "Predict"):
+        return
+
+    class DummyPredict:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def __call__(self, *args: object, **kwargs: object) -> object:
+            return type("Result", (), {"intent": "CONTINUE_COLLABORATION"})()
+
+    monkeypatch.setattr(dspy, "Predict", DummyPredict, raising=False)

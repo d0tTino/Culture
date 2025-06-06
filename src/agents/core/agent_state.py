@@ -106,6 +106,13 @@ class AgentStateData(BaseModel):
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize and call ``model_post_init`` on Pydantic v1."""
+        super().__init__(**data)
+        if not hasattr(BaseModel, "model_validate"):
+            self.model_post_init(None)
+
     last_thought: Optional[str] = None
     last_clarification_question: Optional[str] = None
     last_clarification_downgraded: bool = False
@@ -342,6 +349,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     # Serialization helpers for tests
     # ------------------------------------------------------------------
+
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
         return self.dict()
@@ -353,3 +361,4 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if clean_data.get("memory_store_manager") is None:
             clean_data.pop("memory_store_manager")
         return cls(**clean_data)
+
