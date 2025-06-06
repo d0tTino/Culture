@@ -5,11 +5,12 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 
 # mypy: ignore-errors
 
+import json
 import logging
 import sys
 import time
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 from unittest.mock import MagicMock
 
 import requests  # type: ignore
@@ -34,6 +35,13 @@ except Exception:  # pragma: no cover - optional dependency
     class Signature:
         pass
 
+    _CONFIGURED_LM: Callable[[str], str | list[str]] | None = None
+
+    def _configure(*, lm: Callable[[str | None], str | list[str]] | None = None, **_: Any) -> None:
+        """Record the LM for stub predictions."""
+        global _CONFIGURED_LM
+        _CONFIGURED_LM = lm
+
     class InputField:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
@@ -42,12 +50,50 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
+    class Prediction(SimpleNamespace):
+        """Minimal stand-in for ``dspy.Prediction``."""
+
+    class Predict:
+        """Basic callable stub used when DSPy is unavailable."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, question: str | None = None, *args: Any, **kwargs: Any) -> Prediction:
+            if _CONFIGURED_LM is None:
+                intent = "PROPOSE_IDEA"
+            else:
+                result = _CONFIGURED_LM(question or "")
+                if isinstance(result, list):
+                    result = result[0]
+                if isinstance(result, str):
+                    try:
+                        parsed = json.loads(result)
+                    except Exception:
+                        intent = result.strip()
+                    else:
+                        if isinstance(parsed, dict) and "intent" in parsed:
+                            intent = str(parsed["intent"])
+                        else:
+                            intent = result.strip()
+                elif isinstance(result, dict):
+                    intent = str(result.get("intent", result))
+                else:
+                    intent = str(result)
+            return Prediction(intent=intent)
+
+        @staticmethod
+        def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
+            return Predict()
+
     dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=lambda **_: None),
+        settings=SimpleNamespace(configure=_configure, lm=None),
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
+        Predict=Predict,
+        Prediction=Prediction,
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
@@ -65,6 +111,7 @@ logger = logging.getLogger("dspy_ollama")
 
 __all__ = [
     "OllamaLM",
+    "Predict",
     "configure_dspy_with_ollama",
     "dspy",
 ]

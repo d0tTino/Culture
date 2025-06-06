@@ -6,6 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pydantic import BaseModel, Field, PrivateAttr
+from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
@@ -345,4 +346,19 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
+
+    # ------------------------------------------------------------------
+    # Serialization helpers for tests
+    # ------------------------------------------------------------------
+    def to_dict(self: Self) -> dict[str, Any]:
+        """Return a dictionary representation of the agent state."""
+        return self.model_dump()
+
+    @classmethod
+    def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
+        """Create an ``AgentState`` instance from a serialized dictionary."""
+        clean_data = data.copy()
+        if clean_data.get("memory_store_manager") is None:
+            clean_data.pop("memory_store_manager")
+        return cls.model_validate(clean_data)
 
