@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, cast
 import logging
+from typing import Any, cast
 
 from typing_extensions import Self
 
@@ -60,7 +60,9 @@ class AgentController:
         current_score = state.relationships.get(other_agent_id, 0.0)
         sentiment_score = float(sentiment_score) if sentiment_score is not None else 0.0
         effective = (
-            sentiment_score * state._targeted_message_multiplier if is_targeted else sentiment_score
+            sentiment_score * state._targeted_message_multiplier
+            if is_targeted
+            else sentiment_score
         )
         if effective > 0:
             lr = state._positive_relationship_learning_rate
@@ -70,7 +72,9 @@ class AgentController:
             lr = state._neutral_relationship_learning_rate
         change = effective * lr
         new_score = current_score + change
-        new_score = max(state._min_relationship_score, min(state._max_relationship_score, new_score))
+        new_score = max(
+            state._min_relationship_score, min(state._max_relationship_score, new_score)
+        )
         state.relationships[other_agent_id] = new_score
         if abs(new_score - current_score) > 0.01:
             state.relationship_history.setdefault(other_agent_id, []).append(
@@ -198,5 +202,6 @@ class AgentController:
         state = self._require_state()
         state.relationship_history.clear()
         state.mood_history = [(0, 0.0)]
-        state.relationship_history = {name: [(0, 0.0)] for name in state.relationship_history.keys()}
-
+        state.relationship_history = {
+            name: [(0, 0.0)] for name in state.relationship_history.keys()
+        }

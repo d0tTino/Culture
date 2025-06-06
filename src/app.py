@@ -53,9 +53,11 @@ def create_simulation(
 
     sim = Simulation(
         agents=agents,
-        vector_store_manager=None
-        if not use_vector_store
-        else ChromaVectorStoreManager(persist_directory=vector_store_dir),
+        vector_store_manager=(
+            None
+            if not use_vector_store
+            else ChromaVectorStoreManager(persist_directory=vector_store_dir)
+        ),
         scenario=scenario,
         discord_bot=discord_bot,
     )
