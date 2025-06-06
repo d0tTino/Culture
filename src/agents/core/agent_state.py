@@ -236,7 +236,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -279,7 +278,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             "role": self.current_role,
             # Add other relevant metrics here if needed for collective tracking
         }
-
 
     def __hash__(self) -> int:
         # Pydantic models are not hashable by default if they have mutable fields like lists/dicts.
@@ -346,3 +344,46 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the agent state to a dictionary."""
+        return self.model_dump(
+            exclude={
+                "llm_client",
+                "memory_store_manager",
+                "action_intent_model",
+                "thought_model",
+                "l1_summary_model",
+                "mock_llm_client",
+            }
+        )
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        llm_client_config_override: Any | None = None,
+        memory_store_manager_override: Any | None = None,
+    ) -> "AgentState":
+        """Deserialize an AgentState from a dictionary."""
+        if llm_client_config_override is not None:
+            data["llm_client_config"] = llm_client_config_override
+        if memory_store_manager_override is not None:
+            data["memory_store_manager"] = memory_store_manager_override
+
+        if "mood_history" in data and data["mood_history"] is not None:
+            data["mood_history"] = [
+                (int(turn), float(m_val)) for turn, m_val in data["mood_history"]
+            ]
+
+        if "relationship_history" in data and data["relationship_history"] is not None:
+            processed_rh: dict[str, list[tuple[int, float]]] = {}
+            for agent_name, history_list in data["relationship_history"].items():
+                processed_rh[agent_name] = [
+                    (int(turn), float(r_val)) for turn, r_val in history_list
+                ]
+            data["relationship_history"] = processed_rh
+
+        if "relationships" in data and data["relationships"] is not None:
+            data["relationships"] = {k: float(v) for k, v in data["relationships"].items()}
+
+        return cls(**data)
