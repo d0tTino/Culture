@@ -319,7 +319,7 @@ class Agent:
         Args:
             sentiment_score (float): The sentiment score to apply to the mood
         """
-        from src.agents.graphs.basic_agent_graph import get_descriptive_mood, get_mood_level
+        from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 
         # Calculate new mood value using configured decay and update rates
         current_mood_value = (
