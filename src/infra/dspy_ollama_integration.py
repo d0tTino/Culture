@@ -4,6 +4,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 
 import json
 import logging
@@ -13,7 +14,10 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
-import requests  # type: ignore
+try:  # pragma: no cover - optional dependency
+    import requests  # type: ignore
+except Exception:  # pragma: no cover - fallback when requests missing
+    requests = MagicMock()
 from typing_extensions import Self
 
 # Import DSPy and Ollama, providing fallbacks when unavailable
@@ -85,14 +89,39 @@ except Exception:  # pragma: no cover - optional dependency
         def load(self: Self, _path: str) -> None:  # pragma: no cover - no-op for tests
             pass
 
+    class Settings(SimpleNamespace):
+        def configure(self, **kwargs: Any) -> None:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    settings = Settings()
+
+    class Predict:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, *args: Any, **kwargs: Any) -> SimpleNamespace:
+            lm = getattr(settings, "lm", BaseLM())
+            result = lm(*args, **kwargs)
+            if isinstance(result, list):
+                result = result[0]
+            try:
+                data = json.loads(str(result))
+                intent = data.get("intent", str(result))
+            except Exception:
+                intent = str(result)
+            return SimpleNamespace(intent=intent)
+
     dspy = SimpleNamespace(
         settings=_Settings(),
+
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
         Predict=Predict,
         Prediction=Prediction,
+
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False

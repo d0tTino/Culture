@@ -929,6 +929,7 @@ class Agent:
         state.du = max(0, state.du)
 
     def perceive_messages(self: Self, messages: list[dict]) -> None:
+
         """Allows the agent to perceive messages from other agents or the environment."""
         if not messages:
             return
