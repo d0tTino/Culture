@@ -4,6 +4,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 
 import logging
 import sys
@@ -42,12 +43,41 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
+    _dspy_settings = SimpleNamespace(lm=None)
+
+    def _configure(**kwargs: object) -> None:
+        if "lm" in kwargs:
+            _dspy_settings.lm = kwargs["lm"]
+            dspy.settings.lm = kwargs["lm"]
+
+    class Predict:
+        def __init__(self, _signature: object, lm: BaseLM | None = None) -> None:
+            self.lm = lm or _dspy_settings.lm or BaseLM()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> SimpleNamespace:
+            prompt = kwargs.get("question")
+            result = self.lm(prompt)
+            if isinstance(result, list):
+                result_str = str(result[0]) if result else "PROPOSE_IDEA"
+            else:
+                result_str = str(result)
+            try:
+                if result_str.startswith("{"):
+                    import json
+
+                    parsed = json.loads(result_str)
+                    result_str = parsed.get("intent", result_str)
+            except Exception:
+                pass
+            return SimpleNamespace(intent=result_str)
+
     dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=lambda **_: None),
+        settings=SimpleNamespace(configure=_configure, lm=None),
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
+        Predict=Predict,
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False

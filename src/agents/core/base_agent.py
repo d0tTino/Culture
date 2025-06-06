@@ -64,7 +64,7 @@ class Agent:
     """
 
     def __init__(
-        self,
+        self: Self,
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
@@ -927,7 +927,7 @@ class Agent:
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
 
-    def perceive_messages(self, messages: list[dict]):
+    def perceive_messages(self: Self, messages: list[dict[str, Any]]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""
         if not messages:
             return
@@ -962,9 +962,7 @@ class Agent:
         logger.debug(
             f"BaseAgent ({self.agent_id}): id(self.state) before process_perceived_messages: {id(self.state)}"
         )
-        AgentController(self.state).process_perceived_messages(
-            enriched_messages_for_state_update
-        )
+        AgentController(self.state).process_perceived_messages(enriched_messages_for_state_update)
         logger.info(
             f"Agent {self.agent_id} processed {len(enriched_messages_for_state_update)} messages directly in perceive_messages, updating mood/relationships."
         )

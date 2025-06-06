@@ -4,12 +4,22 @@ Provides real-time updates about the simulation to a Discord channel.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN401
 
 import logging
 from typing import Any, Optional
 
-import discord
-from discord.ext import commands
+try:
+    import discord
+    from discord.ext import commands
+except Exception:  # pragma: no cover - optional dependency
+    import sys
+    from unittest.mock import MagicMock
+
+    logging.getLogger(__name__).warning("discord.py not installed; using MagicMock stub")
+    discord = MagicMock()
+    commands = MagicMock()
+    sys.modules.setdefault("discord", discord)
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
