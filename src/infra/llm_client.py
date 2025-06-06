@@ -21,9 +21,9 @@ except Exception:  # pragma: no cover - optional dependency
 
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
-import requests  # type: ignore
+import requests
 from pydantic import BaseModel, ValidationError
-from requests.exceptions import RequestException  # type: ignore
+from requests.exceptions import RequestException
 
 from src.shared.decorator_utils import monitor_llm_call
 
