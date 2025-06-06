@@ -158,17 +158,6 @@ class AgentStateData(BaseModel):
     _targeted_message_multiplier: float = PrivateAttr(
         default_factory=lambda: float(str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5"))
     )
-                "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. "
-                f"Type: {type(v)}, Value: {v}"
-
-            )
-            if isinstance(v, str) and v.lower() == "neutral":
-                logger.warning(
-                    "AGENT_STATE_VALIDATOR_DEBUG: mood_level input was 'neutral', coercing to 0.0"
-                )
-                return 0.0  # Attempt to coerce common problematic string to float
-            # If it cannot be coerced, Pydantic will raise a validation error later if not a float
-        return v
 
     @validator("mood_level")
     @classmethod
