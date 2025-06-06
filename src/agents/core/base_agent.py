@@ -26,6 +26,8 @@ from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
 from src.shared.async_utils import AsyncDSPyManager
 
+from .agent_controller import AgentController
+
 # Import graph types from the new file
 from .agent_graph_types import AgentActionOutput, AgentTurnState  # RESTORE THIS IMPORT
 
@@ -955,13 +957,13 @@ class Agent:
         # Option 1: Directly update state (if no complex graph logic needed for perception)
         # This is the most direct way if the graph isn't invoked for perception-only updates.
         logger.debug(
-            f"Agent {self.agent_id} (perceive_messages): About to call self.state.process_perceived_messages with: {enriched_messages_for_state_update}"
+            f"Agent {self.agent_id} (perceive_messages): About to call AgentController.process_perceived_messages with: {enriched_messages_for_state_update}"
         )
         logger.debug(
             f"BaseAgent ({self.agent_id}): id(self.state) before process_perceived_messages: {id(self.state)}"
         )
-        self.state.process_perceived_messages(
-            enriched_messages_for_state_update, self.vector_store_manager
+        AgentController(self.state).process_perceived_messages(
+            enriched_messages_for_state_update
         )
         logger.info(
             f"Agent {self.agent_id} processed {len(enriched_messages_for_state_update)} messages directly in perceive_messages, updating mood/relationships."

@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.interfaces.discord_bot import SimulationDiscordBot, say, stats
 
