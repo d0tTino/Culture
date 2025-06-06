@@ -10,20 +10,45 @@ from pydantic import BaseModel, Field, PrivateAttr
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
+    import inspect
+    from types import SimpleNamespace
     from typing import Any as ValidationInfo
 
     from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
 
-    def field_validator(*fields: str, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
-        """Shim to mimic the pydantic v2 ``field_validator`` API."""
+    def field_validator(
+        *fields: str, **kwargs: Any
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Provide a v2-compatible ``field_validator`` for Pydantic v1."""
         mode = kwargs.pop("mode", "after")
-        if mode == "before":
-            kwargs["pre"] = True
-        return _pydantic_validator(*fields, **kwargs)
+        pre = mode == "before"
 
-    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore
+        def decorator(
+            func: Callable[[Any, Any, ValidationInfo], Any] | classmethod,
+        ) -> Callable[[Any, Any], Any]:
+            actual = func.__func__ if isinstance(func, classmethod) else func
+            base = _pydantic_validator(*fields, pre=pre, allow_reuse=True, **kwargs)
+
+            def wrapper(
+                cls: Any,
+                value: Any,
+                values: dict[str, Any],
+                config: Any,
+                field: Any,
+            ) -> Any:
+                info = SimpleNamespace(data=values)
+                return actual(cls, value, info)
+
+            wrapper.__name__ = actual.__name__
+            wrapper.__signature__ = inspect.signature(lambda cls, v, values, config, field: None)
+
+            return base(wrapper)
+
+        return decorator
+
+    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore[misc]
         def decorator(fn: Any) -> Any:
             return fn
 
@@ -122,6 +147,13 @@ class AgentStateData(BaseModel):
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize and call ``model_post_init`` on Pydantic v1."""
+        super().__init__(**data)
+        if not hasattr(BaseModel, "model_validate"):
+            self.model_post_init(None)
+
     last_thought: Optional[str] = None
     last_clarification_question: Optional[str] = None
     last_clarification_downgraded: bool = False
@@ -236,7 +268,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -279,7 +310,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             "role": self.current_role,
             # Add other relevant metrics here if needed for collective tracking
         }
-
 
     def __hash__(self) -> int:
         # Pydantic models are not hashable by default if they have mutable fields like lists/dicts.
@@ -346,3 +376,21 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
 
+    # ------------------------------------------------------------------
+    # Serialization helpers for tests
+    # ------------------------------------------------------------------
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary representation of the state."""
+        if hasattr(self, "model_dump"):
+            return self.model_dump()
+        return self.dict()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AgentState":
+        """Create an AgentState from a dictionary."""
+        sanitized = dict(data)
+        # Exclude optional complex fields that may fail validation when None
+        sanitized.pop("memory_store_manager", None)
+        if hasattr(cls, "model_validate"):
+            return cls.model_validate(sanitized)
+        return cls(**sanitized)
