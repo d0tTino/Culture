@@ -9,7 +9,7 @@ To run the tests, install dependencies from both `requirements.txt` and `require
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ```
-The development requirements include `pytest-asyncio` and `requests` for asynchronous tests and HTTP utilities.
+The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, and `requests` for HTTP utilities.
 
 ## Test Markers and Suite Structure
 
