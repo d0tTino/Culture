@@ -1,6 +1,9 @@
 import logging
 import os
 import sys
+import pytest
+
+pytest.skip("DSPy wrapper manual test", allow_module_level=True)
 
 # Configure logging
 logging.basicConfig(
