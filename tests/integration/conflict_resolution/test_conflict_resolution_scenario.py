@@ -15,6 +15,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import pytest
+
 try:
     import dspy  # pragma: no cover - optional dependency
 except Exception:
