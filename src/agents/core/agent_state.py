@@ -10,20 +10,34 @@ from pydantic import BaseModel, Field, PrivateAttr
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
+    from types import SimpleNamespace
     from typing import Any as ValidationInfo
 
     from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
 
-    def field_validator(*fields: str, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
-        """Shim to mimic the pydantic v2 ``field_validator`` API."""
+    def field_validator(
+        *fields: str, **kwargs: Any
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Provide a v2-compatible ``field_validator`` for Pydantic v1."""
         mode = kwargs.pop("mode", "after")
-        if mode == "before":
-            kwargs["pre"] = True
-        return _pydantic_validator(*fields, **kwargs)
+        pre = mode == "before"
 
-    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore
+        def decorator(
+            func: Callable[[Any, Any, ValidationInfo], Any],
+        ) -> Callable[[Any, Any], Any]:
+            base = _pydantic_validator(*fields, pre=pre, **kwargs)
+
+            def wrapper(cls: Any, value: Any, values: dict[str, Any], *a: Any, **k: Any) -> Any:
+                info = SimpleNamespace(data=values)
+                return func(cls, value, info)
+
+            return base(wrapper)
+
+        return decorator
+
+    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore[misc]
         def decorator(fn: Any) -> Any:
             return fn
 
@@ -236,7 +250,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -279,7 +292,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             "role": self.current_role,
             # Add other relevant metrics here if needed for collective tracking
         }
-
 
     def __hash__(self) -> int:
         # Pydantic models are not hashable by default if they have mutable fields like lists/dicts.
@@ -360,4 +372,3 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         # Exclude optional complex fields that may fail validation when None
         sanitized.pop("memory_store_manager", None)
         return cls(**sanitized)
-
