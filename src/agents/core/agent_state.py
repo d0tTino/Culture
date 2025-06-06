@@ -296,7 +296,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     @validator("memory_store_manager", pre=True)
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
-        if value is None:
+    @root_validator(pre=False, skip_on_failure=True)
             return None
         if hasattr(value, "get_retriever"):  # Check for a specific method
             return value
