@@ -4,6 +4,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 
 import json
 import logging
@@ -88,12 +89,14 @@ except Exception:  # pragma: no cover - optional dependency
 
     dspy = SimpleNamespace(
         settings=SimpleNamespace(configure=_configure, lm=None),
+
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
         Predict=Predict,
         Prediction=Prediction,
+
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
