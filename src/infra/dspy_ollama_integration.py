@@ -6,6 +6,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 # mypy: ignore-errors
 # ruff: noqa: ANN101, ANN102
 
+import json
 import logging
 import sys
 import time
@@ -43,36 +44,31 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-    _dspy_settings = SimpleNamespace(lm=None)
+    class Settings(SimpleNamespace):
+        def configure(self, **kwargs: Any) -> None:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
-    def _configure(**kwargs: object) -> None:
-        if "lm" in kwargs:
-            _dspy_settings.lm = kwargs["lm"]
-            dspy.settings.lm = kwargs["lm"]
+    settings = Settings()
 
     class Predict:
-        def __init__(self, _signature: object, lm: BaseLM | None = None) -> None:
-            self.lm = lm or _dspy_settings.lm or BaseLM()
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
 
         def __call__(self, *args: Any, **kwargs: Any) -> SimpleNamespace:
-            prompt = kwargs.get("question")
-            result = self.lm(prompt)
+            lm = getattr(settings, "lm", BaseLM())
+            result = lm(*args, **kwargs)
             if isinstance(result, list):
-                result_str = str(result[0]) if result else "PROPOSE_IDEA"
-            else:
-                result_str = str(result)
+                result = result[0]
             try:
-                if result_str.startswith("{"):
-                    import json
-
-                    parsed = json.loads(result_str)
-                    result_str = parsed.get("intent", result_str)
+                data = json.loads(str(result))
+                intent = data.get("intent", str(result))
             except Exception:
-                pass
-            return SimpleNamespace(intent=result_str)
+                intent = str(result)
+            return SimpleNamespace(intent=intent)
 
     dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=_configure, lm=None),
+        settings=settings,
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,

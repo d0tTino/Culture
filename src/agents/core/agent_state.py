@@ -350,15 +350,46 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
 
-    # ------------------------------------------------------------------
-    # Serialization helpers
-    # ------------------------------------------------------------------
-
     def to_dict(self) -> dict[str, Any]:
-        """Return a plain dictionary representation of the agent state."""
-        return self.model_dump()
+        """Serialize the agent state to a dictionary."""
+        return self.model_dump(
+            exclude={
+                "llm_client",
+                "memory_store_manager",
+                "action_intent_model",
+                "thought_model",
+                "l1_summary_model",
+                "mock_llm_client",
+            }
+        )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AgentState":
-        """Reconstruct an AgentState from ``to_dict`` output."""
-        return cls.model_validate(data)
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        llm_client_config_override: Any | None = None,
+        memory_store_manager_override: Any | None = None,
+    ) -> "AgentState":
+        """Deserialize an AgentState from a dictionary."""
+        if llm_client_config_override is not None:
+            data["llm_client_config"] = llm_client_config_override
+        if memory_store_manager_override is not None:
+            data["memory_store_manager"] = memory_store_manager_override
+
+        if "mood_history" in data and data["mood_history"] is not None:
+            data["mood_history"] = [
+                (int(turn), float(m_val)) for turn, m_val in data["mood_history"]
+            ]
+
+        if "relationship_history" in data and data["relationship_history"] is not None:
+            processed_rh: dict[str, list[tuple[int, float]]] = {}
+            for agent_name, history_list in data["relationship_history"].items():
+                processed_rh[agent_name] = [
+                    (int(turn), float(r_val)) for turn, r_val in history_list
+                ]
+            data["relationship_history"] = processed_rh
+
+        if "relationships" in data and data["relationships"] is not None:
+            data["relationships"] = {k: float(v) for k, v in data["relationships"].items()}
+
+        return cls(**data)
