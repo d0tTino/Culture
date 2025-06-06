@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
+from src.agents.core.mood_utils import get_descriptive_mood
 from src.agents.core.roles import ROLE_ANALYZER, ROLE_FACILITATOR, ROLE_INNOVATOR
 
 # Import L1SummaryGenerator for DSPy-based L1 summary generation
@@ -370,30 +371,6 @@ def _format_messages(messages: list[dict[str, Any]]) -> str:
         message_type = "(Private to you)" if recipient else "(Broadcast)"
         lines.append(f'  - {sender} {message_type}: "{content}"')
     return "\n".join(lines)
-
-
-def get_mood_level(mood_value: float) -> str:
-    if mood_value < -0.3:
-        return "unhappy"
-    elif mood_value > 0.3:
-        return "happy"
-    return "neutral"
-
-
-def get_descriptive_mood(mood_value: float) -> str:
-    if mood_value < -0.7:
-        return "very unhappy"
-    elif mood_value < -0.3:
-        return "unhappy"
-    elif mood_value < -0.1:
-        return "slightly unhappy"
-    elif mood_value <= 0.1:
-        return "neutral"
-    elif mood_value <= 0.3:
-        return "slightly happy"
-    elif mood_value <= 0.7:
-        return "happy"
-    return "very happy"
 
 
 def shorten_message(message: str) -> str:
