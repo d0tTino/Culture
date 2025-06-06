@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
 
 try:
@@ -58,23 +59,24 @@ def main() -> None:
     )
     print(f"Deserialized state: {deserialized_state.name}, LLM Model: {llm_model}")
 
-    agent_state.update_mood(sentiment_score=0.5)
+    controller = AgentController(agent_state)
+    controller.update_mood(sentiment_score=0.5)
     print(f"Mood after update: {agent_state.mood_level:.2f}, History: {agent_state.mood_history}")
 
-    agent_state.update_relationship("agent2", sentiment_score=-0.3)
+    controller.update_relationship("agent2", sentiment_score=-0.3)
     print(
         f"Relationship with agent2: {agent_state.relationships.get('agent2'):.2f}, History: {agent_state.relationship_history.get('agent2')}"
     )
 
-    agent_state.reset_state()
+    controller.reset_state()
     print(f"Mood after reset: {agent_state.mood_level}, Mood History: {agent_state.mood_history}")
     print(
         f"Relationships after reset: {agent_state.relationships}, Relationship History: {agent_state.relationship_history}"
     )
 
-    agent_state.update_dynamic_config("mood_decay_rate", 0.05)
+    controller.update_dynamic_config("mood_decay_rate", 0.05)
 
-    agent_state.process_perceived_messages(
+    controller.process_perceived_messages(
         [
             {"sender_name": "agent2", "content": "0.9 Great idea!"},
             {"sender_name": "agent3", "content": "-0.5 I disagree."},

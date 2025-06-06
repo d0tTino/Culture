@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
 from src.agents.core.roles import ROLE_ANALYZER, ROLE_FACILITATOR, ROLE_INNOVATOR
 
@@ -566,13 +567,13 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
     if structured_output and structured_output.requested_role_change:
         if process_role_change(agent_state_obj, structured_output.requested_role_change):
-            agent_state_obj.add_memory(
+            AgentController(agent_state_obj).add_memory(
                 sim_step,
                 "role_change",
                 f"Changed role to {structured_output.requested_role_change}",
             )
         else:
-            agent_state_obj.add_memory(
+            AgentController(agent_state_obj).add_memory(
                 sim_step, "resource_constraint", "Failed role change attempt"
             )
 
@@ -616,7 +617,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             memory_summary = getattr(summary_prediction, "summary", None)
 
             if memory_summary:
-                agent_state_obj.add_memory(sim_step, "consolidated_summary", memory_summary)
+                AgentController(agent_state_obj).add_memory(sim_step, "consolidated_summary", memory_summary)
                 vector_store = state.get("vector_store_manager")
                 if vector_store and hasattr(vector_store, "add_memory"):
                     vector_store.add_memory(
