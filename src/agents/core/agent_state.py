@@ -346,3 +346,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
 
+    # ------------------------------------------------------------------
+    # Serialization helpers for tests
+    # ------------------------------------------------------------------
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary representation of the state."""
+        return self.model_dump()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AgentState":
+        """Create an AgentState from a dictionary."""
+        sanitized = dict(data)
+        # Exclude optional complex fields that may fail validation when None
+        sanitized.pop("memory_store_manager", None)
+        return cls(**sanitized)
+
