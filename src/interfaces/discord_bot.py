@@ -10,20 +10,14 @@ import logging
 from typing import Any, Optional
 
 try:
-    import discord  # type: ignore
-    from discord.ext import commands  # type: ignore
-    
+    import discord
+    from discord.ext import commands
 except Exception:  # pragma: no cover - optional dependency
-    import sys
+
     from unittest.mock import MagicMock
 
     discord = MagicMock()
     commands = MagicMock()
-    discord.ext = MagicMock(commands=commands)  # type: ignore[attr-defined]
-    sys.modules.setdefault("discord", discord)
-    sys.modules.setdefault("discord.ext", discord.ext)
-    sys.modules.setdefault("discord.ext.commands", commands)
-    
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
