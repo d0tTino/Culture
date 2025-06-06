@@ -14,14 +14,15 @@ import time
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import Any, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
 
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pydantic import ValidationError
 from typing_extensions import Self
 
-from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
+if TYPE_CHECKING:  # pragma: no cover - for type hints only
+    from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
@@ -135,7 +136,9 @@ class ChromaVectorStoreManager:
             f"'{persist_directory}'."
         )
 
-        # Initialize usage tracking manager
+        # Import lazily to avoid a circular dependency with memory_tracking_manager
+        from .memory_tracking_manager import MemoryTrackingManager
+
         self.tracking_manager = MemoryTrackingManager(self.collection)
 
         # For tracking memory retrieval performance

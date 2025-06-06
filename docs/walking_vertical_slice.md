@@ -23,4 +23,4 @@ This example demonstrates a minimal end-to-end run of the Culture.ai simulation 
    python -m examples.walking_vertical_slice
    ```
 
-The script spins up two agents and runs three steps of the simulation. All LLM calls go through your local Ollama instance; no mocking is applied.
+The demo now spins up **three** agents for three steps. Memories are persisted to ChromaDB and displayed on the Knowledge Board. All LLM calls go through your local Ollama instance; no mocking is applied.

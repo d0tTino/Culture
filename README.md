@@ -495,7 +495,8 @@ To verify your local setup with actual LLM calls, run the minimal demo script:
 ```bash
 python -m examples.walking_vertical_slice
 ```
-This spins up two agents for a few steps using your local Ollama instance. See
+This spins up three agents for a few steps using your local Ollama instance and
+persists their memories to ChromaDB. See
 [docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
 
 ### Running Tests

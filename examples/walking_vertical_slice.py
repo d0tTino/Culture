@@ -17,10 +17,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     sim = create_simulation(
-        num_agents=2,
+        num_agents=3,
         steps=3,
         scenario="Vertical slice demonstration",
-        use_vector_store=False,
+        use_vector_store=True,
     )
     asyncio.run(sim.async_run(sim.steps_to_run))
 
