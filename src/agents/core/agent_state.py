@@ -107,62 +107,57 @@ class AgentStateData(BaseModel):
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
 
-    def __init__(self, **data: Any) -> None:
-        """Initialize and call ``model_post_init`` on Pydantic v1."""
-        super().__init__(**data)
-        if not hasattr(BaseModel, "model_validate"):
-            self.model_post_init(None)
-
-    last_thought: Optional[str] = None
-    last_clarification_question: Optional[str] = None
-    last_clarification_downgraded: bool = False
-    last_action_intent: Optional[AgentActionIntent] = None
-    last_message_step: Optional[int] = None
-    last_action_step: Optional[int] = None
-    available_action_intents: list[AgentActionIntent] = Field(
-        default_factory=lambda: list(DEFAULT_AVAILABLE_ACTIONS)
+    _max_short_term_memory: int = PrivateAttr(
+        default_factory=lambda: int(str(get_config("MAX_SHORT_TERM_MEMORY") or "100"))
     )
-    step_counter: int = 0  # Tracks how many steps this agent has processed
-    messages_sent_count: int = 0
-    messages_received_count: int = 0
-    actions_taken_count: int = 0
-    # Memory consolidation tracking
-    last_level_2_consolidation_step: int = 0
-    collective_ip: float = 0.0
-    collective_du: float = 0.0
-    current_role: str = Field(default_factory=_get_default_role)
-    steps_in_current_role: int = 0
-    conversation_history: deque[str] = Field(
-        default_factory=deque
-    )  # Added for process_perceived_messages
-
-    # Configuration parameters (will be initialized from global config)
-    _max_short_term_memory: int = PrivateAttr()
-    _short_term_memory_decay_rate: float = PrivateAttr()
-    _relationship_decay_rate: float = PrivateAttr()
-    _min_relationship_score: float = PrivateAttr()
-    _max_relationship_score: float = PrivateAttr()
-    _mood_decay_rate: float = PrivateAttr()
-    _mood_update_rate: float = PrivateAttr()
-    _ip_cost_per_message: float = PrivateAttr()
-    _du_cost_per_action: float = PrivateAttr()
-    _role_change_cooldown: int = PrivateAttr()
-    _role_change_ip_cost: float = PrivateAttr()
-    _positive_relationship_learning_rate: float = PrivateAttr()
-    _negative_relationship_learning_rate: float = PrivateAttr()
-    _neutral_relationship_learning_rate: float = PrivateAttr()
-    _targeted_message_multiplier: float = PrivateAttr()
-
-    def __init__(self, **data: Any) -> None:
-        super().__init__(**data)
-        self.model_post_init(None)
-
-    @validator("mood_level", pre=True)
-
-    @classmethod
-    def check_mood_level_type_before(cls, v: Any) -> Any:
-        if not isinstance(v, (float, int)):
-            logger.warning(
+    _short_term_memory_decay_rate: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("SHORT_TERM_MEMORY_DECAY_RATE") or "0.1"))
+    )
+    _relationship_decay_rate: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("RELATIONSHIP_DECAY_FACTOR") or "0.01"))
+    )
+    _min_relationship_score: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("MIN_RELATIONSHIP_SCORE") or "-1.0"))
+    )
+    _max_relationship_score: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("MAX_RELATIONSHIP_SCORE") or "1.0"))
+    )
+    _mood_decay_rate: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("MOOD_DECAY_FACTOR") or "0.01"))
+    )
+    _mood_update_rate: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("MOOD_UPDATE_RATE") or "0.1"))
+    )
+    _ip_cost_per_message: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("IP_COST_SEND_DIRECT_MESSAGE") or "1.0"))
+    )
+    _du_cost_per_action: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("DU_COST_PER_ACTION") or "1.0"))
+    )
+    _role_change_cooldown: int = PrivateAttr(
+        default_factory=lambda: int(str(get_config("ROLE_CHANGE_COOLDOWN") or "10"))
+    )
+    _role_change_ip_cost: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("ROLE_CHANGE_IP_COST") or "5.0"))
+    )
+    _positive_relationship_learning_rate: float = PrivateAttr(
+        default_factory=lambda: float(
+            str(get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
+        )
+    )
+    _negative_relationship_learning_rate: float = PrivateAttr(
+        default_factory=lambda: float(
+            str(get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
+        )
+    )
+    _neutral_relationship_learning_rate: float = PrivateAttr(
+        default_factory=lambda: float(
+            str(get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE") or "0.05")
+        )
+    )
+    _targeted_message_multiplier: float = PrivateAttr(
+        default_factory=lambda: float(str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5"))
+    )
                 "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. "
                 f"Type: {type(v)}, Value: {v}"
 
@@ -297,6 +292,14 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
     def get_current_relationship_score(self, agent_name: str) -> float:
         """Returns the current relationship score with the specified agent."""
+        if not values.get("role_history"):
+            values["role_history"] = [
+                (values.get("step_counter", 0), values.get("current_role", ""))
+            ]
+        if not values.get("mood_history"):
+            values["mood_history"] = [
+                (values.get("step_counter", 0), values.get("mood_level", 0.0))
+            ]
         if agent_name not in self.relationship_history:
             # Return a neutral score if no history exists
             return 0.0
