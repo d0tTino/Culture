@@ -8,7 +8,15 @@ Culture.ai is an AI Genesis Engine that simulates multi-agent interactions withi
 
 Culture.ai follows a modular design pattern, separating distinct concerns into specialized components that interact through well-defined interfaces.
 
-[Diagram: High-Level Architecture - showing relationships between Agent Core, Memory, Decision Logic, Infrastructure, Simulation Environment, and Interfaces]
+```mermaid
+graph TD
+    AC[Agent Core] --> MEM[Memory System]
+    MEM --> DEC[Decision Logic]
+    DEC --> SIM[Simulation Environment]
+    SIM --> AC
+    MEM --> INF[Infrastructure]
+    DEC --> INT[Interfaces]
+```
 
 ### Key Architectural Principles
 
@@ -160,6 +168,18 @@ The agent memory system is organized hierarchically into two main levels:
 - **L1 Summaries (Session/Step Level):** Capture recent events, thoughts, and actions for each agent over a short window (typically 10 steps). L1s are consolidated frequently and pruned more aggressively.
 - **L2 Summaries (Chapter Level):** Synthesize multiple L1 summaries into higher-level, longer-term insights. L2s are consolidated less frequently and pruned more conservatively, as they represent more valuable, synthesized knowledge.
 
+```mermaid
+graph TD
+    Raw[Raw Memories] -->|Consolidate| L1[L1 Summaries]
+    L1 -->|Synthesize| L2[L2 Summaries]
+    Raw -->|RAG Retrieval| RAG[(RAG)]
+    L1 -->|RAG Retrieval| RAG
+    L2 -->|RAG Retrieval| RAG
+    Raw -.->|Prune (Age/MUS)| RawPrune[Pruned]
+    L1 -.->|Prune (Age/MUS)| L1Prune[Pruned]
+    L2 -.->|Prune (Age/MUS)| L2Prune[Pruned]
+```
+
 ## Memory Utility Score (MUS)
 
 The **Memory Utility Score (MUS)** quantifies the importance of each memory using a weighted formula:
@@ -201,7 +221,14 @@ The Agent Decision Logic system (primarily in `src/agents/graphs/basic_agent_gra
 
 The agent decision process is modeled as a graph with specialized nodes for different processing steps:
 
-[Diagram: Agent Turn Graph - showing flow between perception, memory retrieval, thought generation, action selection, and state update nodes]
+```mermaid
+graph TD
+    Perceive[Perceive Environment] --> Retrieve[Retrieve Memories]
+    Retrieve --> Think[Generate Thought]
+    Think --> Act[Select Action]
+    Act --> Update[Update State]
+    Update --> Perceive
+```
 
 ### Key Nodes
 
