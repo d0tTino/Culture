@@ -3,16 +3,13 @@ import sys
 from typing import cast
 
 import pytest
+from typing_extensions import Self
 
-pytest.importorskip("dspy")
-pytest.importorskip("ollama")
-
-import dspy
-import ollama
+dspy = pytest.importorskip("dspy")
+ollama = pytest.importorskip("ollama")
 
 if not hasattr(dspy, "Predict"):
     pytest.skip("dspy Predict not available", allow_module_level=True)
-from typing_extensions import Self
 
 # Configure logging
 logging.basicConfig(
@@ -160,7 +157,9 @@ def test_role_prefix_adherence() -> None:
     logger.info(f"Success rate: {success_rate:.1f}% ({success_count}/{total_tests} successful)")
 
     if success_count == total_tests:
-        logger.info("✅ All tests passed! DSPy role adherence implementation is working correctly.")
+        logger.info(
+            "✅ All tests passed! DSPy role adherence implementation is working correctly."
+        )
     else:
         logger.warning(
             f"⚠️ {total_tests - success_count} tests failed. DSPy role adherence needs improvement."

@@ -9,10 +9,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
-    from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
+    from pydantic import ConfigDict, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
-    from typing import Any as ValidationInfo
-
     from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
@@ -22,9 +20,23 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
         """Shim to mimic the pydantic v2 ``field_validator`` API."""
         mode = kwargs.pop("mode", "after")
-        if mode == "before":
-            kwargs["pre"] = True
-        return _pydantic_validator(*fields, **kwargs)
+        pre = mode == "before"
+
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+            def wrapper(
+                cls: type[object],
+                value: Any,
+                values: dict[str, Any] | None = None,
+                config: Any | None = None,
+                field: Any | None = None,
+            ) -> Any:
+                return fn(cls, value)
+
+            return _pydantic_validator(
+                *fields, pre=pre, allow_reuse=kwargs.get("allow_reuse", False)
+            )(wrapper)
+
+        return decorator
 
     def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore
         def decorator(fn: Any) -> Any:
@@ -165,29 +177,34 @@ class AgentStateData(BaseModel):
     _neutral_relationship_learning_rate: float = PrivateAttr()
     _targeted_message_multiplier: float = PrivateAttr()
 
-    @field_validator("mood_level", mode="before")  # Validate before Pydantic tries to coerce
-    @classmethod
-    def check_mood_level_type_before(cls, v: Any, info: ValidationInfo) -> Any:
+    @field_validator(
+        "mood_level", mode="before", allow_reuse=True
+    )  # Validate before Pydantic tries to coerce
+    def check_mood_level_type_before(cls, v: Any, *args: Any, **kwargs: Any) -> Any:
         if not isinstance(v, (float, int)):
             logger.warning(
-                f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input is not float/int before coercion. Type: {type(v)}, Value: {v}"
+                "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. Type: %s, Value: %s",
+                type(v),
+                v,
             )
             if isinstance(v, str) and v.lower() == "neutral":
                 logger.warning(
-                    f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input was 'neutral', coercing to 0.0"
+                    "AGENT_STATE_VALIDATOR_DEBUG: mood_level input was 'neutral', coercing to 0.0"
                 )
                 return 0.0  # Attempt to coerce common problematic string to float
             # If it cannot be coerced, Pydantic will raise a validation error later if not a float
         return v
 
-    @field_validator("mood_level", mode="after")
-    @classmethod
-    def check_mood_level_type_after(cls, v: float, info: ValidationInfo) -> float:
+    @field_validator("mood_level", mode="after", allow_reuse=True)
+    def check_mood_level_type_after(cls, v: float, *args: Any, **kwargs: Any) -> float:
         if not isinstance(v, float):
             # This should ideally not happen if Pydantic's coercion to float worked or failed earlier
             logger.error(
-                f"AGENT_STATE_VALIDATOR_ERROR ({info.data.get('agent_id', 'Unknown')}): mood_level is not float AFTER Pydantic processing. Type: {type(v)}, Value: {v}. This is unexpected."
+                "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. Type: %s, Value: %s. This is unexpected.",
+                type(v),
+                v,
             )
+            return v
         return v
 
     @property
@@ -239,6 +256,14 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        # Ensure private attributes are initialized when using Pydantic v1
+        try:
+            self.model_post_init(None)
+        except Exception:
+            pass
+
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -308,14 +333,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
     def to_dict(self: Self) -> dict[str, Any]:
         """Serialize state to a plain dictionary."""
-        return self.model_dump(exclude={"memory_store_manager"})
+        if hasattr(self, "model_dump"):
+            return self.model_dump(exclude={"memory_store_manager"})  # type: ignore[attr-defined]
+        return self.dict(exclude={"memory_store_manager"})  # type: ignore[call-arg]
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
         """Deserialize state from a dictionary."""
-        return cls.model_validate(data)
+        if hasattr(cls, "model_validate"):
+            return cls.model_validate(data)  # type: ignore[attr-defined]
+        return cls.parse_obj(data)
 
-    @field_validator("memory_store_manager", mode="before")
+    @field_validator("memory_store_manager", mode="before", allow_reuse=True)
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
         if value is None:
