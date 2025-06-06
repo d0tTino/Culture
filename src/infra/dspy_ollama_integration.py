@@ -370,10 +370,11 @@ def configure_dspy_with_ollama(
 
     # Check Ollama server availability
     try:
-        response = requests.get(f"{api_base}/api/tags")
+        logger.info(f"Checking Ollama server availability at {api_base}...")
+        response = requests.get(api_base, timeout=2)
         if response.status_code != 200:
             logger.error(
-                "Ollama server reachable but returned unexpected status. "
+                f"Ollama server not accessible at {api_base}. "
                 f"Status code: {response.status_code}. "
                 "DSPy LM cannot be configured."
             )

@@ -4,15 +4,57 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
-from typing_extensions import Self
+from pydantic import BaseModel, Field, PrivateAttr
 
 try:  # Support pydantic >= 2 if installed
-    from pydantic import ConfigDict
+    from pydantic import ConfigDict, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
+    import inspect
+    from types import SimpleNamespace
+    from typing import Any as ValidationInfo
+
+    from pydantic import validator as _pydantic_validator
+
     ConfigDict = dict  # type: ignore[misc]
+
+    def field_validator(
+        *fields: str, **kwargs: Any
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Provide a v2-compatible ``field_validator`` for Pydantic v1."""
+        mode = kwargs.pop("mode", "after")
+        pre = mode == "before"
+
+        def decorator(
+            func: Callable[[Any, Any, ValidationInfo], Any] | classmethod,
+        ) -> Callable[[Any, Any], Any]:
+            actual = func.__func__ if isinstance(func, classmethod) else func
+            base = _pydantic_validator(*fields, pre=pre, allow_reuse=True, **kwargs)
+
+            def wrapper(
+                cls: Any,
+                value: Any,
+                values: dict[str, Any],
+                config: Any,
+                field: Any,
+            ) -> Any:
+                info = SimpleNamespace(data=values)
+                return actual(cls, value, info)
+
+            wrapper.__name__ = actual.__name__
+            wrapper.__signature__ = inspect.signature(lambda cls, v, values, config, field: None)
+
+            return base(wrapper)
+
+        return decorator
+
+    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore[misc]
+        def decorator(fn: Any) -> Any:
+            return fn
+
+        return decorator
+
 
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
@@ -107,66 +149,77 @@ class AgentStateData(BaseModel):
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
 
-    _max_short_term_memory: int = PrivateAttr(
-        default_factory=lambda: int(str(get_config("MAX_SHORT_TERM_MEMORY") or "100"))
-    )
-    _short_term_memory_decay_rate: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("SHORT_TERM_MEMORY_DECAY_RATE") or "0.1"))
-    )
-    _relationship_decay_rate: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("RELATIONSHIP_DECAY_FACTOR") or "0.01"))
-    )
-    _min_relationship_score: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("MIN_RELATIONSHIP_SCORE") or "-1.0"))
-    )
-    _max_relationship_score: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("MAX_RELATIONSHIP_SCORE") or "1.0"))
-    )
-    _mood_decay_rate: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("MOOD_DECAY_FACTOR") or "0.01"))
-    )
-    _mood_update_rate: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("MOOD_UPDATE_RATE") or "0.1"))
-    )
-    _ip_cost_per_message: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("IP_COST_SEND_DIRECT_MESSAGE") or "1.0"))
-    )
-    _du_cost_per_action: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("DU_COST_PER_ACTION") or "1.0"))
-    )
-    _role_change_cooldown: int = PrivateAttr(
-        default_factory=lambda: int(str(get_config("ROLE_CHANGE_COOLDOWN") or "10"))
-    )
-    _role_change_ip_cost: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("ROLE_CHANGE_IP_COST") or "5.0"))
-    )
-    _positive_relationship_learning_rate: float = PrivateAttr(
-        default_factory=lambda: float(
-            str(get_config("POSITIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
-        )
-    )
-    _negative_relationship_learning_rate: float = PrivateAttr(
-        default_factory=lambda: float(
-            str(get_config("NEGATIVE_RELATIONSHIP_LEARNING_RATE") or "0.1")
-        )
-    )
-    _neutral_relationship_learning_rate: float = PrivateAttr(
-        default_factory=lambda: float(
-            str(get_config("NEUTRAL_RELATIONSHIP_LEARNING_RATE") or "0.05")
-        )
-    )
-    _targeted_message_multiplier: float = PrivateAttr(
-        default_factory=lambda: float(str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5"))
-    )
+    def __init__(self, **data: Any) -> None:
+        """Initialize and call ``model_post_init`` on Pydantic v1."""
+        super().__init__(**data)
+        if not hasattr(BaseModel, "model_validate"):
+            self.model_post_init(None)
 
-    @validator("mood_level")
+    last_thought: Optional[str] = None
+    last_clarification_question: Optional[str] = None
+    last_clarification_downgraded: bool = False
+    last_action_intent: Optional[AgentActionIntent] = None
+    last_message_step: Optional[int] = None
+    last_action_step: Optional[int] = None
+    available_action_intents: list[AgentActionIntent] = Field(
+        default_factory=lambda: list(DEFAULT_AVAILABLE_ACTIONS)
+    )
+    step_counter: int = 0  # Tracks how many steps this agent has processed
+    messages_sent_count: int = 0
+    messages_received_count: int = 0
+    actions_taken_count: int = 0
+    # Memory consolidation tracking
+    last_level_2_consolidation_step: int = 0
+    collective_ip: float = 0.0
+    collective_du: float = 0.0
+    current_role: str = Field(default_factory=_get_default_role)
+    steps_in_current_role: int = 0
+    conversation_history: deque[str] = Field(
+        default_factory=deque
+    )  # Added for process_perceived_messages
+
+    # Configuration parameters (will be initialized from global config)
+    _max_short_term_memory: int = PrivateAttr()
+    _short_term_memory_decay_rate: float = PrivateAttr()
+    _relationship_decay_rate: float = PrivateAttr()
+    _min_relationship_score: float = PrivateAttr()
+    _max_relationship_score: float = PrivateAttr()
+    _mood_decay_rate: float = PrivateAttr()
+    _mood_update_rate: float = PrivateAttr()
+    _ip_cost_per_message: float = PrivateAttr()
+    _du_cost_per_action: float = PrivateAttr()
+    _role_change_cooldown: int = PrivateAttr()
+    _role_change_ip_cost: float = PrivateAttr()
+    _positive_relationship_learning_rate: float = PrivateAttr()
+    _negative_relationship_learning_rate: float = PrivateAttr()
+    _neutral_relationship_learning_rate: float = PrivateAttr()
+    _targeted_message_multiplier: float = PrivateAttr()
+
+    @field_validator("mood_level", mode="before")
+    @classmethod
+    def check_mood_level_type_before(cls, v: Any) -> Any:
+        if not isinstance(v, (float, int)):
+            logger.warning(
+                "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. Type: %s, Value: %s",
+                type(v),
+                v,
+            )
+            if isinstance(v, str) and v.lower() == "neutral":
+                logger.warning(
+                    "AGENT_STATE_VALIDATOR_DEBUG: mood_level input was 'neutral', coercing to 0.0"
+                )
+                return 0.0  # Attempt to coerce common problematic string to float
+            # If it cannot be coerced, Pydantic will raise a validation error later if not a float
+        return v
+
+    @field_validator("mood_level", mode="after")
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
             logger.error(
-                "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. "
-                f"Type: {type(v)}, Value: {v}. This is unexpected."
-
+                "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. Type: %s, Value: %s. This is unexpected.",
+                type(v),
+                v,
             )
         return v
 
@@ -281,20 +334,12 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
     def get_current_relationship_score(self, agent_name: str) -> float:
         """Returns the current relationship score with the specified agent."""
-        if not values.get("role_history"):
-            values["role_history"] = [
-                (values.get("step_counter", 0), values.get("current_role", ""))
-            ]
-        if not values.get("mood_history"):
-            values["mood_history"] = [
-                (values.get("step_counter", 0), values.get("mood_level", 0.0))
-            ]
         if agent_name not in self.relationship_history:
             # Return a neutral score if no history exists
             return 0.0
         return self.relationship_history[-1][agent_name]
 
-    @validator("memory_store_manager", pre=True)
+    @field_validator("memory_store_manager", mode="before")
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
         if value is None:
@@ -303,29 +348,28 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @root_validator(pre=False, skip_on_failure=True)
-    def _validate_model_after(cls, values: dict[str, Any]) -> dict[str, Any]:
-        llm_client_config = values.get("llm_client_config")
-        llm_client = values.get("llm_client")
-        mock_llm_client = values.get("mock_llm_client")
-        if llm_client_config and not llm_client:
+    @model_validator(mode="after")
+    def _validate_model_after(self) -> "AgentState":
+        if self.llm_client_config and not self.llm_client:
             from src.infra.llm_client import LLMClient  # type: ignore # Local import
 
-            if mock_llm_client:
-                values["llm_client"] = mock_llm_client
+            if self.mock_llm_client:
+                self.llm_client = self.mock_llm_client
             else:
-                config_data = llm_client_config
-                if hasattr(config_data, "model_dump"):
+                # Ensure llm_client_config is a dict if it's from Pydantic model
+                config_data = self.llm_client_config
+                if hasattr(config_data, "model_dump"):  # Check if it's a Pydantic model
                     config_data = cast(dict, config_data.model_dump())
                 elif not isinstance(config_data, dict):
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
-                if isinstance(llm_client_config, BaseModel):
-                    values["llm_client"] = LLMClient(config=llm_client_config)  # type: ignore
-                else:
-                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
+                # Temporarily using LLMClientConfig directly if it's an instance
+                if isinstance(self.llm_client_config, BaseModel):
+                    self.llm_client = LLMClient(config=self.llm_client_config)  # type: ignore
+                else:  # Assumes it's a dict
+                    self.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
-        return values
+        return self
 
     def get_llm_client(self) -> "LLMClient":
         if not self.llm_client:
@@ -341,16 +385,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     # Serialization helpers for tests
     # ------------------------------------------------------------------
-
-    def to_dict(self: Self) -> dict[str, Any]:
-        """Return a dictionary representation of the agent state."""
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary representation of the state."""
+        if hasattr(self, "model_dump"):
+            return self.model_dump()
         return self.dict()
 
     @classmethod
-    def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
-        """Create an ``AgentState`` instance from a serialized dictionary."""
-        clean_data = data.copy()
-        if clean_data.get("memory_store_manager") is None:
-            clean_data.pop("memory_store_manager")
-        return cls(**clean_data)
-
+    def from_dict(cls, data: dict[str, Any]) -> "AgentState":
+        """Create an AgentState from a dictionary."""
+        sanitized = dict(data)
+        # Exclude optional complex fields that may fail validation when None
+        sanitized.pop("memory_store_manager", None)
+        if hasattr(cls, "model_validate"):
+            return cls.model_validate(sanitized)
+        return cls(**sanitized)
