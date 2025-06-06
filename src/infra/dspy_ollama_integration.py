@@ -86,8 +86,8 @@ except Exception:  # pragma: no cover - optional dependency
                 pass
             return Prediction(intent=text)
 
-        def load(self: Self, _path: str) -> None:  # pragma: no cover - no-op for tests
-            pass
+    "configure_dspy_with_ollama",
+    "dspy",
 
     class Settings(SimpleNamespace):
         def configure(self, **kwargs: Any) -> None:

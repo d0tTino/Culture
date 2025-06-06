@@ -1,5 +1,6 @@
 # mypy: ignore-errors
-# ruff: noqa: ANN101, ANN102
+    from pydantic import ConfigDict, model_validator
+    from pydantic import field_validator as _field_validator
 import logging
 import random
 from collections import deque
