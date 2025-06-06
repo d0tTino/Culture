@@ -3,32 +3,16 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
-    from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
+    from pydantic import ConfigDict
 except ImportError:  # pragma: no cover - fallback for old pydantic
-    from typing import Any as ValidationInfo
-
-    from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
-
-    def field_validator(*fields: str, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
-        """Shim to mimic the pydantic v2 ``field_validator`` API."""
-        mode = kwargs.pop("mode", "after")
-        if mode == "before":
-            kwargs["pre"] = True
-        return _pydantic_validator(*fields, **kwargs)
-
-    def model_validator(*_args: str, **_kwargs: str) -> Callable[[Any], Any]:  # type: ignore
-        def decorator(fn: Any) -> Any:
-            return fn
-
-        return decorator
 
 
 # Local imports (ensure these are correct and not causing cycles if possible)
@@ -163,28 +147,34 @@ class AgentStateData(BaseModel):
     _neutral_relationship_learning_rate: float = PrivateAttr()
     _targeted_message_multiplier: float = PrivateAttr()
 
-    @field_validator("mood_level", mode="before")  # Validate before Pydantic tries to coerce
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        self.model_post_init(None)
+
+    @validator("mood_level", pre=True)
     @classmethod
-    def check_mood_level_type_before(cls, v: Any, info: ValidationInfo) -> Any:
+    def check_mood_level_type_before(cls, v: Any) -> Any:
         if not isinstance(v, (float, int)):
             logger.warning(
-                f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input is not float/int before coercion. Type: {type(v)}, Value: {v}"
+                "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. "
+                f"Type: {type(v)}, Value: {v}"
             )
             if isinstance(v, str) and v.lower() == "neutral":
                 logger.warning(
-                    f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input was 'neutral', coercing to 0.0"
+                    "AGENT_STATE_VALIDATOR_DEBUG: mood_level input was 'neutral', coercing to 0.0"
                 )
                 return 0.0  # Attempt to coerce common problematic string to float
             # If it cannot be coerced, Pydantic will raise a validation error later if not a float
         return v
 
-    @field_validator("mood_level", mode="after")
+    @validator("mood_level")
     @classmethod
-    def check_mood_level_type_after(cls, v: float, info: ValidationInfo) -> float:
+    def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
             # This should ideally not happen if Pydantic's coercion to float worked or failed earlier
             logger.error(
-                f"AGENT_STATE_VALIDATOR_ERROR ({info.data.get('agent_id', 'Unknown')}): mood_level is not float AFTER Pydantic processing. Type: {type(v)}, Value: {v}. This is unexpected."
+                "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. "
+                f"Type: {type(v)}, Value: {v}. This is unexpected."
             )
         return v
 
@@ -281,7 +271,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             # Add other relevant metrics here if needed for collective tracking
         }
 
-
     def __hash__(self) -> int:
         # Pydantic models are not hashable by default if they have mutable fields like lists/dicts.
         # For use in sets or as dict keys, if needed, a specific hash can be implemented.
@@ -306,35 +295,36 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return 0.0
         return self.relationship_history[-1][agent_name]
 
-    @field_validator("memory_store_manager", mode="before")
+    @validator("memory_store_manager", pre=True)
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
         if hasattr(value, "get_retriever"):  # Check for a specific method
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")
-    def _validate_model_after(self) -> "AgentState":
-        if self.llm_client_config and not self.llm_client:
+    @root_validator(pre=False)
+    def _validate_model_after(cls, values: dict[str, Any]) -> dict[str, Any]:
+        llm_client_config = values.get("llm_client_config")
+        llm_client = values.get("llm_client")
+        mock_llm_client = values.get("mock_llm_client")
+        if llm_client_config and not llm_client:
             from src.infra.llm_client import LLMClient  # type: ignore # Local import
 
-            if self.mock_llm_client:
-                self.llm_client = self.mock_llm_client
+            if mock_llm_client:
+                values["llm_client"] = mock_llm_client
             else:
-                # Ensure llm_client_config is a dict if it's from Pydantic model
-                config_data = self.llm_client_config
-                if hasattr(config_data, "model_dump"):  # Check if it's a Pydantic model
+                config_data = llm_client_config
+                if hasattr(config_data, "model_dump"):
                     config_data = cast(dict, config_data.model_dump())
                 elif not isinstance(config_data, dict):
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
-                # Temporarily using LLMClientConfig directly if it's an instance
-                if isinstance(self.llm_client_config, BaseModel):
-                    self.llm_client = LLMClient(config=self.llm_client_config)  # type: ignore
-                else:  # Assumes it's a dict
-                    self.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+                if isinstance(llm_client_config, BaseModel):
+                    values["llm_client"] = LLMClient(config=llm_client_config)  # type: ignore
+                else:
+                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
 
-        return self
+        return values
 
     def get_llm_client(self) -> "LLMClient":
         if not self.llm_client:
@@ -352,7 +342,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump()
+        return self.dict()
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
@@ -360,5 +350,4 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         clean_data = data.copy()
         if clean_data.get("memory_store_manager") is None:
             clean_data.pop("memory_store_manager")
-        return cls.model_validate(clean_data)
-
+        return cls(**clean_data)
