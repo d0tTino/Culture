@@ -400,9 +400,7 @@ async def test_case_4_broadcast_vs_targeted(use_discord: bool = False) -> None:
             f"OBSERVED MULTIPLIER: {observed_multiplier:.2f}x (Expected: {targeted_multiplier:.2f}x)"
         )
         if abs(observed_multiplier - targeted_multiplier) < 0.1:
-            logging.info(
-                "✅ VERIFICATION PASSED: Targeted message multiplier is working correctly"
-            )
+            logging.info("✅ VERIFICATION PASSED: Targeted message multiplier is working correctly")
         else:
             logging.info(
                 "❌ VERIFICATION FAILED: Targeted message multiplier not applying correctly"

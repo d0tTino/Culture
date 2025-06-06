@@ -7,10 +7,44 @@ Provides real-time updates about the simulation to a Discord channel.
 
 import logging
 from typing import Any, Optional
-
-import discord
-from discord.ext import commands
 from typing_extensions import Self
+
+try:
+    import discord  # type: ignore
+    from discord.ext import commands  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    class _DummyColor(SimpleNamespace):
+        def __getattr__(self, _: str) -> int:  # pragma: no cover - minimal stub
+            return 0
+
+    discord = SimpleNamespace(  # type: ignore[var-annotated]
+        Client=MagicMock,
+        Intents=SimpleNamespace(default=lambda: SimpleNamespace(message_content=False)),
+        TextChannel=type("TextChannel", (), {}),
+        Thread=type("Thread", (), {}),
+        Embed=MagicMock,
+        Color=_DummyColor(),
+        DiscordException=Exception,
+    )
+
+    class _DummyCommand:
+        def __init__(self: Self, func: Any) -> None:
+            self.callback = func
+
+    class _DummyBot:
+        def __init__(self: Self, *_: Any, **__: Any) -> None:
+            pass
+
+        def command(self: Self, name: str | None = None) -> Any:
+            def decorator(func: Any) -> _DummyCommand:
+                return _DummyCommand(func)
+
+            return decorator
+
+    commands = SimpleNamespace(Bot=_DummyBot, Context=object)
 
 logger = logging.getLogger(__name__)
 

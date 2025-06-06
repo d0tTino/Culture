@@ -348,9 +348,9 @@ class Simulation:
             logger.info(f"  - DU: {current_agent_state.du:.1f} (from {current_agent_state.du})")
 
             # Update the agent state in the simulation's list of agents
-            self.agents[agent_to_run_index] = (
-                agent  # Ensure the agent object itself is updated if it was replaced
-            )
+            self.agents[
+                agent_to_run_index
+            ] = agent  # Ensure the agent object itself is updated if it was replaced
             self.agents[agent_to_run_index].update_state(current_agent_state)
 
             # Determine next agent index based on role change event this turn
