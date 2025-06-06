@@ -319,38 +319,7 @@ class Agent:
         Args:
             sentiment_score (float): The sentiment score to apply to the mood
         """
-        from src.agents.graphs.basic_agent_graph import get_descriptive_mood, get_mood_level
-
-        # Calculate new mood value using configured decay and update rates
-        current_mood_value = (
-            float(self._state.mood_history[-1][1]) if self._state.mood_history else 0.0
-        )
-        new_mood_value = (
-            current_mood_value * (1 - self._state.mood_decay_rate)
-            + sentiment_score * self._state.mood_update_rate
-        )
-        new_mood_value = max(-1.0, min(1.0, new_mood_value))  # Keep within [-1, 1]
-
-        # Update mood and descriptive mood
-        new_mood = get_mood_level(new_mood_value)
-        new_descriptive_mood = get_descriptive_mood(new_mood_value)
-
-        # Track if mood changed
-        mood_changed = self._state.mood != new_mood
-
-        # Update state
-        self._state.mood = new_mood
-        self._state.mood_history.append(
-            (
-                (self._state.last_action_step if self._state.last_action_step is not None else 0),
-                new_mood,
-            )
-        )
-
-        if mood_changed:
-            logger.info(
-                f"Agent {self.agent_id} mood changed to {new_mood} ({new_descriptive_mood})"
-            )
+        AgentController(self._state).update_mood(sentiment_score)
 
     async def run_turn(
         self: Self,
