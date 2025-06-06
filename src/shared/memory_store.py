@@ -2,21 +2,22 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
 
 
+@runtime_checkable
 class MemoryStore(Protocol):
     """Protocol for simple memory stores used in tests."""
 
-    def add_documents(self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+    def add_documents(self: Any, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
         """Add a batch of documents with associated metadata."""
 
-    def query(self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+    def query(self: Any, query: str, top_k: int = 1) -> list[dict[str, Any]]:
         """Return the ``top_k`` most relevant documents."""
 
-    def prune(self, ttl_seconds: int) -> None:
+    def prune(self: Any, ttl_seconds: int) -> None:
         """Remove entries older than ``ttl_seconds`` based on ``timestamp`` metadata."""
 
 

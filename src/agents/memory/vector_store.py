@@ -21,6 +21,8 @@ from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunct
 from pydantic import ValidationError
 from typing_extensions import Self
 
+from src.shared.memory_store import MemoryStore
+
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException
@@ -56,7 +58,7 @@ def first_list_element(lst: list[list[T]] | object) -> list[T]:
     return []
 
 
-class ChromaVectorStoreManager:
+class ChromaVectorStoreManager(MemoryStore):
     """
     Manages a vector store for agent memories using ChromaDB with SentenceTransformer embeddings.
 
@@ -143,6 +145,62 @@ class ChromaVectorStoreManager:
 
         # For tracking event count
         self.event_count = 0
+
+    # ------------------------------------------------------------------
+    # MemoryStore protocol implementation
+    # ------------------------------------------------------------------
+    def add_documents(self: Self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+        """Add a batch of documents with metadata via Chroma."""
+        ids = [str(uuid.uuid4()) for _ in documents]
+        embeddings = [self.get_embedding(doc) for doc in documents]
+        for meta in metadatas:
+            meta.setdefault("timestamp", time.time())
+        try:
+            self.collection.add(
+                ids=ids,
+                embeddings=cast(list[Sequence[float]], embeddings),
+                metadatas=cast(list[ChromaMeta], metadatas),
+                documents=documents,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Error adding documents: %s", exc)
+
+    def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+        """Return the ``top_k`` most relevant documents."""
+        embedding = self.get_embedding(query)
+        try:
+            results = self.collection.query(
+                query_embeddings=cast(list[Sequence[float]], [embedding]),
+                n_results=top_k,
+                include=["documents", "metadatas", "ids"],
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Error querying documents: %s", exc)
+            return []
+
+        docs: list[dict[str, Any]] = []
+        ids: list[str] = first_list_element(results.get("ids")) if results else []
+        metas: list[Mapping[str, Any]] = (
+            first_list_element(results.get("metadatas")) if results else []
+        )
+        texts: list[str] = first_list_element(results.get("documents")) if results else []
+        for doc_id, meta, text in zip(ids, metas, texts):
+            docs.append({"content": text, "metadata": dict(meta), "id": doc_id})
+        return docs
+
+    def prune(self: Self, ttl_seconds: int) -> None:
+        """Remove entries older than ``ttl_seconds``."""
+        cutoff = time.time() - ttl_seconds
+        try:
+            results = self.collection.get(
+                where={"timestamp": {"$lt": cutoff}},
+                include=["ids"],
+            )
+            ids = results.get("ids", []) if results else []
+            if ids:
+                self.collection.delete(ids=ids)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Error pruning documents: %s", exc)
 
     def add_memory(
         self: Self,

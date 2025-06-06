@@ -1,14 +1,18 @@
 import logging
+import time
+import uuid
 from typing import Any, Callable, Optional, cast
 
 import weaviate
 import weaviate.classes as wvc
 from typing_extensions import Self
 
+from src.shared.memory_store import MemoryStore
+
 logger = logging.getLogger(__name__)
 
 
-class WeaviateVectorStoreManager:
+class WeaviateVectorStoreManager(MemoryStore):
     """
     Manages a vector store for agent memories using Weaviate with external
     (pre-computed) embeddings.
@@ -42,6 +46,40 @@ class WeaviateVectorStoreManager:
         self.embedding_function = embedding_function
         self.client = self._connect_client(url)
         self.collection = self._ensure_collection_exists()
+        self._store: list[dict[str, Any]] = []
+
+    # ------------------------------------------------------------------
+    # MemoryStore protocol implementation
+    # ------------------------------------------------------------------
+    def add_documents(self: Self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+        """Add documents with freshly generated vectors using ``embedding_function``."""
+        if self.embedding_function is None:
+            raise RuntimeError("embedding_function must be provided to add documents")
+        vectors = [self.embedding_function(doc) for doc in documents]
+        for meta in metadatas:
+            meta.setdefault("timestamp", time.time())
+            meta.setdefault("uuid", str(uuid.uuid4()))
+        self.add_memories(documents, metadatas, vectors)
+
+    def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+        if self.embedding_function is None:
+            raise RuntimeError("embedding_function must be provided to query")
+        vector = self.embedding_function(query)
+        return self.query_memories(vector, n_results=top_k)
+
+    def prune(self: Self, ttl_seconds: int) -> None:
+        cutoff = time.time() - ttl_seconds
+        ids_to_delete = []
+        remaining = []
+        for entry in self._store:
+            ts = entry.get("metadata", {}).get("timestamp")
+            if ts is not None and ts < cutoff:
+                ids_to_delete.append(entry["id"])
+            else:
+                remaining.append(entry)
+        self._store = remaining
+        if ids_to_delete:
+            self.delete_memories(ids_to_delete)
 
     def _connect_client(self: Self, url: str) -> object:
         # Parse host/port from URL
@@ -111,9 +149,11 @@ class WeaviateVectorStoreManager:
         for text, meta, vector in zip(texts, metadatas, vectors):
             props = dict(meta)
             props["text"] = text
+            uuid_val = meta.get("uuid", str(uuid.uuid4()))
             data_objects.append(
-                wvc.data.DataObject(properties=props, vector=vector, uuid=meta.get("uuid"))
+                wvc.data.DataObject(properties=props, vector=vector, uuid=uuid_val)
             )
+            self._store.append({"content": text, "metadata": meta, "id": uuid_val})
         try:
             self.collection.data.insert_many(data_objects)
         except Exception as e:
@@ -167,11 +207,12 @@ class WeaviateVectorStoreManager:
         Args:
             uuids: List of UUIDs to delete
         """
-        for uuid in uuids:
+        for uid in uuids:
             try:
-                self.collection.data.delete_by_id(uuid)
+                self.collection.data.delete_by_id(uid)
+                self._store = [e for e in self._store if e["id"] != uid]
             except Exception as e:
-                logger.error(f"Failed to delete object {uuid} from Weaviate: {e}")
+                logger.error(f"Failed to delete object {uid} from Weaviate: {e}")
 
     def delete_collection(self: Self) -> None:
         """
