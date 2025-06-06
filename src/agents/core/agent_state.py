@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 import logging
 import random
 from collections import deque
@@ -8,15 +9,15 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 from pydantic import BaseModel, Field, PrivateAttr
 
 try:  # Support pydantic >= 2 if installed
-    from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
+    from pydantic import ConfigDict, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
-    from typing import Any as ValidationInfo
-
     from pydantic import validator as _pydantic_validator
 
     ConfigDict = dict  # type: ignore[misc]
 
-    def field_validator(*fields: str, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
+    def field_validator(
+        *fields: str, **kwargs: Any
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # type: ignore[misc]
         """Shim to mimic the pydantic v2 ``field_validator`` API."""
         mode = kwargs.pop("mode", "after")
         if mode == "before":
@@ -162,28 +163,31 @@ class AgentStateData(BaseModel):
     _neutral_relationship_learning_rate: float = PrivateAttr()
     _targeted_message_multiplier: float = PrivateAttr()
 
-    @field_validator("mood_level", mode="before")  # Validate before Pydantic tries to coerce
+    @field_validator("mood_level", mode="before", allow_reuse=True)
     @classmethod
-    def check_mood_level_type_before(cls, v: Any, info: ValidationInfo) -> Any:
+    def check_mood_level_type_before(cls, v: Any) -> Any:
         if not isinstance(v, (float, int)):
             logger.warning(
-                f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input is not float/int before coercion. Type: {type(v)}, Value: {v}"
+                "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. Type: %s, Value: %s",
+                type(v),
+                v,
             )
             if isinstance(v, str) and v.lower() == "neutral":
                 logger.warning(
-                    f"AGENT_STATE_VALIDATOR_DEBUG ({info.data.get('agent_id', 'Unknown')}): mood_level input was 'neutral', coercing to 0.0"
+                    "AGENT_STATE_VALIDATOR_DEBUG: mood_level input was 'neutral', coercing to 0.0"
                 )
                 return 0.0  # Attempt to coerce common problematic string to float
             # If it cannot be coerced, Pydantic will raise a validation error later if not a float
         return v
 
-    @field_validator("mood_level", mode="after")
+    @field_validator("mood_level", mode="after", allow_reuse=True)
     @classmethod
-    def check_mood_level_type_after(cls, v: float, info: ValidationInfo) -> float:
+    def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
-            # This should ideally not happen if Pydantic's coercion to float worked or failed earlier
             logger.error(
-                f"AGENT_STATE_VALIDATOR_ERROR ({info.data.get('agent_id', 'Unknown')}): mood_level is not float AFTER Pydantic processing. Type: {type(v)}, Value: {v}. This is unexpected."
+                "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. Type: %s, Value: %s. This is unexpected.",
+                type(v),
+                v,
             )
         return v
 
@@ -236,7 +240,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -280,7 +283,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             # Add other relevant metrics here if needed for collective tracking
         }
 
-
     def __hash__(self) -> int:
         # Pydantic models are not hashable by default if they have mutable fields like lists/dicts.
         # For use in sets or as dict keys, if needed, a specific hash can be implemented.
@@ -305,7 +307,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return 0.0
         return self.relationship_history[-1][agent_name]
 
-    @field_validator("memory_store_manager", mode="before")
+    @field_validator("memory_store_manager", mode="before", allow_reuse=True)
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
         if hasattr(value, "get_retriever"):  # Check for a specific method
@@ -345,4 +347,3 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
-
