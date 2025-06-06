@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from typing import Any, cast
+import logging
 
 from typing_extensions import Self
 
