@@ -12,7 +12,10 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
-import requests  # type: ignore
+try:  # pragma: no cover - optional dependency
+    import requests  # type: ignore
+except Exception:  # pragma: no cover - fallback when requests missing
+    requests = MagicMock()
 from typing_extensions import Self
 
 # Import DSPy and Ollama, providing fallbacks when unavailable
