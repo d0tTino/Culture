@@ -5,6 +5,7 @@ weaviate-client==3.25.0
 chromadb==0.3.21
 dspy==0.1.4
 pydantic==2.3.0
+pydantic-settings==2.0.3
 langgraph==0.2.0
 requests==2.32.3
 
