@@ -4,6 +4,7 @@ Provides real-time updates about the simulation to a Discord channel.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN401
 
 import logging
 from typing import Any, Optional
@@ -11,6 +12,7 @@ from typing import Any, Optional
 try:
     import discord  # type: ignore
     from discord.ext import commands  # type: ignore
+    
 except Exception:  # pragma: no cover - optional dependency
     import sys
     from unittest.mock import MagicMock
@@ -21,6 +23,7 @@ except Exception:  # pragma: no cover - optional dependency
     sys.modules.setdefault("discord", discord)
     sys.modules.setdefault("discord.ext", discord.ext)
     sys.modules.setdefault("discord.ext.commands", commands)
+    
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)

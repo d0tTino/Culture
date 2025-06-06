@@ -1,6 +1,8 @@
+# ruff: noqa: E402
 import pytest
 
 pytest.importorskip("langgraph")
+
 from src.agents.core.agent_state import AgentState
 from src.agents.graphs.basic_agent_graph import AgentTurnState
 from src.agents.graphs.interaction_handlers import (

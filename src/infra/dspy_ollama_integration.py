@@ -4,6 +4,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 
 import json
 import logging
