@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 import logging
 import random
 from collections import deque
@@ -13,7 +14,6 @@ try:  # Support pydantic >= 2 if installed
 except ImportError:  # pragma: no cover - fallback for old pydantic
 
     ConfigDict = dict  # type: ignore[misc]
-
 
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
@@ -171,7 +171,6 @@ class AgentStateData(BaseModel):
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
-            # This should ideally not happen if Pydantic's coercion to float worked or failed earlier
             logger.error(
                 "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. "
                 f"Type: {type(v)}, Value: {v}. This is unexpected."
@@ -227,7 +226,6 @@ class AgentStateData(BaseModel):
 
 
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
-
     @property
     def descriptive_mood(self) -> str:
         return get_descriptive_mood(self.mood_level)
@@ -298,6 +296,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     @validator("memory_store_manager", pre=True)
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
+        if value is None:
+            return None
         if hasattr(value, "get_retriever"):  # Check for a specific method
             return value
         raise ValueError("Invalid memory_store_manager provided")
@@ -336,7 +336,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()  # type: ignore
-
     # ------------------------------------------------------------------
     # Serialization helpers for tests
     # ------------------------------------------------------------------
