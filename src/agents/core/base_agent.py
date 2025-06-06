@@ -321,6 +321,7 @@ class Agent:
         """
         AgentController(self._state).update_mood(sentiment_score)
 
+
     async def run_turn(
         self: Self,
         simulation_step: int,
