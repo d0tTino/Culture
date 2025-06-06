@@ -2,15 +2,15 @@ import pytest
 
 from src.agents.core.agent_attributes import AgentAttributes
 from src.agents.graphs.interaction_handlers import (
+    _UNLOCKED_CAPABILITY,
+    handle_ask_clarification_node,
+    handle_continue_collaboration_node,
+    handle_deep_analysis_node,
+    handle_idle_node,
     handle_propose_idea,
     handle_propose_idea_node,
-    handle_continue_collaboration_node,
-    handle_idle_node,
-    handle_ask_clarification_node,
-    handle_deep_analysis_node,
     handle_retrieve_and_update,
 )
-from src.agents.graphs.interaction_handlers import _UNLOCKED_CAPABILITY
 from src.infra.config import (
     DU_AWARD_FOR_PROPOSAL,
     DU_COST_DEEP_ANALYSIS,

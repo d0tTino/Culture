@@ -1,16 +1,15 @@
-import types
 from types import SimpleNamespace
 
 import pytest
 
 from src.agents.graphs.graph_nodes import (
+    _format_knowledge_board,
+    _format_other_agents,
     analyze_perception_sentiment_node,
     finalize_message_agent_node,
     generate_thought_and_message_node,
     prepare_relationship_prompt_node,
     retrieve_and_summarize_memories_node,
-    _format_knowledge_board,
-    _format_other_agents,
 )
 
 
@@ -55,12 +54,16 @@ async def test_retrieve_and_summarize_memories_node_no_manager() -> None:
 
 
 class DummyManager:
-    async def aretrieve_relevant_memories(self, agent_id: str, query: str = "", k: int = 5):
+    async def aretrieve_relevant_memories(
+        self, agent_id: str, query: str = "", k: int = 5
+    ) -> list[dict[str, str]]:
         return [{"content": "m1"}, {"content": "m2"}]
 
 
 class DummyAgent:
-    async def async_generate_l1_summary(self, role: str, memories: str, context: str):
+    async def async_generate_l1_summary(
+        self, role: str, memories: str, context: str
+    ) -> SimpleNamespace:
         return SimpleNamespace(summary="SUM")
 
 
