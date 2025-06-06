@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict, ValidationInfo, field_validator, model_validator
 except ImportError:  # pragma: no cover - fallback for old pydantic
+    import inspect
     from types import SimpleNamespace
     from typing import Any as ValidationInfo
 
@@ -25,13 +26,23 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
         pre = mode == "before"
 
         def decorator(
-            func: Callable[[Any, Any, ValidationInfo], Any],
+            func: Callable[[Any, Any, ValidationInfo], Any] | classmethod,
         ) -> Callable[[Any, Any], Any]:
-            base = _pydantic_validator(*fields, pre=pre, **kwargs)
+            actual = func.__func__ if isinstance(func, classmethod) else func
+            base = _pydantic_validator(*fields, pre=pre, allow_reuse=True, **kwargs)
 
-            def wrapper(cls: Any, value: Any, values: dict[str, Any], *a: Any, **k: Any) -> Any:
+            def wrapper(
+                cls: Any,
+                value: Any,
+                values: dict[str, Any],
+                config: Any,
+                field: Any,
+            ) -> Any:
                 info = SimpleNamespace(data=values)
-                return func(cls, value, info)
+                return actual(cls, value, info)
+
+            wrapper.__name__ = actual.__name__
+            wrapper.__signature__ = inspect.signature(lambda cls, v, values, config, field: None)
 
             return base(wrapper)
 
@@ -136,6 +147,13 @@ class AgentStateData(BaseModel):
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize and call ``model_post_init`` on Pydantic v1."""
+        super().__init__(**data)
+        if not hasattr(BaseModel, "model_validate"):
+            self.model_post_init(None)
+
     last_thought: Optional[str] = None
     last_clarification_question: Optional[str] = None
     last_clarification_downgraded: bool = False
@@ -363,7 +381,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the state."""
-        return self.model_dump()
+        if hasattr(self, "model_dump"):
+            return self.model_dump()
+        return self.dict()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AgentState":
@@ -371,4 +391,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         sanitized = dict(data)
         # Exclude optional complex fields that may fail validation when None
         sanitized.pop("memory_store_manager", None)
+        if hasattr(cls, "model_validate"):
+            return cls.model_validate(sanitized)
         return cls(**sanitized)
