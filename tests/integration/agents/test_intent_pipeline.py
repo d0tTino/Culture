@@ -4,6 +4,7 @@ import pytest
 from pytest import MonkeyPatch
 
 from src.agents.core.agent_attributes import AgentAttributes
+
 try:  # agent_state may fail to import due to known indentation issue
     from src.agents.core.agent_controller import AgentController
 except IndentationError:  # pragma: no cover - environment bug
