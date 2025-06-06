@@ -962,9 +962,7 @@ class Agent:
         logger.debug(
             f"BaseAgent ({self.agent_id}): id(self.state) before process_perceived_messages: {id(self.state)}"
         )
-        AgentController(self.state).process_perceived_messages(
-            enriched_messages_for_state_update
-        )
+        AgentController(self.state).process_perceived_messages(enriched_messages_for_state_update)
         logger.info(
             f"Agent {self.agent_id} processed {len(enriched_messages_for_state_update)} messages directly in perceive_messages, updating mood/relationships."
         )

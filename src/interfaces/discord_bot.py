@@ -8,8 +8,14 @@ Provides real-time updates about the simulation to a Discord channel.
 import logging
 from typing import Any, Optional
 
-import discord
-from discord.ext import commands
+try:
+    import discord
+    from discord.ext import commands
+except Exception:  # pragma: no cover - optional dependency
+    from unittest.mock import MagicMock
+
+    discord = MagicMock()
+    commands = MagicMock()
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)

@@ -5,11 +5,12 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 
 # mypy: ignore-errors
 
+import json
 import logging
 import sys
 import time
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 from unittest.mock import MagicMock
 
 import requests  # type: ignore
@@ -34,6 +35,13 @@ except Exception:  # pragma: no cover - optional dependency
     class Signature:
         pass
 
+    _CONFIGURED_LM: Callable[[str], str | list[str]] | None = None
+
+    def _configure(*, lm: Callable[[str | None], str | list[str]] | None = None, **_: Any) -> None:
+        """Record the LM for stub predictions."""
+        global _CONFIGURED_LM
+        _CONFIGURED_LM = lm
+
     class InputField:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
@@ -42,12 +50,50 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
+    class Prediction(SimpleNamespace):
+        """Minimal stand-in for ``dspy.Prediction``."""
+
+    class Predict:
+        """Basic callable stub used when DSPy is unavailable."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, question: str | None = None, *args: Any, **kwargs: Any) -> Prediction:
+            if _CONFIGURED_LM is None:
+                intent = "PROPOSE_IDEA"
+            else:
+                result = _CONFIGURED_LM(question or "")
+                if isinstance(result, list):
+                    result = result[0]
+                if isinstance(result, str):
+                    try:
+                        parsed = json.loads(result)
+                    except Exception:
+                        intent = result.strip()
+                    else:
+                        if isinstance(parsed, dict) and "intent" in parsed:
+                            intent = str(parsed["intent"])
+                        else:
+                            intent = result.strip()
+                elif isinstance(result, dict):
+                    intent = str(result.get("intent", result))
+                else:
+                    intent = str(result)
+            return Prediction(intent=intent)
+
+        @staticmethod
+        def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
+            return Predict()
+
     dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=lambda **_: None),
+        settings=SimpleNamespace(configure=_configure, lm=None),
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
+        Predict=Predict,
+        Prediction=Prediction,
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
@@ -65,6 +111,7 @@ logger = logging.getLogger("dspy_ollama")
 
 __all__ = [
     "OllamaLM",
+    "Predict",
     "configure_dspy_with_ollama",
     "dspy",
 ]
@@ -348,53 +395,32 @@ def configure_dspy_with_ollama(
 
 # === AsyncDSPyManager Design (Task 137 Phase 2) ===
 
+# The AsyncDSPyManager class previously lived in this module as a placeholder
+# design. It has since been fully implemented in ``src.shared.async_utils`` and
+# all references have been updated to import it from there.  The stub below is
+# retained only for historical context and is commented out to avoid accidental
+# use.
 
-class AsyncDSPyManager:
-    """
-    Manages asynchronous execution of DSPy program calls with robust error handling and timeouts.
-    Intended to allow non-blocking DSPy calls from agents, with result retrieval and
-    fallback support.
-    """
-
-    def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
-        """
-        Initialize the async manager with a worker pool and default timeout.
-        Args:
-            max_workers (int): Maximum number of concurrent DSPy calls.
-            default_timeout (float): Default timeout for DSPy calls in seconds.
-        """
-
-    async def submit(
-        self: Self,
-        dspy_callable: object,
-        *args: object,
-        timeout: float | None = None,
-        **kwargs: object,
-    ) -> object:
-        """
-        Submit a DSPy program call to be executed asynchronously.
-        Args:
-            dspy_callable: The DSPy program or function to call.
-            *args, **kwargs: Arguments to pass to the DSPy call.
-            timeout (float, optional): Timeout for this call.
-        Returns:
-            An asyncio.Future or similar handle for result retrieval.
-        """
-
-    async def get_result(self: Self, future: object, default: object = None) -> object:
-        """
-        Await and retrieve the result of a submitted DSPy call.
-        Args:
-            future: The handle returned by submit().
-            default: Value to return if the call fails or times out.
-        Returns:
-            The result of the DSPy call, or the default value on error/timeout.
-        """
-
-    async def shutdown(self: Self) -> None:
-        """
-        Cleanly shut down the async manager, cancelling any pending tasks.
-        """
+# class AsyncDSPyManager:  # pragma: no cover - unused placeholder
+#     """Deprecated stub. Use :class:`src.shared.async_utils.AsyncDSPyManager`."""
+#
+#     def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
+#         pass
+#
+#     async def submit(
+#         self: Self,
+#         dspy_callable: object,
+#         *args: object,
+#         timeout: float | None = None,
+#         **kwargs: object,
+#     ) -> object:
+#         pass
+#
+#     async def get_result(self: Self, future: object, default: object = None) -> object:
+#         pass
+#
+#     async def shutdown(self: Self) -> None:
+#         pass
 
 
 # Usage Example (not implemented):

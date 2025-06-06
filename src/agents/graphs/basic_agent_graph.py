@@ -617,7 +617,9 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             memory_summary = getattr(summary_prediction, "summary", None)
 
             if memory_summary:
-                AgentController(agent_state_obj).add_memory(sim_step, "consolidated_summary", memory_summary)
+                AgentController(agent_state_obj).add_memory(
+                    sim_step, "consolidated_summary", memory_summary
+                )
                 vector_store = state.get("vector_store_manager")
                 if vector_store and hasattr(vector_store, "add_memory"):
                     vector_store.add_memory(
