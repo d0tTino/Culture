@@ -110,7 +110,7 @@ class AgentStateData(BaseModel):
     def __init__(self, **data: Any) -> None:
         """Initialize and call ``model_post_init`` on Pydantic v1."""
         super().__init__(**data)
-        if not hasattr(BaseModel, "model_validate"):
+        if not hasattr(BaseModel, "model_validate") and hasattr(self, "model_post_init"):
             self.model_post_init(None)
 
     last_thought: Optional[str] = None

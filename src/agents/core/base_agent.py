@@ -383,7 +383,11 @@ class Agent:
         # --- End Extract Perceived Messages ---
 
         # Convert the state to dictionary for compatibility with the existing graph
-        state_dict = self._state.model_dump()
+        state_dict = (
+            self._state.model_dump()  # Pydantic v2
+            if hasattr(self._state, "model_dump")
+            else self._state.dict()
+        )
 
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
@@ -403,7 +407,11 @@ class Agent:
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
-            "current_state": self._state.model_dump(exclude_none=True),  # Current full state
+            "current_state": (
+                self._state.model_dump(exclude_none=True)
+                if hasattr(self._state, "model_dump")
+                else self._state.dict(exclude_none=True)
+            ),  # Current full state
             "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
             "environment_perception": environment_perception,
@@ -422,7 +430,9 @@ class Agent:
             "knowledge_board_content": knowledge_board_content,  # Pass the knowledge board content
             "knowledge_board": knowledge_board,  # Pass the knowledge board instance
             "scenario_description": scenario_description,  # Pass the simulation scenario
-            "current_role": self._state.role,  # Pass the agent's current role
+            "current_role": getattr(
+                self._state, "current_role", getattr(self._state, "role", "")
+            ),  # Pass the agent's current role
             "influence_points": int(self._state.ip),  # Cast to int for TypedDict compliance
             "steps_in_current_role": self._state.steps_in_current_role,
             # Pass the agent's steps in current role
@@ -508,7 +518,7 @@ class Agent:
                         )
                     logger.debug(  # Keep this log for state update confirmation
                         f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new "
-                        f"AgentState object (Role: {self._state.role}, Mood: {self._state.mood})."
+                        f"AgentState object (Role: {getattr(self._state, 'current_role', getattr(self._state, 'role', ''))}, Mood: {self._state.mood})."
                     )
                 else:
                     logger.warning(
@@ -601,12 +611,12 @@ class Agent:
 
     def __str__(self: Self) -> str:
         """Returns a string representation of the agent."""
-        return f"Agent(id={self.agent_id}, role={self._state.role})"
+        return f"Agent(id={self.agent_id}, role={getattr(self._state, 'current_role', getattr(self._state, 'role', ''))})"
 
     def __repr__(self: Self) -> str:
         """Returns a detailed string representation for debugging."""
         return (
-            f"Agent(agent_id='{self.agent_id}', role='{self._state.role}', "
+            f"Agent(agent_id='{self.agent_id}', role='{getattr(self._state, 'current_role', getattr(self._state, 'role', ''))}', "
             f"ip={self._state.ip}, du={self._state.du})"
         )
 
