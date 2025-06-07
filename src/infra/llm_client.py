@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, cast
 
 try:
     import ollama
@@ -21,24 +21,25 @@ except Exception:  # pragma: no cover - optional dependency
 
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
-try:  # pragma: no cover - optional dependency
+
+if TYPE_CHECKING:  # pragma: no cover - used only for type checking
     import requests  # type: ignore[import-untyped]
     from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
-except Exception:  # pragma: no cover - fallback when requests missing
-    logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
-    from unittest.mock import MagicMock
+else:
+    try:  # pragma: no cover - optional dependency
+        import requests  # type: ignore[import-untyped]
+        from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
+    except Exception:  # pragma: no cover - fallback when requests missing
+        logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
+        from unittest.mock import MagicMock
 
-    requests = MagicMock()
+        requests = MagicMock()
 
-    class RequestException(Exception):  # type: ignore[no-redef]
-        """Fallback RequestException when requests is unavailable."""
+        class RequestException(Exception):
+            """Fallback RequestException when requests is unavailable."""
 
-        pass
-
-    class Timeout(RequestException):  # type: ignore[no-redef, no-any-unimported]
-        """Fallback Timeout when requests is unavailable."""
-
-        pass
+        class Timeout(RequestException):
+            """Fallback Timeout when requests is unavailable."""
 
 
 from pydantic import BaseModel, ValidationError
