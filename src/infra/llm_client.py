@@ -31,8 +31,14 @@ except Exception:  # pragma: no cover - fallback when requests missing
     from unittest.mock import MagicMock
 
     requests = MagicMock()
-    RequestException = Exception
+
+    class RequestException(Exception):  # type: ignore[no-redef]
+        """Fallback RequestException when requests is unavailable."""
+
+        pass
+
 from pydantic import BaseModel, ValidationError
+from requests.exceptions import RequestException
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -40,10 +46,14 @@ from .config import OLLAMA_API_BASE  # Import base URL from config
 
 try:
     from litellm.exceptions import APIError
-except ImportError:
-    _APIError = Exception
-else:
-    APIError = APIError
+except Exception:
+    class APIError(Exception):  # type: ignore[no-redef]
+        """Fallback APIError when litellm is unavailable."""
+
+        pass
+
+_RequestException = RequestException
+_APIError = APIError
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +165,7 @@ def _retry_with_backoff(
     for attempt in range(max_retries):
         try:
             return func(*args, **kwargs), None
-        except (RequestException, _APIError, ValidationError) as exc:
+        except (_RequestException, _APIError, ValidationError) as exc:
             e = exc
             logger.error(
                 f"LLM call failed (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True
