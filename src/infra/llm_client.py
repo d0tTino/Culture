@@ -38,6 +38,7 @@ except Exception:  # pragma: no cover - fallback when requests missing
         pass
 
 from pydantic import BaseModel, ValidationError
+from requests.exceptions import RequestException
 
 from src.shared.decorator_utils import monitor_llm_call
 
