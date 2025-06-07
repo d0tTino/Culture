@@ -19,6 +19,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
+          pip install chromadb weaviate-client langgraph
 
       - name: Run Ruff (Lint)
         run: ruff check . --output-format=full
@@ -29,6 +30,9 @@ jobs:
       - name: Run Tests & Coverage
         run: |
           pytest --maxfail=1 --disable-warnings -q --cov=src --cov-report=xml --cov-fail-under=0
+
+      - name: Run Integration Tests
+        run: pytest -m "integration" --disable-warnings -q
 
       - name: Run Black (Formatter)
         run: black --check . 
