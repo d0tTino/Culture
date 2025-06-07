@@ -162,7 +162,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 metadatas=cast(list[ChromaMeta], metadatas),
                 documents=documents,
             )
-        except Exception as exc:  # pragma: no cover - defensive
+        except (ChromaDBException, ValidationError, OSError) as exc:  # pragma: no cover - defensive
             logger.error("Error adding documents: %s", exc)
 
     def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
@@ -174,7 +174,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 n_results=top_k,
                 include=["documents", "metadatas", "ids"],
             )
-        except Exception as exc:  # pragma: no cover - defensive
+        except (ChromaDBException, ValidationError, OSError) as exc:  # pragma: no cover - defensive
             logger.error("Error querying documents: %s", exc)
             return []
 
@@ -199,7 +199,7 @@ class ChromaVectorStoreManager(MemoryStore):
             ids = results.get("ids", []) if results else []
             if ids:
                 self.collection.delete(ids=ids)
-        except Exception as exc:  # pragma: no cover - defensive
+        except (ChromaDBException, ValidationError, OSError) as exc:  # pragma: no cover - defensive
             logger.error("Error pruning documents: %s", exc)
 
     def add_memory(
@@ -263,7 +263,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 )
                 return ""
             return memory_id
-        except Exception as e:
+        except (ChromaDBException, ValidationError, OSError) as e:
             logger.error(
                 f"Error adding memory. agent_id={agent_id}, step={step}, "
                 f"event_type={event_type}: {e}",
@@ -314,7 +314,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 f"{previous_role} -> {new_role}"
             )
             return unique_id
-        except Exception as e:
+        except (ChromaDBException, ValidationError, OSError) as e:
             logger.error(f"Failed to add role change to Chroma: {e}")
             return ""
 
@@ -433,7 +433,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 exc_info=True,
             )
             return []
-        except Exception as e:
+        except (ChromaDBException, ValidationError, OSError) as e:
             logger.error(
                 f"Unexpected error in retrieve_relevant_memories: "
                 f"agent_id={agent_id}, query={query}, error={e}",
@@ -521,7 +521,7 @@ class ChromaVectorStoreManager(MemoryStore):
 
             return memories
 
-        except Exception as e:
+        except (ChromaDBException, ValidationError, OSError) as e:
             logger.error(f"Error retrieving filtered memories: {e}")
             return []
 
@@ -590,7 +590,7 @@ class ChromaVectorStoreManager(MemoryStore):
 
             return role_history
 
-        except Exception as e:
+        except (ChromaDBException, ValidationError, OSError) as e:
             logger.error(f"Error retrieving role history for agent {agent_id}: {e}")
             return []  # Return empty list on error instead of raising an exception
 

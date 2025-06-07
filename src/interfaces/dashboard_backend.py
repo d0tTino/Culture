@@ -38,7 +38,7 @@ async def stream_messages(request: Request) -> EventSourceResponse:
                     "event": "message",
                     "data": msg.model_dump_json(),
                 }
-            except Exception as e:
+            except (RuntimeError, ValueError) as e:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
 
     return EventSourceResponse(event_generator())
