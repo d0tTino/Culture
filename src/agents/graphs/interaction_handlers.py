@@ -77,6 +77,7 @@ def handle_propose_idea(
     idea_text = f"Idea from {agent.id}"
     metadata = {"author": agent.id}
     knowledge_board.add_documents([idea_text], [metadata])
+    memory_store.add_documents([idea_text], [metadata])
     agent.ip -= IP_COST_TO_POST_IDEA
     agent.du += config.DU_AWARD_FOR_PROPOSAL
 

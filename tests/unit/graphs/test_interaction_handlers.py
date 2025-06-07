@@ -65,8 +65,10 @@ def test_handle_propose_idea() -> None:
     agent.ip = 8
     agent.du = 0
     handle_propose_idea(agent, memory, board)
-    docs = board.query("", top_k=1)
-    assert docs[0]["metadata"]["author"] == "a"
+    docs_board = board.query("", top_k=1)
+    docs_memory = memory.query("", top_k=1)
+    assert docs_board[0]["metadata"]["author"] == "a"
+    assert docs_memory[0]["metadata"]["author"] == "a"
     assert agent.ip == 8 - IP_COST_TO_POST_IDEA
     assert agent.du == DU_AWARD_FOR_PROPOSAL
 
