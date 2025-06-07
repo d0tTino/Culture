@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 import logging
 import random
 from collections import deque
@@ -12,7 +13,6 @@ try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict
 except ImportError:  # pragma: no cover - fallback for old pydantic
     ConfigDict = dict  # type: ignore[misc]
-
 
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
@@ -106,6 +106,13 @@ class AgentStateData(BaseModel):
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize and call ``model_post_init`` on Pydantic v1."""
+        super().__init__(**data)
+        if not hasattr(BaseModel, "model_validate"):
+            self.model_post_init(None)
+
     last_thought: Optional[str] = None
     last_clarification_question: Optional[str] = None
     last_clarification_downgraded: bool = False
@@ -189,6 +196,7 @@ class AgentStateData(BaseModel):
             logger.warning(
                 "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. "
                 f"Type: {type(v)}, Value: {v}"
+
             )
             if isinstance(v, str) and v.lower() == "neutral":
                 logger.warning(
@@ -201,11 +209,12 @@ class AgentStateData(BaseModel):
     @validator("mood_level")
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
+
         if not isinstance(v, float):
-            # This should ideally not happen if Pydantic's coercion to float worked or failed earlier
             logger.error(
                 "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. "
                 f"Type: {type(v)}, Value: {v}. This is unexpected."
+
             )
         return v
 
@@ -291,6 +300,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     @validator("memory_store_manager", pre=True)
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
+        if value is None:
+            return None
         if hasattr(value, "get_retriever"):  # Check for a specific method
             return value
         raise ValueError("Invalid memory_store_manager provided")

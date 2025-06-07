@@ -4,6 +4,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN101, ANN102
 
 import json
 import logging
@@ -13,7 +14,10 @@ from types import SimpleNamespace
 from typing import Any, Callable
 from unittest.mock import MagicMock
 
-import requests  # type: ignore
+try:  # pragma: no cover - optional dependency
+    import requests  # type: ignore
+except Exception:  # pragma: no cover - fallback when requests missing
+    requests = MagicMock()
 from typing_extensions import Self
 
 # Import DSPy and Ollama, providing fallbacks when unavailable
@@ -88,12 +92,14 @@ except Exception:  # pragma: no cover - optional dependency
 
     dspy = SimpleNamespace(
         settings=SimpleNamespace(configure=_configure, lm=None),
+
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
         Predict=Predict,
         Prediction=Prediction,
+
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
@@ -399,6 +405,7 @@ def configure_dspy_with_ollama(
 # design. It now resides in ``src.shared.async_utils`` as a fully functional
 # implementation. All production code should import it from that module. The
 # commented stub below remains only for historical reference.
+
 
 # class AsyncDSPyManager:  # pragma: no cover - unused placeholder
 #     """Deprecated stub. Use :class:`src.shared.async_utils.AsyncDSPyManager`."""

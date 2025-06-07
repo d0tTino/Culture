@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Manual verification tests for relationship dynamics."""
+# ruff: noqa: E402
 import argparse
 import asyncio
 import logging
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import pytest
+
+pytest.skip("Manual verification module", allow_module_level=True)
 
 # Allow running as standalone script
 sys.path.append(str(Path(__file__).parent.parent))
@@ -399,7 +402,9 @@ async def test_case_4_broadcast_vs_targeted(use_discord: bool = False) -> None:
             f"OBSERVED MULTIPLIER: {observed_multiplier:.2f}x (Expected: {targeted_multiplier:.2f}x)"
         )
         if abs(observed_multiplier - targeted_multiplier) < 0.1:
-            logging.info("✅ VERIFICATION PASSED: Targeted message multiplier is working correctly")
+            logging.info(
+                "✅ VERIFICATION PASSED: Targeted message multiplier is working correctly"
+            )
         else:
             logging.info(
                 "❌ VERIFICATION FAILED: Targeted message multiplier not applying correctly"

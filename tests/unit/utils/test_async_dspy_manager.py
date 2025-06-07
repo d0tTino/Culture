@@ -59,6 +59,44 @@ async def test_execution_error(manager: AsyncDSPyManager, caplog: LogCaptureFixt
     assert any("Exception retrieving result" in r for r in caplog.text.splitlines())
 
 
+@pytest.mark.asyncio
+async def test_run_with_timeout_success(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+    def quick_call(duration: float) -> str:
+        time.sleep(duration)
+        return "ok"
+
+    with caplog.at_level(logging.DEBUG):
+        result = await manager.run_with_timeout_async(quick_call, 0.1, timeout=1.0)
+
+    assert result == "ok"
+    assert any("completed successfully" in r for r in caplog.text.splitlines())
+
+
+@pytest.mark.asyncio
+async def test_run_with_timeout_timeout(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+    def slow_call(duration: float) -> str:
+        time.sleep(duration)
+        return "slow"
+
+    with caplog.at_level(logging.WARNING):
+        result = await manager.run_with_timeout_async(slow_call, 2.0, timeout=0.2)
+
+    assert result is None
+    assert any("Timeout" in r for r in caplog.text.splitlines())
+
+
+@pytest.mark.asyncio
+async def test_run_with_timeout_exception(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+    def error_call() -> None:
+        raise RuntimeError("boom")
+
+    with caplog.at_level(logging.ERROR):
+        result = await manager.run_with_timeout_async(error_call, timeout=1.0)
+
+    assert result is None
+    assert any("Error for" in r for r in caplog.text.splitlines())
+
+
 def def_noop_manager() -> AsyncDSPyManager:
     mgr = AsyncDSPyManager(max_workers=2, default_timeout=1.0)
     return mgr

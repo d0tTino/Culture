@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock
 
+import pytest
+
+pytest.importorskip("requests")
 import requests
 from pytest import MonkeyPatch
 

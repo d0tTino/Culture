@@ -4,6 +4,7 @@ Provides real-time updates about the simulation to a Discord channel.
 """
 
 # mypy: ignore-errors
+# ruff: noqa: ANN401
 
 import logging
 from typing import Any, Optional
@@ -12,6 +13,7 @@ try:
     import discord
     from discord.ext import commands
 except Exception:  # pragma: no cover - optional dependency
+
     from unittest.mock import MagicMock
 
     discord = MagicMock()

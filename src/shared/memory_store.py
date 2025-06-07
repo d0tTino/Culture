@@ -1,35 +1,55 @@
 from __future__ import annotations
 
+import json
+import os
 import time
 import uuid
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
 
 
+@runtime_checkable
 class MemoryStore(Protocol):
     """Protocol for simple memory stores used in tests."""
 
-    def add_documents(self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
+    def add_documents(self: Any, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
         """Add a batch of documents with associated metadata."""
 
-    def query(self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
+    def query(self: Any, query: str, top_k: int = 1) -> list[dict[str, Any]]:
         """Return the ``top_k`` most relevant documents."""
 
-    def prune(self, ttl_seconds: int) -> None:
+    def prune(self: Any, ttl_seconds: int) -> None:
         """Remove entries older than ``ttl_seconds`` based on ``timestamp`` metadata."""
 
 
 class ChromaMemoryStore(MemoryStore):
-    """Minimal in-memory stand-in for ChromaDB used in tests."""
+    """Minimal in-memory stand-in for ChromaDB used in tests.
+
+    If ``persist_directory`` is provided, the store will load from and save to
+    ``chroma_memory.json`` in that directory.
+    """
 
     def __init__(self: Self, persist_directory: str | None = None) -> None:
         self._store: list[dict[str, Any]] = []
+        self._persist_path: str | None = None
+        if persist_directory is not None:
+            os.makedirs(persist_directory, exist_ok=True)
+            self._persist_path = os.path.join(persist_directory, "chroma_memory.json")
+            if os.path.exists(self._persist_path):
+                try:
+                    with open(self._persist_path, encoding="utf-8") as fh:
+                        self._store = json.load(fh)
+                except Exception:
+                    self._store = []
 
     def add_documents(self: Self, documents: list[str], metadatas: list[dict[str, Any]]) -> None:
         for doc, meta in zip(documents, metadatas):
             entry = {"content": doc, "metadata": meta, "id": str(uuid.uuid4())}
             self._store.append(entry)
+        if self._persist_path is not None:
+            with open(self._persist_path, "w", encoding="utf-8") as fh:
+                json.dump(self._store, fh)
 
     def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
         # Ignore query text for this simplified implementation
@@ -43,6 +63,9 @@ class ChromaMemoryStore(MemoryStore):
             if ts is None or ts >= threshold:
                 remaining.append(entry)
         self._store = remaining
+        if self._persist_path is not None:
+            with open(self._persist_path, "w", encoding="utf-8") as fh:
+                json.dump(self._store, fh)
 
 
 class WeaviateMemoryStore(MemoryStore):

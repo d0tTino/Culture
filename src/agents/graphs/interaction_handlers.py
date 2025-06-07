@@ -46,6 +46,22 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
     return dict(state)
 
 
+def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
+def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
+def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
+def handle_send_direct_message_node(state: AgentTurnState) -> dict[str, Any]:
+    return dict(state)
+
+
 # --- Simple vertical slice handlers ---
 
 _RELATIONSHIP_INCREMENT = 0.1
@@ -60,7 +76,10 @@ def handle_propose_idea(
     """Post an idea to the knowledge board and update agent resources."""
     idea_text = f"Idea from {agent.id}"
     metadata = {"author": agent.id}
-    knowledge_board.add_documents([idea_text], [metadata])
+    docs = [idea_text]
+    metas = [metadata]
+    knowledge_board.add_documents(docs, metas)
+    memory_store.add_documents(docs, metas)
     agent.ip -= IP_COST_TO_POST_IDEA
     agent.du += config.DU_AWARD_FOR_PROPOSAL
 

@@ -3,7 +3,7 @@
 This document summarizes the minimal end-to-end pipeline implemented for Task 149. The tests exercise a simple interaction loop:
 
 1. **Agent A proposes an idea.** Influence Points are reduced and Data Units are awarded.
-2. **The Knowledge Board stores the idea.** A lightweight in-memory store stands in for ChromaDB during tests.
+2. **The Knowledge Board stores the idea.** A lightweight in-memory store stands in for ChromaDB during tests and can optionally persist to disk. When `persist_directory` is supplied, data is written to `chroma_memory.json` within that folder.
 3. **Agent B retrieves the idea.** The retrieval updates Agent B's relationship with Agent A.
 4. **Full flow validation.** Integration tests confirm the step sequence A → B succeeds.
 

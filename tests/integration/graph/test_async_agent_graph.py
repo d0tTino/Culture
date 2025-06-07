@@ -39,17 +39,11 @@ def async_manager() -> Generator[AsyncDSPyManager, None, None]:
 
 
 @pytest.mark.asyncio
-# @pytest.mark.skip( # Unskip test
-#     reason=(
-#         "No canonical graph object is exported from basic_agent_graph.py; "
-#         "test cannot run until this is resolved."
-#     )
-# )
 async def test_dspy_call_timeout_in_graph(
     simple_agent: Agent, async_manager: AsyncDSPyManager, caplog: LogCaptureFixture
 ) -> None:
     caplog.set_level(
-        logging.WARNING, logger="src.utils.async_dspy_manager"
+        logging.WARNING, logger="src.shared.async_utils"
     )  # For timeout test, we expect WARNING
     caplog.set_level(logging.DEBUG)  # General debug for other logs if needed
 
@@ -135,12 +129,6 @@ async def test_dspy_call_timeout_in_graph(
 
 
 @pytest.mark.asyncio
-# @pytest.mark.skip( # Unskip test
-#     reason=(
-#         "No canonical graph object is exported from basic_agent_graph.py; "
-#         "test cannot run until this is resolved."
-#     )
-# )
 async def test_dspy_call_exception_in_graph(
     simple_agent: Agent, async_manager: AsyncDSPyManager, caplog: LogCaptureFixture
 ) -> None:

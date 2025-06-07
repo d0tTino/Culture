@@ -25,6 +25,7 @@ from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
 from src.shared.async_utils import AsyncDSPyManager
+from src.shared.memory_store import MemoryStore
 
 from .agent_controller import AgentController
 
@@ -64,11 +65,11 @@ class Agent:
     """
 
     def __init__(
-        self,
+        self: Self,
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
-        vector_store_manager: Optional[object] = None,
+        vector_store_manager: Optional[MemoryStore] = None,
         async_dspy_manager: Optional[AsyncDSPyManager] = None,
     ):
         """
@@ -81,15 +82,15 @@ class Agent:
                 If None is provided, default values will be used.
             name (str, optional): A name for the agent. If None is provided,
                 a default name based on agent_id will be used.
-            vector_store_manager (Optional[object], optional): Manager for vector-based memory
+            vector_store_manager (Optional[MemoryStore], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             async_dspy_manager (Optional[AsyncDSPyManager], optional): Manager for DSPy program execution.
         """
         # Generate a unique ID if none provided
         self.agent_id = agent_id if agent_id else str(uuid.uuid4())
 
-        # Explicitly declare vector_store_manager as object for Mypy
-        # self.vector_store_manager: object # Declaration moved to parameter
+        # Explicitly declare vector_store_manager for Mypy
+        # self.vector_store_manager: MemoryStore | None
 
         # Initialize as empty if not provided
         if initial_state is None:
@@ -319,44 +320,15 @@ class Agent:
         Args:
             sentiment_score (float): The sentiment score to apply to the mood
         """
-        from src.agents.graphs.basic_agent_graph import get_descriptive_mood, get_mood_level
+        AgentController(self._state).update_mood(sentiment_score)
 
-        # Calculate new mood value using configured decay and update rates
-        current_mood_value = (
-            float(self._state.mood_history[-1][1]) if self._state.mood_history else 0.0
-        )
-        new_mood_value = (
-            current_mood_value * (1 - self._state.mood_decay_rate)
-            + sentiment_score * self._state.mood_update_rate
-        )
-        new_mood_value = max(-1.0, min(1.0, new_mood_value))  # Keep within [-1, 1]
-
-        # Update mood and descriptive mood
-        new_mood = get_mood_level(new_mood_value)
-        new_descriptive_mood = get_descriptive_mood(new_mood_value)
-
-        # Track if mood changed
-        mood_changed = self._state.mood != new_mood
-
-        # Update state
-        self._state.mood = new_mood
-        self._state.mood_history.append(
-            (
-                (self._state.last_action_step if self._state.last_action_step is not None else 0),
-                new_mood,
-            )
-        )
-
-        if mood_changed:
-            logger.info(
-                f"Agent {self.agent_id} mood changed to {new_mood} ({new_descriptive_mood})"
-            )
 
     async def run_turn(
         self: Self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
-        vector_store_manager: object = None,  # Accepts any vector store manager implementation
+        vector_store_manager: MemoryStore
+        | None = None,  # Accepts any vector store manager implementation
         knowledge_board: Optional["KnowledgeBoard"] = None,
     ) -> dict[str, Any]:
         """
@@ -366,7 +338,7 @@ class Agent:
             simulation_step (int): The current step number from the simulation.
             environment_perception (Dict[str, Any], optional): Perception data from the
                 environment.
-            vector_store_manager (Optional[object], optional): Manager for vector-based memory
+            vector_store_manager (Optional[MemoryStore], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
                 that agents can read from and write to.
@@ -927,7 +899,7 @@ class Agent:
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
 
-    def perceive_messages(self, messages: list[dict]):
+    def perceive_messages(self: Self, messages: list[dict[str, Any]]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""
         if not messages:
             return
