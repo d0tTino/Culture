@@ -84,3 +84,14 @@ def test_weaviate_manager_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(time, "time", lambda: 10)
     manager.prune(5)
     mock_collection.data.delete_by_id.assert_called_once()
+
+
+@pytest.mark.unit
+def test_chroma_persistence(tmp_path: pathlib.Path) -> None:
+    """Data persists when a directory is provided."""
+    store = ChromaMemoryStore(persist_directory=str(tmp_path))
+    store.add_documents(["persist"], [{"timestamp": 0}])
+
+    reload_store = ChromaMemoryStore(persist_directory=str(tmp_path))
+    results = reload_store.query("", top_k=1)
+    assert results and results[0]["content"] == "persist"
