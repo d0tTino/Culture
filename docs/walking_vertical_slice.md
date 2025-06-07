@@ -24,3 +24,13 @@ This example demonstrates a minimal end-to-end run of the Culture.ai simulation 
    ```
 
 The demo now spins up **three** agents for three steps. Memories are persisted to ChromaDB and displayed on the Knowledge Board. All LLM calls go through your local Ollama instance; no mocking is applied.
+
+## Automated Test
+
+An integration test ensures that the vertical slice setup works end to end. It runs a short two-step simulation with three agents and requires a running Ollama server.
+
+```bash
+pytest tests/integration/agents/test_vertical_slice_real_llm.py -m integration
+```
+
+The test is skipped automatically if Ollama is unavailable.
