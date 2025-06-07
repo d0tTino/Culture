@@ -3,10 +3,12 @@
 This example demonstrates a minimal end-to-end run of the Culture.ai simulation using a real LLM via Ollama. It is useful for verifying your local setup.
 
 ## Prerequisites
-- Python environment with project dependencies installed
+- Python environment with project dependencies installed. Run
+  `pip install -r requirements.txt -r requirements-dev.txt` to install extras like
+  `chromadb`, `weaviate-client`, and `langgraph`.
 - [Ollama](https://ollama.ai/) running locally with the `mistral:latest` model pulled
 - Environment variable `OLLAMA_API_BASE` set to your Ollama server URL (e.g. `http://localhost:11434`)
- - Copy `.env.example` to `.env` and ensure the above variable is defined there
+- Copy `.env.example` to `.env` and ensure the above variable is defined there
 
 ## Running the Demo
 1. Activate your virtual environment and install the requirements:
