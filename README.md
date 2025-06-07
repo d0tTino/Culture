@@ -345,7 +345,7 @@ Before running tests, install both runtime and development dependencies:
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ```
-The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities.
+The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities. The `pytest.ini` file always invokes `-n auto`, so `pytest-xdist` **must** be installed from `requirements-dev.txt` before running the suite.
 
 Run tests using the Python module format:
 
@@ -510,6 +510,8 @@ Run the full test suite:
 ```bash
 python -m pytest tests/
 ```
+`pytest-xdist` is required for this command because the default `pytest.ini` uses `-n auto`.
+Install it via `requirements-dev.txt` if you haven't already.
 Generate a coverage report:
 ```bash
 python -m pytest --cov=src --cov-report=term-missing tests/
