@@ -345,7 +345,9 @@ Before running tests, install both runtime and development dependencies:
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ```
-The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities. The `pytest.ini` file always invokes `-n auto`, so `pytest-xdist` **must** be installed from `requirements-dev.txt` before running the suite.
+You can also run `scripts/setup_test_env.sh` to create a virtual environment and
+install these dependencies automatically.
+The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities.
 
 Run tests using the Python module format:
 
