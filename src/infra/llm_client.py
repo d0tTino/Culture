@@ -22,8 +22,8 @@ except Exception:  # pragma: no cover - optional dependency
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
 try:  # pragma: no cover - optional dependency
-    import requests
-    from requests.exceptions import RequestException, Timeout
+    import requests  # type: ignore[import-untyped]
+    from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - fallback when requests missing
     logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
     from unittest.mock import MagicMock
@@ -35,7 +35,7 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
         pass
 
-    class Timeout(RequestException):  # type: ignore[no-redef]
+    class Timeout(RequestException):  # type: ignore[no-redef, no-any-unimported]
         """Fallback Timeout when requests is unavailable."""
 
         pass
