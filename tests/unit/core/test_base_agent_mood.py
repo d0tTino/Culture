@@ -24,6 +24,7 @@ def _ensure_chromadb_stub() -> None:
         sys.modules["chromadb.utils.embedding_functions"] = utils_mod
     if "weaviate" not in sys.modules:
         weaviate = types.ModuleType("weaviate")
+        weaviate.__path__ = []  # treat stub as a package
         weaviate.Client = object  # type: ignore[attr-defined]
         sys.modules["weaviate"] = weaviate
         classes_mod = types.ModuleType("weaviate.classes")

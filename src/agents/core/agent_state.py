@@ -197,7 +197,7 @@ class AgentStateData(BaseModel):
 
     @field_validator("mood_level", mode="before")
     @classmethod
-    def check_mood_level_type_before(cls, v: Any) -> Any:
+    def check_mood_level_type_before(cls, v: Any, info: Any) -> Any:
         if not isinstance(v, (float, int)):
             logger.warning(
                 "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. Type: %s, Value: %s",
@@ -214,7 +214,7 @@ class AgentStateData(BaseModel):
 
     @field_validator("mood_level", mode="after")
     @classmethod
-    def check_mood_level_type_after(cls, v: float) -> float:
+    def check_mood_level_type_after(cls, v: float, info: Any) -> float:
         if not isinstance(v, float):
             logger.error(
                 "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. Type: %s, Value: %s. This is unexpected.",
