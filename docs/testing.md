@@ -9,6 +9,8 @@ To run the tests, install dependencies from both `requirements.txt` and `require
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ```
+You can also run `scripts/setup_test_env.sh` to automatically create a virtual
+environment and install these dependencies.
 The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, and `requests` for HTTP utilities.
 
 ## Test Markers and Suite Structure

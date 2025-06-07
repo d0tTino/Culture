@@ -30,6 +30,16 @@ PYTHONPATH=. python scripts/query_agent_memory.py \
     [--max_context_items 10]
 ```
 
+### `setup_test_env.sh`
+
+Creates a Python virtual environment and installs all runtime and development
+dependencies needed for running tests.
+
+Usage:
+```bash
+bash scripts/setup_test_env.sh
+```
+
 # Culture.ai Scripts
 
 ## Code Quality & Compliance
