@@ -6,7 +6,11 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
+
+try:
+    from sse_starlette.sse import EventSourceResponse
+except Exception:  # pragma: no cover - fallback for typing when stubs missing
+    EventSourceResponse = Any
 
 # Global queue for agent messages
 message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
@@ -26,7 +30,7 @@ app = FastAPI()
 
 
 @app.get("/stream/messages")
-async def stream_messages(request: Request) -> EventSourceResponse:
+async def stream_messages(request: Request) -> Any:
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         while True:
             if await request.is_disconnected():
@@ -35,7 +39,7 @@ async def stream_messages(request: Request) -> EventSourceResponse:
                 msg: AgentMessage = await message_sse_queue.get()
                 yield {
                     "event": "message",
-                    "data": msg.model_dump_json(),
+                    "data": msg.json(),
                 }
             except (RuntimeError, ValueError) as e:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}

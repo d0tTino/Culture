@@ -162,7 +162,11 @@ class ChromaVectorStoreManager(MemoryStore):
                 metadatas=cast(list[ChromaMeta], metadatas),
                 documents=documents,
             )
-        except (ChromaDBException, ValidationError, OSError) as exc:  # pragma: no cover - defensive
+        except (
+            ChromaDBException,
+            ValidationError,
+            OSError,
+        ) as exc:  # pragma: no cover - defensive
             logger.error("Error adding documents: %s", exc)
 
     def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
@@ -174,7 +178,11 @@ class ChromaVectorStoreManager(MemoryStore):
                 n_results=top_k,
                 include=["documents", "metadatas", "ids"],
             )
-        except (ChromaDBException, ValidationError, OSError) as exc:  # pragma: no cover - defensive
+        except (
+            ChromaDBException,
+            ValidationError,
+            OSError,
+        ) as exc:  # pragma: no cover - defensive
             logger.error("Error querying documents: %s", exc)
             return []
 
@@ -199,7 +207,11 @@ class ChromaVectorStoreManager(MemoryStore):
             ids = results.get("ids", []) if results else []
             if ids:
                 self.collection.delete(ids=ids)
-        except (ChromaDBException, ValidationError, OSError) as exc:  # pragma: no cover - defensive
+        except (
+            ChromaDBException,
+            ValidationError,
+            OSError,
+        ) as exc:  # pragma: no cover - defensive
             logger.error("Error pruning documents: %s", exc)
 
     def add_memory(

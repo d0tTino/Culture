@@ -13,7 +13,6 @@ try:
     import discord
     from discord.ext import commands
 except Exception:  # pragma: no cover - optional dependency
-
     from unittest.mock import MagicMock
 
     discord = MagicMock()

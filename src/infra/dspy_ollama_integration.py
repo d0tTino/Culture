@@ -92,14 +92,12 @@ except Exception:  # pragma: no cover - optional dependency
 
     dspy = SimpleNamespace(
         settings=SimpleNamespace(configure=_configure, lm=None),
-
         LM=BaseLM,
         Signature=Signature,
         InputField=InputField,
         OutputField=OutputField,
         Predict=Predict,
         Prediction=Prediction,
-
     )
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False

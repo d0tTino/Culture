@@ -21,9 +21,7 @@ def test_analyze_perception_sentiment_node(monkeypatch: pytest.MonkeyPatch) -> N
         calls.append(text)
         return "positive" if text == "good" else "negative"
 
-    monkeypatch.setattr(
-        "src.agents.graphs.graph_nodes.analyze_sentiment", fake_sentiment
-    )
+    monkeypatch.setattr("src.agents.graphs.graph_nodes.analyze_sentiment", fake_sentiment)
 
     state = {
         "agent_id": "a",
