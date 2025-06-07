@@ -42,6 +42,7 @@ The configuration is organized into the following categories:
 ### Ollama Settings
 
 - `OLLAMA_API_BASE` - Base URL for Ollama API
+- `OLLAMA_REQUEST_TIMEOUT` - Timeout in seconds for Ollama requests
 
 ### Redis Settings
 
