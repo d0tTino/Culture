@@ -5,6 +5,6 @@ pytest-cov==4.1.0
 black==23.7.0
 types-requests==2.31.0
 pytest-xdist==3.7.0
-pytest-asyncio
+pytest-asyncio>=0.21
 requests
 pydantic-settings
