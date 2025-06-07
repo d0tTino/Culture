@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - optional dependency
     sys.modules.setdefault("ollama", ollama)
 try:  # pragma: no cover - optional dependency
     import requests
-    from requests.exceptions import RequestException
+    from requests.exceptions import RequestException, Timeout
 except Exception:  # pragma: no cover - fallback when requests missing
     logging.getLogger(__name__).warning(
         "requests package not installed; using MagicMock stub"
@@ -37,12 +37,17 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
         pass
 
+    class Timeout(RequestException):  # type: ignore[no-redef]
+        """Fallback Timeout when requests is unavailable."""
+
+        pass
+
 from pydantic import BaseModel, ValidationError
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, Timeout
 
 from src.shared.decorator_utils import monitor_llm_call
 
-from .config import OLLAMA_API_BASE  # Import base URL from config
+from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config values
 
 try:
     from litellm.exceptions import APIError
@@ -413,6 +418,7 @@ def generate_structured_output(
     response_model: type[BaseModel],
     model: str = "mistral:latest",
     temperature: float = 0.2,
+    timeout: Optional[int] = None,
 ) -> Optional[BaseModel]:
     """
     Generate a structured output using the LLM and parse it into the given Pydantic model.
@@ -423,6 +429,8 @@ def generate_structured_output(
         response_model (Type[T]): The Pydantic model to parse the response into
         model (str): The Ollama model to use
         temperature (float): The temperature for generation
+        timeout (int | None): Request timeout in seconds. Defaults to the
+            `OLLAMA_REQUEST_TIMEOUT` config value.
 
     Returns:
         T | None: An instance of the response_model, or None if parsing failed
@@ -550,6 +558,7 @@ def generate_structured_output(
         f"```json\n{example_json}\n```\n\n"
         f"YOUR RESPONSE:"
     )
+    timeout_value = timeout if timeout is not None else OLLAMA_REQUEST_TIMEOUT
     try:
         logger.debug(f"Sending structured prompt to Ollama model '{model}':")
         logger.debug(f"---PROMPT START---\n{structured_prompt}\n---PROMPT END---")
@@ -562,6 +571,7 @@ def generate_structured_output(
                 "stream": False,
                 "options": {"temperature": temperature, "top_p": 0.95, "num_predict": 400},
             },
+            timeout=timeout_value,
         )
         response.raise_for_status()
         result: dict[str, Any] = response.json()
@@ -583,6 +593,7 @@ def generate_structured_output(
             return None
     except (RequestException, APIError) as e:
         logger.error(f"Error in generate_structured_output: {e}")
+
         return None
 
 

@@ -486,6 +486,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
 6. **Configure environment variables:**
    - Copy `.env.example` to `.env` and edit as needed:
     - `OLLAMA_API_BASE` (e.g., http://localhost:11434)
+    - `OLLAMA_REQUEST_TIMEOUT` (request timeout in seconds)
      - `WEAVIATE_URL` (e.g., http://localhost:8080)
      - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
    - See `.env.example` and `docs/testing.md` for details.
