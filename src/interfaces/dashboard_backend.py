@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 import asyncio
 import json
 from collections.abc import AsyncGenerator
@@ -33,15 +32,16 @@ async def stream_messages(request: Request) -> EventSourceResponse:
             if await request.is_disconnected():
                 break
             try:
-                msg = await message_sse_queue.get()
+                msg: AgentMessage = await message_sse_queue.get()
                 yield {
                     "event": "message",
                     "data": msg.model_dump_json(),
                 }
-            except Exception as e:
+            except (RuntimeError, ValueError) as e:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
 
-    return EventSourceResponse(event_generator())
+    generator: AsyncGenerator[dict[str, Any], None] = event_generator()
+    return EventSourceResponse(generator)
 
 
 @app.get("/health")
