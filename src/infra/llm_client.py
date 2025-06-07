@@ -117,7 +117,7 @@ def is_ollama_available() -> bool:
         # Try to connect to Ollama with a small timeout
         response: Any = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
         return bool(getattr(response, "status_code", 0) == 200)
-    except Exception as e:
+    except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")
         return False
 
@@ -138,7 +138,7 @@ try:
     # client.list() # This might be too slow or throw errors if Ollama is busy/starting.
     # A basic check might be better handled during the first actual call.
     logger.info(f"Ollama client initialized for host: {OLLAMA_API_BASE}")
-except Exception as e:
+except (APIError, RequestException) as e:
     logger.error(
         f"Failed to initialize Ollama client for host {OLLAMA_API_BASE}: {e}", exc_info=True
     )
@@ -325,7 +325,7 @@ def summarize_memory_context(
             )
             return "(Memory summarization failed: Unexpected response format)"
 
-    except Exception as e:
+    except (_RequestException, _APIError, ValidationError) as e:
         logger.error(f"Error during memory summarization: {e}", exc_info=True)
         return "(Memory summarization failed due to an error)"
 
@@ -520,7 +520,7 @@ def generate_structured_output(
                     elif field.annotation is dict:
                         field_dict[field_name] = {}
             return response_model(**field_dict)
-        except Exception as e:
+        except (ValidationError, json.JSONDecodeError, TypeError) as e:
             logger.error(f"Error generating mock structured output: {e}")
             return None
     # Get the Ollama client instance
@@ -587,17 +587,13 @@ def generate_structured_output(
             else:
                 # Defensive: fallback for non-model response, cast to Optional[BaseModel]
                 return cast(Optional[BaseModel], json.loads(str(response_text)))
-        except (json.JSONDecodeError, Exception) as e:
+        except (json.JSONDecodeError, ValidationError) as e:
             logger.warning(f"Failed to parse JSON from Ollama response: {e}")
             logger.warning(f"Raw response: {response_text}")
             return None
-    except Timeout as e:
-        logger.error(
-            f"Ollama request timed out after {timeout_value} seconds: {e}"
-        )
-        return None
-    except Exception as e:
-        logger.error(f"Error in generate_structured_output: {e}", exc_info=True)
+    except (RequestException, APIError) as e:
+        logger.error(f"Error in generate_structured_output: {e}")
+
         return None
 
 

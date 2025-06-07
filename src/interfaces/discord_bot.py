@@ -139,7 +139,7 @@ class SimulationDiscordBot:
         except (discord.DiscordException, OSError) as e:
             logger.error(f"Discord API/network error sending message: {e}", exc_info=True)
             return False
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
             return False
 
@@ -327,7 +327,7 @@ class SimulationDiscordBot:
         try:
             logger.info(f"Starting Discord bot, connecting to channel ID: {self.channel_id}")
             await self.client.start(self.bot_token)
-        except Exception as e:
+        except (discord.DiscordException, OSError) as e:
             logger.error(f"Error starting Discord bot: {e}")
 
     async def stop_bot(self: Self) -> None:
@@ -355,7 +355,7 @@ class SimulationDiscordBot:
             await self.client.close()
             self.is_ready = False
             logger.info("Discord bot stopped")
-        except Exception as e:
+        except (discord.DiscordException, OSError) as e:
             logger.error(f"Error stopping Discord bot: {e}")
 
 
