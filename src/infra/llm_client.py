@@ -21,18 +21,9 @@ except Exception:  # pragma: no cover - optional dependency
 
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
-try:  # pragma: no cover - optional dependency
-    import requests
-    from requests.exceptions import RequestException
-except Exception:  # pragma: no cover - fallback when requests missing
-    logging.getLogger(__name__).warning(
-        "requests package not installed; using MagicMock stub"
-    )
-    from unittest.mock import MagicMock
-
-    requests = MagicMock()
-    RequestException = Exception
+import requests
 from pydantic import BaseModel, ValidationError
+from requests.exceptions import RequestException
 
 from src.shared.decorator_utils import monitor_llm_call
 
