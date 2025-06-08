@@ -196,7 +196,6 @@ class AgentStateData(BaseModel):
             logger.warning(
                 "AGENT_STATE_VALIDATOR_DEBUG: mood_level input is not float/int before coercion. "
                 f"Type: {type(v)}, Value: {v}"
-
             )
             if isinstance(v, str) and v.lower() == "neutral":
                 logger.warning(
@@ -214,7 +213,6 @@ class AgentStateData(BaseModel):
             logger.error(
                 "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. "
                 f"Type: {type(v)}, Value: {v}. This is unexpected."
-
             )
         return v
 

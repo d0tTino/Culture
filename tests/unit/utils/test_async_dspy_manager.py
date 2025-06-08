@@ -60,7 +60,9 @@ async def test_execution_error(manager: AsyncDSPyManager, caplog: LogCaptureFixt
 
 
 @pytest.mark.asyncio
-async def test_run_with_timeout_success(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+async def test_run_with_timeout_success(
+    manager: AsyncDSPyManager, caplog: LogCaptureFixture
+) -> None:
     def quick_call(duration: float) -> str:
         time.sleep(duration)
         return "ok"
@@ -73,7 +75,9 @@ async def test_run_with_timeout_success(manager: AsyncDSPyManager, caplog: LogCa
 
 
 @pytest.mark.asyncio
-async def test_run_with_timeout_timeout(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+async def test_run_with_timeout_timeout(
+    manager: AsyncDSPyManager, caplog: LogCaptureFixture
+) -> None:
     def slow_call(duration: float) -> str:
         time.sleep(duration)
         return "slow"
@@ -86,7 +90,9 @@ async def test_run_with_timeout_timeout(manager: AsyncDSPyManager, caplog: LogCa
 
 
 @pytest.mark.asyncio
-async def test_run_with_timeout_exception(manager: AsyncDSPyManager, caplog: LogCaptureFixture) -> None:
+async def test_run_with_timeout_exception(
+    manager: AsyncDSPyManager, caplog: LogCaptureFixture
+) -> None:
     def error_call() -> None:
         raise RuntimeError("boom")
 

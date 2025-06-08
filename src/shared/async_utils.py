@@ -120,9 +120,7 @@ class AsyncDSPyManager:
 
         if not future.done():
             if future.cancel():
-                logger.debug(
-                    f"Cancelled underlying task for {callable_name} due to timeout."
-                )
+                logger.debug(f"Cancelled underlying task for {callable_name} due to timeout.")
             else:
                 logger.debug(
                     "Failed to cancel underlying task for "
