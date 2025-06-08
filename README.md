@@ -154,20 +154,24 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 ## Code Linting and Formatting
 
-This project uses Black for code formatting, isort for import sorting, Flake8 for linting, and Mypy for static type checking.
+This project uses **Ruff** and **Black** for linting and formatting. Ruff handles
+import sorting and style checks (replacing Flake8 and isort), while Black
+provides opinionated code formatting. **Mypy** is used for static type checking.
 
 To install development dependencies (including linting tools), run:
 ```bash
 pip install -r requirements-dev.txt
 ```
 
-To run all linters and formatters:
+To run the linters and formatters locally:
 ```bash
-# On Linux/Mac:
-./scripts/lint.sh
+ruff check .
+black --check .
+```
 
-# On Windows:
-scripts\lint.bat
+You can also auto-format the codebase using Ruff:
+```bash
+ruff format
 ```
 
 See `docs/coding_standards.md` for detailed information about our coding standards and linting setup.
