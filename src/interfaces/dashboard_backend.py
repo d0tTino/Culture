@@ -26,7 +26,7 @@ app = FastAPI()
 
 
 @app.get("/stream/messages")
-async def stream_messages(request: Request) -> EventSourceResponse:
+async def stream_messages(request: Request) -> EventSourceResponse:  # type: ignore[no-any-unimported]
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         while True:
             if await request.is_disconnected():
