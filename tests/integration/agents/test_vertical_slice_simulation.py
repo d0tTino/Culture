@@ -76,6 +76,8 @@ def test_vertical_slice_simulation() -> None:
     asyncio.run(sim.async_run(sim.steps_to_run))
     assert len(sim.knowledge_board.get_full_entries()) >= 1
     relationships_updated = any(
-        any(score != 0.0 for score in agent.state.relationships.values()) for agent in sim.agent
+        any(score != 0.0 for score in agent.state.relationships.values())
+        for agent in sim.agents
+
     )
     assert relationships_updated
