@@ -322,13 +322,13 @@ class Agent:
         """
         AgentController(self._state).update_mood(sentiment_score)
 
-
     async def run_turn(
         self: Self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
-        vector_store_manager: MemoryStore
-        | None = None,  # Accepts any vector store manager implementation
+        vector_store_manager: (
+            MemoryStore | None
+        ) = None,  # Accepts any vector store manager implementation
         knowledge_board: Optional["KnowledgeBoard"] = None,
     ) -> dict[str, Any]:
         """

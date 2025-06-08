@@ -77,6 +77,5 @@ def test_vertical_slice_simulation() -> None:
     assert len(sim.knowledge_board.get_full_entries()) >= 1
     relationships_updated = any(
         any(score != 0.0 for score in agent.state.relationships.values()) for agent in sim.agent
-    
     )
     assert relationships_updated

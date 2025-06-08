@@ -49,15 +49,15 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
                     "agent_role": "Innovator",
                     "recent_events": "Event 1: Agent discussed new ideas\nEvent 2: Agent shared a prototype",
                     "current_mood": "enthusiastic",
-                    "l1_summary": "Agent enthusiastically developed and shared new prototype ideas."
+                    "l1_summary": "Agent enthusiastically developed and shared new prototype ideas.",
                 }
             ],
             "config": {"temperature": 0.1},
-            "module_type": "dspy.Predict"
+            "module_type": "dspy.Predict",
         }
 
         filepath = os.path.join(self.temp_dir_name, filename)
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(compiled_data, f)
 
         return filepath
@@ -65,13 +65,13 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
     def _create_corrupted_l1_compiled_file(self, filename: str) -> str:
         """Create an invalid/corrupted JSON file."""
         filepath = os.path.join(self.temp_dir_name, filename)
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             f.write("{This is not valid JSON!")
 
         return filepath
 
-    @patch('src.agents.dspy_programs.l1_summary_generator.L1SummaryGenerator.generate_summary')
-    @patch('src.agents.dspy_programs.l1_summary_generator.L1SummaryGenerator.__init__')
+    @patch("src.agents.dspy_programs.l1_summary_generator.L1SummaryGenerator.generate_summary")
+    @patch("src.agents.dspy_programs.l1_summary_generator.L1SummaryGenerator.__init__")
     def test_successful_load_optimized_l1_program(
         self, mock_init: MagicMock, mock_generate: MagicMock
     ) -> None:
@@ -94,23 +94,19 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
 
         # Test that generate_summary works as expected
         result = l1_generator.generate_summary(
-            agent_role="Innovator",
-            recent_events="Event 1\nEvent 2",
-            current_mood="happy"
+            agent_role="Innovator", recent_events="Event 1\nEvent 2", current_mood="happy"
         )
 
         # Verify the mock was called with the right parameters
         mock_generate.assert_called_once_with(
-            agent_role="Innovator",
-            recent_events="Event 1\nEvent 2",
-            current_mood="happy"
+            agent_role="Innovator", recent_events="Event 1\nEvent 2", current_mood="happy"
         )
 
         # Assert that the result is the mocked summary
         self.assertEqual(result, self.sample_summary)
 
-    @patch('src.agents.dspy_programs.l1_summary_generator.os.path.exists')
-    @patch('src.agents.dspy_programs.l1_summary_generator.logger')
+    @patch("src.agents.dspy_programs.l1_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l1_summary_generator.logger")
     def test_fallback_if_l1_program_missing(
         self, mock_logger: MagicMock, mock_exists: MagicMock
     ) -> None:
@@ -122,7 +118,7 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
         from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 
         # Patch the actual dspy.Predict to mock its creation and usage
-        with patch('src.agents.dspy_programs.l1_summary_generator.dspy.Predict') as mock_predict:
+        with patch("src.agents.dspy_programs.l1_summary_generator.dspy.Predict") as mock_predict:
             # Configure the predictor mock
             mock_predictor = MagicMock()
             mock_predict.return_value = mock_predictor
@@ -142,27 +138,25 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
             mock_predictor.load.assert_not_called()
 
             # Verify logging indicates fallback
-            mock_logger.info.assert_any_call("No compiled L1 summarizer found or path not provided. Using default predictor.")
+            mock_logger.info.assert_any_call(
+                "No compiled L1 summarizer found or path not provided. Using default predictor."
+            )
 
             # Test generate_summary with the default predictor
             result = l1_generator.generate_summary(
-                agent_role="Innovator",
-                recent_events="Event 1\nEvent 2",
-                current_mood="happy"
+                agent_role="Innovator", recent_events="Event 1\nEvent 2", current_mood="happy"
             )
 
             # Assert that the predictor was called with the right parameters
             mock_predictor.assert_called_once_with(
-                agent_role="Innovator",
-                recent_events="Event 1\nEvent 2",
-                current_mood="happy"
+                agent_role="Innovator", recent_events="Event 1\nEvent 2", current_mood="happy"
             )
 
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l1_summary)
 
-    @patch('src.agents.dspy_programs.l1_summary_generator.os.path.exists')
-    @patch('src.agents.dspy_programs.l1_summary_generator.logger')
+    @patch("src.agents.dspy_programs.l1_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l1_summary_generator.logger")
     def test_fallback_if_l1_program_corrupted(
         self, mock_logger: MagicMock, mock_exists: MagicMock
     ) -> None:
@@ -171,13 +165,15 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
         mock_exists.return_value = True
 
         # Create a corrupted JSON file
-        corrupted_file_path = self._create_corrupted_l1_compiled_file("corrupted_l1_summarizer.json")
+        corrupted_file_path = self._create_corrupted_l1_compiled_file(
+            "corrupted_l1_summarizer.json"
+        )
 
         # Import after mocking
         from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 
         # Patch the actual dspy.Predict to mock its creation and usage
-        with patch('src.agents.dspy_programs.l1_summary_generator.dspy.Predict') as mock_predict:
+        with patch("src.agents.dspy_programs.l1_summary_generator.dspy.Predict") as mock_predict:
             # Configure the predictor mock
             mock_predictor = MagicMock()
             mock_predict.return_value = mock_predictor
@@ -203,22 +199,20 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
 
             # Test generate_summary with the default predictor
             result = l1_generator.generate_summary(
-                agent_role="Innovator",
-                recent_events="Event 1\nEvent 2",
-                current_mood="happy"
+                agent_role="Innovator", recent_events="Event 1\nEvent 2", current_mood="happy"
             )
 
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l1_summary)
 
-    @patch('src.agents.dspy_programs.l1_summary_generator.logger')
+    @patch("src.agents.dspy_programs.l1_summary_generator.logger")
     def test_fallback_if_l1_program_path_is_none(self, mock_logger: MagicMock) -> None:
         """Test that the L1SummaryGenerator falls back to default predictor if path is None."""
         # Import after mocking
         from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 
         # Patch the actual dspy.Predict to mock its creation and usage
-        with patch('src.agents.dspy_programs.l1_summary_generator.dspy.Predict') as mock_predict:
+        with patch("src.agents.dspy_programs.l1_summary_generator.dspy.Predict") as mock_predict:
             # Configure the predictor mock
             mock_predictor = MagicMock()
             mock_predict.return_value = mock_predictor
@@ -235,13 +229,13 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
             mock_predictor.load.assert_not_called()
 
             # Verify logging indicates use of default predictor
-            mock_logger.info.assert_any_call("No compiled L1 summarizer found or path not provided. Using default predictor.")
+            mock_logger.info.assert_any_call(
+                "No compiled L1 summarizer found or path not provided. Using default predictor."
+            )
 
             # Test generate_summary with the default predictor
             result = l1_generator.generate_summary(
-                agent_role="Innovator",
-                recent_events="Event 1\nEvent 2",
-                current_mood="happy"
+                agent_role="Innovator", recent_events="Event 1\nEvent 2", current_mood="happy"
             )
 
             # Assert that the result is the mocked summary
@@ -281,15 +275,15 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
                     "l1_summaries_context": "L1 Summary 1: Analyzed data patterns\nL1 Summary 2: Identified key correlations",
                     "overall_mood_trend": "increasingly confident",
                     "agent_goals": "Discover meaningful patterns in complex data",
-                    "l2_summary": "Over time, the agent successfully analyzed complex data patterns, identifying key correlations with increasing confidence, making progress toward the goal of discovering meaningful patterns."
+                    "l2_summary": "Over time, the agent successfully analyzed complex data patterns, identifying key correlations with increasing confidence, making progress toward the goal of discovering meaningful patterns.",
                 }
             ],
             "config": {"temperature": 0.1},
-            "module_type": "dspy.Predict"
+            "module_type": "dspy.Predict",
         }
 
         filepath = os.path.join(self.temp_dir_name, filename)
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(compiled_data, f)
 
         return filepath
@@ -297,13 +291,13 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
     def _create_corrupted_l2_compiled_file(self, filename: str) -> str:
         """Create an invalid/corrupted JSON file."""
         filepath = os.path.join(self.temp_dir_name, filename)
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             f.write("{This is not valid JSON for L2 summarizer!")
 
         return filepath
 
-    @patch('src.agents.dspy_programs.l2_summary_generator.L2SummaryGenerator.generate_summary')
-    @patch('src.agents.dspy_programs.l2_summary_generator.L2SummaryGenerator.__init__')
+    @patch("src.agents.dspy_programs.l2_summary_generator.L2SummaryGenerator.generate_summary")
+    @patch("src.agents.dspy_programs.l2_summary_generator.L2SummaryGenerator.__init__")
     def test_successful_load_optimized_l2_program(
         self, mock_init: MagicMock, mock_generate: MagicMock
     ) -> None:
@@ -329,7 +323,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             agent_role="Analyzer",
             l1_summaries_context="L1 Summary 1\nL1 Summary 2",
             overall_mood_trend="positive",
-            agent_goals="Analyze complex patterns"
+            agent_goals="Analyze complex patterns",
         )
 
         # Verify the mock was called with the right parameters
@@ -337,14 +331,14 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             agent_role="Analyzer",
             l1_summaries_context="L1 Summary 1\nL1 Summary 2",
             overall_mood_trend="positive",
-            agent_goals="Analyze complex patterns"
+            agent_goals="Analyze complex patterns",
         )
 
         # Assert that the result is the mocked summary
         self.assertEqual(result, self.sample_summary)
 
-    @patch('src.agents.dspy_programs.l2_summary_generator.os.path.exists')
-    @patch('src.agents.dspy_programs.l2_summary_generator.logger')
+    @patch("src.agents.dspy_programs.l2_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_missing(
         self, mock_logger: MagicMock, mock_exists: MagicMock
     ) -> None:
@@ -356,7 +350,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
         from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 
         # Patch the actual dspy.Predict to mock its creation and usage
-        with patch('src.agents.dspy_programs.l2_summary_generator.dspy.Predict') as mock_predict:
+        with patch("src.agents.dspy_programs.l2_summary_generator.dspy.Predict") as mock_predict:
             # Configure the predictor mock
             mock_predictor = MagicMock()
             mock_predict.return_value = mock_predictor
@@ -376,14 +370,16 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             mock_predictor.load.assert_not_called()
 
             # Verify logging indicates fallback
-            mock_logger.info.assert_any_call("No compiled L2 summarizer found or path not provided. Using default predictor.")
+            mock_logger.info.assert_any_call(
+                "No compiled L2 summarizer found or path not provided. Using default predictor."
+            )
 
             # Test generate_summary with the default predictor
             result = l2_generator.generate_summary(
                 agent_role="Analyzer",
                 l1_summaries_context="L1 Summary 1\nL1 Summary 2",
                 overall_mood_trend="positive",
-                agent_goals="Analyze complex patterns"
+                agent_goals="Analyze complex patterns",
             )
 
             # Assert that the predictor was called with the right parameters
@@ -391,14 +387,14 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
                 agent_role="Analyzer",
                 l1_summaries_context="L1 Summary 1\nL1 Summary 2",
                 overall_mood_trend="positive",
-                agent_goals="Analyze complex patterns"
+                agent_goals="Analyze complex patterns",
             )
 
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l2_summary)
 
-    @patch('src.agents.dspy_programs.l2_summary_generator.os.path.exists')
-    @patch('src.agents.dspy_programs.l2_summary_generator.logger')
+    @patch("src.agents.dspy_programs.l2_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_corrupted(
         self, mock_logger: MagicMock, mock_exists: MagicMock
     ) -> None:
@@ -407,13 +403,15 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
         mock_exists.return_value = True
 
         # Create a corrupted JSON file
-        corrupted_file_path = self._create_corrupted_l2_compiled_file("corrupted_l2_summarizer.json")
+        corrupted_file_path = self._create_corrupted_l2_compiled_file(
+            "corrupted_l2_summarizer.json"
+        )
 
         # Import after mocking
         from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 
         # Patch the actual dspy.Predict to mock its creation and usage
-        with patch('src.agents.dspy_programs.l2_summary_generator.dspy.Predict') as mock_predict:
+        with patch("src.agents.dspy_programs.l2_summary_generator.dspy.Predict") as mock_predict:
             # Configure the predictor mock
             mock_predictor = MagicMock()
             mock_predict.return_value = mock_predictor
@@ -442,20 +440,20 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
                 agent_role="Analyzer",
                 l1_summaries_context="L1 Summary 1\nL1 Summary 2",
                 overall_mood_trend="positive",
-                agent_goals="Analyze complex patterns"
+                agent_goals="Analyze complex patterns",
             )
 
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l2_summary)
 
-    @patch('src.agents.dspy_programs.l2_summary_generator.logger')
+    @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_path_is_none(self, mock_logger: MagicMock) -> None:
         """Test that the L2SummaryGenerator falls back to default predictor if path is None."""
         # Import after mocking
         from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
 
         # Patch the actual dspy.Predict to mock its creation and usage
-        with patch('src.agents.dspy_programs.l2_summary_generator.dspy.Predict') as mock_predict:
+        with patch("src.agents.dspy_programs.l2_summary_generator.dspy.Predict") as mock_predict:
             # Configure the predictor mock
             mock_predictor = MagicMock()
             mock_predict.return_value = mock_predictor
@@ -472,14 +470,16 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             mock_predictor.load.assert_not_called()
 
             # Verify logging indicates use of default predictor
-            mock_logger.info.assert_any_call("No compiled L2 summarizer found or path not provided. Using default predictor.")
+            mock_logger.info.assert_any_call(
+                "No compiled L2 summarizer found or path not provided. Using default predictor."
+            )
 
             # Test generate_summary with the default predictor
             result = l2_generator.generate_summary(
                 agent_role="Analyzer",
                 l1_summaries_context="L1 Summary 1\nL1 Summary 2",
                 overall_mood_trend="positive",
-                agent_goals="Analyze complex patterns"
+                agent_goals="Analyze complex patterns",
             )
 
             # Assert that the result is the mocked summary
