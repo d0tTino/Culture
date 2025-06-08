@@ -352,14 +352,21 @@ To customize the simulation:
 
 ## Running Tests
 
-Before running tests, install both runtime and development dependencies:
-```bash
-pip install -r requirements.txt -r requirements-dev.txt
-```
-You can also run `scripts/setup_test_env.sh` to create a virtual environment and
-install these dependencies automatically.
-These requirements include optional packages such as `chromadb`, `weaviate-client`, and `langgraph`. Our CI workflow installs them automatically so tests won't be skipped unexpectedly.
-The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities.
+### Test Suite Setup
+1. *(Optional)* Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+2. Install both runtime and development dependencies:
+   ```bash
+   pip install -r requirements.txt -r requirements-dev.txt
+   ```
+   The development requirements include tools such as `pytest-xdist`,
+   `pytest-asyncio`, and `requests` which are required for the full test suite.
+   You can also run `scripts/setup_test_env.sh` to automate these steps.
+   Optional packages like `chromadb`, `weaviate-client`, and `langgraph` are
+   included so tests won't be skipped unexpectedly.
 
 Run tests using the Python module format:
 
