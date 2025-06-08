@@ -78,5 +78,6 @@ def test_vertical_slice_simulation() -> None:
     relationships_updated = any(
         any(score != 0.0 for score in agent.state.relationships.values())
         for agent in sim.agents
+
     )
     assert relationships_updated

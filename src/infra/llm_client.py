@@ -25,9 +25,7 @@ try:  # pragma: no cover - optional dependency
     import requests
     from requests.exceptions import RequestException, Timeout
 except Exception:  # pragma: no cover - fallback when requests missing
-    logging.getLogger(__name__).warning(
-        "requests package not installed; using MagicMock stub"
-    )
+    logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
     from unittest.mock import MagicMock
 
     requests = MagicMock()
@@ -42,8 +40,9 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
         pass
 
+
 from pydantic import BaseModel, ValidationError
-from requests.exceptions import RequestException, Timeout
+from requests.exceptions import RequestException
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -52,10 +51,12 @@ from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config val
 try:
     from litellm.exceptions import APIError
 except Exception:
+
     class APIError(Exception):  # type: ignore[no-redef]
         """Fallback APIError when litellm is unavailable."""
 
         pass
+
 
 _RequestException = RequestException
 _APIError = APIError

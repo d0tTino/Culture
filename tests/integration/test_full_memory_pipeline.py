@@ -39,15 +39,16 @@ from src.infra import config
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("test_full_memory_pipeline.log")
-    ]
+        logging.FileHandler("test_full_memory_pipeline.log"),
+    ],
 )
 
 logger = logging.getLogger("test_full_memory_pipeline")
 logger.setLevel(logging.INFO)
+
 
 class TestFullMemoryPipeline(unittest.TestCase):
     """
@@ -84,13 +85,13 @@ class TestFullMemoryPipeline(unittest.TestCase):
         cls._start_datetime = datetime(2023, 1, 1, 12, 0, 0)  # Fixed start time for testing
 
         # Create a patcher for datetime.utcnow() to have controlled time progression
-        cls.datetime_patcher = patch('src.agents.memory.vector_store.datetime')
+        cls.datetime_patcher = patch("src.agents.memory.vector_store.datetime")
         cls.mock_datetime = cls.datetime_patcher.start()
         cls.mock_datetime.utcnow.return_value = cls._start_datetime
         cls.mock_datetime.fromisoformat = datetime.fromisoformat  # Keep the real method
 
         # Patch llm_client.generate_response
-        cls.llm_patcher = patch('src.infra.llm_client.generate_response')
+        cls.llm_patcher = patch("src.infra.llm_client.generate_response")
         cls.mock_llm_generate = cls.llm_patcher.start()
         cls.mock_llm_generate.return_value = "Mocked LLM response for testing."
 
@@ -119,9 +120,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
 
         # Create agent instances with different roles
         self.agents = {
-            'innovator': self._create_mock_agent(ROLE_INNOVATOR),
-            'analyzer': self._create_mock_agent(ROLE_ANALYZER),
-            'facilitator': self._create_mock_agent(ROLE_FACILITATOR)
+            "innovator": self._create_mock_agent(ROLE_INNOVATOR),
+            "analyzer": self._create_mock_agent(ROLE_ANALYZER),
+            "facilitator": self._create_mock_agent(ROLE_FACILITATOR),
         }
 
         # Track simulation step
@@ -146,10 +147,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
 
         # Record the role in the vector store
         self.vector_store.record_role_change(
-            agent_id=agent.id,
-            step=0,
-            previous_role="unknown",
-            new_role=role
+            agent_id=agent.id, step=0, previous_role="unknown", new_role=role
         )
 
         return agent
@@ -173,7 +171,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 "What if we combined vector embeddings with multi-modal transformers?",
                 "My intuition says there's a creative solution that others haven't considered.",
                 "The connection between these seemingly disparate ideas might lead to breakthrough innovation.",
-                "I need to explore this unconventional approach further before presenting it to the team."
+                "I need to explore this unconventional approach further before presenting it to the team.",
             ]
         elif agent.role == ROLE_ANALYZER:
             contents = [
@@ -181,7 +179,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 "We should conduct a detailed analysis of the failure cases to identify patterns.",
                 "Based on my calculations, hypothesis B is supported with p < 0.01.",
                 "The metrics show concerning performance degradation under high load conditions.",
-                "A systematic evaluation reveals three critical weaknesses in the current design."
+                "A systematic evaluation reveals three critical weaknesses in the current design.",
             ]
         else:  # ROLE_FACILITATOR
             contents = [
@@ -189,7 +187,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 "I sense some tension between the engineers and the product team that needs addressing.",
                 "Let's create a shared vision that incorporates everyone's perspectives.",
                 "The team will be more effective if we align our goals and establish trust.",
-                "I should organize a workshop to help resolve these conflicting priorities."
+                "I should organize a workshop to help resolve these conflicting priorities.",
             ]
 
         # Add memory events for specified steps
@@ -203,9 +201,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 step=step,
                 event_type=event_type,
                 content=content,
-                metadata={
-                    "simulation_step_timestamp": self.mock_datetime.utcnow().isoformat()
-                }
+                metadata={"simulation_step_timestamp": self.mock_datetime.utcnow().isoformat()},
             )
             added_memory_ids.append(memory_id)
 
@@ -213,7 +209,11 @@ class TestFullMemoryPipeline(unittest.TestCase):
             if i % 3 == 0:
                 # Another agent responds
                 responder_role = ROLE_ANALYZER if agent.role != ROLE_ANALYZER else ROLE_FACILITATOR
-                responder_agent = self.agents['analyzer'] if responder_role == ROLE_ANALYZER else self.agents['facilitator']
+                responder_agent = (
+                    self.agents["analyzer"]
+                    if responder_role == ROLE_ANALYZER
+                    else self.agents["facilitator"]
+                )
 
                 response_content = f"Interesting point about {content.split()[3:7]}. Have you considered alternative perspectives?"
 
@@ -224,8 +224,8 @@ class TestFullMemoryPipeline(unittest.TestCase):
                     content=response_content,
                     metadata={
                         "source_agent_id": responder_agent.id,
-                        "simulation_step_timestamp": self.mock_datetime.utcnow().isoformat()
-                    }
+                        "simulation_step_timestamp": self.mock_datetime.utcnow().isoformat(),
+                    },
                 )
 
         return added_memory_ids
@@ -242,27 +242,25 @@ class TestFullMemoryPipeline(unittest.TestCase):
             "$and": [
                 {"agent_id": {"$eq": agent.id}},
                 {"step": {"$gte": start_step}},
-                {"step": {"$lte": end_step}}
+                {"step": {"$lte": end_step}},
             ]
         }
 
         results = self.vector_store.collection.get(
-            where=where_filter,
-            include=["documents", "metadatas"]
+            where=where_filter, include=["documents", "metadatas"]
         )
 
         if not results or not results.get("ids", []):
-            logger.warning(f"No raw memories found for agent {agent.id} in step range {start_step}-{end_step}")
+            logger.warning(
+                f"No raw memories found for agent {agent.id} in step range {start_step}-{end_step}"
+            )
             return None
 
         # Process the memories that were returned
         memories = []
         for i, doc in enumerate(results["documents"]):
             if i < len(results.get("metadatas", [])):
-                memories.append({
-                    "content": doc,
-                    "metadata": results["metadatas"][i]
-                })
+                memories.append({"content": doc, "metadata": results["metadatas"][i]})
 
         # Prepare the context for the summarizer
         recent_events = "\n".join([memory["content"] for memory in memories])
@@ -271,7 +269,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
         l1_summary = self.role_specific_summarizer.generate_l1_summary(
             agent_role=agent.role,
             recent_events=recent_events,
-            current_mood=agent_state.get("current_mood", "neutral")
+            current_mood=agent_state.get("current_mood", "neutral"),
         )
 
         # Add the consolidated summary to the vector store
@@ -284,11 +282,13 @@ class TestFullMemoryPipeline(unittest.TestCase):
             metadata={
                 "consolidated_step_range": f"{start_step}-{end_step}",
                 "consolidation_timestamp": self.mock_datetime.utcnow().isoformat(),
-                "simulation_step_timestamp": self.mock_datetime.utcnow().isoformat()
-            }
+                "simulation_step_timestamp": self.mock_datetime.utcnow().isoformat(),
+            },
         )
 
-        logger.info(f"Added L1 consolidated summary for agent {agent.id} at step {end_step}, covering steps {start_step}-{end_step}")
+        logger.info(
+            f"Added L1 consolidated summary for agent {agent.id} at step {end_step}, covering steps {start_step}-{end_step}"
+        )
         return consolidated_memory_id
 
     def _simulate_l2_consolidation(self, agent: MagicMock, step: int) -> str | None:
@@ -304,38 +304,40 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 {"agent_id": {"$eq": agent.id}},
                 {"memory_type": {"$eq": "consolidated_summary"}},
                 {"step": {"$gte": start_step}},
-                {"step": {"$lte": step}}
+                {"step": {"$lte": step}},
             ]
         }
 
         results = self.vector_store.collection.get(
-            where=where_filter,
-            include=["documents", "metadatas"]
+            where=where_filter, include=["documents", "metadatas"]
         )
 
         if not results or not results.get("ids", []):
-            logger.warning(f"No L1 summaries found for agent {agent.id} in step range {start_step}-{step}")
+            logger.warning(
+                f"No L1 summaries found for agent {agent.id} in step range {start_step}-{step}"
+            )
             return None
 
         # Process the L1 summaries that were returned
         l1_summaries = []
         for i, doc in enumerate(results["documents"]):
             if i < len(results.get("metadatas", [])):
-                l1_summaries.append({
-                    "content": doc,
-                    "metadata": results["metadatas"][i]
-                })
+                l1_summaries.append({"content": doc, "metadata": results["metadatas"][i]})
 
         # Prepare the context for the L2 summarizer
-        l1_summaries_context = "\n\n".join([f"L1 Summary (Step {summary['metadata'].get('step', 'unknown')}): {summary['content']}"
-                                         for summary in l1_summaries])
+        l1_summaries_context = "\n\n".join(
+            [
+                f"L1 Summary (Step {summary['metadata'].get('step', 'unknown')}): {summary['content']}"
+                for summary in l1_summaries
+            ]
+        )
 
         # Generate the L2 summary using the role-specific summarizer
         l2_summary = self.role_specific_summarizer.generate_l2_summary(
             agent_role=agent.role,
             l1_summaries_context=l1_summaries_context,
             overall_mood_trend=agent_state.get("current_mood", "neutral"),
-            agent_goals=agent_state.get("goals", "Complete the task effectively")
+            agent_goals=agent_state.get("goals", "Complete the task effectively"),
         )
 
         # Add the L2 chapter summary to the vector store
@@ -349,11 +351,13 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 "consolidated_step_range": f"{start_step}-{step}",
                 "consolidation_timestamp": self.mock_datetime.utcnow().isoformat(),
                 "simulation_step_start_timestamp": self.mock_datetime.utcnow().isoformat(),
-                "simulation_step_end_timestamp": self.mock_datetime.utcnow().isoformat()
-            }
+                "simulation_step_end_timestamp": self.mock_datetime.utcnow().isoformat(),
+            },
         )
 
-        logger.info(f"Added L2 chapter summary for agent {agent.id} at step {step}, covering steps {start_step}-{step}")
+        logger.info(
+            f"Added L2 chapter summary for agent {agent.id} at step {step}, covering steps {start_step}-{step}"
+        )
         return l2_memory_id
 
     def _simulate_memory_retrievals(self, agent: MagicMock, queries: list[str]) -> None:
@@ -361,24 +365,24 @@ class TestFullMemoryPipeline(unittest.TestCase):
         for query in queries:
             # Perform a retrieval
             memories = self.vector_store.retrieve_relevant_memories(
-                agent_id=agent.id,
-                query=query,
-                k=3
+                agent_id=agent.id, query=query, k=3
             )
 
             # Log what was retrieved
-            logger.info(f"Agent {agent.id} retrieved {len(memories)} memories for query: '{query}'")
+            logger.info(
+                f"Agent {agent.id} retrieved {len(memories)} memories for query: '{query}'"
+            )
 
             # Perform a targeted retrieval to ensure specific memories get retrieved often
             # This helps test the MUS scoring later
             if "innovation" in query.lower() or "creative" in query.lower():
                 targeted_filter = {"event_type": "thought"}
                 targeted_memories = self.vector_store.retrieve_filtered_memories(
-                    agent_id=agent.id,
-                    filters=targeted_filter,
-                    limit=2
+                    agent_id=agent.id, filters=targeted_filter, limit=2
                 )
-                logger.info(f"Agent {agent.id} made targeted retrieval of {len(targeted_memories)} memories")
+                logger.info(
+                    f"Agent {agent.id} made targeted retrieval of {len(targeted_memories)} memories"
+                )
 
     def _perform_age_pruning(self):
         """Simulate age-based pruning for both L1 and L2 summaries"""
@@ -386,11 +390,15 @@ class TestFullMemoryPipeline(unittest.TestCase):
         l1_ids_to_prune = []
         for agent in self.agents.values():
             # Get all L1 summaries for the agent
-            l1_where = {"$and": [{"agent_id": {"$eq": agent.id}}, {"memory_type": {"$eq": "consolidated_summary"}}]}
+            l1_where = {
+                "$and": [
+                    {"agent_id": {"$eq": agent.id}},
+                    {"memory_type": {"$eq": "consolidated_summary"}},
+                ]
+            }
 
             l1_results = self.vector_store.collection.get(
-                where=l1_where,
-                include=["metadatas", "documents"]
+                where=l1_where, include=["metadatas", "documents"]
             )
 
             if l1_results and "ids" in l1_results and l1_results["ids"]:
@@ -440,8 +448,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
         # Get all L1 summaries
         l1_where = {"memory_type": {"$eq": "consolidated_summary"}}
         l1_results = self.vector_store.collection.get(
-            where=l1_where,
-            include=["metadatas", "documents"]
+            where=l1_where, include=["metadatas", "documents"]
         )
 
         if l1_results and "ids" in l1_results and l1_results["ids"]:
@@ -450,7 +457,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
                     metadata = l1_results["metadatas"][i]
 
                     # Check age
-                    timestamp_str = metadata.get('simulation_step_timestamp')
+                    timestamp_str = metadata.get("simulation_step_timestamp")
                     if not timestamp_str:
                         continue
 
@@ -465,10 +472,10 @@ class TestFullMemoryPipeline(unittest.TestCase):
                         continue  # Skip memories that are too young
 
                     # Calculate MUS
-                    retrieval_count = metadata.get('retrieval_count', 0)
-                    accumulated_relevance = metadata.get('accumulated_relevance_score', 0.0)
-                    relevance_count = metadata.get('retrieval_relevance_count', 0)
-                    last_retrieved = metadata.get('last_retrieved_timestamp', "")
+                    retrieval_count = metadata.get("retrieval_count", 0)
+                    accumulated_relevance = metadata.get("accumulated_relevance_score", 0.0)
+                    relevance_count = metadata.get("retrieval_relevance_count", 0)
+                    last_retrieved = metadata.get("last_retrieved_timestamp", "")
 
                     # Calculate components
                     rfs = math.log(1 + retrieval_count)
@@ -482,7 +489,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
                             days_since = max(0, days_since)
                             recs = 1.0 / (1.0 + days_since)
                         except Exception as e:
-                            logger.warning(f"Invalid last_retrieved_timestamp format: {last_retrieved}")
+                            logger.warning(
+                                f"Invalid last_retrieved_timestamp format: {last_retrieved}"
+                            )
 
                     # Calculate MUS
                     mus = (0.4 * rfs) + (0.4 * rs) + (0.2 * recs)
@@ -493,7 +502,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
 
         # Perform the actual L1 MUS pruning
         if l1_ids_to_prune:
-            logger.info(f"MUS-based pruning: Deleting {len(l1_ids_to_prune)} L1 summaries with low utility scores")
+            logger.info(
+                f"MUS-based pruning: Deleting {len(l1_ids_to_prune)} L1 summaries with low utility scores"
+            )
             self.vector_store.delete_memories_by_ids(l1_ids_to_prune)
 
         # Similar approach for L2 summaries
@@ -504,8 +515,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
         # Get all L2 summaries
         l2_where = {"memory_type": {"$eq": "chapter_summary"}}
         l2_results = self.vector_store.collection.get(
-            where=l2_where,
-            include=["metadatas", "documents"]
+            where=l2_where, include=["metadatas", "documents"]
         )
 
         if l2_results and "ids" in l2_results and l2_results["ids"]:
@@ -514,7 +524,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
                     metadata = l2_results["metadatas"][i]
 
                     # Check age
-                    timestamp_str = metadata.get('simulation_step_end_timestamp')
+                    timestamp_str = metadata.get("simulation_step_end_timestamp")
                     if not timestamp_str:
                         continue
 
@@ -529,10 +539,10 @@ class TestFullMemoryPipeline(unittest.TestCase):
                         continue  # Skip memories that are too young
 
                     # Calculate MUS (same formula as L1)
-                    retrieval_count = metadata.get('retrieval_count', 0)
-                    accumulated_relevance = metadata.get('accumulated_relevance_score', 0.0)
-                    relevance_count = metadata.get('retrieval_relevance_count', 0)
-                    last_retrieved = metadata.get('last_retrieved_timestamp', "")
+                    retrieval_count = metadata.get("retrieval_count", 0)
+                    accumulated_relevance = metadata.get("accumulated_relevance_score", 0.0)
+                    relevance_count = metadata.get("retrieval_relevance_count", 0)
+                    last_retrieved = metadata.get("last_retrieved_timestamp", "")
 
                     # Calculate components
                     rfs = math.log(1 + retrieval_count)
@@ -546,7 +556,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
                             days_since = max(0, days_since)
                             recs = 1.0 / (1.0 + days_since)
                         except Exception as e:
-                            logger.warning(f"Invalid last_retrieved_timestamp format: {last_retrieved}")
+                            logger.warning(
+                                f"Invalid last_retrieved_timestamp format: {last_retrieved}"
+                            )
 
                     # Calculate MUS
                     mus = (0.4 * rfs) + (0.4 * rs) + (0.2 * recs)
@@ -557,7 +569,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
 
         # Perform the actual L2 MUS pruning
         if l2_ids_to_prune:
-            logger.info(f"MUS-based pruning: Deleting {len(l2_ids_to_prune)} L2 summaries with low utility scores")
+            logger.info(
+                f"MUS-based pruning: Deleting {len(l2_ids_to_prune)} L2 summaries with low utility scores"
+            )
             self.vector_store.delete_memories_by_ids(l2_ids_to_prune)
 
     def test_memory_pipeline_evolution(self):
@@ -595,7 +609,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
                 end_step = step
 
                 for agent_name, agent in self.agents.items():
-                    logger.info(f"Performing L1 consolidation for {agent_name} (steps {start_step}-{end_step})")
+                    logger.info(
+                        f"Performing L1 consolidation for {agent_name} (steps {start_step}-{end_step})"
+                    )
                     self._simulate_l1_consolidation(agent, start_step, end_step)
 
                 # Advance time to simulate passage of a day
@@ -621,19 +637,19 @@ class TestFullMemoryPipeline(unittest.TestCase):
                         queries = [
                             "innovative ideas for our project",
                             "creative solutions to our problem",
-                            "novel approaches to consider"
+                            "novel approaches to consider",
                         ]
                     elif agent.role == ROLE_ANALYZER:
                         queries = [
                             "data analysis results",
                             "performance metrics evaluation",
-                            "systematic analysis of the problem"
+                            "systematic analysis of the problem",
                         ]
                     else:  # ROLE_FACILITATOR
                         queries = [
                             "team communication strategies",
                             "resolving conflicts in the team",
-                            "aligning team goals and priorities"
+                            "aligning team goals and priorities",
                         ]
 
                     self._simulate_memory_retrievals(agent, queries)
@@ -701,7 +717,9 @@ class TestFullMemoryPipeline(unittest.TestCase):
         try:
             for agent_name, agent in self.agents.items():
                 agent_id = agent.id
-                l1_summaries = self._get_memories_of_type(agent_id, "consolidated_summary", limit=5)
+                l1_summaries = self._get_memories_of_type(
+                    agent_id, "consolidated_summary", limit=5
+                )
                 if l1_summaries:
                     # Here we would check for role-specific markers in summaries
                     # For Innovator: creativity, novel ideas, etc.
@@ -725,17 +743,13 @@ class TestFullMemoryPipeline(unittest.TestCase):
 
         if memory_type:
             where_clause = {
-                "$and": [
-                    {"agent_id": {"$eq": agent_id}},
-                    {"memory_type": {"$eq": memory_type}}
-                ]
+                "$and": [{"agent_id": {"$eq": agent_id}}, {"memory_type": {"$eq": memory_type}}]
             }
         else:
             where_clause = {"agent_id": {"$eq": agent_id}}
 
         results = self.vector_store.collection.get(
-            where=where_clause,
-            include=[]  # Don't need any content, just counting
+            where=where_clause, include=[]  # Don't need any content, just counting
         )
 
         return len(results.get("ids", []))
@@ -743,47 +757,33 @@ class TestFullMemoryPipeline(unittest.TestCase):
     def _get_memories_of_type(self, agent_id: str, memory_type: str, limit: int = 5) -> list[dict]:
         """Get memories of a specific type for an agent."""
         where_filter = {
-            "$and": [
-                {"agent_id": {"$eq": agent_id}},
-                {"memory_type": {"$eq": memory_type}}
-            ]
+            "$and": [{"agent_id": {"$eq": agent_id}}, {"memory_type": {"$eq": memory_type}}]
         }
 
         results = self.vector_store.collection.get(
-            where=where_filter,
-            include=["documents", "metadatas"],
-            limit=limit
+            where=where_filter, include=["documents", "metadatas"], limit=limit
         )
 
         memories = []
         if results and "documents" in results and results["documents"]:
             for i, doc in enumerate(results["documents"]):
                 if i < len(results.get("metadatas", [])):
-                    memories.append({
-                        "content": doc,
-                        "metadata": results["metadatas"][i]
-                    })
+                    memories.append({"content": doc, "metadata": results["metadatas"][i]})
 
         return memories
 
     def _get_memory_with_usage_stats(self, agent_id: str) -> dict | None:
         """Check if any memories have usage statistics for an agent."""
-        where_filter = {
-            "$and": [
-                {"agent_id": {"$eq": agent_id}},
-                {"retrieval_count": {"$gt": 0}}
-            ]
-        }
+        where_filter = {"$and": [{"agent_id": {"$eq": agent_id}}, {"retrieval_count": {"$gt": 0}}]}
 
         results = self.vector_store.collection.get(
-            where=where_filter,
-            include=["metadatas"],
-            limit=1
+            where=where_filter, include=["metadatas"], limit=1
         )
 
         if results and "metadatas" in results and results["metadatas"]:
             return results["metadatas"][0]
         return None
+
 
 if __name__ == "__main__":
     unittest.main()
