@@ -115,6 +115,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 - Python 3.10+
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
+- Additional development and testing dependencies in `requirements-dev.txt` (required for the full test suite)
 
 ## Installation
 
@@ -357,6 +358,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 ```
 You can also run `scripts/setup_test_env.sh` to create a virtual environment and
 install these dependencies automatically.
+These requirements include optional packages such as `chromadb`, `weaviate-client`, and `langgraph`. Our CI workflow installs them automatically so tests won't be skipped unexpectedly.
 The development requirements provide `pytest-xdist` for parallel execution, `pytest-asyncio` for async tests, and `requests` for HTTP utilities.
 
 Run tests using the Python module format:
@@ -531,6 +533,7 @@ python -m pytest tests/
 ```
 `pytest-xdist` is required for this command because the default `pytest.ini` uses `-n auto`.
 Install it via `requirements-dev.txt` if you haven't already.
+These tests also rely on optional packages (`chromadb`, `weaviate-client`, `langgraph`) which are included in `requirements.txt` and installed in CI.
 Generate a coverage report:
 ```bash
 python -m pytest --cov=src --cov-report=term-missing tests/
