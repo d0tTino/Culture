@@ -310,6 +310,8 @@ This script will:
 3. Perform static type checking using Mypy
 
 It's recommended to run this script before committing changes.
+The format steps modify files in-place, so run the script prior to creating your
+commit to avoid unexpected diffs.
 
 #### Individual Tool Usage
 
