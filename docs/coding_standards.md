@@ -297,15 +297,15 @@ To ensure code consistency and catch potential errors, you can run all checks an
 
 ```bash
 # On Linux/Mac:
-./scripts/lint.sh
+./scripts/lint.sh --format  # add --format to apply Ruff and Black formatting
 
 # On Windows:
-scripts\lint.bat
+scripts\lint.bat --format
 ```
 
 This script will:
 
-1. Format code using `ruff format` and Black
+1. Optionally format code using `ruff format` and Black when `--format` is supplied
 2. Lint the codebase with `ruff check`
 3. Perform static type checking using Mypy
 

@@ -43,7 +43,7 @@ Before submitting code for review, the author should:
 
 1. **Self-Review**: Perform a self-review of the code using the same criteria a reviewer would
 2. **Follow Standards**: Ensure code adheres to `docs/coding_standards.md`
-3. **Run Linters**: Execute `scripts/lint.sh` or `scripts/lint.bat` and address all reported issues
+3. **Run Linters**: Execute `scripts/lint.sh --format` (or `scripts/lint.bat --format`) and address all reported issues
 4. **Test Coverage**: Write and execute tests for the changes, ensuring all tests pass
 5. **Clear Description**: Provide a clear description of the changes, including:
    - What problem the change solves
@@ -159,7 +159,7 @@ To support the review process, we recommend the following branching strategy:
 
 ## 7. Tools and Resources
 
-- Linting: `scripts/lint.sh` or `scripts/lint.bat`
+ - Linting: `scripts/lint.sh --format` or `scripts/lint.bat --format`
 - Code Standards: `docs/coding_standards.md`
 - Python Style Guide: [PEP 8](https://peps.python.org/pep-0008/)
 - Type Hinting Guide: [PEP 484](https://peps.python.org/pep-0484/)
