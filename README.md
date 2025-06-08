@@ -194,6 +194,12 @@ Run a simulation with Discord integration:
 python -m src.app --discord
 ```
 
+Start the optional HTTP dashboard backend (for streaming events via SSE):
+
+```bash
+python -m src.http_app
+```
+
 ### Configuring a Simulation Scenario
 
 You can modify the `DEFAULT_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
@@ -489,14 +495,20 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    - Copy `.env.example` to `.env` and edit as needed:
     - `OLLAMA_API_BASE` (e.g., http://localhost:11434)
     - `OLLAMA_REQUEST_TIMEOUT` (request timeout in seconds)
-     - `WEAVIATE_URL` (e.g., http://localhost:8080)
-     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
+    - `WEAVIATE_URL` (e.g., http://localhost:8080)
+    - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
+    - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
    - See `.env.example` and `docs/testing.md` for details.
 
 ### Running the Simulation
 Run a basic simulation (default parameters):
 ```bash
 python -m src.app --steps 5
+```
+
+Start the HTTP dashboard backend (optional):
+```bash
+python -m src.http_app
 ```
 
 ### Walking Vertical Slice
