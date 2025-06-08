@@ -63,6 +63,7 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
 - Fast unit tests run on every push/PR
 - Full suite runs nightly and on main branch merges
 - See `.github/workflows/tests.yml` for details
+- Pushes that only modify Markdown files or documentation paths are ignored by CI
 
 ## Adding/Updating Markers
 
