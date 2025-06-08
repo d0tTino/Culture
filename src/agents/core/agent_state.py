@@ -108,9 +108,9 @@ class AgentStateData(BaseModel):
     mock_llm_client: Optional[Any] = None
 
     def __init__(self, **data: Any) -> None:
-        """Initialize and call ``model_post_init`` on Pydantic v1."""
+        """Initialize and conditionally call ``model_post_init`` for Pydantic v1."""
         super().__init__(**data)
-        if not hasattr(BaseModel, "model_validate"):
+        if hasattr(self, "model_post_init"):
             self.model_post_init(None)
 
     last_thought: Optional[str] = None
