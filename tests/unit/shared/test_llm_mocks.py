@@ -34,7 +34,9 @@ def test_create_mock_ollama_client_chat_and_generate() -> None:
     )
     assert json.loads(neg["message"]["content"])["sentiment_score"] == -0.7
 
-    gen = client.generate(prompt="Your output fields are: `l1_summary` (str)\nrecent_events")
+    gen = client.generate(
+        prompt="Your output fields are: `l1_summary` (str)\n`recent_events` (str)\n`agent_role` (str)"
+    )
     assert "l1_summary" in json.loads(gen["response"])
 
     fallback = client.generate(prompt="something else")
