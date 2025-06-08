@@ -98,36 +98,6 @@ class AsyncDSPyManager:
         logger.info("Shutting down AsyncDSPyManager executor.")
         self.executor.shutdown(wait=wait)
 
-    def _handle_timeout(
-        self: Self,
-        future: asyncio.Future[object],
-        default_value: object = None,
-        timeout: float | None = None,
-        dspy_callable: Callable[..., object] | None = None,
-    ) -> object:
-        """Handle a timeout by cancelling the future and logging."""
-        timeout_val = timeout if timeout is not None else self.default_timeout
-        callable_name = (
-            getattr(dspy_callable, "__name__", str(dspy_callable))
-            if dspy_callable
-            else "Unnamed DSPy call"
-        )
-
-        logger.warning(
-            "AsyncDSPyManager._handle_timeout: Timeout awaiting result for "
-            f"{callable_name} after {timeout_val:.2f}s."
-        )
-
-        if not future.done():
-            if future.cancel():
-                logger.debug(f"Cancelled underlying task for {callable_name} due to timeout.")
-            else:
-                logger.debug(
-                    "Failed to cancel underlying task for "
-                    f"{callable_name} (might have already completed or started running)."
-                )
-        return default_value
-
     async def run_with_timeout_async(
         self: Self,
         program_callable: Callable[..., object],
