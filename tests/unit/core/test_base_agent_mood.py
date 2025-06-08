@@ -33,6 +33,34 @@ def _ensure_chromadb_stub() -> None:
         sse_mod = types.ModuleType("sse_starlette.sse")
         sse_mod.EventSourceResponse = object  # type: ignore[attr-defined]
         sys.modules["sse_starlette.sse"] = sse_mod
+    if "fastapi" not in sys.modules:
+        fastapi_mod = types.ModuleType("fastapi")
+
+        class _FastAPI:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def get(self, *args: object, **kwargs: object) -> object:
+                """Return decorator that leaves function unchanged."""
+
+                def decorator(func: object) -> object:
+                    return func
+
+                return decorator
+
+        class _Request:
+            async def is_disconnected(self) -> bool:
+                """Pretend the connection is always active."""
+
+                return False
+
+        fastapi_mod.FastAPI = _FastAPI
+        fastapi_mod.Request = _Request
+
+        responses_mod = types.ModuleType("fastapi.responses")
+        responses_mod.JSONResponse = object  # type: ignore[attr-defined]
+        sys.modules["fastapi"] = fastapi_mod
+        sys.modules["fastapi.responses"] = responses_mod
 
 
 @pytest.mark.unit
