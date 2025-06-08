@@ -11,10 +11,13 @@ def test_is_ollama_running_false(monkeypatch: pytest.MonkeyPatch) -> None:
     class DummySocket:
         def __init__(self, *args: object, **kwargs: object) -> None:
             pass
-        def settimeout(self, *args: object) -> None:  # noqa: D401 - thin wrapper
+
+        def settimeout(self, *args: object) -> None:
             pass
+
         def connect(self, addr: tuple[str, int]) -> None:
             raise OSError()
+
         def close(self) -> None:
             pass
 
@@ -26,10 +29,14 @@ def test_is_ollama_running_false(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_create_mock_ollama_client_chat_and_generate() -> None:
     client = llm_mocks.create_mock_ollama_client()
 
-    neg = client.chat(messages=[{"content": "Analyze the sentiment of the following message. Strongly disagree"}])
+    neg = client.chat(
+        messages=[{"content": "Analyze the sentiment of the following message. Strongly disagree"}]
+    )
     assert json.loads(neg["message"]["content"])["sentiment_score"] == -0.7
 
-    gen = client.generate(prompt="Your output fields are: `l1_summary` (str)\nrecent_events")
+    gen = client.generate(
+        prompt="Your output fields are: `l1_summary` (str)\n`recent_events` (str)\n`agent_role` (str)"
+    )
     assert "l1_summary" in json.loads(gen["response"])
 
     fallback = client.generate(prompt="something else")

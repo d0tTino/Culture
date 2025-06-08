@@ -558,6 +558,7 @@ python -m pytest --cov=src --cov-report=term-missing tests/
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
 
 For advanced testing, parallelization, and CI details, see [docs/testing.md](docs/testing.md).
+CI workflows are skipped when a commit only modifies documentation (`*.md` files or files under `docs/`).
 
 ## Code Quality and Type Safety
 

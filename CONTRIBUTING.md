@@ -5,8 +5,9 @@ Welcome! We're excited that you're interested in contributing to Culture.ai. Thi
 ## Getting Started
 - **Read the [README.md](README.md)** for setup, prerequisites, and quickstart instructions.
 - Install development tools:
-  - [Ruff](https://docs.astral.sh/ruff/) for linting/formatting
-  - [Mypy](http://mypy-lang.org/) for static type checking
+- [Ruff](https://docs.astral.sh/ruff/) for linting/formatting
+- [Mypy](http://mypy-lang.org/) for static type checking
+- Install dependencies from `requirements-dev.txt` (includes `pytest-xdist`) in addition to `requirements.txt`.
 - Set up your environment and dependencies as described in the README.
 
 ## Code Style Guidelines

@@ -1,5 +1,3 @@
-import importlib
-
 import pytest
 
 from src.infra import config
@@ -16,7 +14,9 @@ def test_get_relationship_label_ranges() -> None:
 def test_get_config_value_with_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "TEST_KEY", "from_override")
     assert (
-        config.get_config_value_with_override("TEST_KEY", default="def", module_name="src.infra.config")
+        config.get_config_value_with_override(
+            "TEST_KEY", default="def", module_name="src.infra.config"
+        )
         == "from_override"
     )
 
@@ -24,6 +24,8 @@ def test_get_config_value_with_override(monkeypatch: pytest.MonkeyPatch) -> None
 @pytest.mark.unit
 def test_get_config_value_with_missing_module() -> None:
     assert (
-        config.get_config_value_with_override("MISSING", default="def", module_name="nonexistent.module")
+        config.get_config_value_with_override(
+            "MISSING", default="def", module_name="nonexistent.module"
+        )
         == "def"
     )

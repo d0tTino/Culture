@@ -281,10 +281,10 @@ The following tools are integrated to enforce these standards:
 
 ### 11.1. Formatting
 - **Black**: Automatic code formatter that enforces a consistent style by reformatting your code
-- **isort**: Import statement organizer that automatically sorts and groups imports
+- **Ruff**: Handles import sorting and minor formatting via `ruff format`
 
 ### 11.2. Linting
-- **Flake8**: Code style enforcement that checks your code against PEP 8 guidelines
+- **Ruff**: Fast linter covering most Flake8 rules
 - **Mypy**: Static type checker that helps catch type-related errors before runtime
 
 ### 11.3. Testing
@@ -297,20 +297,21 @@ To ensure code consistency and catch potential errors, you can run all checks an
 
 ```bash
 # On Linux/Mac:
-./scripts/lint.sh
+./scripts/lint.sh --format  # add --format to apply Ruff and Black formatting
 
 # On Windows:
-scripts\lint.bat
+scripts\lint.bat --format
 ```
 
 This script will:
 
-1. Format code using Black
-2. Sort imports using isort
-3. Check for PEP 8 compliance and other style issues using Flake8
-4. Perform static type checking using Mypy
+1. Optionally format code using `ruff format` and Black when `--format` is supplied
+2. Lint the codebase with `ruff check`
+3. Perform static type checking using Mypy
 
 It's recommended to run this script before committing changes.
+The format steps modify files in-place, so run the script prior to creating your
+commit to avoid unexpected diffs.
 
 #### Individual Tool Usage
 
@@ -322,16 +323,10 @@ black src/ tests/          # Format all files in src/ and tests/
 black path/to/specific.py  # Format a specific file
 ```
 
-**isort** (import sorting):
+**Ruff** (linting & import sorting):
 ```bash
-isort src/ tests/          # Sort imports in all files in src/ and tests/
-isort path/to/specific.py  # Sort imports in a specific file
-```
-
-**Flake8** (style checking):
-```bash
-flake8 src/ tests/         # Check style in all files in src/ and tests/
-flake8 path/to/specific.py # Check style in a specific file
+ruff format path/to/file.py  # Format and sort imports in a file
+ruff check src/ tests/       # Lint all files in src/ and tests/
 ```
 
 **Mypy** (type checking):
