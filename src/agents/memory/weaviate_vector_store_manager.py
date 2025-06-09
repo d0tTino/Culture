@@ -150,9 +150,11 @@ class WeaviateVectorStoreManager(MemoryStore):
             props = dict(meta)
             props["text"] = text
             uuid_val = meta.get("uuid", str(uuid.uuid4()))
-            data_objects.append(
-                wvc.data.DataObject(properties=props, vector=vector, uuid=uuid_val)
-            )
+            if hasattr(wvc, "data") and hasattr(wvc.data, "DataObject"):
+                data_obj = wvc.data.DataObject(properties=props, vector=vector, uuid=uuid_val)
+            else:  # Fallback for older/newer weaviate classes
+                data_obj = {"properties": props, "vector": vector, "uuid": uuid_val}
+            data_objects.append(data_obj)
             self._store.append({"content": text, "metadata": meta, "id": uuid_val})
         try:
             self.collection.data.insert_many(data_objects)
