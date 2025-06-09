@@ -11,7 +11,6 @@ import time
 from collections.abc import Iterable
 from typing import Any, Callable, Optional, Protocol, TypeVar, cast
 
-
 try:
     import ollama
 except Exception:  # pragma: no cover - optional dependency
@@ -76,8 +75,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[dict[str, str]],
         options: Optional[dict[str, Any]] = None,
-    ) -> Any:
-        ...
+    ) -> Any: ...
+
 
 # Mock implementation variables and functions
 _MOCK_ENABLED = False
@@ -168,7 +167,6 @@ def get_ollama_client() -> OllamaClientProtocol | None:
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
     return client
-
 
 
 def _retry_with_backoff(
@@ -620,7 +618,6 @@ def generate_structured_output(
 
 
 def get_default_llm_client() -> OllamaClientProtocol | None:
-
     """
     Creates and returns a default LLM client instance for use in simulations.
     This function is a convenience wrapper that returns the global client.

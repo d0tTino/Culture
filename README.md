@@ -116,6 +116,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
 - Additional development and testing dependencies in `requirements-dev.txt` (required for the full test suite)
+- `pydantic==2.3.0` is pinned for both runtime and development to ensure consistency
 
 ## Installation
 
