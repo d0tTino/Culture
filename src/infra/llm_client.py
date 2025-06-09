@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import Any, Callable, Optional, Protocol, TypeVar, cast
 
 try:
     import ollama
@@ -64,6 +64,18 @@ logger = logging.getLogger(__name__)
 
 # Define a generic type variable for Pydantic models
 T = TypeVar("T")
+
+
+class OllamaClientProtocol(Protocol):
+    """Minimal protocol for the Ollama client used in this module."""
+
+    def chat(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        options: Optional[dict[str, Any]] = None,
+    ) -> Any:
+        ...
 
 # Mock implementation variables and functions
 _MOCK_ENABLED = False
@@ -131,9 +143,10 @@ else:
 
 # Initialize the Ollama client globally using the configured base URL
 # This assumes the Ollama service is running and accessible.
+client: OllamaClientProtocol | None
 try:
     # Ensure OLLAMA_API_BASE is correctly formatted (e.g., 'http://localhost:11434')
-    client = ollama.Client(host=OLLAMA_API_BASE)
+    client = cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
     # Optional: Perform a quick check to see if the client can connect.
     # client.list() # This might be too slow or throw errors if Ollama is busy/starting.
     # A basic check might be better handled during the first actual call.
@@ -148,11 +161,11 @@ except (APIError, RequestException) as e:
     # raise ConnectionError(f"Could not connect to Ollama at {OLLAMA_API_BASE}") from e
 
 
-def get_ollama_client() -> ollama.Client | None:
+def get_ollama_client() -> OllamaClientProtocol | None:
     """Return the initialized Ollama client instance if available."""
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
-    return cast(Optional[ollama.Client], client)
+    return client
 
 
 def _retry_with_backoff(
@@ -346,7 +359,13 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
     if _MOCK_ENABLED:
         logger.debug("Using mock response for sentiment analysis")
         val = _MOCK_RESPONSES.get("sentiment_analysis", "neutral")
-        return float(val) if isinstance(val, str) else 0.0
+        if isinstance(val, str):
+            try:
+                return float(val)
+            except ValueError:
+                logger.warning(f"Invalid mock sentiment value: {val}")
+                return 0.0
+        return float(val) if isinstance(val, (int, float)) else 0.0
 
     ollama_client = get_ollama_client()
     if not ollama_client or not text:
@@ -597,7 +616,7 @@ def generate_structured_output(
         return None
 
 
-def get_default_llm_client() -> ollama.Client | None:
+def get_default_llm_client() -> OllamaClientProtocol | None:
     """
     Creates and returns a default LLM client instance for use in simulations.
     This function is a convenience wrapper that returns the global client.
