@@ -563,6 +563,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines 
 
 For advanced testing, parallelization, and CI details, see [docs/testing.md](docs/testing.md).
 CI workflows are skipped when a commit only modifies documentation (`*.md` files or files under `docs/`).
+See [docs/ci_status.md](docs/ci_status.md) for tips on checking CI status with the GitHub interface or the `gh` CLI. Because this repository has no remote configured by default, you'll need to add your GitHub remote before checking statuses.
 
 ## Code Quality and Type Safety
 
