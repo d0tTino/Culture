@@ -63,7 +63,9 @@ def test_update_state_node_role_change(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_route_helpers() -> None:
-    out_broadcast = bag.route_broadcast_decision({"structured_output": SimpleNamespace(message_content="hi")})
+    out_broadcast = bag.route_broadcast_decision(
+        {"structured_output": SimpleNamespace(message_content="hi")}
+    )
     assert out_broadcast == "broadcast"
     out_exit = bag.route_broadcast_decision({"structured_output": None})
     assert out_exit == "exit"
@@ -72,9 +74,14 @@ def test_route_helpers() -> None:
     agent.relationships = {"b": 0.1}
     out_rel = bag.route_relationship_context({"state": agent})
     assert out_rel == "has_relationships"
-    assert bag.route_relationship_context({"state": SimpleNamespace(relationships={})}) == "no_relationships"
+    assert (
+        bag.route_relationship_context({"state": SimpleNamespace(relationships={})})
+        == "no_relationships"
+    )
 
-    intent_out = bag.route_action_intent({"structured_output": SimpleNamespace(action_intent="join_project")})
+    intent_out = bag.route_action_intent(
+        {"structured_output": SimpleNamespace(action_intent="join_project")}
+    )
     assert intent_out == "handle_join_project"
 
 
