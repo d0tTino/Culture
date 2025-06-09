@@ -248,7 +248,10 @@ Culture.ai/
 │   │   │   ├── action_intent_selector.py   # Action intent selection
 │   │   │   └── rag_context_synthesizer.py  # RAG context processing
 │   │   ├── graphs/            # Agent cognitive graphs
-│   │   │   └── basic_agent_graph.py  # LangGraph implementation
+│   │   │   ├── agent_graph_builder.py  # Build LangGraph workflows
+│   │   │   ├── graph_nodes.py          # Individual graph nodes
+│   │   │   ├── interaction_handlers.py # Interaction handlers
+│   │   │   └── basic_agent_graph.py    # Coordinator tying nodes and handlers
 │   │   └── __init__.py
 │   ├── infra/                 # Infrastructure code
 │   │   ├── __init__.py
