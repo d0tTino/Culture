@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,6 +11,7 @@ from src.infra import llm_client
 
 
 @pytest.mark.unit
+@pytest.mark.require_ollama
 def test_generate_text_failure(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         llm_client,
