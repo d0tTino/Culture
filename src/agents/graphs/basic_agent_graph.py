@@ -298,6 +298,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
         role_name = agent_state_obj.role
         role_du_conf = ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
         du_gen_rate = role_du_conf.get("base", 1.0)
+
         generated_du = round(du_gen_rate * (0.5 + random.random()), 1)
         if generated_du > 0:
             agent_state_obj.du += generated_du

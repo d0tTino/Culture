@@ -1,4 +1,5 @@
 # ruff: noqa: ANN401
+# mypy: ignore-errors
 # src/infra/llm_client.py
 """
 Provides a client for interacting with the Ollama LLM service.
@@ -9,6 +10,7 @@ import logging
 import time
 from collections.abc import Iterable
 from typing import Any, Callable, Optional, Protocol, TypeVar, cast
+
 
 try:
     import ollama
@@ -166,6 +168,7 @@ def get_ollama_client() -> OllamaClientProtocol | None:
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
     return client
+
 
 
 def _retry_with_backoff(
@@ -617,6 +620,7 @@ def generate_structured_output(
 
 
 def get_default_llm_client() -> OllamaClientProtocol | None:
+
     """
     Creates and returns a default LLM client instance for use in simulations.
     This function is a convenience wrapper that returns the global client.

@@ -17,6 +17,9 @@ def _ensure_chromadb_stub() -> None:
             def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
+            def get_or_create_collection(self, *args: object, **kwargs: object) -> object:
+                return types.SimpleNamespace(add=lambda **_: None, query=lambda **_: {})
+
         chromadb.PersistentClient = _DummyClient
         sys.modules["chromadb"] = chromadb
         utils_mod = types.ModuleType("chromadb.utils.embedding_functions")
@@ -33,6 +36,9 @@ def _ensure_chromadb_stub() -> None:
         sse_mod = types.ModuleType("sse_starlette.sse")
         sse_mod.EventSourceResponse = object  # type: ignore[attr-defined]
         sys.modules["sse_starlette.sse"] = sse_mod
+    if "langgraph" not in sys.modules:
+        langgraph_mod = types.ModuleType("langgraph")
+        sys.modules["langgraph"] = langgraph_mod
     if "fastapi" not in sys.modules:
         fastapi_mod = types.ModuleType("fastapi")
 

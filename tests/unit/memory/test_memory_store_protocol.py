@@ -45,7 +45,12 @@ def test_weaviate_ttl_prune(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_chroma_manager_protocol(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    pytest.importorskip("chromadb")
+    chromadb = pytest.importorskip("chromadb")
+    if (
+        getattr(chromadb, "PersistentClient", None)
+        and chromadb.PersistentClient.__name__ == "_DummyClient"
+    ):
+        pytest.skip("chromadb stubbed")
     from src.agents.memory.vector_store import ChromaVectorStoreManager
 
     manager: MemoryStore = ChromaVectorStoreManager(
