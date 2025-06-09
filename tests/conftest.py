@@ -122,3 +122,19 @@ def ensure_dspy_predict(monkeypatch: MonkeyPatch) -> None:
             return type("Result", (), {"intent": "CONTINUE_COLLABORATION"})()
 
     monkeypatch.setattr(dspy, "Predict", DummyPredict, raising=False)
+
+@pytest.fixture(autouse=True)
+def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
+    """Provide minimal langgraph stubs when the package is missing."""
+    if "langgraph" in sys.modules:
+        return
+    import types
+
+    langgraph_mod = types.ModuleType("langgraph")
+    graph_mod = types.ModuleType("langgraph.graph")
+    graph_mod.StateGraph = object
+    graph_mod.START = "START"
+    graph_mod.END = "END"
+    langgraph_mod.graph = graph_mod
+    sys.modules["langgraph"] = langgraph_mod
+    sys.modules["langgraph.graph"] = graph_mod
