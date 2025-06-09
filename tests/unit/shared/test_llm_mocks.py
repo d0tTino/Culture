@@ -48,5 +48,6 @@ def test_patch_ollama_functions(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.infra import llm_client
 
     llm_mocks.patch_ollama_functions(monkeypatch)
-    assert llm_client.generate_text("test") == llm_mocks.mock_text_global
+    result = llm_client.generate_text("test")
+    assert result == "This is a mock Ollama response"
     assert isinstance(llm_client.client.chat, MagicMock)

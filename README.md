@@ -164,14 +164,18 @@ To install development dependencies (including linting tools), run:
 pip install -r requirements-dev.txt
 ```
 
-To run the linters and formatters locally:
+To run the linters and type checker locally, use the helper scripts:
+```bash
+# Linux/Mac
+./scripts/lint.sh --format  # omit --format to only check
+# Windows
+scripts\lint.bat --format
+```
+These scripts execute `ruff check`, `black`, and `mypy` to match the CI pipeline.
+You can still run the commands manually:
 ```bash
 ruff check .
 black --check .
-```
-
-You can also auto-format the codebase using Ruff:
-```bash
 ruff format
 ```
 

@@ -252,14 +252,10 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
     # Remove the direct patch of llm_client.analyze_sentiment
     # The logic is now handled by the more sophisticated mock_client.chat side_effect
 
-    # Patch the main functions that DON'T rely on llm_client.client directly
-    # if they have their own logic or simpler mock needs.
-    monkeypatch.setattr(llm_client, "generate_text", lambda *args, **kwargs: mock_text_global)
-    monkeypatch.setattr(
-        llm_client, "summarize_memory_context", lambda *args, **kwargs: mock_summary_global
-    )
-    # generate_structured_output in llm_client uses llm_client.client.generate, so it will use the mock_client's generate.
-    # We don't need to patch generate_structured_output directly unless we want to bypass its internal logic.
+    # Use the real generate_text and summarize_memory_context implementations so
+    # tests can override their behavior when needed. generate_structured_output
+    # in llm_client uses ``llm_client.client.generate`` so it will pick up our
+    # mocked client below without additional patching.
 
     # Create and set the more intelligent mock client for llm_client.py
     intelligent_mock_client: MagicMock = create_mock_ollama_client()

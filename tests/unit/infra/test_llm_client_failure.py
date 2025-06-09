@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 import pytest
 
 pytest.importorskip("requests")
-import requests  # noqa: E402
-from pytest import MonkeyPatch  # noqa: E402
+import requests
+from pytest import MonkeyPatch
 
-from src.infra import llm_client  # noqa: E402
+from src.infra import llm_client
 
 
 @pytest.mark.unit
