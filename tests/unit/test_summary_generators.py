@@ -1,10 +1,10 @@
 import pytest
 from pytest import MonkeyPatch
 
-pytest.importorskip("dspy")
-
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
+
+pytest.importorskip("dspy")
 
 
 @pytest.mark.unit

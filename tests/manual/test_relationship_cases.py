@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Manual verification tests for relationship dynamics."""
+
 # ruff: noqa: E402
 import argparse
 import asyncio

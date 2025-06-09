@@ -296,7 +296,8 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
     if action_intent != "idle":
         role_name = agent_state_obj.role
-        du_gen_rate = ROLE_DU_GENERATION.get(role_name, 1.0)  # Use constant
+        du_gen_cfg = ROLE_DU_GENERATION.get(role_name, {})
+        du_gen_rate = du_gen_cfg.get("base", 1.0)
         generated_du = round(du_gen_rate * (0.5 + random.random()), 1)
         if generated_du > 0:
             agent_state_obj.du += generated_du

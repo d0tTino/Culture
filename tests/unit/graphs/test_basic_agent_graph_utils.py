@@ -87,9 +87,20 @@ def test_route_helpers() -> None:
 
 @pytest.mark.unit
 def test_compile_agent_graph(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    if "langgraph" not in sys.modules:
+        langgraph_mod = types.ModuleType("langgraph")
+        graph_mod = types.ModuleType("langgraph.graph")
+        graph_mod.StateGraph = object
+        graph_mod.END = "END"
+        sys.modules["langgraph"] = langgraph_mod
+        sys.modules["langgraph.graph"] = graph_mod
+
     class DummyGraph:
         def compile(self) -> str:
             return "compiled"
 
-    monkeypatch.setattr(bag, "build_graph", lambda: DummyGraph())
+    monkeypatch.setattr("src.agents.graphs.agent_graph_builder.build_graph", lambda: DummyGraph())
     assert bag.compile_agent_graph() == "compiled"

@@ -749,7 +749,8 @@ class TestFullMemoryPipeline(unittest.TestCase):
             where_clause = {"agent_id": {"$eq": agent_id}}
 
         results = self.vector_store.collection.get(
-            where=where_clause, include=[]  # Don't need any content, just counting
+            where=where_clause,
+            include=[],  # Don't need any content, just counting
         )
 
         return len(results.get("ids", []))

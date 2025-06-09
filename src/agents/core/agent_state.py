@@ -208,7 +208,6 @@ class AgentStateData(BaseModel):
     @validator("mood_level")
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
-
         if not isinstance(v, float):
             logger.error(
                 "AGENT_STATE_VALIDATOR_ERROR: mood_level is not float AFTER Pydantic processing. "
