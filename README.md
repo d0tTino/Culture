@@ -549,6 +549,7 @@ Generate a coverage report:
 ```bash
 python -m pytest --cov=src --cov-report=term-missing tests/
 ```
+CI enforces `--cov-fail-under=90` for overall coverage.
 
 ### Project Structure (Key Directories)
 - `src/` — Main source code (agents, graphs, memory, infra, simulation)
