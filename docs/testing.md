@@ -58,6 +58,9 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
   pytest --durations=10 -v
   ```
 
+- On Windows, run these commands from **Git Bash** or **WSL** for full Bash compatibility.
+- Use `scripts\lint.bat --format` to run the same linters as CI.
+
 ## CI Workflow
 
 - Fast unit tests run on every push/PR
