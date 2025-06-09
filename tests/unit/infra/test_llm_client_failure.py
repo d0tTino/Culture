@@ -3,12 +3,13 @@ from unittest.mock import MagicMock
 import pytest
 
 pytest.importorskip("requests")
-import requests
-from pytest import MonkeyPatch
+import requests  # noqa: E402
+from pytest import MonkeyPatch  # noqa: E402
 
-from src.infra import llm_client
+from src.infra import llm_client  # noqa: E402
 
 
+@pytest.mark.unit
 def test_generate_text_failure(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         llm_client,
