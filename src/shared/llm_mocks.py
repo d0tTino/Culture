@@ -259,7 +259,6 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
         llm_client, "summarize_memory_context", lambda *args, **kwargs: mock_summary_global
     )
     # generate_structured_output in llm_client uses llm_client.client.generate, so it will use the mock_client's generate.
-    # We don't need to patch generate_structured_output directly unless we want to bypass its internal logic.
 
     # Create and set the more intelligent mock client for llm_client.py
     intelligent_mock_client: MagicMock = create_mock_ollama_client()
