@@ -5,6 +5,7 @@ import time
 import uuid
 from typing import Any, Callable, Optional, ParamSpec, TypeVar
 
+from src.interfaces import metrics
 from src.shared.logging_utils import get_logger
 
 # Setup a dedicated logger for LLM performance metrics
@@ -36,7 +37,7 @@ def monitor_llm_call(
             model = kwargs.get(model_param, "unknown_model")
 
             # Initialize metrics dictionary
-            metrics: dict[str, Any] = {
+            metrics_data: dict[str, Any] = {
                 "request_id": request_id,
                 "function": func.__name__,
                 "model": model,
@@ -53,38 +54,40 @@ def monitor_llm_call(
             try:
                 result = func(*args, **kwargs)
                 if result is None:
-                    metrics["success"] = False
+                    metrics_data["success"] = False
                     exc_type, exc_value, _ = sys.exc_info()
                     if exc_type and exc_value:
-                        metrics["error_type"] = exc_type.__name__
-                        metrics["error_message"] = str(exc_value)
+                        metrics_data["error_type"] = exc_type.__name__
+                        metrics_data["error_message"] = str(exc_value)
                         if hasattr(exc_value, "status_code"):
-                            metrics["status_code"] = exc_value.status_code
+                            metrics_data["status_code"] = exc_value.status_code
                         if hasattr(exc_value, "response") and hasattr(exc_value.response, "text"):
-                            metrics["error_message"] = exc_value.response.text
+                            metrics_data["error_message"] = exc_value.response.text
                     else:
-                        metrics["error_type"] = "UnknownError"
-                        metrics["error_message"] = "Function returned None, indicating an error"
+                        metrics_data["error_type"] = "UnknownError"
+                        metrics_data["error_message"] = "Function returned None, indicating an error"
                 else:
-                    metrics["success"] = True
+                    metrics_data["success"] = True
                     if result is not None and hasattr(result, "usage"):
-                        metrics["prompt_tokens"] = getattr(result.usage, "prompt_tokens", None)
-                        metrics["completion_tokens"] = getattr(
+                        metrics_data["prompt_tokens"] = getattr(result.usage, "prompt_tokens", None)
+                        metrics_data["completion_tokens"] = getattr(
                             result.usage, "completion_tokens", None
                         )
             except Exception as e:
-                metrics["success"] = False
-                metrics["error_type"] = type(e).__name__
-                metrics["error_message"] = str(e)
+                metrics_data["success"] = False
+                metrics_data["error_type"] = type(e).__name__
+                metrics_data["error_message"] = str(e)
                 if hasattr(e, "status_code"):
-                    metrics["status_code"] = e.status_code
+                    metrics_data["status_code"] = e.status_code
                 if hasattr(e, "response") and hasattr(e.response, "text"):
-                    metrics["error_message"] = e.response.text
+                    metrics_data["error_message"] = e.response.text
                 raise
             finally:
                 end_time = time.perf_counter()
-                metrics["duration_ms"] = round((end_time - start_time) * 1000, 2)
-                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics)}")
+                metrics_data["duration_ms"] = round((end_time - start_time) * 1000, 2)
+                metrics.LLM_CALLS_TOTAL.inc()
+                metrics.LLM_LATENCY_MS.set(metrics_data["duration_ms"])
+                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
             return result
 
         return wrapper

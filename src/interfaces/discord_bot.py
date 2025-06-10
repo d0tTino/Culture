@@ -9,6 +9,8 @@ Provides real-time updates about the simulation to a Discord channel.
 import logging
 from typing import Any, Optional
 
+from src.interfaces import metrics
+
 try:
     import discord
     from discord.ext import commands
@@ -366,14 +368,12 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
-def get_llm_latency() -> int:
-    """Stub metric for LLM latency in milliseconds."""
-    return 0
+def get_llm_latency() -> float:
+    return metrics.get_llm_latency()
 
 
 def get_kb_size() -> int:
-    """Stub metric for Knowledge Board size."""
-    return 0
+    return metrics.get_kb_size()
 
 
 @bot.command(name="say")
