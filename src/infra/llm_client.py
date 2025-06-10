@@ -11,7 +11,12 @@ import time
 from collections.abc import Iterable
 from typing import Any, Callable, Optional, Protocol, TypeVar, cast
 
-from src.shared.typing import LLMChatResponse
+from src.shared.typing import (
+    LLMChatResponse,
+    LLMClientMockResponses,
+    OllamaGenerateResponse,
+    SentimentAnalysisResponse,
+)
 
 try:
     import ollama
@@ -82,7 +87,7 @@ class OllamaClientProtocol(Protocol):
 
 # Mock implementation variables and functions
 _MOCK_ENABLED = False
-_MOCK_RESPONSES: dict[str, Any] = {
+_MOCK_RESPONSES: LLMClientMockResponses = {
     "default": "This is a mock response from the LLM client.",
     "text_generation": "This is a mock text generation response.",
     "structured_output": {
@@ -97,14 +102,14 @@ _MOCK_RESPONSES: dict[str, Any] = {
 
 def enable_mock_mode(
     enabled: bool = True,
-    mock_responses: Optional[dict[str, Any]] = None,
+    mock_responses: Optional[LLMClientMockResponses] = None,
 ) -> None:
     """
     Enable or disable mock mode for testing.
 
     Args:
         enabled (bool): Whether to enable mock mode
-        mock_responses (dict[str, object], optional): Custom mock responses to use
+        mock_responses (LLMClientMockResponses | None): Custom mock responses to use
     """
     global _MOCK_ENABLED, _MOCK_RESPONSES
     _MOCK_ENABLED = enabled
@@ -130,7 +135,7 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: Any = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")
@@ -401,7 +406,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
         response_content_str = str(response["message"]["content"])
         logger.debug(f"Sentiment analysis: received content string: '{response_content_str}'")
         try:
-            sentiment_data = json.loads(response_content_str)
+            sentiment_data: SentimentAnalysisResponse = json.loads(response_content_str)
             if isinstance(sentiment_data, dict) and "sentiment_score" in sentiment_data:
                 score = float(sentiment_data["sentiment_score"])
                 logger.debug(f"Sentiment analysis result: score '{score}' for text: \"{text}\"")
@@ -600,7 +605,7 @@ def generate_structured_output(
             timeout=timeout_value,
         )
         response.raise_for_status()
-        result: dict[str, Any] = response.json()
+        result: OllamaGenerateResponse = response.json()
         response_text: str = result.get("response", "")
         logger.debug(f"FULL RAW LLM RESPONSE: {response_text}")
         try:
