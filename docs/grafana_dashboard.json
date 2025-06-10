@@ -1,0 +1,30 @@
+{
+  "id": null,
+  "uid": "culture-example-dashboard",
+  "title": "Culture.ai Metrics",
+  "description": "Example Grafana dashboard for monitoring Culture.ai services.",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "CPU Usage",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "process_cpu_seconds_total{job=\"culture\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    }
+  ]
+}
