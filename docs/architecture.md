@@ -8,6 +8,31 @@ Culture.ai is an AI Genesis Engine that simulates multi-agent interactions withi
 
 Culture.ai follows a modular design pattern, separating distinct concerns into specialized components that interact through well-defined interfaces.
 
+The diagram below provides a high-level view of how the main pieces fit together.
+
+```mermaid
+graph LR
+    subgraph Simulation
+        AGENTS[Agents]
+        ENV[Environment]
+        MEM[Memory]
+        GRAPH[Decision Graph]
+    end
+    AGENTS --> MEM
+    MEM --> AGENTS
+    AGENTS --> GRAPH
+    GRAPH --> ENV
+    ENV --> MEM
+    subgraph Infrastructure
+        LLM[(LLM Backend)]
+        VDB[(Vector Store)]
+        API[HTTP Dashboard]
+    end
+    MEM --> VDB
+    AGENTS --> LLM
+    GRAPH --> API
+```
+
 ```mermaid
 graph TD
     AC[Agent Core] --> MEM[Memory System]
