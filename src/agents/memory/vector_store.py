@@ -553,14 +553,22 @@ class ChromaVectorStoreManager(MemoryStore):
             where_clause = {"$and": [{"agent_id": agent_id}, {"event_type": "role_change"}]}
 
             results = self.roles_collection.get(
-                where=cast(Any, where_clause), include=["metadatas"]
+                where=where_clause, include=["metadatas"]
             )
+
+            # Support both dict-like and attribute-based responses
+            if hasattr(results, "get"):
+                result_ids = results.get("ids")
+                metadatas = results.get("metadatas")
+            else:
+                result_ids = getattr(results, "ids", None)
+                metadatas = getattr(results, "metadatas", None)
 
             role_history = []
 
             # Process the results to build role periods
-            if results and results.get("ids"):
-                metadatas = results.get("metadatas")
+            if results and result_ids:
+                # Use metadatas from above variable
                 if metadatas is not None:
                     # Sort by step to ensure chronological order
                     sorted_indices = sorted(
