@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.shared.typing import SimulationMessage
+
 # These imports are crucial for get_type_hints to resolve forward references
 # in AgentTurnState when StateGraph is initialized.
 # from .agent_state import AgentState # REMOVE
@@ -114,7 +116,7 @@ class AgentTurnState(TypedDict):
     simulation_step: int  # The current step number from the simulation
     previous_thought: str | None  # The thought from the *last* turn
     environment_perception: dict[str, object]  # Perception data from the environment
-    perceived_messages: list[dict[str, object]]  # Messages perceived from last step
+    perceived_messages: list[SimulationMessage]  # Messages perceived from last step
     memory_history_list: list[dict[str, object]]  # Field for memory history list
     turn_sentiment_score: float  # Field for aggregated sentiment score.
     individual_message_sentiments: list[dict[str, Any]]  # For per-message sentiment scores

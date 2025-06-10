@@ -35,7 +35,7 @@ async def stream_messages(request: Request) -> EventSourceResponse:  # type: ign
                 msg: AgentMessage = await message_sse_queue.get()
                 yield {
                     "event": "message",
-                    "data": msg.model_dump_json(),
+                    "data": msg.json(),
                 }
             except (RuntimeError, ValueError) as e:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
