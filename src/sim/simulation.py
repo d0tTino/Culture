@@ -41,12 +41,12 @@ class Simulation:
     """
 
     def __init__(
-        self,
+        self: Self,
         agents: list["Agent"],
         vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
         scenario: str = "",
         discord_bot: Optional["SimulationDiscordBot"] = None,
-    ):
+    ) -> None:
         """
         Initializes the Simulation instance.
 
@@ -82,9 +82,9 @@ class Simulation:
         logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -119,9 +119,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -248,9 +248,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -297,6 +295,9 @@ class Simulation:
                 f"Agent {agent_id} (Round {self.current_step}): perceived_messages = {perception_data['perceived_messages']}"
             )
 
+            ip_start = current_agent_state.ip
+            du_start = current_agent_state.du
+
             # Run the agent's turn with perception data
             agent_output = await agent.run_turn(
                 simulation_step=self.current_step,
@@ -304,6 +305,20 @@ class Simulation:
                 vector_store_manager=self.vector_store_manager,
                 knowledge_board=self.knowledge_board,
             )
+
+            ip_gain = current_agent_state.ip - ip_start
+            if ip_gain > config.MAX_IP_PER_TICK:
+                current_agent_state.ip = ip_start + float(config.MAX_IP_PER_TICK)
+                logger.warning(
+                    f"Agent {agent_id} IP gain {ip_gain:.2f} exceeds MAX_IP_PER_TICK; capping to {config.MAX_IP_PER_TICK}"
+                )
+
+            du_gain = current_agent_state.du - du_start
+            if du_gain > config.MAX_DU_PER_TICK:
+                current_agent_state.du = du_start + float(config.MAX_DU_PER_TICK)
+                logger.warning(
+                    f"Agent {agent_id} DU gain {du_gain:.2f} exceeds MAX_DU_PER_TICK; capping to {config.MAX_DU_PER_TICK}"
+                )
 
             # --- Process Agent Output ---
             this_agent_turn_generated_messages = []  # Local list for this agent's output this turn
