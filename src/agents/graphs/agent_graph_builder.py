@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-# mypy: ignore-errors
+from typing import Any
+
 from langgraph.graph import END, StateGraph
 
 from .basic_agent_types import AgentTurnState
@@ -24,7 +25,7 @@ from .interaction_handlers import (
 )
 
 
-def build_graph() -> StateGraph:
+def build_graph() -> Any:
     graph_builder = StateGraph(AgentTurnState)
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
     graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
