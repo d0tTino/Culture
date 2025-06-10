@@ -45,5 +45,5 @@ async def stream_messages(request: Request) -> EventSourceResponse:  # type: ign
 
 
 @app.get("/health")
-async def health() -> JSONResponse:
+async def health() -> JSONResponse:  # type: ignore[no-any-unimported]
     return JSONResponse({"status": "ok"})

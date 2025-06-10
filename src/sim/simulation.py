@@ -41,12 +41,12 @@ class Simulation:
     """
 
     def __init__(
-        self,
+        self: Self,
         agents: list["Agent"],
         vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
         scenario: str = "",
         discord_bot: Optional["SimulationDiscordBot"] = None,
-    ):
+    ) -> None:
         """
         Initializes the Simulation instance.
 
@@ -295,6 +295,9 @@ class Simulation:
                 f"Agent {agent_id} (Round {self.current_step}): perceived_messages = {perception_data['perceived_messages']}"
             )
 
+            ip_start = current_agent_state.ip
+            du_start = current_agent_state.du
+
             # Run the agent's turn with perception data
             agent_output = await agent.run_turn(
                 simulation_step=self.current_step,
@@ -302,6 +305,20 @@ class Simulation:
                 vector_store_manager=self.vector_store_manager,
                 knowledge_board=self.knowledge_board,
             )
+
+            ip_gain = current_agent_state.ip - ip_start
+            if ip_gain > config.MAX_IP_PER_TICK:
+                current_agent_state.ip = ip_start + float(config.MAX_IP_PER_TICK)
+                logger.warning(
+                    f"Agent {agent_id} IP gain {ip_gain:.2f} exceeds MAX_IP_PER_TICK; capping to {config.MAX_IP_PER_TICK}"
+                )
+
+            du_gain = current_agent_state.du - du_start
+            if du_gain > config.MAX_DU_PER_TICK:
+                current_agent_state.du = du_start + float(config.MAX_DU_PER_TICK)
+                logger.warning(
+                    f"Agent {agent_id} DU gain {du_gain:.2f} exceeds MAX_DU_PER_TICK; capping to {config.MAX_DU_PER_TICK}"
+                )
 
             # --- Process Agent Output ---
             this_agent_turn_generated_messages = []  # Local list for this agent's output this turn
