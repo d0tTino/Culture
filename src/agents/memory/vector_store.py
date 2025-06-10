@@ -553,7 +553,7 @@ class ChromaVectorStoreManager(MemoryStore):
             where_clause = {"$and": [{"agent_id": agent_id}, {"event_type": "role_change"}]}
 
             results = self.roles_collection.get(
-                where=cast(Any, where_clause), include=["metadatas"]
+                where=where_clause, include=["metadatas"]
             )
 
             role_history = []
