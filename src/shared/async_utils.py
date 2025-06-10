@@ -24,6 +24,28 @@ class AsyncDSPyManager:
             f"default_timeout={default_timeout}s"
         )
 
+    async def __aenter__(self: Self) -> "AsyncDSPyManager":
+        return self
+
+    async def __aexit__(
+        self: Self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object | None,
+    ) -> None:
+        self.shutdown()
+
+    def __enter__(self: Self) -> "AsyncDSPyManager":
+        return self
+
+    def __exit__(
+        self: Self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object | None,
+    ) -> None:
+        self.shutdown()
+
     async def submit(
         self: Self,
         dspy_callable: Callable[..., object],
