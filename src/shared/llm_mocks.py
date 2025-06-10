@@ -9,6 +9,8 @@ import socket
 from typing import Any
 from unittest.mock import MagicMock
 
+from src.shared.typing import LLMChatResponse, OllamaGenerateResponse
+
 # Handle optional Ollama dependency
 try:
     import ollama
@@ -82,9 +84,7 @@ def create_mock_ollama_client() -> MagicMock:
         mock_client = MagicMock(spec=original_client)  # Use spec for better mocking
 
     # Mock the chat method with more specific behavior for sentiment
-    def mock_chat_for_sentiment_and_general(
-        *args: Any, **kwargs: Any
-    ) -> dict[str, dict[str, str]]:
+    def mock_chat_for_sentiment_and_general(*args: Any, **kwargs: Any) -> LLMChatResponse:
         messages = kwargs.get("messages", [])
         prompt_content = ""
         if (
@@ -141,7 +141,7 @@ def create_mock_ollama_client() -> MagicMock:
     # Keep the existing heuristic for generate, but ensure it returns a dict with "response" key
     # as ollama.Client.generate does.
 
-    def mock_generate(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    def mock_generate(*args: Any, **kwargs: Any) -> OllamaGenerateResponse:
         prompt_content = str(kwargs.get("prompt", ""))  # Ensure prompt_content is a string
         logger.debug(f"MOCK_GENERATE_PROMPT_CONTENT_DEBUG: '''{prompt_content}'''")
 

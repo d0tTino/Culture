@@ -26,6 +26,7 @@ from src.infra.llm_client import get_ollama_client
 from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
 from src.shared.async_utils import AsyncDSPyManager
 from src.shared.memory_store import MemoryStore
+from src.shared.typing import SimulationMessage
 
 from .agent_controller import AgentController
 
@@ -899,7 +900,7 @@ class Agent:
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
 
-    def perceive_messages(self: Self, messages: list[dict[str, Any]]) -> None:
+    def perceive_messages(self: Self, messages: list[SimulationMessage]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""
         if not messages:
             return

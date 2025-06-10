@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
+from src.shared.typing import SimulationMessage
 
 from .basic_agent_graph import AgentActionOutput, AgentTurnState
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
     agent_id = state["agent_id"]
-    perceived_messages = state.get("perceived_messages", [])
+    perceived_messages: list[SimulationMessage] = state.get("perceived_messages", [])
     total = 0
     for msg in perceived_messages:
         if msg.get("sender_id") == agent_id:

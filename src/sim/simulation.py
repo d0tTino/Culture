@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from typing_extensions import Self
 
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
+from src.shared.typing import SimulationMessage
 from src.sim.knowledge_board import KnowledgeBoard
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
@@ -111,13 +112,13 @@ class Simulation:
             )
 
         # --- Store broadcasts from the previous step ---
-        self.last_step_messages: list[dict[str, Any]] = []
+        self.last_step_messages: list[SimulationMessage] = []
         logger.info("Initialized storage for last step's messages.")
         # --- End NEW ---
 
-        self.pending_messages_for_next_round: list[dict[str, Any]] = []
+        self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[dict[str, Any]] = (
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
             []
         )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
@@ -272,7 +273,7 @@ class Simulation:
 
             # --- Prepare Perception Data ---
             # Use messages from the current round's perception pool
-            messages_for_this_agent_turn = list(
+            messages_for_this_agent_turn: list[SimulationMessage] = list(
                 self.messages_to_perceive_this_round
             )  # Make a copy for this agent
             perception_data = {
@@ -321,7 +322,7 @@ class Simulation:
                     f"\\'{message_content}\\'"
                 )
 
-                msg_data = {
+                msg_data: SimulationMessage = {
                     "step": self.current_step,  # Log with current global turn number
                     "sender_id": agent_id,
                     "recipient_id": message_recipient_id,

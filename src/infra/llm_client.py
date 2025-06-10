@@ -11,6 +11,8 @@ import time
 from collections.abc import Iterable
 from typing import Any, Callable, Optional, Protocol, TypeVar, cast
 
+from src.shared.typing import LLMChatResponse
+
 try:
     import ollama
 except Exception:  # pragma: no cover - optional dependency
@@ -75,7 +77,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[dict[str, str]],
         options: Optional[dict[str, Any]] = None,
-    ) -> Any: ...
+    ) -> LLMChatResponse: ...
 
 
 # Mock implementation variables and functions
@@ -232,7 +234,7 @@ def generate_text(
         logger.warning("Attempted to generate text but Ollama client is unavailable.")
         return None
 
-    def call() -> object:
+    def call() -> LLMChatResponse:
         return ollama_client.chat(
             model=model,
             messages=[{"role": "user", "content": prompt}],
@@ -240,6 +242,9 @@ def generate_text(
         )
 
     response, error = _retry_with_backoff(call)
+    response = cast(Optional[LLMChatResponse], response)
+    response = cast(Optional[LLMChatResponse], response)
+    response = cast(Optional[LLMChatResponse], response)
     if error:
         logger.error(f"Failed to generate text after retries: {error}")
         return None
@@ -380,7 +385,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
     messages = [{"role": "user", "content": prompt}]
     logger.debug(f"LLM_CLIENT_ANALYZE_SENTIMENT --- Constructed prompt: '''{prompt}'''")
 
-    def call() -> object:
+    def call() -> LLMChatResponse:
         return ollama_client.chat(
             model=model,
             messages=messages,
@@ -388,6 +393,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
         )
 
     response, error = _retry_with_backoff(call)
+    response = cast(Optional[LLMChatResponse], response)
     if error:
         logger.error(f"Failed to analyze sentiment after retries: {error}")
         return None

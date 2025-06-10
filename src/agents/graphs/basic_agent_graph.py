@@ -23,6 +23,7 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
 from src.infra import config  # Import config for role change parameters
+from src.shared.typing import SimulationMessage
 
 from .interaction_handlers import (  # noqa: F401 - imported for re-export
     handle_create_project_node,
@@ -229,7 +230,7 @@ class AgentTurnState(TypedDict):
     simulation_step: int  # The current step number from the simulation
     previous_thought: str | None  # The thought from the *last* turn
     environment_perception: dict[str, object]  # Perception data from the environment
-    perceived_messages: list[dict[str, object]]  # Messages perceived from last step
+    perceived_messages: list[SimulationMessage]  # Messages perceived from last step
     memory_history_list: list[dict[str, object]]  # Field for memory history list
     turn_sentiment_score: int  # Field for aggregated sentiment score
     prompt_modifier: str  # Field for relationship-based prompt adjustments
