@@ -123,6 +123,7 @@ def ensure_dspy_predict(monkeypatch: MonkeyPatch) -> None:
 
     monkeypatch.setattr(dspy, "Predict", DummyPredict, raising=False)
 
+
 @pytest.fixture(autouse=True)
 def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
     """Provide minimal langgraph stubs when the package is missing."""
