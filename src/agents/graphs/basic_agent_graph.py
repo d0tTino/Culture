@@ -1,5 +1,4 @@
 # mypy: ignore-errors
-# mypy: disable-error-code=unused-ignore
 # src/agents/graphs/basic_agent_graph.py
 """
 Defines the basic LangGraph structure for an agent's turn.
@@ -9,9 +8,7 @@ import logging
 import os
 import random
 import sys
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
-
-from pydantic import BaseModel, ConfigDict, Field
+from typing import TYPE_CHECKING, Any
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
@@ -24,12 +21,15 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
 from src.infra import config  # Import config for role change parameters
 
+from .basic_agent_types import AgentTurnState
 from .interaction_handlers import (  # noqa: F401 - imported for re-export
     handle_create_project_node,
     handle_join_project_node,
     handle_leave_project_node,
     handle_send_direct_message_node,
 )
+
+VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -113,145 +113,6 @@ except Exception as e:  # Catch any other exception during DSPy setup
 if TYPE_CHECKING:
     pass  # No specific type hints needed here for now
 
-# Decay factors for mood and relationships (loaded from config)
-MOOD_DECAY_FACTOR = config.MOOD_DECAY_FACTOR
-RELATIONSHIP_DECAY_FACTOR = config.RELATIONSHIP_DECAY_FACTOR
-
-# IP award constants (loaded from config)
-IP_AWARD_FOR_PROPOSAL = config.IP_AWARD_FOR_PROPOSAL
-IP_COST_TO_POST_IDEA = config.IP_COST_TO_POST_IDEA
-
-# Role change constants (loaded from config)
-ROLE_CHANGE_IP_COST = config.ROLE_CHANGE_IP_COST
-ROLE_CHANGE_COOLDOWN = config.ROLE_CHANGE_COOLDOWN
-
-# Data Units constants (loaded from config)
-INITIAL_DATA_UNITS = config.INITIAL_DATA_UNITS
-ROLE_DU_GENERATION = config.ROLE_DU_GENERATION
-PROPOSE_DETAILED_IDEA_DU_COST = config.PROPOSE_DETAILED_IDEA_DU_COST
-DU_AWARD_IDEA_ACKNOWLEDGED = config.DU_AWARD_IDEA_ACKNOWLEDGED
-DU_AWARD_SUCCESSFUL_ANALYSIS = config.DU_AWARD_SUCCESSFUL_ANALYSIS
-DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = config.DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE
-DU_COST_DEEP_ANALYSIS = config.DU_COST_DEEP_ANALYSIS
-DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFICATION
-
-# List of valid roles
-VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
-
-
-# Define the Pydantic model for structured LLM output
-class AgentActionOutput(BaseModel):
-    """Defines the expected structured output from the LLM."""
-
-    model_config = ConfigDict(extra="forbid")
-    thought: str = Field(
-        ...,
-        json_schema_extra={
-            "description": "The agent's internal thought or reasoning for the turn."
-        },
-    )
-    message_content: str | None = Field(
-        None,
-        json_schema_extra={
-            "description": (
-                "The message to send to other agents, or None if choosing not to send a message."
-            )
-        },
-    )
-    message_recipient_id: str | None = Field(
-        None,
-        json_schema_extra={
-            "description": (
-                "The ID of the agent this message is directed to. None means broadcast to all "
-                "agents."
-            )
-        },
-    )
-    action_intent: Literal[
-        "idle",
-        "continue_collaboration",
-        "propose_idea",
-        "ask_clarification",
-        "perform_deep_analysis",
-        "create_project",
-        "join_project",
-        "leave_project",
-        "send_direct_message",
-    ] = Field(
-        default="idle",  # Default intent
-        json_schema_extra={"description": "The agent's primary intent for this turn."},
-    )
-    requested_role_change: str | None = Field(
-        None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you wish to request a change to a different role, specify the role "
-                "name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as "
-                "null."
-            )
-        },
-    )
-    project_name_to_create: str | None = Field(
-        None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you want to create a new project, specify the name here. This is "
-                "used with the 'create_project' intent."
-            )
-        },
-    )
-    project_description_for_creation: str | None = Field(
-        None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you want to create a new project, specify the description here. "
-                "This is used with the 'create_project' intent."
-            )
-        },
-    )
-    project_id_to_join_or_leave: str | None = Field(
-        None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you want to join or leave a project, specify the project ID here. "
-                "This is used with the 'join_project' and 'leave_project' intents."
-            )
-        },
-    )
-
-
-# Define the state the graph will operate on during a single agent turn
-class AgentTurnState(TypedDict):
-    """Represents the state passed into and modified by the agent's graph turn."""
-
-    agent_id: str
-    current_state: dict[str, object]  # The agent's full state dictionary
-    simulation_step: int  # The current step number from the simulation
-    previous_thought: str | None  # The thought from the *last* turn
-    environment_perception: dict[str, object]  # Perception data from the environment
-    perceived_messages: list[dict[str, object]]  # Messages perceived from last step
-    memory_history_list: list[dict[str, object]]  # Field for memory history list
-    turn_sentiment_score: int  # Field for aggregated sentiment score
-    prompt_modifier: str  # Field for relationship-based prompt adjustments
-    structured_output: AgentActionOutput | None  # Holds the parsed LLM output object
-    agent_goal: str  # The agent's goal for the simulation
-    updated_state: dict[str, object]  # Output field: The updated state after the turn
-    vector_store_manager: object | None  # For persisting memories to vector store
-    rag_summary: str  # Summarized memories from vector store
-    knowledge_board_content: list[str]  # Current entries on the knowledge board
-    knowledge_board: object | None  # The knowledge board instance for posting entries
-    scenario_description: str  # Description of the simulation scenario
-    current_role: str  # The agent's current role in the simulation
-    influence_points: int  # The agent's current Influence Points
-    steps_in_current_role: int  # Steps taken in the current role
-    data_units: int  # The agent's current Data Units
-    current_project_affiliation: str | None  # The agent's current project ID (if any)
-    available_projects: dict[str, object]  # Dictionary of available projects
-    state: AgentState  # The agent's structured state object (new Pydantic model)
-    collective_ip: float | None  # Total IP across all agents in the simulation
-    collective_du: float | None  # Total DU across all agents in the simulation
-
-
 # --- Node Functions ---
 
 
@@ -296,7 +157,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
     if action_intent != "idle":
         role_name = agent_state_obj.role
-        role_du_conf = ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
+        role_du_conf = config.ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
         du_gen_rate = role_du_conf.get("base", 1.0)
 
         generated_du = round(du_gen_rate * (0.5 + random.random()), 1)

@@ -6,7 +6,7 @@ from typing import Any
 
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
 
-from .basic_agent_graph import AgentActionOutput, AgentTurnState
+from .basic_agent_types import AgentActionOutput, AgentTurnState
 
 logger = logging.getLogger(__name__)
 
