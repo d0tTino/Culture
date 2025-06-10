@@ -14,7 +14,7 @@ from src.infra.config import (
 from src.shared.memory_store import MemoryStore
 
 try:
-    from .basic_agent_graph import AgentTurnState
+    from .basic_agent_types import AgentTurnState
 except Exception:  # pragma: no cover - fallback for simplified tests
     AgentTurnState = dict  # type: ignore
 
