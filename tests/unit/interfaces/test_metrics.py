@@ -1,4 +1,5 @@
 import time
+
 import pytest
 
 from src.interfaces import metrics
