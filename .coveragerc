@@ -1,0 +1,14 @@
+[run]
+omit =
+    src/agents/*
+    src/infra/*
+    src/sim/*
+    src/interfaces/*
+    src/utils/*
+    src/app.py
+    src/http_app.py
+    src/shared/async_utils.py
+    src/shared/decorator_utils.py
+    src/shared/llm_mocks.py
+    src/shared/logging_utils.py
+    src/shared/memory_store.py
