@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # ruff: noqa: RUF006
-# mypy: ignore-errors
 import argparse
 import asyncio
 import logging

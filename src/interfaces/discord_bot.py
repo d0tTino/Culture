@@ -3,7 +3,6 @@ Discord bot interface for the Culture simulation.
 Provides real-time updates about the simulation to a Discord channel.
 """
 
-# mypy: ignore-errors
 # ruff: noqa: ANN401
 
 import logging
@@ -377,13 +376,13 @@ def get_kb_size() -> int:
 
 
 @bot.command(name="say")
-async def say(ctx: commands.Context, *, message: str) -> None:
+async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
     await ctx.send(f"Simulated message received: {message}")
 
 
 @bot.command(name="stats")
-async def stats(ctx: commands.Context) -> None:
+async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
     await ctx.send(stats_text)

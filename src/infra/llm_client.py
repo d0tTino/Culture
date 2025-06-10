@@ -1,5 +1,4 @@
 # ruff: noqa: ANN401
-# mypy: ignore-errors
 # src/infra/llm_client.py
 """
 Provides a client for interacting with the Ollama LLM service.
@@ -25,7 +24,7 @@ except Exception:  # pragma: no cover - optional dependency
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
 try:  # pragma: no cover - optional dependency
-    import requests
+    import requests  # type: ignore[import-untyped, no-any-unimported]
     from requests.exceptions import RequestException, Timeout
 except Exception:  # pragma: no cover - fallback when requests missing
     logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
@@ -38,8 +37,7 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
         pass
 
-    class Timeout(RequestException):  # type: ignore[no-redef]
-        """Fallback Timeout when requests is unavailable."""
+    class Timeout(RequestException):  # type: ignore[no-any-unimported, no-redef]
 
         pass
 

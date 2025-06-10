@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-# mypy: ignore-errors
 import logging
-from typing import Any
+from typing import Any, cast
 
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
 from src.shared.typing import SimulationMessage
@@ -14,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
     agent_id = state["agent_id"]
-    perceived_messages: list[SimulationMessage] = state.get("perceived_messages", [])
+    perceived_messages: list[SimulationMessage] = cast(
+        list[SimulationMessage], state.get("perceived_messages", [])
+    )
     total = 0
     for msg in perceived_messages:
         if msg.get("sender_id") == agent_id:
@@ -22,10 +23,11 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
         content = msg.get("content")
         if isinstance(content, str):
             sentiment = analyze_sentiment(content)
-            if sentiment == "positive":
-                total += 1
-            elif sentiment == "negative":
-                total -= 1
+            if sentiment is not None:
+                if sentiment >= 0.6:
+                    total += 1
+                elif sentiment <= 0.4:
+                    total -= 1
     return {"turn_sentiment_score": total}
 
 
@@ -38,8 +40,8 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 
 
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, str]:
-    manager = state.get("vector_store_manager")
-    agent = state.get("agent_instance")
+    manager = cast(Any, state.get("vector_store_manager"))
+    agent = cast(Any, state.get("agent_instance"))
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)"}
     memories = await manager.aretrieve_relevant_memories(state["agent_id"], query="", k=5)
@@ -54,15 +56,18 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
 async def generate_thought_and_message_node(
     state: AgentTurnState,
 ) -> dict[str, AgentActionOutput | None]:
-    agent = state.get("agent_instance")
+    agent = cast(Any, state.get("agent_instance"))
     thought = "Thinking..."
     action_intent = "idle"
     if agent and hasattr(agent, "async_select_action_intent"):
         result = await agent.async_select_action_intent("", "", "", [])
         if result:
             action_intent = getattr(result, "chosen_action_intent", "idle")
-    structured = generate_structured_output("prompt", AgentActionOutput)
-    return {"structured_output": structured or None}
+    structured = cast(
+        AgentActionOutput | None,
+        generate_structured_output("prompt", AgentActionOutput),
+    )
+    return {"structured_output": structured}
 
 
 async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:

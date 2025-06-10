@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 # src/agents/graphs/basic_agent_graph.py
 """
 Defines the basic LangGraph structure for an agent's turn.
@@ -8,9 +7,7 @@ import logging
 import os
 import random
 import sys
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
-
-from pydantic import BaseModel, ConfigDict, Field
+from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
@@ -23,6 +20,7 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
 from src.infra import config  # Import config for role change parameters
 
+from .basic_agent_types import AgentTurnState
 from .interaction_handlers import (  # noqa: F401 - imported for re-export
     handle_create_project_node,
     handle_join_project_node,
@@ -147,15 +145,15 @@ def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     if requested_role not in VALID_ROLES:
         logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
         return False
-    if requested_role == agent_state.role:
+    if requested_role == agent_state.current_role:
         return False
     if agent_state.steps_in_current_role < agent_state.role_change_cooldown:
         return False
     if agent_state.ip < agent_state.role_change_ip_cost:
         return False
-    old_role = agent_state.role
+    old_role = agent_state.current_role
     agent_state.ip -= agent_state.role_change_ip_cost
-    agent_state.role = requested_role
+    agent_state.current_role = requested_role
     agent_state.steps_in_current_role = 0
     agent_state.role_history.append((int(agent_state.last_action_step or 0), requested_role))
     logger.info(f"Agent {agent_state.agent_id} changed role from {old_role} to {requested_role}.")
@@ -172,17 +170,15 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
     if structured_output and structured_output.requested_role_change:
         if process_role_change(agent_state_obj, structured_output.requested_role_change):
             AgentController(agent_state_obj).add_memory(
-                sim_step,
-                "role_change",
-                f"Changed role to {structured_output.requested_role_change}",
+                f"[step {sim_step}] Changed role to {structured_output.requested_role_change}"
             )
         else:
             AgentController(agent_state_obj).add_memory(
-                sim_step, "resource_constraint", "Failed role change attempt"
+                f"[step {sim_step}] Failed role change attempt"
             )
 
     if action_intent != "idle":
-        role_name = agent_state_obj.role
+        role_name = agent_state_obj.current_role
         role_du_conf = config.ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
         du_gen_rate = role_du_conf.get("base", 1.0)
 
@@ -215,8 +211,8 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             mood_desc = get_descriptive_mood(mood_val_for_summary)
 
             # Call the dspy program
-            summary_prediction = l1_gen(
-                agent_role=agent_state_obj.role,
+            summary_prediction = cast(Any, l1_gen)(
+                agent_role=agent_state_obj.current_role,
                 recent_events=recent_events_str,
                 current_mood=mood_desc,
             )
@@ -224,9 +220,9 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
             if memory_summary:
                 AgentController(agent_state_obj).add_memory(
-                    sim_step, "consolidated_summary", memory_summary
+                    f"[step {sim_step}] consolidated_summary: {memory_summary}"
                 )
-                vector_store = state.get("vector_store_manager")
+                vector_store = cast(Any, state.get("vector_store_manager"))
                 if vector_store and hasattr(vector_store, "add_memory"):
                     vector_store.add_memory(
                         agent_id,

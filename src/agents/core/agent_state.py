@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 # ruff: noqa: ANN101, ANN102
 import logging
 import random
