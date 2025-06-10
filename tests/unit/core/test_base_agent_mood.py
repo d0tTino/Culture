@@ -30,6 +30,7 @@ def _ensure_chromadb_stub() -> None:
         weaviate.__path__ = []  # treat stub as a package
         weaviate.Client = object  # type: ignore[attr-defined]
         sys.modules["weaviate"] = weaviate
+    if "weaviate.classes" not in sys.modules:
         classes_mod = types.ModuleType("weaviate.classes")
         sys.modules["weaviate.classes"] = classes_mod
     if "sse_starlette.sse" not in sys.modules:
