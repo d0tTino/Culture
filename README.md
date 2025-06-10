@@ -532,6 +532,8 @@ Start the HTTP dashboard backend (optional):
 python -m src.http_app
 ```
 
+For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
+
 ### Walking Vertical Slice
 To verify your local setup with actual LLM calls, run the minimal demo script:
 ```bash
@@ -558,7 +560,7 @@ CI enforces `--cov-fail-under=90` for overall coverage.
 ### Project Structure (Key Directories)
 - `src/` — Main source code (agents, graphs, memory, infra, simulation)
 - `tests/` — Unit and integration tests
-- `docs/` — Documentation (architecture, testing, coding standards)
+- `docs/` — Documentation (architecture, runbook, testing, coding standards)
 - `scripts/` — Utility and migration scripts
 - `examples/` — Example and experimental scripts
 - `archives/` — Historical documents (e.g., [README_archives.md](archives/README_archives.md))
