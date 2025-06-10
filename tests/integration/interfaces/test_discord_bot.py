@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 pytest.importorskip("discord")
-
+from src.interfaces import metrics
 from src.interfaces.discord_bot import SimulationDiscordBot, say, stats
 
 
@@ -14,7 +14,7 @@ class DummyDiscordClient:
         self.event = lambda func: func
         self.user = "dummy"
 
-    def get_channel(self, channel_id: int) -> None:
+    def get_channel(self, channel_id: int) -> None:  # pragma: no cover - no channel
         return None
 
     async def start(self, token: str) -> None:  # pragma: no cover - not used
@@ -40,10 +40,13 @@ async def test_say_command(simulation_bot: SimulationDiscordBot) -> None:
     ctx.send.assert_awaited_once_with("Simulated message received: hello")
 
 
+@pytest.mark.unit
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_stats_command(simulation_bot: SimulationDiscordBot) -> None:
     ctx = MagicMock()
     ctx.send = AsyncMock()
+    metrics.LLM_LATENCY_MS.set(42.0)
+    metrics.KNOWLEDGE_BOARD_SIZE.set(7)
     await stats.callback(ctx)
-    ctx.send.assert_awaited_once_with("LLM latency: 0 ms; KB size: 0")
+    ctx.send.assert_awaited_once_with("LLM latency: 42.0 ms; KB size: 7")

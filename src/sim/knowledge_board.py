@@ -8,6 +8,8 @@ from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
 
+from src.interfaces import metrics
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ class KnowledgeBoard:
         logger.info(
             f"KnowledgeBoard initialized. Instance ID: {id(self)}. Entries list ID: {id(self.entries)} type: {type(self.entries)}"
         )
+        metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
     def get_state(self: Self, max_entries: int = 10) -> list[str]:
         """
@@ -142,6 +145,7 @@ class KnowledgeBoard:
                 "content_display": formatted_content,  # Store formatted entry for display
             }
             self.entries.append(new_entry_dict)  # Append first
+            metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
             logger.info(  # Log after append
                 f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "
@@ -170,3 +174,4 @@ class KnowledgeBoard:
         logger.info(
             f"KNOWLEDGE_BOARD_DEBUG: Board cleared. Instance ID: {id(self)}. New entries list ID: {id(self.entries)}"
         )
+        metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
