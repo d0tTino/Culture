@@ -3,7 +3,7 @@ from __future__ import annotations
 # mypy: ignore-errors
 from langgraph.graph import END, StateGraph
 
-from .basic_agent_graph import AgentTurnState
+from .basic_agent_types import AgentTurnState
 from .graph_nodes import (
     analyze_perception_sentiment_node,
     finalize_message_agent_node,

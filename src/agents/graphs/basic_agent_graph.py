@@ -1,5 +1,4 @@
 # mypy: ignore-errors
-# mypy: disable-error-code=unused-ignore
 # src/agents/graphs/basic_agent_graph.py
 """
 Defines the basic LangGraph structure for an agent's turn.
@@ -9,9 +8,7 @@ import logging
 import os
 import random
 import sys
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
-
-from pydantic import BaseModel, ConfigDict, Field
+from typing import TYPE_CHECKING, Any
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
@@ -25,12 +22,15 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 from src.infra import config  # Import config for role change parameters
 from src.shared.typing import SimulationMessage
 
+from .basic_agent_types import AgentTurnState
 from .interaction_handlers import (  # noqa: F401 - imported for re-export
     handle_create_project_node,
     handle_join_project_node,
     handle_leave_project_node,
     handle_send_direct_message_node,
 )
+
+VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -251,8 +251,7 @@ class AgentTurnState(TypedDict):
     state: AgentState  # The agent's structured state object (new Pydantic model)
     collective_ip: float | None  # Total IP across all agents in the simulation
     collective_du: float | None  # Total DU across all agents in the simulation
-
-
+      
 # --- Node Functions ---
 
 
@@ -297,7 +296,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
     if action_intent != "idle":
         role_name = agent_state_obj.role
-        role_du_conf = ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
+        role_du_conf = config.ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
         du_gen_rate = role_du_conf.get("base", 1.0)
 
         generated_du = round(du_gen_rate * (0.5 + random.random()), 1)

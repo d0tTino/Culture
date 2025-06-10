@@ -6,7 +6,13 @@ from collections import deque
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, cast
 
-from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -189,7 +195,7 @@ class AgentStateData(BaseModel):
         default_factory=lambda: float(str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5"))
     )
 
-    @validator("mood_level", pre=True)
+    @field_validator("mood_level", mode="before")
     @classmethod
     def check_mood_level_type_before(cls, v: Any) -> Any:
         if not isinstance(v, (float, int)):
@@ -205,7 +211,7 @@ class AgentStateData(BaseModel):
             # If it cannot be coerced, Pydantic will raise a validation error later if not a float
         return v
 
-    @validator("mood_level")
+    @field_validator("mood_level")
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
@@ -294,7 +300,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return 0.0
         return self.relationship_history[-1][agent_name]
 
-    @validator("memory_store_manager", pre=True)
+    @field_validator("memory_store_manager", mode="before")
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
         if value is None:
@@ -303,16 +309,16 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @root_validator(pre=False, skip_on_failure=True)
-    def _validate_model_after(cls, values: dict[str, Any]) -> dict[str, Any]:
-        llm_client_config = values.get("llm_client_config")
-        llm_client = values.get("llm_client")
-        mock_llm_client = values.get("mock_llm_client")
+    @model_validator(mode="after")
+    def _validate_model_after(cls, model: "AgentState") -> "AgentState":
+        llm_client_config = model.llm_client_config
+        llm_client = model.llm_client
+        mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
             from src.infra.llm_client import LLMClient  # type: ignore # Local import
 
             if mock_llm_client:
-                values["llm_client"] = mock_llm_client
+                model.llm_client = mock_llm_client
             else:
                 config_data = llm_client_config
                 if hasattr(config_data, "model_dump"):
@@ -321,19 +327,15 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
                 if isinstance(llm_client_config, BaseModel):
-                    values["llm_client"] = LLMClient(config=llm_client_config)  # type: ignore
+                    model.llm_client = LLMClient(config=llm_client_config)  # type: ignore
                 else:
-                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
+                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
-        if not values.get("role_history"):
-            values["role_history"] = [
-                (values.get("step_counter", 0), values.get("current_role", ""))
-            ]
-        if not values.get("mood_history"):
-            values["mood_history"] = [
-                (values.get("step_counter", 0), values.get("mood_level", 0.0))
-            ]
-        return values
+        if not model.role_history:
+            model.role_history = [(model.step_counter, model.current_role)]
+        if not model.mood_history:
+            model.mood_history = [(model.step_counter, model.mood_level)]
+        return model
 
     def get_llm_client(self) -> "LLMClient":
         if not self.llm_client:
@@ -351,7 +353,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.dict()
+        return self.model_dump()
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
