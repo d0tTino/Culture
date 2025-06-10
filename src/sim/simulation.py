@@ -101,6 +101,7 @@ class Simulation:
                 "Simulation initialized without vector store manager. "
                 "Memory will not be persisted."
             )
+        self._last_memory_prune_step = 0
 
         # --- Store Discord bot ---
         self.discord_bot = discord_bot
@@ -405,6 +406,17 @@ class Simulation:
             self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
             self.total_turns_executed += 1
             turn_counter_this_run_step += 1
+
+        if (
+            self.vector_store_manager
+            and self.current_step - self._last_memory_prune_step
+            >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
+        ):
+            try:
+                self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Memory store prune failed: %s", exc)
+            self._last_memory_prune_step = self.current_step
 
         return turn_counter_this_run_step  # Return number of agent turns actually processed
 
