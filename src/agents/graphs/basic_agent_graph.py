@@ -8,7 +8,9 @@ import logging
 import os
 import random
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
@@ -22,7 +24,6 @@ from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
 from src.infra import config  # Import config for role change parameters
 from src.shared.typing import SimulationMessage
 
-from .basic_agent_types import AgentTurnState
 from .interaction_handlers import (  # noqa: F401 - imported for re-export
     handle_create_project_node,
     handle_join_project_node,
@@ -251,7 +252,7 @@ class AgentTurnState(TypedDict):
     state: AgentState  # The agent's structured state object (new Pydantic model)
     collective_ip: float | None  # Total IP across all agents in the simulation
     collective_du: float | None  # Total DU across all agents in the simulation
-      
+
 # --- Node Functions ---
 
 

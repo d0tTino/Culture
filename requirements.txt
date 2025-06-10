@@ -9,3 +9,4 @@ pydantic-settings==2.0.3
 langgraph==0.2.0
 requests==2.32.3
 
+prometheus-client==0.20.0
