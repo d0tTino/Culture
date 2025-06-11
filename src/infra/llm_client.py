@@ -1,14 +1,15 @@
 # ruff: noqa: ANN401
-# src/infra/llm_client.py
-"""
-Provides a client for interacting with the Ollama LLM service.
-"""
+"""Provides a client for interacting with the Ollama LLM service."""
+
+from __future__ import annotations
 
 import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Callable, Optional, ParamSpec, Protocol, TypeVar, cast
+
+from typing import Any, Callable, Protocol, TypeVar, cast
+
 
 from src.shared.typing import (
     ChatOptions,
@@ -41,11 +42,13 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
     requests = MagicMock()
 
+    # requests defines RequestException; use a stub when missing
     class RequestException(Exception):  # type: ignore[no-redef]
         """Fallback RequestException when requests is unavailable."""
 
         pass
 
+    # Timeout depends on requests; ignore redefinition when stubbed
     class Timeout(RequestException):  # type: ignore[no-redef]
         """Fallback Timeout when requests is unavailable."""
 
@@ -63,7 +66,7 @@ from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config val
 try:
     from litellm.exceptions import APIError
 except Exception:
-
+    # litellm provides APIError; define fallback if absent
     class APIError(Exception):  # type: ignore[no-redef]
         """Fallback APIError when litellm is unavailable."""
 
@@ -84,10 +87,10 @@ class OllamaClientProtocol(Protocol):
     """Minimal protocol for the Ollama client used in this module."""
 
     def chat(
-        self,
+        self: OllamaClientProtocol,
         model: str,
         messages: list[dict[str, str]],
-        options: Optional[dict[str, Any]] = None,
+        options: dict[str, Any] | None = None,
 
     ) -> LLMChatResponse: ...
 
@@ -109,7 +112,7 @@ _MOCK_RESPONSES: LLMClientMockResponses = {
 
 def enable_mock_mode(
     enabled: bool = True,
-    mock_responses: Optional[LLMClientMockResponses] = None,
+    mock_responses: LLMClientMockResponses | None = None,
 ) -> None:
     """
     Enable or disable mock mode for testing.
@@ -187,14 +190,15 @@ def _retry_with_backoff(
     func: Callable[P, T],
     max_retries: int = 3,
     base_delay: int = 1,
-    *args: P.args,
-    **kwargs: P.kwargs,
-) -> tuple[Optional[T], Optional[Exception]]:
+    *args: Any,
+    **kwargs: Any,
+) -> tuple[T | None, Exception | None]:
+
     """
     Helper for retrying a function with exponential backoff.
     Returns (result, error) tuple. If successful, error is None.
     """
-    e: Optional[Exception] = None
+    e: Exception | None = None
     for attempt in range(max_retries):
         try:
             return func(*args, **kwargs), None
@@ -217,7 +221,7 @@ def _retry_with_backoff(
 @monitor_llm_call(model_param="model", context="text_generation")
 def generate_text(
     prompt: str, model: str = "mistral:latest", temperature: float = 0.7
-) -> Optional[str]:
+) -> str | None:
     """
     Generates text using the configured Ollama client.
 
@@ -255,7 +259,10 @@ def generate_text(
         )
 
     response, error = _retry_with_backoff(call)
-    response = cast(Optional[LLMChatResponse], response)
+    response = cast(LLMChatResponse | None, response)
+    response = cast(LLMChatResponse | None, response)
+    response = cast(LLMChatResponse | None, response)
+
     if error:
         logger.error(f"Failed to generate text after retries: {error}")
         return None
@@ -362,7 +369,7 @@ def summarize_memory_context(
 
 
 @monitor_llm_call(model_param="model", context="sentiment_analysis")
-def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[float]:
+def analyze_sentiment(text: str, model: str = "mistral:latest") -> float | None:
     """
     Analyzes the sentiment of a given text using Ollama.
 
@@ -405,7 +412,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
         )
 
     response, error = _retry_with_backoff(call)
-    response = cast(Optional[LLMChatResponse], response)
+    response = cast(LLMChatResponse | None, response)
     if error:
         logger.error(f"Failed to analyze sentiment after retries: {error}")
         return None
@@ -456,8 +463,8 @@ def generate_structured_output(
     response_model: type[BaseModel],
     model: str = "mistral:latest",
     temperature: float = 0.2,
-    timeout: Optional[int] = None,
-) -> Optional[BaseModel]:
+    timeout: int | None = None,
+) -> BaseModel | None:
     """
     Generate a structured output using the LLM and parse it into the given Pydantic model.
     If mock mode is enabled, returns a mock response that fits the response_model.
@@ -618,8 +625,8 @@ def generate_structured_output(
                 logger.debug(f"Successfully parsed structured output: {parsed_output}")
                 return parsed_output
             else:
-                # Defensive: fallback for non-model response, cast to Optional[BaseModel]
-                return cast(Optional[BaseModel], json.loads(str(response_text)))
+                # Defensive: fallback for non-model response, cast to BaseModel | None
+                return cast(BaseModel | None, json.loads(str(response_text)))
         except (json.JSONDecodeError, ValidationError) as e:
             logger.warning(f"Failed to parse JSON from Ollama response: {e}")
             logger.warning(f"Raw response: {response_text}")
@@ -643,7 +650,7 @@ def get_default_llm_client() -> OllamaClientProtocol | None:
 
 def generate_response(
     prompt: str, model: str = "mistral:latest", temperature: float = 0.7
-) -> Optional[str]:
+) -> str | None:
     """
     Generates a response to the given prompt.
     This is an alias for generate_text for backward compatibility.
