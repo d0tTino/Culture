@@ -1,5 +1,4 @@
 # ruff: noqa: ANN401
-# mypy: ignore-errors
 # src/infra/llm_client.py
 """
 Provides a client for interacting with the Ollama LLM service.
@@ -9,11 +8,13 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any, Callable, Optional, Protocol, TypeVar, cast
+from typing import Any, Callable, Optional, ParamSpec, Protocol, TypeVar, cast
 
 from src.shared.typing import (
+    ChatOptions,
     LLMChatResponse,
     LLMClientMockResponses,
+    LLMMessage,
     OllamaGenerateResponse,
     SentimentAnalysisResponse,
 )
@@ -70,8 +71,9 @@ _APIError = APIError
 
 logger = logging.getLogger(__name__)
 
-# Define a generic type variable for Pydantic models
+# Define generic type variables for Pydantic models and call signatures
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 class OllamaClientProtocol(Protocol):
@@ -80,10 +82,9 @@ class OllamaClientProtocol(Protocol):
     def chat(
         self,
         model: str,
-        messages: list[dict[str, str]],
-        options: Optional[dict[str, Any]] = None,
-    ) -> LLMChatResponse:
-        ...
+        messages: list[LLMMessage],
+        options: Optional[ChatOptions] = None,
+    ) -> LLMChatResponse: ...
 
 
 # Mock implementation variables and functions
@@ -178,11 +179,11 @@ def get_ollama_client() -> OllamaClientProtocol | None:
 
 
 def _retry_with_backoff(
-    func: Callable[..., T],
+    func: Callable[P, T],
     max_retries: int = 3,
     base_delay: int = 1,
-    *args: Any,
-    **kwargs: Any,
+    *args: P.args,
+    **kwargs: P.kwargs,
 ) -> tuple[Optional[T], Optional[Exception]]:
     """
     Helper for retrying a function with exponential backoff.
@@ -241,15 +242,14 @@ def generate_text(
         return None
 
     def call() -> LLMChatResponse:
+        messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
         return ollama_client.chat(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             options={"temperature": temperature},
         )
 
     response, error = _retry_with_backoff(call)
-    response = cast(Optional[LLMChatResponse], response)
-    response = cast(Optional[LLMChatResponse], response)
     response = cast(Optional[LLMChatResponse], response)
     if error:
         logger.error(f"Failed to generate text after retries: {error}")
@@ -324,9 +324,10 @@ def summarize_memory_context(
             f"goal='{goal}', context='{current_context}'"
         )
 
+        chat_messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
         response = ollama_client.chat(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=chat_messages,
             options={"temperature": temperature},
         )
 
@@ -388,7 +389,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
         f"Analyze the sentiment of the following message. Respond with only one word: "
         f"'positive', 'negative', or 'neutral'.\n\nMessage: \"{text}\"\n\nSentiment:"
     )
-    messages = [{"role": "user", "content": prompt}]
+    messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
     logger.debug(f"LLM_CLIENT_ANALYZE_SENTIMENT --- Constructed prompt: '''{prompt}'''")
 
     def call() -> LLMChatResponse:
@@ -476,7 +477,7 @@ def generate_structured_output(
             if not issubclass(response_model, BaseModel):
                 raise TypeError("response_model must be a subclass of BaseModel")
             if model_name in _MOCK_RESPONSES:
-                mock_data = _MOCK_RESPONSES[model_name]
+                mock_data = cast(dict[str, Any], _MOCK_RESPONSES).get(model_name)
                 if isinstance(mock_data, dict):
                     field_dict: dict[str, Any] = {}
                     mock_fields = getattr(response_model, "model_fields", None)

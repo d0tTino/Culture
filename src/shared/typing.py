@@ -4,6 +4,7 @@ from typing import Optional, TypedDict
 class LLMMessage(TypedDict):
     """Minimal shape for a chat message from Ollama."""
 
+    role: str
     content: str
 
 
@@ -11,6 +12,14 @@ class LLMChatResponse(TypedDict):
     """Return type for Ollama chat calls."""
 
     message: LLMMessage
+
+
+class ChatOptions(TypedDict, total=False):
+    """Options for Ollama chat calls."""
+
+    temperature: float
+    top_p: float
+    num_predict: int
 
 
 class OllamaGenerateResponse(TypedDict, total=False):
