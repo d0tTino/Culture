@@ -552,9 +552,7 @@ class ChromaVectorStoreManager(MemoryStore):
             # Query the role changes collection using proper where clause format
             where_clause = {"$and": [{"agent_id": agent_id}, {"event_type": "role_change"}]}
 
-            results = self.roles_collection.get(
-                where=where_clause, include=["metadatas"]
-            )
+            results = self.roles_collection.get(where=where_clause, include=["metadatas"])
 
             # Support both dict-like and attribute-based responses
             if hasattr(results, "get"):

@@ -10,7 +10,9 @@ def setup_dummy_chromadb() -> None:
     emb = types.ModuleType("chromadb.utils.embedding_functions")
 
     class SentenceTransformerEmbeddingFunction:
-        def __init__(self, model_name: str | None = None) -> None:  # pragma: no cover - simple stub
+        def __init__(
+            self, model_name: str | None = None
+        ) -> None:  # pragma: no cover - simple stub
             pass
 
     emb.SentenceTransformerEmbeddingFunction = SentenceTransformerEmbeddingFunction
@@ -21,7 +23,9 @@ def setup_dummy_chromadb() -> None:
         def __init__(self) -> None:
             self.docs: list[dict[str, object]] = []
 
-        def add(self, documents: list[str], metadatas: list[dict[str, object]], ids: list[str]) -> None:
+        def add(
+            self, documents: list[str], metadatas: list[dict[str, object]], ids: list[str]
+        ) -> None:
             for doc, meta, _id in zip(documents, metadatas, ids):
                 self.docs.append({"id": _id, "metadata": meta, "document": doc})
 
@@ -48,7 +52,9 @@ def setup_dummy_chromadb() -> None:
         def __init__(self, path: str | None = None) -> None:
             self.collections: dict[str, DummyCollection] = {}
 
-        def get_or_create_collection(self, name: str, embedding_function: object | None = None) -> DummyCollection:
+        def get_or_create_collection(
+            self, name: str, embedding_function: object | None = None
+        ) -> DummyCollection:
             if name not in self.collections:
                 self.collections[name] = DummyCollection()
             return self.collections[name]

@@ -82,7 +82,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[dict[str, str]],
         options: Optional[dict[str, Any]] = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 # Mock implementation variables and functions
