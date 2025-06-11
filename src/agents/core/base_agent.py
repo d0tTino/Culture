@@ -422,7 +422,7 @@ class Agent:
             "knowledge_board_content": knowledge_board_content,  # Pass the knowledge board content
             "knowledge_board": knowledge_board,  # Pass the knowledge board instance
             "scenario_description": scenario_description,  # Pass the simulation scenario
-            "current_role": self._state.role,  # Pass the agent's current role
+            "current_role": self._state.current_role,  # Pass the agent's current role
             "influence_points": int(self._state.ip),  # Cast to int for TypedDict compliance
             "steps_in_current_role": self._state.steps_in_current_role,
             # Pass the agent's steps in current role
@@ -508,7 +508,7 @@ class Agent:
                         )
                     logger.debug(  # Keep this log for state update confirmation
                         f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new "
-                        f"AgentState object (Role: {self._state.role}, Mood: {self._state.mood})."
+                        f"AgentState object (Role: {self._state.current_role}, Mood: {self._state.mood_value})."
                     )
                 else:
                     logger.warning(
@@ -567,7 +567,9 @@ class Agent:
                     and isinstance(turn_output, dict)
                     and "action_intent" in turn_output
                 ):
-                    self._state.last_action_intent = turn_output["action_intent"]
+                    self._state.last_action_intent = AgentActionIntent(
+                        turn_output["action_intent"]
+                    )
                     logger.debug(
                         f"Agent {self.agent_id} updated last_action_intent to: {self._state.last_action_intent}"
                     )
@@ -601,12 +603,12 @@ class Agent:
 
     def __str__(self: Self) -> str:
         """Returns a string representation of the agent."""
-        return f"Agent(id={self.agent_id}, role={self._state.role})"
+        return f"Agent(id={self.agent_id}, role={self._state.current_role})"
 
     def __repr__(self: Self) -> str:
         """Returns a detailed string representation for debugging."""
         return (
-            f"Agent(agent_id='{self.agent_id}', role='{self._state.role}', "
+            f"Agent(agent_id='{self.agent_id}', role='{self._state.current_role}', "
             f"ip={self._state.ip}, du={self._state.du})"
         )
 
@@ -851,17 +853,22 @@ class Agent:
             du_change -= state.du_cost_per_action
 
         # Intent-specific DU generation/costs from ACTION_DU_GENERATION_V2
-        action_du_config = config.ACTION_DU_GENERATION_V2.get(action_intent, {})
+        action_du_generation_cfg = config.get_config("ACTION_DU_GENERATION_V2")
+        action_du_config = {}
+        if isinstance(action_du_generation_cfg, dict):
+            action_du_config = action_du_generation_cfg.get(action_intent, {})
         base_du_generation = action_du_config.get("base_amount", 0.0)
         role_bonus_factor = action_du_config.get("role_bonus_factor", 0.0)
 
         # Get the role-specific generation dictionary (e.g., {"base": 1.0, "bonus_factor": 0.2})
-        role_specific_generation_dict = config.ROLE_DU_GENERATION.get(state.role, {})
+        role_specific_generation_dict = config.ROLE_DU_GENERATION.get(state.current_role, {})
         # Extract the 'base' DU generation for the role, to be multiplied by the action's role_bonus_factor
         role_base_generation_for_action_bonus = role_specific_generation_dict.get("base", 0.0)
 
         # --- Start Debug Logging ---
-        logger.debug(f"DU Calc: action_intent='{action_intent}', agent_role='{state.role}'")
+        logger.debug(
+            f"DU Calc: action_intent='{action_intent}', agent_role='{state.current_role}'"
+        )
         logger.debug(f"DU Calc: action_du_config='{action_du_config}'")
         logger.debug(
             f"DU Calc: base_du_generation (type: {type(base_du_generation)})='{base_du_generation}'"
@@ -934,7 +941,9 @@ class Agent:
         logger.debug(
             f"BaseAgent ({self.agent_id}): id(self.state) before process_perceived_messages: {id(self.state)}"
         )
-        AgentController(self.state).process_perceived_messages(enriched_messages_for_state_update)
+        AgentController(self.state).process_perceived_messages(
+            cast(list[dict[str, Any]], enriched_messages_for_state_update)
+        )
         logger.info(
             f"Agent {self.agent_id} processed {len(enriched_messages_for_state_update)} messages directly in perceive_messages, updating mood/relationships."
         )
