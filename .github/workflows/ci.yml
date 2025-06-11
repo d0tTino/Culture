@@ -61,6 +61,21 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      # Cache the pre-commit environment to speed up runs
+      - name: Cache pre-commit
+        if: steps.changes.outputs.CODE_CHANGES == 'true'
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-precommit-
+
+      - name: Run pre-commit
+        if: steps.changes.outputs.CODE_CHANGES == 'true'
+        shell: bash
+        run: pre-commit run --all-files
+
       - name: Run Ruff (Lint)
         if: steps.changes.outputs.CODE_CHANGES == 'true'
         shell: bash
