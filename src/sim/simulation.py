@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from typing_extensions import Self
 
+from src.agents.core import ResourceManager
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.shared.typing import SimulationMessage
 from src.sim.knowledge_board import KnowledgeBoard
@@ -66,6 +67,7 @@ class Simulation:
         self.last_completed_agent_index: int | None = None
         self.steps_to_run: int = 0  # Number of steps to run, set externally
         self.total_turns_executed = 0
+        self.resource_manager = ResourceManager(config.MAX_IP_PER_TICK, config.MAX_DU_PER_TICK)
         self.simulation_complete = False
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
@@ -308,19 +310,9 @@ class Simulation:
                 knowledge_board=self.knowledge_board,
             )
 
-            ip_gain = current_agent_state.ip - ip_start
-            if ip_gain > config.MAX_IP_PER_TICK:
-                current_agent_state.ip = ip_start + float(config.MAX_IP_PER_TICK)
-                logger.warning(
-                    f"Agent {agent_id} IP gain {ip_gain:.2f} exceeds MAX_IP_PER_TICK; capping to {config.MAX_IP_PER_TICK}"
-                )
-
-            du_gain = current_agent_state.du - du_start
-            if du_gain > config.MAX_DU_PER_TICK:
-                current_agent_state.du = du_start + float(config.MAX_DU_PER_TICK)
-                logger.warning(
-                    f"Agent {agent_id} DU gain {du_gain:.2f} exceeds MAX_DU_PER_TICK; capping to {config.MAX_DU_PER_TICK}"
-                )
+            self.resource_manager.cap_tick(
+                ip_start=ip_start, du_start=du_start, obj=current_agent_state
+            )
 
             # --- Process Agent Output ---
             this_agent_turn_generated_messages = []  # Local list for this agent's output this turn
