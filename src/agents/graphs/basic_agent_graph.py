@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 # src/agents/graphs/basic_agent_graph.py
 """
 Defines the basic LangGraph structure for an agent's turn.

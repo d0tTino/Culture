@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# mypy: ignore-errors
 from langgraph.graph import END, StateGraph
 
 from .basic_agent_types import AgentTurnState

@@ -3,7 +3,6 @@ Integration module for using Ollama models with DSPy.
 Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
-# mypy: ignore-errors
 # ruff: noqa: ANN101, ANN102
 
 import json
@@ -15,7 +14,7 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 try:  # pragma: no cover - optional dependency
-    import requests  # type: ignore
+    import requests
 except Exception:  # pragma: no cover - fallback when requests missing
     requests = MagicMock()
 from typing_extensions import Self
@@ -24,17 +23,20 @@ from typing_extensions import Self
 try:
     import dspy
 
+    # dspy lacks type hints, so LM resolves to "Any"
     BaseLM = dspy.LM
     DSPY_AVAILABLE = True
 except Exception:  # pragma: no cover - optional dependency
     logging.getLogger(__name__).warning("DSPy not available; using stub implementations")
 
-    class BaseLM:
+    class _BaseLM:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
         def __call__(self, *args: Any, **kwargs: Any) -> list[str]:
             return ["DSPy unavailable"]
+
+    BaseLM = _BaseLM
 
     class Signature:
         pass
@@ -121,7 +123,7 @@ __all__ = [
 ]
 
 
-class OllamaLM(BaseLM):  # type: ignore[misc]
+class OllamaLM(BaseLM):  # type: ignore[misc, valid-type]
     """
     A DSPy-compatible language model implementation for Ollama.
 

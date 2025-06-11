@@ -1,5 +1,4 @@
 # ruff: noqa: E501, ANN101
-# mypy: ignore-errors
 """
 DSPy-powered Action Intent Selector Module
 
@@ -31,7 +30,8 @@ except ImportError as e:
     raise
 
 
-class ActionIntentSelection(dspy.Signature):  # type: ignore[misc, no-any-unimported]  # Mypy cannot follow dspy.Signature import
+# dspy lacks type hints, so Signature resolves to Any
+class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported]
     """
     Given the agent's role, current situation, overarching goal, and available actions,
     select the most appropriate action intent and provide a brief justification.

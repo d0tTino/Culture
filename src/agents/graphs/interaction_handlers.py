@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# mypy: ignore-errors
 import logging
 from typing import Any
 
@@ -16,7 +15,8 @@ from src.shared.memory_store import MemoryStore
 try:
     from .basic_agent_types import AgentTurnState
 except Exception:  # pragma: no cover - fallback for simplified tests
-    AgentTurnState = dict  # type: ignore
+    # During tests, AgentTurnState may be unavailable; use plain dict
+    AgentTurnState = dict  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

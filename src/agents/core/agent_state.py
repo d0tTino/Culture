@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 # ruff: noqa: ANN101, ANN102
 import logging
 import random
@@ -18,6 +17,7 @@ from typing_extensions import Self
 try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict
 except ImportError:  # pragma: no cover - fallback for old pydantic
+    # pydantic<2 provides ConfigDict as a plain dict
     ConfigDict = dict  # type: ignore[misc]
 
 # Local imports (ensure these are correct and not causing cycles if possible)
@@ -81,7 +81,7 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 if TYPE_CHECKING:
-    from src.infra.llm_client import LLMClient, LLMClientConfig  # type: ignore
+    from src.infra.llm_client import LLMClient, LLMClientConfig
 
 
 class AgentStateData(BaseModel):
@@ -315,7 +315,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         llm_client = model.llm_client
         mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
-            from src.infra.llm_client import LLMClient  # type: ignore # Local import
+            from src.infra.llm_client import LLMClient  # Local import
 
             if mock_llm_client:
                 model.llm_client = mock_llm_client
@@ -327,7 +327,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
                 if isinstance(llm_client_config, BaseModel):
-                    model.llm_client = LLMClient(config=llm_client_config)  # type: ignore
+                    model.llm_client = LLMClient(config=llm_client_config)
                 else:
                     model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
@@ -346,7 +346,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         """Returns the memory retriever for the agent."""
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
-        return self.memory_store_manager.get_retriever()  # type: ignore
+        return self.memory_store_manager.get_retriever()
 
     # ------------------------------------------------------------------
     # Serialization helpers for tests
