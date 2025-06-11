@@ -1,4 +1,13 @@
-from typing import Optional, TypedDict
+from __future__ import annotations
+
+from typing import TypedDict, Union
+
+# Basic JSON-compatible types used throughout the codebase
+JSONValue = Union[str, int, float, bool, None, dict[str, "JSONValue"], list["JSONValue"]]
+
+# Simple alias for a JSON-compatible dictionary
+JSONDict = dict[str, JSONValue]
+
 
 
 class LLMMessage(TypedDict):
@@ -61,6 +70,6 @@ class SimulationMessage(TypedDict):
 
     step: int
     sender_id: str
-    recipient_id: Optional[str]
+    recipient_id: str | None
     content: str
-    action_intent: Optional[str]
+    action_intent: str | None
