@@ -8,13 +8,17 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any, Callable, Optional, Protocol, TypeVar, cast
+from typing import Callable, Optional, ParamSpec, Protocol, TypeVar, cast
 
 from src.shared.typing import (
+    ChatOptions,
+    JSONDict,
     LLMChatResponse,
     LLMClientMockResponses,
+    LLMMessage,
     OllamaGenerateResponse,
     SentimentAnalysisResponse,
+    StructuredOutputMock,
 )
 
 try:
@@ -49,6 +53,8 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
 
 from pydantic import BaseModel, ValidationError
+from pydantic.fields import FieldInfo
+from pydantic.v1.fields import ModelField
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -69,8 +75,9 @@ _APIError = APIError
 
 logger = logging.getLogger(__name__)
 
-# Define a generic type variable for Pydantic models
+# Define generic type variables for Pydantic models and call signatures
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 class OllamaClientProtocol(Protocol):
@@ -81,6 +88,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[dict[str, str]],
         options: Optional[dict[str, Any]] = None,
+
     ) -> LLMChatResponse: ...
 
 
@@ -176,11 +184,11 @@ def get_ollama_client() -> OllamaClientProtocol | None:
 
 
 def _retry_with_backoff(
-    func: Callable[..., T],
+    func: Callable[P, T],
     max_retries: int = 3,
     base_delay: int = 1,
-    *args: Any,
-    **kwargs: Any,
+    *args: P.args,
+    **kwargs: P.kwargs,
 ) -> tuple[Optional[T], Optional[Exception]]:
     """
     Helper for retrying a function with exponential backoff.
@@ -239,15 +247,14 @@ def generate_text(
         return None
 
     def call() -> LLMChatResponse:
+        messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
         return ollama_client.chat(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             options={"temperature": temperature},
         )
 
     response, error = _retry_with_backoff(call)
-    response = cast(Optional[LLMChatResponse], response)
-    response = cast(Optional[LLMChatResponse], response)
     response = cast(Optional[LLMChatResponse], response)
     if error:
         logger.error(f"Failed to generate text after retries: {error}")
@@ -322,9 +329,10 @@ def summarize_memory_context(
             f"goal='{goal}', context='{current_context}'"
         )
 
+        chat_messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
         response = ollama_client.chat(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=chat_messages,
             options={"temperature": temperature},
         )
 
@@ -386,7 +394,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> Optional[floa
         f"Analyze the sentiment of the following message. Respond with only one word: "
         f"'positive', 'negative', or 'neutral'.\n\nMessage: \"{text}\"\n\nSentiment:"
     )
-    messages = [{"role": "user", "content": prompt}]
+    messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
     logger.debug(f"LLM_CLIENT_ANALYZE_SENTIMENT --- Constructed prompt: '''{prompt}'''")
 
     def call() -> LLMChatResponse:
@@ -474,9 +482,9 @@ def generate_structured_output(
             if not issubclass(response_model, BaseModel):
                 raise TypeError("response_model must be a subclass of BaseModel")
             if model_name in _MOCK_RESPONSES:
-                mock_data = _MOCK_RESPONSES[model_name]
+                mock_data = cast(StructuredOutputMock | str | None, _MOCK_RESPONSES.get(model_name))
                 if isinstance(mock_data, dict):
-                    field_dict: dict[str, Any] = {}
+                    mocked_fields: JSONDict = {}
                     mock_fields = getattr(response_model, "model_fields", None)
                     if mock_fields is None:
                         base_fields = getattr(response_model, "__fields__", None)
@@ -486,70 +494,65 @@ def generate_structured_output(
                     for field_name, field in mock_fields.items():
                         if field.is_required():
                             if field.annotation is str:
-                                field_dict[field_name] = str(
+                                mocked_fields[field_name] = str(
                                     mock_data.get(field_name, f"Mock {field_name}")
                                 )
                             elif field.annotation is int:
                                 val = mock_data.get(field_name, 1)
-                                field_dict[field_name] = int(val) if isinstance(val, int) else 1
+                                mocked_fields[field_name] = int(val) if isinstance(val, int) else 1
                             elif field.annotation is float:
                                 val = mock_data.get(field_name, 1.0)
-                                field_dict[field_name] = (
+                                mocked_fields[field_name] = (
                                     float(val) if isinstance(val, float) else 1.0
                                 )
                             elif field.annotation is bool:
                                 val = mock_data.get(field_name, False)
-                                field_dict[field_name] = (
+                                mocked_fields[field_name] = (
                                     bool(val) if isinstance(val, bool) else False
                                 )
                             elif field.annotation is list:
                                 val = mock_data.get(field_name, [])
-                                field_dict[field_name] = val if isinstance(val, list) else []
+                                mocked_fields[field_name] = val if isinstance(val, list) else []
                             elif field.annotation is dict:
                                 val = mock_data.get(field_name, {})
-                                field_dict[field_name] = val if isinstance(val, dict) else {}
-                    return response_model(**field_dict)
+                                mocked_fields[field_name] = val if isinstance(val, dict) else {}
+                    return response_model(**mocked_fields)
                 else:
                     try:
                         mock_dict = json.loads(str(mock_data))
                         return response_model(**mock_dict)
                     except json.JSONDecodeError:
                         pass
-            # Only define field_dict if not already defined
-            field_dict = {}
+            # Only define field_defaults if not already defined
+            field_defaults: JSONDict = {}
             if hasattr(response_model, "model_fields"):
-                fields: Iterable[tuple[str, Any]] = response_model.model_fields.items()
-
-                def is_required(f: Any) -> bool:
-                    return bool(f.is_required())
-
+                fields: Iterable[tuple[str, FieldInfo]] = response_model.model_fields.items()
             else:
                 base_fields = getattr(response_model, "__fields__", None)
                 if callable(base_fields):
                     base_fields = base_fields()
-                if base_fields is None:
-                    fields = []
-                else:
-                    fields = base_fields.items()
+                fields = base_fields.items() if base_fields is not None else []
 
-                def is_required(f: Any) -> bool:
-                    return bool(cast("Any", f).required)
+            def is_required(f: FieldInfo | ModelField) -> bool:
+                if isinstance(f, FieldInfo):
+                    return bool(f.is_required())
+                return bool(f.required)
 
             for field_name, field in fields:
                 if is_required(field):
                     if field.annotation is str:
-                        field_dict[field_name] = f"Mock {field_name}"
+                        field_defaults[field_name] = f"Mock {field_name}"
                     elif field.annotation is int:
-                        field_dict[field_name] = 1
+                        field_defaults[field_name] = 1
                     elif field.annotation is float:
-                        field_dict[field_name] = 1.0
+                        field_defaults[field_name] = 1.0
                     elif field.annotation is bool:
-                        field_dict[field_name] = False
+                        field_defaults[field_name] = False
                     elif field.annotation is list:
-                        field_dict[field_name] = []
+                        field_defaults[field_name] = []
                     elif field.annotation is dict:
-                        field_dict[field_name] = {}
-            return response_model(**field_dict)
+                        field_defaults[field_name] = {}
+            return response_model(**field_defaults)
         except (ValidationError, json.JSONDecodeError, TypeError) as e:
             logger.error(f"Error generating mock structured output: {e}")
             return None
@@ -565,7 +568,7 @@ def generate_structured_output(
         schema_json = json.dumps(response_model.model_json_schema(), indent=2)
     else:
         schema_json = json.dumps(response_model.schema(), indent=2)
-    example: dict[str, Any] = {}
+    example: JSONDict = {}
     example_fields = getattr(response_model, "model_fields", None)
     if example_fields is None:
         base_fields = getattr(response_model, "__fields__", None)
@@ -610,7 +613,7 @@ def generate_structured_output(
         try:
             logger.debug(f"Received potential JSON response from Ollama: {response_text}")
             if response_model:
-                json_data: dict[str, Any] = json.loads(str(response_text))
+                json_data: JSONDict = json.loads(str(response_text))
                 parsed_output: BaseModel = response_model(**json_data)
                 logger.debug(f"Successfully parsed structured output: {parsed_output}")
                 return parsed_output

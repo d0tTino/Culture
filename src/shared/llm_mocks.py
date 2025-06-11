@@ -72,7 +72,7 @@ class MockLLMResponse:
             "message_content": "Mock message for testing",
             "action_intent": "idle",
         }
-        self.message: dict[str, str] = {"content": content}
+        self.message: dict[str, str] = {"role": "assistant", "content": content}
 
 
 def create_mock_ollama_client() -> MagicMock:
@@ -102,6 +102,7 @@ def create_mock_ollama_client() -> MagicMock:
                 logger.debug("Mock ollama.Client.chat: returning -0.7 sentiment for disagreement")
                 return {
                     "message": {
+                        "role": "assistant",
                         "content": '{"sentiment_score": -0.7, "sentiment_label": "negative"}'
                     }
                 }
@@ -112,6 +113,7 @@ def create_mock_ollama_client() -> MagicMock:
                 logger.debug("Mock ollama.Client.chat: returning 0.2 sentiment for facilitation")
                 return {
                     "message": {
+                        "role": "assistant",
                         "content": '{"sentiment_score": 0.2, "sentiment_label": "neutral"}'
                     }
                 }
@@ -121,6 +123,7 @@ def create_mock_ollama_client() -> MagicMock:
                 )
                 return {
                     "message": {
+                        "role": "assistant",
                         "content": '{"sentiment_score": 0.0, "sentiment_label": "neutral"}'
                     }
                 }
@@ -133,7 +136,7 @@ def create_mock_ollama_client() -> MagicMock:
         )
         # Ensure this default response is what other direct .chat() users might expect if not sentiment.
         # The original code had "This is a mock Ollama response". Let's stick to that for non-sentiment.
-        return {"message": {"content": "This is a mock Ollama response"}}
+        return {"message": {"role": "assistant", "content": "This is a mock Ollama response"}}
 
     mock_client.chat.side_effect = mock_chat_for_sentiment_and_general
 

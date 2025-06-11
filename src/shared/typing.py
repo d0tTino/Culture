@@ -1,9 +1,19 @@
-from typing import Optional, TypedDict
+from __future__ import annotations
+
+from typing import TypedDict, Union
+
+# Basic JSON-compatible types used throughout the codebase
+JSONValue = Union[str, int, float, bool, None, dict[str, "JSONValue"], list["JSONValue"]]
+
+# Simple alias for a JSON-compatible dictionary
+JSONDict = dict[str, JSONValue]
+
 
 
 class LLMMessage(TypedDict):
     """Minimal shape for a chat message from Ollama."""
 
+    role: str
     content: str
 
 
@@ -11,6 +21,14 @@ class LLMChatResponse(TypedDict):
     """Return type for Ollama chat calls."""
 
     message: LLMMessage
+
+
+class ChatOptions(TypedDict, total=False):
+    """Options for Ollama chat calls."""
+
+    temperature: float
+    top_p: float
+    num_predict: int
 
 
 class OllamaGenerateResponse(TypedDict, total=False):
@@ -52,7 +70,8 @@ class SimulationMessage(TypedDict):
 
     step: int
     sender_id: str
-    recipient_id: Optional[str]
+    recipient_id: str | None
     content: str
     action_intent: Optional[str]
     sentiment_score: Optional[float]
+
