@@ -10,3 +10,4 @@ requests
 pydantic==2.3.0
 pydantic-settings
 prometheus-client==0.20.0
+hypothesis>=6.0
