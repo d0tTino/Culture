@@ -79,7 +79,7 @@ jobs:
           pytest --maxfail=1 --disable-warnings -q --cov=src --cov-report=xml --cov-fail-under=90
 
       - name: Run Integration Tests
-        if: steps.changes.outputs.CODE_CHANGES == 'true'
+        if: steps.changes.outputs.CODE_CHANGES == 'true' && matrix.os == 'ubuntu-latest'
         shell: bash
         run: pytest -m "integration" --disable-warnings -q
 

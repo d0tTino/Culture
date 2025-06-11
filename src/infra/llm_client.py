@@ -7,12 +7,9 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-
-from typing import Any, Callable, Protocol, TypeVar, cast
-
+from typing import Any, Callable, ParamSpec, Protocol, TypeVar, cast
 
 from src.shared.typing import (
-    ChatOptions,
     JSONDict,
     LLMChatResponse,
     LLMClientMockResponses,
