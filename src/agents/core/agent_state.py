@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 # ruff: noqa: ANN101, ANN102
 import logging
 import random
@@ -195,6 +194,31 @@ class AgentStateData(BaseModel):
         default_factory=lambda: float(str(get_config("TARGETED_MESSAGE_MULTIPLIER") or "1.5"))
     )
 
+    @property
+    def positive_relationship_learning_rate(self) -> float:
+        return self._positive_relationship_learning_rate
+
+    @property
+    def negative_relationship_learning_rate(self) -> float:
+        return self._negative_relationship_learning_rate
+
+    @property
+    def neutral_relationship_learning_rate(self) -> float:
+        return self._neutral_relationship_learning_rate
+
+    @property
+    def targeted_message_multiplier(self) -> float:
+        """Multiplier applied when sending targeted messages."""
+        return self._targeted_message_multiplier
+
+    @property
+    def min_relationship_score(self) -> float:
+        return self._min_relationship_score
+
+    @property
+    def max_relationship_score(self) -> float:
+        return self._max_relationship_score
+
     @field_validator("mood_level", mode="before")
     @classmethod
     def check_mood_level_type_before(cls, v: Any) -> Any:
@@ -340,13 +364,13 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     def get_llm_client(self) -> "LLMClient":
         if not self.llm_client:
             raise ValueError("LLMClient not initialized")
-        return cast("LLMClient", self.llm_client)
+        return cast("LLMClient", self.llm_client)  # type: ignore[no-any-unimported]
 
     def get_memory_retriever(self) -> Any:  # VectorStoreRetriever:
         """Returns the memory retriever for the agent."""
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
-        return self.memory_store_manager.get_retriever()  # type: ignore
+        return self.memory_store_manager.get_retriever()
 
     # ------------------------------------------------------------------
     # Serialization helpers for tests

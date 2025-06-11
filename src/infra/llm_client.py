@@ -1,5 +1,4 @@
 # ruff: noqa: ANN401
-# mypy: ignore-errors
 # src/infra/llm_client.py
 """
 Provides a client for interacting with the Ollama LLM service.
@@ -82,8 +81,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[dict[str, str]],
         options: Optional[dict[str, Any]] = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 # Mock implementation variables and functions

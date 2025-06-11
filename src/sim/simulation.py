@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # ruff: noqa: RUF006
-# mypy: ignore-errors
 import argparse
 import asyncio
 import logging
 import sys
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from typing_extensions import Self
 
 from src.agents.core import ResourceManager
+from src.agents.core.agent_controller import AgentController
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.shared.typing import SimulationMessage
 from src.sim.knowledge_board import KnowledgeBoard
@@ -167,7 +167,7 @@ class Simulation:
             current_collective_ip = sum(agent.state.ip for agent in self.agents)
             current_collective_du = sum(agent.state.du for agent in self.agents)
             for agent_instance in self.agents:
-                agent_instance.state.update_collective_metrics(
+                AgentController(agent_instance.state).update_collective_metrics(
                     current_collective_ip, current_collective_du
                 )
 
@@ -191,8 +191,8 @@ class Simulation:
                     public_info = {
                         "agent_id": agent.agent_id,
                         "name": agent.state.name,
-                        "role": agent.state.role,
-                        "mood": agent.state.mood,  # Or descriptive_mood
+                        "role": agent.state.current_role,
+                        "mood": agent.state.mood_value,
                         "current_project_id": agent.state.current_project_id,
                         # Add other relevant public fields, avoid sensitive internal state
                     }
@@ -250,9 +250,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -332,13 +330,17 @@ class Simulation:
                     f"\\'{message_content}\\'"
                 )
 
-                msg_data: SimulationMessage = {
-                    "step": self.current_step,  # Log with current global turn number
-                    "sender_id": agent_id,
-                    "recipient_id": message_recipient_id,
-                    "content": message_content,
-                    "action_intent": action_intent_str,
-                }
+                msg_data = cast(
+                    SimulationMessage,
+                    {
+                        "step": self.current_step,
+                        "sender_id": agent_id,
+                        "recipient_id": message_recipient_id,
+                        "content": message_content,
+                        "action_intent": action_intent_str,
+                        "sentiment_score": None,
+                    },
+                )
                 this_agent_turn_generated_messages.append(msg_data)
                 current_agent_state.messages_sent_count += 1
                 current_agent_state.last_message_step = self.current_step
@@ -363,9 +365,9 @@ class Simulation:
             logger.info(f"  - DU: {current_agent_state.du:.1f} (from {current_agent_state.du})")
 
             # Update the agent state in the simulation's list of agents
-            self.agents[
-                agent_to_run_index
-            ] = agent  # Ensure the agent object itself is updated if it was replaced
+            self.agents[agent_to_run_index] = (
+                agent  # Ensure the agent object itself is updated if it was replaced
+            )
             self.agents[agent_to_run_index].update_state(current_agent_state)
 
             # Determine next agent index based on role change event this turn
