@@ -534,7 +534,7 @@ python -m src.http_app
 
 ### Prometheus Metrics
 The simulation exposes Prometheus metrics on port 8000 when `src.interfaces.metrics` is imported.
-Metrics include `llm_latency_ms` and `knowledge_board_size`. You can scrape them with a Prometheus server and
+Metrics include `llm_latency_ms`, `llm_calls_total`, `knowledge_board_size`, and `active_agent_count`. You can scrape them with a Prometheus server and
 check the latest values with the `!stats` Discord command.
 
 For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
