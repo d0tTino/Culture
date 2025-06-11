@@ -86,6 +86,19 @@ To add a new warning filter:
 3. Document it in this file
 4. Verify the filter works by running the tests
 
+## Test Suite Warning Policy
+
+Run the full test suite with warnings disabled:
+
+```bash
+pytest --disable-warnings
+```
+
+The summary will still show how many warnings were raised. If any appear,
+either fix the source (for example by updating deprecated Pydantic `Field`
+usage or closing async sessions) or extend `src/infra/warning_filters.py` and
+document the change here.
+
 ## Command-Line Control
 
 You can enable or disable these filters when running the simulation:
