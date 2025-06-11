@@ -82,6 +82,13 @@ jobs:
         shell: bash
         run: pytest -m "integration" --disable-warnings -q
 
+      - name: Upload coverage artifact
+        if: steps.changes.outputs.CODE_CHANGES == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage.xml
+          path: coverage.xml
+
       - name: Run Black (Formatter)
         if: steps.changes.outputs.CODE_CHANGES == 'true'
         shell: bash
