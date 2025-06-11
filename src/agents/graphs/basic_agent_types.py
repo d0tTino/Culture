@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Extra, Field
 
 from src.agents.core.agent_state import AgentState
 
@@ -12,7 +12,7 @@ from src.agents.core.agent_state import AgentState
 class AgentActionOutput(BaseModel):
     """Defines the expected structured output from the LLM."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra=Extra.forbid)
     thought: str = Field(
         ...,
         json_schema_extra={
