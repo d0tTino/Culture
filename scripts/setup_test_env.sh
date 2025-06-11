@@ -16,8 +16,8 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt -r requirements-dev.txt
 
 if ! python -c "import xdist" >/dev/null 2>&1; then
-    echo "pytest-xdist is required but not installed" >&2
-    exit 1
+    echo "pytest-xdist is required but not installed; installing..." >&2
+    pip install pytest-xdist
 fi
 
 echo "Environment ready. Run pytest with $VENV_DIR/bin/python -m pytest"
