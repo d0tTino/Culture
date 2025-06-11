@@ -23,7 +23,61 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+      "y": 0
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Knowledge Board Size",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "knowledge_board_size",
+          "legendFormat": "KB Size",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Active Agent Count",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "active_agent_count",
+          "legendFormat": "Agents",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      }
+    },
+    {
+      "type": "graph",
+      "title": "LLM Query Rate (QPS)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(llm_calls_total[1m])",
+          "legendFormat": "QPS",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
       }
     }
   ]

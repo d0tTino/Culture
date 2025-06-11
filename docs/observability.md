@@ -13,7 +13,7 @@ This guide explains how to configure basic monitoring for Culture.ai using Grafa
 2. Upload `docs/grafana_dashboard.json` from this repository.
 3. Select your Prometheus data source when prompted and click **Import**.
 
-The dashboard provides a starter panel showing CPU usage for Culture.ai processes. Extend it with additional panels as needed.
+The imported dashboard includes panels for CPU usage, Knowledge Board size, active agent count, and the LLM query rate (QPS).
 
 ## 3. Running Grafana Locally
 
