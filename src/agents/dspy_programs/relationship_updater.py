@@ -1,5 +1,4 @@
 # ruff: noqa: E501, ANN101
-# mypy: ignore-errors
 import logging
 import os
 
