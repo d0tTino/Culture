@@ -72,6 +72,6 @@ class SimulationMessage(TypedDict):
     sender_id: str
     recipient_id: str | None
     content: str
-    action_intent: Optional[str]
-    sentiment_score: Optional[float]
+    action_intent: str | None
+    sentiment_score: float | None
 
