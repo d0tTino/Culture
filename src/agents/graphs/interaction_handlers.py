@@ -16,7 +16,7 @@ try:
     from .basic_agent_types import AgentTurnState
 except Exception:  # pragma: no cover - fallback for simplified tests
     # During tests, AgentTurnState may be unavailable; use plain dict
-    AgentTurnState = dict  # type: ignore[assignment]
+    AgentTurnState = dict  # type: ignore[misc, assignment]
 
 logger = logging.getLogger(__name__)
 

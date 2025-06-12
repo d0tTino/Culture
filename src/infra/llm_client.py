@@ -86,7 +86,7 @@ class OllamaClientProtocol(Protocol):
     def chat(
         self: OllamaClientProtocol,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
 
     ) -> LLMChatResponse: ...
