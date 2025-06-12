@@ -54,7 +54,10 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
-from pydantic.v1.fields import ModelField
+try:  # Support pydantic >= 2 if installed
+    from pydantic.v1.fields import ModelField
+except Exception:  # pragma: no cover - fallback for pydantic<2
+    from pydantic.fields import ModelField
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -89,6 +92,31 @@ class OllamaClientProtocol(Protocol):
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
     ) -> LLMChatResponse: ...
+
+
+class LLMClientConfig(BaseModel):
+    """Simple configuration for ``LLMClient``."""
+
+    model_name: str = "mistral:latest"
+    api_key: str | None = None
+
+
+class LLMClient:
+    """Lightweight wrapper around the Ollama client."""
+
+    def __init__(self, config: LLMClientConfig) -> None:
+        self.config = config
+        self._client = get_ollama_client()
+
+    def chat(
+        self,
+        model: str,
+        messages: list[LLMMessage],
+        options: dict[str, Any] | None = None,
+    ) -> LLMChatResponse:
+        if not self._client:
+            raise RuntimeError("Ollama client not initialized")
+        return self._client.chat(model=model, messages=messages, options=options)
 
 
 # Mock implementation variables and functions

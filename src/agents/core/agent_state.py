@@ -5,6 +5,7 @@ from collections import deque
 from enum import Enum
 from typing import Any, Optional
 
+
 from pydantic import (
     BaseModel,
     Field,
@@ -23,6 +24,7 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 from src.infra.config import get_config  # Import get_config function
+from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +92,7 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
     def get_default_llm_client() -> OllamaClientProtocol | None:
         return None
+
 
 
 class AgentStateData(BaseModel):
@@ -352,6 +355,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 model.llm_client = mock_llm_client
             else:
                 model.llm_client = get_default_llm_client()
+
 
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]
