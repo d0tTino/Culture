@@ -379,13 +379,13 @@ def get_kb_size() -> int:
     return metrics.get_kb_size()
 
 
-@bot.command(name="say")  # type: ignore[misc]
+@bot.command(name="say")
 async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
     await ctx.send(f"Simulated message received: {message}")
 
 
-@bot.command(name="stats")  # type: ignore[misc]
+@bot.command(name="stats")
 async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
