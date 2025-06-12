@@ -549,7 +549,7 @@ persists their memories to ChromaDB. See
 [docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
 
 ### Running Tests
-Run the full test suite:
+Run the full test suite (after installing development dependencies):
 ```bash
 python -m pytest tests/
 ```
