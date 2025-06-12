@@ -1,4 +1,4 @@
-# ruff: noqa: ANN401
+# ruff: noqa: ANN401, ANN101, ANN102
 """Provides a client for interacting with the Ollama LLM service."""
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ except Exception:  # pragma: no cover - optional dependency
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
 try:  # pragma: no cover - optional dependency
-    import requests  # type: ignore[import-untyped]
-    from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
+    import requests
+    from requests.exceptions import RequestException, Timeout
 except Exception:  # pragma: no cover - fallback when requests missing
     logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
     from unittest.mock import MagicMock
@@ -46,7 +46,7 @@ except Exception:  # pragma: no cover - fallback when requests missing
         pass
 
     # Timeout depends on requests; ignore redefinition when stubbed
-    class Timeout(RequestException):  # type: ignore[no-redef, no-any-unimported]
+    class Timeout(RequestException):  # type: ignore[no-redef]
         """Fallback Timeout when requests is unavailable."""
 
         pass
@@ -87,8 +87,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -166,9 +165,7 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(  # type: ignore[no-any-unimported]
-            f"{OLLAMA_API_BASE}", timeout=1
-        )
+        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")
@@ -523,10 +520,7 @@ def generate_structured_output(
                             base_fields = base_fields()
                         mock_fields = base_fields or {}
                     for field_name, field in mock_fields.items():
-                        if (
-                            hasattr(field, "is_required")
-                            and callable(field.is_required)
-                        ):
+                        if hasattr(field, "is_required") and callable(field.is_required):
                             required = bool(field.is_required())
                         else:
                             required = bool(getattr(field, "required", False))
