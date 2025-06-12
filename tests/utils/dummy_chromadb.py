@@ -5,6 +5,14 @@ import types
 def setup_dummy_chromadb() -> None:
     """Install a lightweight stub of the ``chromadb`` package into ``sys.modules``."""
 
+    for mod in [
+        "chromadb",
+        "chromadb.utils",
+        "chromadb.utils.embedding_functions",
+        "chromadb.exceptions",
+    ]:
+        sys.modules.pop(mod, None)
+
     chromadb = types.ModuleType("chromadb")
     utils = types.ModuleType("chromadb.utils")
     emb = types.ModuleType("chromadb.utils.embedding_functions")

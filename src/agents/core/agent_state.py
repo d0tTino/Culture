@@ -3,16 +3,15 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
+from pydantic import BaseModel, Field, PrivateAttr
 
-from pydantic import (
-    BaseModel,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
+try:  # pragma: no cover - prefer Pydantic v2 validators
+    from pydantic import field_validator, model_validator
+except Exception:  # pragma: no cover - fallback for pydantic<2
+    from pydantic import root_validator as model_validator
+    from pydantic import validator as field_validator
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -351,20 +350,21 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         llm_client_config = model.llm_client_config
         llm_client = model.llm_client
         mock_llm_client = model.mock_llm_client
-        if llm_client_config and not llm_client:
-            if mock_llm_client:
 
+        if not llm_client:
+            if mock_llm_client:
                 model.llm_client = mock_llm_client
+            elif llm_client_config:
+                if isinstance(llm_client_config, BaseModel):
+                    model.llm_client = LLMClient(
+                        config=cast(LLMClientConfig, llm_client_config)
+                    )
+                else:
+                    model.llm_client = LLMClient(
+                        config=LLMClientConfig(**llm_client_config)
+                    )
             else:
                 model.llm_client = get_default_llm_client()
-
-                model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
-
-                if isinstance(llm_client_config, BaseModel):
-                    model.llm_client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
-                else:
-                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
-
 
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]
@@ -388,12 +388,14 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump()
+        return self.model_dump(
+            exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+        )
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
         """Create an ``AgentState`` instance from a serialized dictionary."""
         clean_data = data.copy()
         if clean_data.get("memory_store_manager") is None:
-            clean_data.pop("memory_store_manager")
+            clean_data.pop("memory_store_manager", None)
         return cls(**clean_data)

@@ -52,19 +52,8 @@ except Exception:  # pragma: no cover - fallback when requests missing
         pass
 
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
-
-if TYPE_CHECKING:
-    from pydantic.v1.fields import ModelField
-else:  # pragma: no cover - runtime import
-    try:  # Support pydantic >= 2 if installed
-        from pydantic.v1.fields import ModelField
-    except Exception:  # pragma: no cover - fallback for pydantic<2
-        from pydantic.fields import ModelField  # type: ignore[attr-defined]
-
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -290,8 +279,7 @@ def generate_text(
         )
 
     response, error = _retry_with_backoff(call)
-    response = cast(LLMChatResponse | None, response)
-    response = cast(LLMChatResponse | None, response)
+    # Cast for static type checkers; _retry_with_backoff returns T | None
     response = cast(LLMChatResponse | None, response)
 
     if error:
@@ -443,6 +431,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> float | None:
         )
 
     response, error = _retry_with_backoff(call)
+    # Cast for static type checkers; _retry_with_backoff returns T | None
     response = cast(LLMChatResponse | None, response)
     if error:
         logger.error(f"Failed to analyze sentiment after retries: {error}")
