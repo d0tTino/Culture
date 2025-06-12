@@ -40,6 +40,19 @@ Usage:
 bash scripts/setup_test_env.sh
 ```
 
+### `start_vllm.sh`
+
+Launches the vLLM OpenAI-compatible API server with sane defaults. The script
+exposes the `VLLM_MODEL`, `VLLM_PORT`, and `VLLM_SWAP_SPACE` environment
+variables to customize the model, port, and swap space size.
+
+Usage:
+```bash
+scripts/start_vllm.sh  # uses defaults
+# or specify overrides
+VLLM_MODEL=my/model VLLM_SWAP_SPACE=16 scripts/start_vllm.sh
+```
+
 # Culture.ai Scripts
 
 ## Code Quality & Compliance
