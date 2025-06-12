@@ -3,7 +3,7 @@ uvicorn==0.25.0
 discord.py==2.3.0
 weaviate-client==3.25.0
 chromadb==0.3.21
-dspy==0.1.4
+dspy-ai==0.2.9
 pydantic==2.3.0
 pydantic-settings==2.0.3
 langgraph==0.2.0

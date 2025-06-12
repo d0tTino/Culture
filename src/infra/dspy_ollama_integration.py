@@ -22,11 +22,17 @@ from typing_extensions import Self
 # Import DSPy and Ollama, providing fallbacks when unavailable
 try:
     import dspy
+except Exception:  # pragma: no cover - attempt dspy_ai fallback
+    try:
+        import dspy_ai as dspy
+    except Exception:
+        dspy = None
 
+if dspy is not None:
     # dspy lacks type hints, so LM resolves to "Any"
     BaseLM = dspy.LM
     DSPY_AVAILABLE = True
-except Exception:  # pragma: no cover - optional dependency
+else:
     logging.getLogger(__name__).warning("DSPy not available; using stub implementations")
 
     class _BaseLM:
