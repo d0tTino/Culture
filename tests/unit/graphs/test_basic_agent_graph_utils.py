@@ -18,7 +18,7 @@ class DummyController:
 def make_agent_state() -> SimpleNamespace:
     return SimpleNamespace(
         agent_id="a",
-        role="Innovator",
+        current_role="Innovator",
         steps_in_current_role=5,
         role_change_cooldown=3,
         ip=10.0,
@@ -34,7 +34,7 @@ def make_agent_state() -> SimpleNamespace:
 def test_process_role_change_success(monkeypatch: pytest.MonkeyPatch) -> None:
     state = make_agent_state()
     assert bag.process_role_change(state, "Analyzer") is True
-    assert state.role == "Analyzer"
+    assert state.current_role == "Analyzer"
     assert state.ip == 8.0
 
 
@@ -56,7 +56,7 @@ def test_update_state_node_role_change(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     )
 
-    assert state.role == "Analyzer"
+    assert state.current_role == "Analyzer"
     assert controller.added[0][0].startswith("Changed role")
     assert output["data_units"] == int(state.du)
 

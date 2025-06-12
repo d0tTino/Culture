@@ -3,7 +3,7 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import (
     BaseModel,
@@ -82,13 +82,16 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 if TYPE_CHECKING:
     try:
-        from src.infra.llm_client import LLMClient, LLMClientConfig  # type: ignore[attr-defined]
-    except Exception:
-        LLMClient = Any
-        LLMClientConfig = Any
+        from src.infra.llm_client import (
+            OllamaClientProtocol,
+            get_default_llm_client,
+        )
+    except Exception:  # pragma: no cover - fallback when llm_client is missing
+        OllamaClientProtocol = Any  # type: ignore[misc, assignment]
+        get_default_llm_client = lambda: None
 else:  # pragma: no cover - used only for typing
-    LLMClient = Any
-    LLMClientConfig = Any
+    OllamaClientProtocol = Any  # type: ignore[misc, assignment]
+    get_default_llm_client = lambda: None
 
 
 class AgentStateData(BaseModel):
@@ -115,8 +118,8 @@ class AgentStateData(BaseModel):
     goals: list[dict[str, Any]] = Field(default_factory=list)
     projects: dict[str, dict[str, Any]] = Field(default_factory=dict)  # project_id: {details}
     current_project_id: Optional[str] = None
-    llm_client_config: Optional[Any] = None  # Optional[LLMClientConfig] - Using Any temporarily
-    llm_client: Optional[Any] = None
+    llm_client_config: Optional[Any] = None  # Configuration data for LLM client
+    llm_client: Optional[OllamaClientProtocol] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
 
@@ -327,9 +330,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
     def get_current_relationship_score(self, agent_name: str) -> float:
         """Returns the current relationship score with the specified agent."""
-        history = self.relationship_history.get(agent_name)
+        history = self.relationship_history.get(agent_name, [])
         if not history:
-            # Return a neutral score if no history exists
             return 0.0
         return history[-1][1]
 
@@ -363,15 +365,16 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 else:
                     model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
+
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]
         if not model.mood_history:
             model.mood_history = [(model.step_counter, model.mood_level)]
         return model
 
-    def get_llm_client(self) -> Any:
+    def get_llm_client(self) -> OllamaClientProtocol:
         if not self.llm_client:
-            raise ValueError("LLMClient not initialized")
+            raise ValueError("LLM client not initialized")
         return self.llm_client
 
     def get_memory_retriever(self) -> Any:  # VectorStoreRetriever:
