@@ -7,10 +7,9 @@ from typing import Any, Optional, cast
 
 from pydantic import (
     BaseModel,
+    Extra,
     Field,
     PrivateAttr,
-    field_validator,
-    model_validator,
 )
 from typing_extensions import Self
 
@@ -26,6 +25,30 @@ from src.infra.config import get_config  # Import get_config function
 from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
+
+
+try:  # Support pydantic >= 2 if installed
+    from pydantic import field_validator as _field_validator  # type: ignore[attr-defined]
+    from pydantic import model_validator as _model_validator  # type: ignore[attr-defined]
+    _PYDANTIC_V2 = True
+except ImportError:  # pragma: no cover - fallback for old pydantic
+    from pydantic import root_validator as _model_validator
+    from pydantic import validator as _field_validator
+    _PYDANTIC_V2 = False
+
+
+def field_validator(*args: Any, **kwargs: Any) -> Any:
+    """Compatibility wrapper for Pydantic field validators."""
+    if not _PYDANTIC_V2:
+        kwargs.pop("mode", None)
+    return _field_validator(*args, **kwargs)
+
+
+def model_validator(*args: Any, **kwargs: Any) -> Any:
+    """Compatibility wrapper for Pydantic model validators."""
+    if not _PYDANTIC_V2:
+        kwargs.pop("mode", None)
+    return _model_validator(*args, **kwargs)
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -96,7 +119,7 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
 
 class AgentStateData(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)
 
     agent_id: str
     name: str
@@ -362,15 +385,25 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
                 if isinstance(llm_client_config, BaseModel):
                     model.llm_client = LLMClient(config=llm_client_config)  # type: ignore[arg-type]
+
                 else:
-                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+                    if isinstance(llm_client_config, BaseModel):
+                        if hasattr(llm_client_config, "model_dump"):
+                            config_data = llm_client_config.model_dump()
+                        else:
+                            config_data = llm_client_config.dict()
+                    else:
+                        config_data = cast(dict[str, Any], llm_client_config)
 
+                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
+            elif not llm_client:
+                values["llm_client"] = get_default_llm_client()
 
-        if not model.role_history:
-            model.role_history = [(model.step_counter, model.current_role)]
-        if not model.mood_history:
-            model.mood_history = [(model.step_counter, model.mood_level)]
-        return model
+            if not values.get("role_history"):
+                values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
+            if not values.get("mood_history"):
+                values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
+            return values
 
     def get_llm_client(self) -> Any:
         if not self.llm_client:
@@ -388,7 +421,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump()
+        return self.dict()
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
