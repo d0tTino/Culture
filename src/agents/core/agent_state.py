@@ -361,9 +361,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 if isinstance(llm_client_config, BaseModel):
                     model.llm_client = LLMClient(config=llm_client_config)
                 else:
-                    model.llm_client = LLMClient(
-                        config=LLMClientConfig(**config_data)
-                    )
+                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]

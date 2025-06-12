@@ -88,7 +88,6 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-
     ) -> LLMChatResponse: ...
 
 
@@ -190,7 +189,6 @@ def _retry_with_backoff(
     *args: Any,
     **kwargs: Any,
 ) -> tuple[T | None, Exception | None]:
-
     """
     Helper for retrying a function with exponential backoff.
     Returns (result, error) tuple. If successful, error is None.
@@ -486,7 +484,9 @@ def generate_structured_output(
             if not issubclass(response_model, BaseModel):
                 raise TypeError("response_model must be a subclass of BaseModel")
             if model_name in _MOCK_RESPONSES:
-                mock_data = cast(StructuredOutputMock | str | None, _MOCK_RESPONSES.get(model_name))
+                mock_data = cast(
+                    StructuredOutputMock | str | None, _MOCK_RESPONSES.get(model_name)
+                )
                 if isinstance(mock_data, dict):
                     mocked_fields: JSONDict = {}
                     mock_fields = getattr(response_model, "model_fields", None)
