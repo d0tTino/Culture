@@ -133,6 +133,7 @@ htmlcov/
 *.out
 !requirements-dev.txt
 !requirements.txt
+!tests/redteam/jailbreak_prompts.txt
 
 # Data, logs, and temp files
 logs/

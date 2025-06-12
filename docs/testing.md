@@ -61,6 +61,21 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
 - On Windows, run these commands from **Git Bash** or **WSL** for full Bash compatibility.
 - Use `scripts\lint.bat --format` to run the same linters as CI.
 
+## Red Team Testing (Optional)
+
+Tests under `tests/redteam/` rely on the [Garak](https://github.com/NVIDIA/garak) library and a small
+jailbreak prompt corpus. They are marked with the `redteam` pytest marker and are **not** included in
+regular CI runs.
+
+To run these tests locally:
+
+```bash
+pip install garak
+pytest tests/redteam -m redteam -v
+```
+
+The CI workflow can run this suite by triggering the `run-redteam` input of the `CI` action.
+
 ## CI Workflow
 
 - Fast unit tests run on every push/PR
