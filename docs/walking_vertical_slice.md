@@ -11,7 +11,7 @@ This example demonstrates a minimal end-to-end run of the Culture.ai simulation 
 - Copy `.env.example` to `.env` and ensure the above variable is defined there
 
 ## Running the Demo
-1. Activate your virtual environment and install the requirements:
+1. Activate your virtual environment (on Windows run `venv\Scripts\activate.bat`) and install the requirements:
    ```bash
    pip install -r requirements.txt -r requirements-dev.txt
    ```
