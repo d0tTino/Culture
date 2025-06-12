@@ -58,7 +58,7 @@ class SimulationDiscordBot:
 
         # Set up event handlers
         @self.client.event
-        @typing.no_type_check
+
         async def on_ready() -> None:
             """Event handler that fires when the bot connects to Discord."""
             self.is_ready = True

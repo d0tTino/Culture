@@ -81,6 +81,7 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
     AgentActionIntent.SEND_DIRECT_MESSAGE,
 ]
 
+
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 try:
     from src.infra.llm_client import (
@@ -351,12 +352,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         llm_client = model.llm_client
         mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
-            if mock_llm_client is not None:
+            if mock_llm_client:
+
                 model.llm_client = mock_llm_client
             else:
                 model.llm_client = get_default_llm_client()
 
                 model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+
+                if isinstance(llm_client_config, BaseModel):
+                    model.llm_client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
+                else:
+                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
 
         if not model.role_history:

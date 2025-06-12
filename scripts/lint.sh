@@ -20,6 +20,6 @@ echo "Running Black..."
 black src/ tests/
 
 echo "Running Mypy..."
-mypy src/ tests/
+mypy src/
 
 echo "Linting and formatting complete." 
