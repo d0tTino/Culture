@@ -3,7 +3,7 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from pydantic import (
     BaseModel,
@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 from src.infra.config import get_config  # Import get_config function
+from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,11 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 ]
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
+def _dummy_llm_client() -> Any:
+    """Fallback function returned when ``llm_client`` is unavailable."""
+    return None
+
+
 if TYPE_CHECKING:
     try:
         from src.infra.llm_client import (
@@ -88,10 +94,10 @@ if TYPE_CHECKING:
         )
     except Exception:  # pragma: no cover - fallback when llm_client is missing
         OllamaClientProtocol = Any  # type: ignore[misc, assignment]
-        get_default_llm_client = lambda: None
+        get_default_llm_client = _dummy_llm_client
 else:  # pragma: no cover - used only for typing
     OllamaClientProtocol = Any  # type: ignore[misc, assignment]
-    get_default_llm_client = lambda: None
+    get_default_llm_client = _dummy_llm_client
 
 
 class AgentStateData(BaseModel):
