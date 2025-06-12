@@ -54,10 +54,6 @@ except Exception:  # pragma: no cover - fallback when requests missing
 
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
-try:  # Support pydantic >= 2 if installed
-    from pydantic.v1.fields import ModelField
-except Exception:  # pragma: no cover - fallback for pydantic<2
-    from pydantic.fields import ModelField
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -565,7 +561,7 @@ def generate_structured_output(
                     base_fields = base_fields()
                 fields = base_fields.items() if base_fields is not None else []
 
-            def is_required(f: FieldInfo | ModelField) -> bool:
+            def is_required(f: FieldInfo | Any) -> bool:
                 if isinstance(f, FieldInfo):
                     return bool(f.is_required())
                 return bool(f.required)
