@@ -18,7 +18,7 @@ try:  # Support pydantic >= 2 if installed
     from pydantic import ConfigDict
 except ImportError:  # pragma: no cover - fallback for old pydantic
     # pydantic<2 provides ConfigDict as a plain dict
-    ConfigDict = dict  # type: ignore[misc]
+    ConfigDict = dict  # type: ignore[misc, assignment]
 
 # Local imports (ensure these are correct and not causing cycles if possible)
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
@@ -81,7 +81,14 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 if TYPE_CHECKING:
-    from src.infra.llm_client import LLMClient, LLMClientConfig
+    try:
+        from src.infra.llm_client import LLMClient, LLMClientConfig  # type: ignore[attr-defined]
+    except Exception:
+        LLMClient = Any
+        LLMClientConfig = Any
+else:  # pragma: no cover - used only for typing
+    LLMClient = Any
+    LLMClientConfig = Any
 
 
 class AgentStateData(BaseModel):
@@ -320,10 +327,11 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
     def get_current_relationship_score(self, agent_name: str) -> float:
         """Returns the current relationship score with the specified agent."""
-        if agent_name not in self.relationship_history:
+        history = self.relationship_history.get(agent_name)
+        if not history:
             # Return a neutral score if no history exists
             return 0.0
-        return self.relationship_history[-1][agent_name]
+        return history[-1][1]
 
     @field_validator("memory_store_manager", mode="before")
     @classmethod
@@ -334,27 +342,28 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")
+    @model_validator(mode="after")  # type: ignore[arg-type]
     def _validate_model_after(cls, model: "AgentState") -> "AgentState":
         llm_client_config = model.llm_client_config
         llm_client = model.llm_client
         mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
-            from src.infra.llm_client import LLMClient  # Local import
 
             if mock_llm_client:
                 model.llm_client = mock_llm_client
             else:
                 config_data = llm_client_config
                 if hasattr(config_data, "model_dump"):
-                    config_data = cast(dict, config_data.model_dump())
+                    config_data = cast(dict[str, Any], config_data.model_dump())
                 elif not isinstance(config_data, dict):
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
                 if isinstance(llm_client_config, BaseModel):
                     model.llm_client = LLMClient(config=llm_client_config)
                 else:
-                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+                    model.llm_client = LLMClient(
+                        config=LLMClientConfig(**config_data)
+                    )
 
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]
@@ -362,10 +371,10 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             model.mood_history = [(model.step_counter, model.mood_level)]
         return model
 
-    def get_llm_client(self) -> "LLMClient":
+    def get_llm_client(self) -> Any:
         if not self.llm_client:
             raise ValueError("LLMClient not initialized")
-        return cast("LLMClient", self.llm_client)  # type: ignore[no-any-unimported]
+        return self.llm_client
 
     def get_memory_retriever(self) -> Any:  # VectorStoreRetriever:
         """Returns the memory retriever for the agent."""

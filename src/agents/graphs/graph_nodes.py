@@ -21,6 +21,9 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
         content = msg.get("content")
         if isinstance(content, str):
             sentiment = analyze_sentiment(content)
+            if isinstance(sentiment, str):
+                mapping = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}
+                sentiment = mapping.get(sentiment.lower(), 0.0)
             if sentiment is not None:
                 if sentiment > 0:
                     total += 1

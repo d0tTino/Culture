@@ -699,7 +699,7 @@ class Simulation:
 
         return True
 
-    def get_project_details(self: Self) -> dict:
+    def get_project_details(self: Self) -> dict[str, dict[str, Any]]:
         """
         Returns a dictionary containing details of all projects for agent perception.
 

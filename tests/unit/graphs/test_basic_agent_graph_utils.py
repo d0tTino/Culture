@@ -57,7 +57,7 @@ def test_update_state_node_role_change(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert state.role == "Analyzer"
-    assert controller.added[0][2].startswith("Changed role")
+    assert controller.added[0][0].startswith("Changed role")
     assert output["data_units"] == int(state.du)
 
 
