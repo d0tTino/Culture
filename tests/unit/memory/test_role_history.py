@@ -10,6 +10,7 @@ def _install_dummy_chromadb() -> None:
 
 @pytest.mark.unit
 def test_get_role_history_builds_periods(tmp_path) -> None:
+    setup_dummy_chromadb()
     from src.agents.memory.vector_store import ChromaVectorStoreManager
 
     manager = ChromaVectorStoreManager(
