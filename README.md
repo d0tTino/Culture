@@ -561,6 +561,8 @@ Generate a coverage report:
 python -m pytest --cov=src --cov-report=term-missing tests/
 ```
 CI enforces `--cov-fail-under=90` for overall coverage.
+CI also uploads `coverage.xml` as a GitHub Actions artifact. Open the workflow run
+and download the file from the **Artifacts** section.
 
 ### Project Structure (Key Directories)
 - `src/` — Main source code (agents, graphs, memory, infra, simulation)

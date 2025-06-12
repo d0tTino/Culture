@@ -67,6 +67,7 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
 - Full suite runs nightly and on main branch merges
 - See `.github/workflows/ci.yml` for details
 - Pushes that only modify Markdown files or documentation paths are ignored by CI
+- After tests complete, the `coverage.xml` file is uploaded as a GitHub Actions artifact. In the workflow run summary, look under **Artifacts** to download it.
 
 ## Adding/Updating Markers
 
