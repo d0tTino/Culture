@@ -77,19 +77,18 @@ def query_agent_memory(
         rag_synthesizer = RAGContextSynthesizer()
 
         # Retrieve relevant memory items
-        memory_results = vector_store.search(
-            collection_name=agent_id, query_texts=[query], n_results=max_context_items
+        memory_results = vector_store.retrieve_relevant_memories(
+            agent_id=agent_id, query=query, k=max_context_items
         )
 
         # Extract documents from results
-        if memory_results and len(memory_results) > 0:
-            retrieved_items = memory_results[0]
-
+        if memory_results:
             # Format context for synthesis
             context_items = []
-            for idx, (doc, metadata) in enumerate(
-                zip(retrieved_items["documents"], retrieved_items["metadatas"])
-            ):
+            for idx, item in enumerate(memory_results):
+                doc = item.get("content", "")
+                metadata = {k: v for k, v in item.items() if k != "content"}
+
                 # Format metadata for display
                 meta_str = " | ".join(
                     [

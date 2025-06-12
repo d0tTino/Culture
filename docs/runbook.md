@@ -12,6 +12,11 @@ This runbook outlines routine operations for working with Culture.ai.
    ```bash
    ollama pull mistral:latest
    ```
+   Alternatively, start a vLLM server with swap space enabled to avoid
+   out-of-memory errors when running many agents:
+   ```bash
+   scripts/start_vllm.sh
+   ```
 4. (Optional) Start the vector store:
    ```bash
    docker compose up -d

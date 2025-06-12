@@ -509,6 +509,12 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```bash
    ollama pull mistral:latest
    ```
+   Alternatively, you can run the model with vLLM. Start the server with the
+   `--swap-space` option to avoid out-of-memory errors when running more than
+   ten agents:
+   ```bash
+   scripts/start_vllm.sh
+   ```
 5. **Run Weaviate (for vector store, optional):**
    ```bash
    docker compose up -d  # See docs/testing.md for details
