@@ -9,7 +9,6 @@ JSONValue = Union[str, int, float, bool, None, dict[str, "JSONValue"], list["JSO
 JSONDict = dict[str, JSONValue]
 
 
-
 class LLMMessage(TypedDict):
     """Minimal shape for a chat message from Ollama."""
 
@@ -74,4 +73,3 @@ class SimulationMessage(TypedDict):
     content: str
     action_intent: str | None
     sentiment_score: float | None
-

@@ -350,9 +350,21 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         llm_client = model.llm_client
         mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
-            model.llm_client = mock_llm_client or get_default_llm_client()
-        elif not llm_client:
-            model.llm_client = mock_llm_client or get_default_llm_client()
+
+            if mock_llm_client:
+                model.llm_client = mock_llm_client
+            else:
+                config_data = llm_client_config
+                if hasattr(config_data, "model_dump"):
+                    config_data = cast(dict[str, Any], config_data.model_dump())
+                elif not isinstance(config_data, dict):
+                    raise ValueError("llm_client_config must be a Pydantic model or a dict")
+
+                if isinstance(llm_client_config, BaseModel):
+                    model.llm_client = LLMClient(config=llm_client_config)
+                else:
+                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+
 
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]

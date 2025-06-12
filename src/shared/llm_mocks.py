@@ -103,7 +103,7 @@ def create_mock_ollama_client() -> MagicMock:
                 return {
                     "message": {
                         "role": "assistant",
-                        "content": '{"sentiment_score": -0.7, "sentiment_label": "negative"}'
+                        "content": '{"sentiment_score": -0.7, "sentiment_label": "negative"}',
                     }
                 }
             elif (
@@ -114,7 +114,7 @@ def create_mock_ollama_client() -> MagicMock:
                 return {
                     "message": {
                         "role": "assistant",
-                        "content": '{"sentiment_score": 0.2, "sentiment_label": "neutral"}'
+                        "content": '{"sentiment_score": 0.2, "sentiment_label": "neutral"}',
                     }
                 }
             else:
@@ -124,7 +124,7 @@ def create_mock_ollama_client() -> MagicMock:
                 return {
                     "message": {
                         "role": "assistant",
-                        "content": '{"sentiment_score": 0.0, "sentiment_label": "neutral"}'
+                        "content": '{"sentiment_score": 0.0, "sentiment_label": "neutral"}',
                     }
                 }
 
