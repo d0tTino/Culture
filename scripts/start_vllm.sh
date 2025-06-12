@@ -3,7 +3,7 @@
 set -euo pipefail
 
 MODEL=${VLLM_MODEL:-"mistralai/Mistral-7B-Instruct-v0.2"}
-PORT=${VLLM_PORT:-8000}
+PORT=${VLLM_PORT:-8001}
 SWAP=${VLLM_SWAP_SPACE:-16}
 
 python -m vllm.entrypoints.openai.api_server \

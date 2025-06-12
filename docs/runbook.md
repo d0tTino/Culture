@@ -15,7 +15,7 @@ This runbook outlines routine operations for working with Culture.ai.
    Alternatively, start a vLLM server with swap space enabled to avoid
    out-of-memory errors when running many agents:
    ```bash
-   scripts/start_vllm.sh
+   scripts/start_vllm.sh  # defaults to port 8001 (override with VLLM_PORT)
    ```
 4. (Optional) Start the vector store:
    ```bash

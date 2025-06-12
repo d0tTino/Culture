@@ -63,7 +63,7 @@ else:  # pragma: no cover - runtime import
     try:  # Support pydantic >= 2 if installed
         from pydantic.v1.fields import ModelField
     except Exception:  # pragma: no cover - fallback for pydantic<2
-        from pydantic.fields import ModelField  # type: ignore[attr-defined]
+        from pydantic.fields import ModelField  # type: ignore[attr-defined]  # noqa: F401
 
 
 from src.shared.decorator_utils import monitor_llm_call
