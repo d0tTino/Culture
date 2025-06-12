@@ -513,7 +513,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    `--swap-space` option to avoid out-of-memory errors when running more than
    ten agents:
    ```bash
-   scripts/start_vllm.sh
+   scripts/start_vllm.sh  # defaults to port 8001 (override with VLLM_PORT)
    ```
 5. **Run Weaviate (for vector store, optional):**
    ```bash

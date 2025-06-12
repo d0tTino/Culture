@@ -368,42 +368,24 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    if _PYDANTIC_V2:
-        @model_validator(mode="after")
-        def _validate_model_after(cls, model: "AgentState") -> "AgentState":
-            llm_client_config = model.llm_client_config
-            llm_client = model.llm_client
-            mock_llm_client = model.mock_llm_client
-            if llm_client_config and not llm_client:
-                if mock_llm_client:
-                    model.llm_client = mock_llm_client
-                else:
-                    if isinstance(llm_client_config, BaseModel):
-                        if hasattr(llm_client_config, "model_dump"):
-                            config_data: dict[str, Any] = llm_client_config.model_dump()
-                        else:
-                            config_data = llm_client_config.dict()
-                    else:
-                        config_data = cast(dict[str, Any], llm_client_config)
+    @model_validator(mode="after")  # type: ignore[arg-type]
+    def _validate_model_after(cls, model: "AgentState") -> "AgentState":
+        llm_client_config = model.llm_client_config
+        llm_client = model.llm_client
+        mock_llm_client = model.mock_llm_client
+        if llm_client_config and not llm_client:
+            if mock_llm_client:
+                model.llm_client = mock_llm_client
+            else:
+                config_data = llm_client_config
+                if hasattr(config_data, "model_dump"):
+                    config_data = cast(dict[str, Any], config_data.model_dump())
+                elif not isinstance(config_data, dict):
+                    raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
-                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
-            elif not llm_client:
-                model.llm_client = get_default_llm_client()
+                if isinstance(llm_client_config, BaseModel):
+                    model.llm_client = LLMClient(config=llm_client_config)  # type: ignore[arg-type]
 
-            if not model.role_history:
-                model.role_history = [(model.step_counter, model.current_role)]
-            if not model.mood_history:
-                model.mood_history = [(model.step_counter, model.mood_level)]
-            return model
-    else:
-        @model_validator()
-        def _validate_model_after(cls, values: dict[str, Any]) -> dict[str, Any]:
-            llm_client_config = values.get("llm_client_config")
-            llm_client = values.get("llm_client")
-            mock_llm_client = values.get("mock_llm_client")
-            if llm_client_config and not llm_client:
-                if mock_llm_client:
-                    values["llm_client"] = mock_llm_client
                 else:
                     if isinstance(llm_client_config, BaseModel):
                         if hasattr(llm_client_config, "model_dump"):
