@@ -264,7 +264,7 @@ class TestCollectiveMetrics(unittest.TestCase):
         # Run simulation for multiple steps
         num_steps = 3
         for step in range(num_steps):
-            logger.info(f"--- Step {step+1} of {num_steps} ---")
+            logger.info(f"--- Step {step + 1} of {num_steps} ---")
 
             # Calculate expected DU increase from passive role-based generation
             expected_du_increase = 0
@@ -277,7 +277,7 @@ class TestCollectiveMetrics(unittest.TestCase):
             # Update expected values
             expected_collective_du += expected_du_increase
             logger.info(
-                f"Expected collective DU after step {step+1}: {expected_collective_du} (increase of {expected_du_increase})"
+                f"Expected collective DU after step {step + 1}: {expected_collective_du} (increase of {expected_du_increase})"
             )
 
             # Run a simulation step
@@ -287,8 +287,8 @@ class TestCollectiveMetrics(unittest.TestCase):
             actual_collective_ip = self.sim.collective_ip
             actual_collective_du = self.sim.collective_du
 
-            logger.info(f"Actual collective IP after step {step+1}: {actual_collective_ip}")
-            logger.info(f"Actual collective DU after step {step+1}: {actual_collective_du}")
+            logger.info(f"Actual collective IP after step {step + 1}: {actual_collective_ip}")
+            logger.info(f"Actual collective DU after step {step + 1}: {actual_collective_du}")
 
             # Due to randomness in agent decisions, we should verify the collective metrics are correctly
             # calculated based on actual agent states rather than our predictions
@@ -302,12 +302,12 @@ class TestCollectiveMetrics(unittest.TestCase):
             self.assertAlmostEqual(
                 actual_collective_ip,
                 calculated_collective_ip,
-                msg=f"Simulation's collective IP doesn't match calculation from agent states at step {step+1}",
+                msg=f"Simulation's collective IP doesn't match calculation from agent states at step {step + 1}",
             )
             self.assertAlmostEqual(
                 actual_collective_du,
                 calculated_collective_du,
-                msg=f"Simulation's collective DU doesn't match calculation from agent states at step {step+1}",
+                msg=f"Simulation's collective DU doesn't match calculation from agent states at step {step + 1}",
             )
 
             # Update expected values for next step based on actual values
@@ -321,19 +321,23 @@ class TestCollectiveMetrics(unittest.TestCase):
             actual_collective_ip_after = self.sim.collective_ip
             actual_collective_du_after = self.sim.collective_du
 
-            logger.info(f"Actual collective IP after step {step+1}: {actual_collective_ip_after}")
-            logger.info(f"Actual collective DU after step {step+1}: {actual_collective_du_after}")
+            logger.info(
+                f"Actual collective IP after step {step + 1}: {actual_collective_ip_after}"
+            )
+            logger.info(
+                f"Actual collective DU after step {step + 1}: {actual_collective_du_after}"
+            )
 
             # Verify calculations in edge case scenarios
             self.assertAlmostEqual(
                 actual_collective_ip_after,
                 expected_collective_ip,
-                msg=f"Simulation's collective IP doesn't match calculation from agent states at step {step+1}",
+                msg=f"Simulation's collective IP doesn't match calculation from agent states at step {step + 1}",
             )
             self.assertAlmostEqual(
                 actual_collective_du_after,
                 expected_collective_du,
-                msg=f"Simulation's collective DU doesn't match calculation from agent states at step {step+1}",
+                msg=f"Simulation's collective DU doesn't match calculation from agent states at step {step + 1}",
             )
 
         logger.info("✅ Multi-step collective metrics tracking passed")
