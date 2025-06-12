@@ -521,7 +521,16 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
     - `WEAVIATE_URL` (e.g., http://localhost:8080)
     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
     - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
+
    - See `.env.example` and `docs/testing.md` for details.
+
+### Windows / WSL2 Notes
+
+Running on Windows requires the WSL2 build of **Ollama** (version 0.1.34 or
+newer). Expose port `11434` to your host when launching Ollama so the Python
+services can reach it. Configure the connection with the `OLLAMA_API_BASE` and
+`OLLAMA_REQUEST_TIMEOUT` variables in your `.env` (see `.env.example`). GPU
+acceleration is only available when running Ollama through Docker or WSL2.
 
 ### Running the Simulation
 Run a basic simulation (default parameters):
