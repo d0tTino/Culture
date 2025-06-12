@@ -572,7 +572,9 @@ class ChromaVectorStoreManager(MemoryStore):
                     sorted_indices = sorted(
                         range(len(metadatas)),
                         key=lambda i: int(
-                            metadatas[i].get("step", getattr(metadatas[i], "step", 0))
+                            metadatas[i]["step"]
+                            if isinstance(metadatas[i], dict)
+                            else getattr(metadatas[i], "step", 0)
                         ),
                     )
 
@@ -581,10 +583,12 @@ class ChromaVectorStoreManager(MemoryStore):
 
                     for idx in sorted_indices:
                         metadata = metadatas[idx]
-                        step = int(metadata.get("step", getattr(metadata, "step", 0)))
-                        new_role = str(
-                            metadata.get("new_role", getattr(metadata, "new_role", "unknown"))
-                        )
+                        if isinstance(metadata, dict):
+                            step = int(metadata.get("step", 0))
+                            new_role = str(metadata.get("new_role", "unknown"))
+                        else:
+                            step = int(getattr(metadata, "step", 0))
+                            new_role = str(getattr(metadata, "new_role", "unknown"))
 
                         # Add the previous role period
                         if prev_role != "unknown":
