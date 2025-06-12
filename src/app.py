@@ -2,10 +2,12 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 from typing import Optional
 
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.infra.checkpoint import load_checkpoint, save_checkpoint
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.infra.warning_filters import configure_warning_filters
@@ -93,6 +95,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Log warnings that would otherwise be suppressed.",
     )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        help="Path to a checkpoint file to load and save simulation state.",
+    )
     return parser.parse_args()
 
 
@@ -105,16 +112,25 @@ def main() -> None:
         log_suppressed=args.log_suppressed_warnings,
     )
 
-    sim = create_simulation(
-        num_agents=args.agents,
-        steps=args.steps,
-        scenario=args.scenario,
-        use_discord=args.discord,
-        use_vector_store=args.vector_store,
-        vector_store_dir=args.vector_dir,
-    )
+    sim: Simulation
+    if args.checkpoint and Path(args.checkpoint).exists():
+        logging.info("Loading simulation from checkpoint %s", args.checkpoint)
+        sim = load_checkpoint(args.checkpoint)
+        sim.steps_to_run = args.steps
+    else:
+        sim = create_simulation(
+            num_agents=args.agents,
+            steps=args.steps,
+            scenario=args.scenario,
+            use_discord=args.discord,
+            use_vector_store=args.vector_store,
+            vector_store_dir=args.vector_dir,
+        )
 
     asyncio.run(sim.async_run(args.steps))
+
+    if args.checkpoint:
+        save_checkpoint(sim, args.checkpoint)
 
 
 if __name__ == "__main__":
