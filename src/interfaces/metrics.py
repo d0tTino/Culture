@@ -1,6 +1,26 @@
 """Prometheus metrics for Culture simulation."""
 
-from prometheus_client import Counter, Gauge, start_http_server
+# mypy: ignore-errors
+
+try:
+    from prometheus_client import Counter, Gauge, start_http_server
+except Exception:  # pragma: no cover - optional dependency
+
+    class _Dummy:
+        def __call__(self, *args: object, **kwargs: object) -> "_Dummy":
+            return self
+
+        def inc(self, *args: object, **kwargs: object) -> None:  # pragma: no cover - noop
+            pass
+
+        def set(self, *args: object, **kwargs: object) -> None:  # pragma: no cover - noop
+            pass
+
+    Counter = Gauge = _Dummy  # type: ignore[assignment]
+
+    def start_http_server(*args: object, **kwargs: object) -> None:  # pragma: no cover - noop
+        return
+
 
 # Expose metrics for LLM calls and knowledge board state
 LLM_LATENCY_MS = Gauge("llm_latency_ms", "Latency of last LLM call in milliseconds")

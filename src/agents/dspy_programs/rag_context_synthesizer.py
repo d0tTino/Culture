@@ -32,7 +32,7 @@ except ImportError as e:
 
 
 # dspy lacks type hints, so Signature resolves to ``Any``.
-class RAGSynthesis(dspy.Signature):  # type: ignore[misc,no-any-unimported]
+class RAGSynthesis(dspy.Signature):  # type: ignore[no-any-unimported]
     """
     Given a query and a list of retrieved context passages, synthesize a concise and relevant
     answer or insight that addresses the query based strictly on the provided contexts.

@@ -12,6 +12,45 @@ from collections.abc import Generator
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+
+# Ensure np.float_ exists for libraries expecting NumPy <2.0
+if not hasattr(np, "float_"):
+    np.float_ = float  # type: ignore[attr-defined]
+
+try:
+    import dspy  # type: ignore
+
+    if not hasattr(dspy, "LM"):
+
+        class DummyLM:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def __call__(self, *args: object, **kwargs: object) -> str:
+                return ""
+
+        dspy.LM = DummyLM  # type: ignore[attr-defined]
+
+    if not hasattr(dspy, "Signature"):
+
+        class Signature:
+            pass
+
+        class InputField:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+        class OutputField:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+        dspy.Signature = Signature  # type: ignore[attr-defined]
+        dspy.InputField = InputField  # type: ignore[attr-defined]
+        dspy.OutputField = OutputField  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 import pytest
 from pytest import FixtureRequest, MonkeyPatch
 

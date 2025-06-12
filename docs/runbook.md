@@ -29,6 +29,10 @@ This runbook outlines routine operations for working with Culture.ai.
    ```bash
    python -m src.app --steps 5 --checkpoint my_sim.pkl
    ```
+7. (Optional) Replay a previous run deterministically:
+   ```bash
+   python -m src.app --steps 5 --checkpoint my_sim.pkl --replay
+   ```
 
 ## Running Tests
 Run the full suite with coverage:

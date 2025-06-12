@@ -6,7 +6,7 @@ try:
     from langgraph.graph import END, StateGraph
 except Exception:  # pragma: no cover - optional dependency
     END = "END"
-    StateGraph = Any
+    StateGraph = Any  # type: ignore[misc,assignment]
 
 from .basic_agent_types import AgentTurnState
 from .graph_nodes import (
@@ -29,8 +29,7 @@ from .interaction_handlers import (
 )
 
 
-def build_graph() -> StateGraph:  # type: ignore[no-any-unimported]
-
+def build_graph() -> StateGraph:
     graph_builder = StateGraph(AgentTurnState)
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
     graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)

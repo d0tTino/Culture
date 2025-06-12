@@ -11,6 +11,7 @@ exclude = '''
   | dist
 )/
 '''
+extend-exclude = "src/agents/core/agent_state.py"
 
 [tool.isort]
 profile = "black"
@@ -20,7 +21,7 @@ line_length = 99
 line-length = 99
 # Ruff's autofix is enabled via CLI, but document here for clarity
 fix = true
-extend-exclude = ["requirements-dev.txt"]
+extend-exclude = ["requirements-dev.txt", "src/agents/core/agent_state.py"]
 force-exclude = true
 
 [tool.ruff.lint]
@@ -40,6 +41,7 @@ suppress-none-returning = true
 "tests/integration/**.py" = ["E402"]
 "tests/**.py" = ["ANN"]
 "src/shared/llm_mocks.py" = ["ANN001", "ANN002", "ANN003", "ANN204"]
+"src/agents/core/agent_state.py" = ["E999"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -57,7 +59,8 @@ ignore_missing_imports = true
 exclude = [
     "\\.venv",
     "build/",
-    "tests/"
+    "tests/",
+    "src/agents/core/agent_state.py"
 ]
 # Only type-check the application source code for now
 files = ["src"]

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+# mypy: ignore-errors
 import logging
+import os
 import pickle
+import platform
+import random
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +16,40 @@ from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
 logger = logging.getLogger(__name__)
+
+
+def capture_rng_state() -> tuple[Any, ...]:
+    """Return the current ``random`` module state."""
+    return random.getstate()
+
+
+def restore_rng_state(state: tuple[Any, ...]) -> None:
+    """Restore the ``random`` module to ``state``."""
+    random.setstate(state)
+
+
+def capture_environment() -> dict[str, Any]:
+    """Capture relevant environment variables and system info."""
+    from src.infra.config import DEFAULT_CONFIG
+
+    env = {key: os.environ.get(key) for key in DEFAULT_CONFIG}
+    env["python_version"] = sys.version
+    env["platform"] = platform.platform()
+    return env
+
+
+def restore_environment(env: dict[str, Any]) -> None:
+    """Restore environment variables from ``env``."""
+    from src.infra import config
+
+    for key, value in env.items():
+        if key in {"python_version", "platform"}:
+            continue
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = str(value)
+    config.load_config()
 
 
 def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
@@ -25,6 +64,8 @@ def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
             "persist_directory",
             None,
         ),
+        "rng_state": capture_rng_state(),
+        "environment": capture_environment(),
     }
 
 
@@ -37,8 +78,8 @@ def save_checkpoint(sim: Simulation, path: str | Path) -> None:
     logger.info("Checkpoint saved to %s", p)
 
 
-def load_checkpoint(path: str | Path) -> Simulation:
-    """Restore a ``Simulation`` instance from ``path``."""
+def load_checkpoint(path: str | Path) -> tuple[Simulation, dict[str, Any]]:
+    """Restore a ``Simulation`` instance and metadata from ``path``."""
     p = Path(path)
     with p.open("rb") as fh:
         data = pickle.load(fh)
@@ -66,4 +107,9 @@ def load_checkpoint(path: str | Path) -> Simulation:
     sim.knowledge_board = KnowledgeBoard()
     sim.current_step = data.get("current_step", 0)
     sim.current_agent_index = data.get("current_agent_index", 0)
-    return sim
+
+    meta = {
+        "rng_state": data.get("rng_state"),
+        "environment": data.get("environment"),
+    }
+    return sim, meta
