@@ -19,7 +19,11 @@ def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
         "current_step": sim.current_step,
         "current_agent_index": sim.current_agent_index,
         "scenario": sim.scenario,
-        "vector_store_dir": getattr(sim.vector_store_manager, "persist_directory", None),
+        "vector_store_dir": getattr(
+            sim.vector_store_manager,
+            "persist_directory",
+            None,
+        ),
     }
 
 
