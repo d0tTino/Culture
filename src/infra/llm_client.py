@@ -52,12 +52,18 @@ except Exception:  # pragma: no cover - fallback when requests missing
         pass
 
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
-try:  # Support pydantic >= 2 if installed
+
+if TYPE_CHECKING:
     from pydantic.v1.fields import ModelField
-except Exception:  # pragma: no cover - fallback for pydantic<2
-    from pydantic.fields import ModelField
+else:  # pragma: no cover - runtime import
+    try:  # Support pydantic >= 2 if installed
+        from pydantic.v1.fields import ModelField
+    except Exception:  # pragma: no cover - fallback for pydantic<2
+        from pydantic.fields import ModelField  # type: ignore[attr-defined]
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -91,7 +97,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):

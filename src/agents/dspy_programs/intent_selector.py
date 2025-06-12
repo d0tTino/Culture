@@ -8,7 +8,7 @@ from typing_extensions import Self
 from src.infra.dspy_ollama_integration import dspy
 
 
-class _StubLM(dspy.LM):  # type: ignore[misc, no-any-unimported]
+class _StubLM(dspy.LM):  # type: ignore[no-any-unimported]
     """Deterministic LM returning a fixed intent for tests."""
 
     def __init__(self: Self) -> None:
@@ -21,7 +21,7 @@ class _StubLM(dspy.LM):  # type: ignore[misc, no-any-unimported]
         return ['{"intent": "PROPOSE_IDEA"}']
 
 
-class _CallableLM(dspy.LM):  # type: ignore[misc, no-any-unimported]
+class _CallableLM(dspy.LM):  # type: ignore[no-any-unimported]
     """Wrap a simple callable so it can be used as a DSPy LM."""
 
     def __init__(self: Self, fn: Callable[[str | None], str | list[str]]) -> None:
@@ -41,7 +41,7 @@ INTENTS = ["PROPOSE_IDEA", "CONTINUE_COLLABORATION"]
 
 
 # dspy lacks type hints, so Signature resolves to Any
-class IntentPrompt(dspy.Signature):  # type: ignore[misc, no-any-unimported]
+class IntentPrompt(dspy.Signature):  # type: ignore[no-any-unimported]
     question = dspy.InputField()
     intent = dspy.OutputField()
 

@@ -31,7 +31,7 @@ except ImportError as e:
 
 
 # dspy lacks type hints, so Signature resolves to Any
-class ActionIntentSelection(dspy.Signature):  # type: ignore[misc, no-any-unimported]
+class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported]
     """
     Given the agent's role, current situation, overarching goal, and available actions,
     select the most appropriate action intent and provide a brief justification.

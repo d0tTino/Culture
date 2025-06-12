@@ -4,7 +4,11 @@ set -e
 # Determine base commit for diff
 BASE_SHA="${GITHUB_BASE_SHA:-${GITHUB_EVENT_BEFORE}}"
 if [ -z "$BASE_SHA" ]; then
-  BASE_SHA=$(git rev-parse HEAD~1)
+  if git rev-parse HEAD~1 >/dev/null 2>&1; then
+    BASE_SHA=$(git rev-parse HEAD~1)
+  else
+    BASE_SHA=$(git rev-parse HEAD)
+  fi
 fi
 
 git fetch --depth=1 origin "$BASE_SHA" >/dev/null 2>&1 || true
