@@ -3,7 +3,8 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import Any, Optional
+
 
 from pydantic import (
     BaseModel,
@@ -82,23 +83,17 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
-def _dummy_llm_client() -> Any:
-    """Fallback function returned when ``llm_client`` is unavailable."""
-    return None
-
-
-if TYPE_CHECKING:
-    try:
-        from src.infra.llm_client import (
-            OllamaClientProtocol,
-            get_default_llm_client,
-        )
-    except Exception:  # pragma: no cover - fallback when llm_client is missing
-        OllamaClientProtocol = Any  # type: ignore[misc, assignment]
-        get_default_llm_client = _dummy_llm_client
-else:  # pragma: no cover - used only for typing
+try:
+    from src.infra.llm_client import (
+        OllamaClientProtocol,
+        get_default_llm_client,
+    )
+except Exception:  # pragma: no cover - fallback when llm_client is missing
     OllamaClientProtocol = Any  # type: ignore[misc, assignment]
-    get_default_llm_client = _dummy_llm_client
+
+    def get_default_llm_client() -> OllamaClientProtocol | None:
+        return None
+
 
 
 class AgentStateData(BaseModel):
@@ -126,7 +121,7 @@ class AgentStateData(BaseModel):
     projects: dict[str, dict[str, Any]] = Field(default_factory=dict)  # project_id: {details}
     current_project_id: Optional[str] = None
     llm_client_config: Optional[Any] = None  # Configuration data for LLM client
-    llm_client: Optional[OllamaClientProtocol] = None
+    llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
 
@@ -358,18 +353,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
             if mock_llm_client:
+
                 model.llm_client = mock_llm_client
             else:
-                config_data = llm_client_config
-                if hasattr(config_data, "model_dump"):
-                    config_data = cast(dict[str, Any], config_data.model_dump())
-                elif not isinstance(config_data, dict):
-                    raise ValueError("llm_client_config must be a Pydantic model or a dict")
+                model.llm_client = get_default_llm_client()
+
+                model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
                 if isinstance(llm_client_config, BaseModel):
                     model.llm_client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
                 else:
                     model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+
 
         if not model.role_history:
             model.role_history = [(model.step_counter, model.current_role)]
@@ -377,7 +372,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             model.mood_history = [(model.step_counter, model.mood_level)]
         return model
 
-    def get_llm_client(self) -> OllamaClientProtocol:
+    def get_llm_client(self) -> Any:
         if not self.llm_client:
             raise ValueError("LLM client not initialized")
         return self.llm_client

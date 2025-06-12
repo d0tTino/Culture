@@ -92,15 +92,16 @@ except Exception:  # pragma: no cover - optional dependency
         def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
             return Predict()
 
-    dspy = SimpleNamespace(
-        settings=SimpleNamespace(configure=_configure, lm=None),
-        LM=BaseLM,
-        Signature=Signature,
-        InputField=InputField,
-        OutputField=OutputField,
-        Predict=Predict,
-        Prediction=Prediction,
-    )
+    import types
+
+    dspy = types.ModuleType("dspy")
+    dspy.settings = SimpleNamespace(configure=_configure, lm=None)
+    dspy.LM = BaseLM
+    dspy.Signature = Signature
+    dspy.InputField = InputField
+    dspy.OutputField = OutputField
+    dspy.Predict = Predict
+    dspy.Prediction = Prediction
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
 
