@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+from pathlib import Path
 from typing import Any
 
 from src.agents.core.base_agent import Agent
@@ -27,17 +28,19 @@ def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
     }
 
 
-def save_checkpoint(sim: Simulation, path: str) -> None:
+def save_checkpoint(sim: Simulation, path: str | Path) -> None:
     """Serialize ``sim`` to ``path`` using pickle."""
     data = _serialize_simulation(sim)
-    with open(path, "wb") as fh:
+    p = Path(path)
+    with p.open("wb") as fh:
         pickle.dump(data, fh)
-    logger.info("Checkpoint saved to %s", path)
+    logger.info("Checkpoint saved to %s", p)
 
 
-def load_checkpoint(path: str) -> Simulation:
+def load_checkpoint(path: str | Path) -> Simulation:
     """Restore a ``Simulation`` instance from ``path``."""
-    with open(path, "rb") as fh:
+    p = Path(path)
+    with p.open("rb") as fh:
         data = pickle.load(fh)
 
     vector_store_manager = None
