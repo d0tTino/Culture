@@ -141,7 +141,9 @@ VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 
 
 def _get_current_role(agent_state: AgentState) -> str:
-    return cast(str, getattr(agent_state, "current_role", getattr(agent_state, "role")))
+    if hasattr(agent_state, "current_role"):
+        return cast(str, getattr(agent_state, "current_role"))
+    return cast(str, getattr(agent_state, "role"))
 
 
 def _set_current_role(agent_state: AgentState, role: str) -> None:
@@ -153,9 +155,7 @@ def _set_current_role(agent_state: AgentState, role: str) -> None:
 
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     if requested_role not in VALID_ROLES:
-        logger.warning(
-            f"Agent {agent_state.agent_id} requested invalid role: {requested_role}"
-        )
+        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
         return False
     current_role = _get_current_role(agent_state)
     if requested_role == current_role:
