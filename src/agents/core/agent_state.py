@@ -80,6 +80,7 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
     AgentActionIntent.SEND_DIRECT_MESSAGE,
 ]
 
+
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 def _dummy_llm_client() -> Any:
     """Fallback function returned when ``llm_client`` is unavailable."""
@@ -356,7 +357,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         llm_client = model.llm_client
         mock_llm_client = model.mock_llm_client
         if llm_client_config and not llm_client:
-
             if mock_llm_client:
                 model.llm_client = mock_llm_client
             else:
@@ -367,7 +367,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
                 if isinstance(llm_client_config, BaseModel):
-                    model.llm_client = LLMClient(config=llm_client_config)
+                    model.llm_client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
                 else:
                     model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 

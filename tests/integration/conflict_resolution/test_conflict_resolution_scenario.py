@@ -192,9 +192,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
 
         # --- Step 1: AgentA posts controversial idea ---
         logger.info("Step 1: AgentA (Innovator) posts controversial idea...")
-        controversial_idea_content = (  # SPLIT
-            "All inter-agent communications should be publicly logged for maximum " "transparency."
-        )  # AgentA's stance
+        controversial_idea_content = "All inter-agent communications should be publicly logged for maximum transparency."  # SPLIT  # AgentA's stance
 
         initial_ip_a = self.agent_a.state.ip
         initial_du_a = self.agent_a.state.du
