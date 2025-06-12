@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from typing_extensions import Self
 
 from src.infra.dspy_ollama_integration import dspy
 
 
-class _StubLM(dspy.LM):  # type: ignore[no-any-unimported]
+class _StubLM(dspy.LM):  # type: ignore[misc, no-any-unimported]
     """Deterministic LM returning a fixed intent for tests."""
 
     def __init__(self: Self) -> None:
@@ -20,7 +21,7 @@ class _StubLM(dspy.LM):  # type: ignore[no-any-unimported]
         return ['{"intent": "PROPOSE_IDEA"}']
 
 
-class _CallableLM(dspy.LM):  # type: ignore[no-any-unimported]
+class _CallableLM(dspy.LM):  # type: ignore[misc, no-any-unimported]
     """Wrap a simple callable so it can be used as a DSPy LM."""
 
     def __init__(self: Self, fn: Callable[[str | None], str | list[str]]) -> None:
@@ -40,7 +41,7 @@ INTENTS = ["PROPOSE_IDEA", "CONTINUE_COLLABORATION"]
 
 
 # dspy lacks type hints, so Signature resolves to Any
-class IntentPrompt(dspy.Signature):  # type: ignore[no-any-unimported]
+class IntentPrompt(dspy.Signature):  # type: ignore[misc, no-any-unimported]
     question = dspy.InputField()
     intent = dspy.OutputField()
 
@@ -48,9 +49,9 @@ class IntentPrompt(dspy.Signature):  # type: ignore[no-any-unimported]
 class IntentSelectorProgram:
     """Minimal DSPy program that selects an intent."""
 
-    def __init__(  # type: ignore[no-any-unimported]
+    def __init__(
         self: Self,
-        lm: dspy.LM | Callable[[str | None], str | list[str]] | None = None,
+        lm: Any | Callable[[str | None], str | list[str]] | None = None,
     ) -> None:
         if lm is None:
             self.lm = _StubLM()

@@ -7,7 +7,7 @@ import logging
 import os
 import random
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_graph_types import AgentTurnState
@@ -140,20 +140,33 @@ VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 # --- Node Functions ---
 
 
+def _get_current_role(agent_state: AgentState) -> str:
+    return cast(str, getattr(agent_state, "current_role", getattr(agent_state, "role")))
+
+
+def _set_current_role(agent_state: AgentState, role: str) -> None:
+    if hasattr(agent_state, "current_role"):
+        agent_state.current_role = role
+    else:
+        setattr(agent_state, "role", role)
+
+
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
-    # (Implementation from original file)
     if requested_role not in VALID_ROLES:
-        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
+        logger.warning(
+            f"Agent {agent_state.agent_id} requested invalid role: {requested_role}"
+        )
         return False
-    if requested_role == agent_state.current_role:
+    current_role = _get_current_role(agent_state)
+    if requested_role == current_role:
         return False
     if agent_state.steps_in_current_role < agent_state.role_change_cooldown:
         return False
     if agent_state.ip < agent_state.role_change_ip_cost:
         return False
-    old_role = agent_state.current_role
+    old_role = current_role
     agent_state.ip -= agent_state.role_change_ip_cost
-    agent_state.current_role = requested_role
+    _set_current_role(agent_state, requested_role)
     agent_state.steps_in_current_role = 0
     agent_state.role_history.append((int(agent_state.last_action_step or 0), requested_role))
     logger.info(f"Agent {agent_state.agent_id} changed role from {old_role} to {requested_role}.")
@@ -172,15 +185,15 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
             AgentController(agent_state_obj).add_memory(
                 f"Changed role to {structured_output.requested_role_change}",
                 {"step": sim_step, "type": "role_change"},
-            )  # type: ignore[arg-type]
+            )
         else:
             AgentController(agent_state_obj).add_memory(
                 "Failed role change attempt",
                 {"step": sim_step, "type": "resource_constraint"},
-            )  # type: ignore[arg-type]
+            )
 
     if action_intent != "idle":
-        role_name = agent_state_obj.current_role
+        role_name = _get_current_role(agent_state_obj)
         role_du_conf = config.ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
         du_gen_rate = role_du_conf.get("base", 1.0)
 
@@ -214,7 +227,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
             # Call the dspy program
             summary_prediction = l1_gen.generate_summary(
-                agent_role=agent_state_obj.current_role,
+                agent_role=_get_current_role(agent_state_obj),
                 recent_events=recent_events_str,
                 current_mood=mood_desc,
             )
@@ -224,7 +237,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                 AgentController(agent_state_obj).add_memory(
                     memory_summary,
                     {"step": sim_step, "type": "consolidated_summary"},
-                )  # type: ignore[arg-type]
+                )
                 vector_store = state.get("vector_store_manager")
                 if vector_store and hasattr(vector_store, "add_memory"):
                     vector_store.add_memory(
@@ -233,7 +246,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                         "consolidated_summary",
                         memory_summary,
                         "consolidated_summary",
-                    )  # type: ignore[arg-type]
+                    )
                 logger.info(f"Agent {agent_id}: Generated L1 memory summary.")
         except Exception as e:
             logger.error(

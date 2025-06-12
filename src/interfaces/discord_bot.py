@@ -6,18 +6,22 @@ Provides real-time updates about the simulation to a Discord channel.
 # ruff: noqa: ANN401
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from src.interfaces import metrics
 
-try:
+if TYPE_CHECKING:  # pragma: no cover - type checking only
     import discord
     from discord.ext import commands
-except Exception:  # pragma: no cover - optional dependency
-    from unittest.mock import MagicMock
+else:  # pragma: no cover - runtime import with fallback
+    try:
+        import discord  # type: ignore
+        from discord.ext import commands  # type: ignore
+    except Exception:  # pragma: no cover - optional dependency
+        from unittest.mock import MagicMock
 
-    discord = MagicMock()
-    commands = MagicMock()
+        discord = MagicMock()
+        commands = MagicMock()
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
@@ -52,7 +56,7 @@ class SimulationDiscordBot:
         self.client: Any = discord.Client(intents=intents)
 
         # Set up event handlers
-        @self.client.event
+        @self.client.event  # type: ignore[misc]
         async def on_ready() -> None:
             """Event handler that fires when the bot connects to Discord."""
             self.is_ready = True
@@ -375,14 +379,14 @@ def get_kb_size() -> int:
     return metrics.get_kb_size()
 
 
-@bot.command(name="say")
-async def say(ctx: commands.Context, *, message: str) -> None:
+@bot.command(name="say")  # type: ignore[misc]
+async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
     await ctx.send(f"Simulated message received: {message}")
 
 
-@bot.command(name="stats")
-async def stats(ctx: commands.Context) -> None:
+@bot.command(name="stats")  # type: ignore[misc]
+async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
     await ctx.send(stats_text)
