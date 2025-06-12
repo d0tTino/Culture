@@ -65,6 +65,7 @@ else:  # pragma: no cover - runtime import
     except Exception:  # pragma: no cover - fallback for pydantic<2
         from pydantic.fields import ModelField  # type: ignore[attr-defined]
 
+
 from src.shared.decorator_utils import monitor_llm_call
 
 from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config values
@@ -572,7 +573,7 @@ def generate_structured_output(
                     base_fields = base_fields()
                 fields = base_fields.items() if base_fields is not None else []
 
-            def is_required(f: FieldInfo | ModelField) -> bool:
+            def is_required(f: FieldInfo | Any) -> bool:
                 if isinstance(f, FieldInfo):
                     return bool(f.is_required())
                 return bool(f.required)

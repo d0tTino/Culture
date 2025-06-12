@@ -503,6 +503,8 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    pip install -r requirements.txt
    pip install -r requirements-dev.txt
    ```
+   Alternatively you can run `scripts/codex_setup.sh` to install everything and
+   set up pre-commit hooks in one step.
 4. **Set up Ollama and pull the required model:**
    ```bash
    ollama pull mistral:latest
@@ -549,7 +551,7 @@ persists their memories to ChromaDB. See
 [docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
 
 ### Running Tests
-Run the full test suite:
+Run the full test suite (after installing development dependencies):
 ```bash
 python -m pytest tests/
 ```

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from langgraph.graph import END, StateGraph
+from typing import Any
+
+try:
+    from langgraph.graph import END, StateGraph
+except Exception:  # pragma: no cover - optional dependency
+    END = "END"
+    StateGraph = Any
 
 from .basic_agent_types import AgentTurnState
 from .graph_nodes import (
@@ -24,6 +30,7 @@ from .interaction_handlers import (
 
 
 def build_graph() -> StateGraph:  # type: ignore[no-any-unimported]
+
     graph_builder = StateGraph(AgentTurnState)
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
     graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)

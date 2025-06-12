@@ -6,6 +6,7 @@ Provides real-time updates about the simulation to a Discord channel.
 # ruff: noqa: ANN401
 
 import logging
+import typing
 from typing import TYPE_CHECKING, Any, Optional
 
 from src.interfaces import metrics
@@ -57,6 +58,7 @@ class SimulationDiscordBot:
 
         # Set up event handlers
         @self.client.event
+
         async def on_ready() -> None:
             """Event handler that fires when the bot connects to Discord."""
             self.is_ready = True
@@ -379,12 +381,14 @@ def get_kb_size() -> int:
     return metrics.get_kb_size()
 
 
+@typing.no_type_check
 @bot.command(name="say")
 async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
     await ctx.send(f"Simulated message received: {message}")
 
 
+@typing.no_type_check
 @bot.command(name="stats")
 async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
