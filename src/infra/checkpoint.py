@@ -38,7 +38,7 @@ ENV_PREFIXES: tuple[str, ...] = (
 
 
 def capture_rng_state() -> dict[str, Any]:
-    """Return the current RNG state for ``random`` and ``numpy``."""
+    """Return the current RNG state for ``random`` and ``numpy`` if available."""
 
     state = {"random": random.getstate()}
     try:  # pragma: no cover - optional dependency
@@ -46,7 +46,6 @@ def capture_rng_state() -> dict[str, Any]:
 
         state["numpy"] = np.random.get_state()
     except ImportError:
-
         # ``numpy`` is optional; ignore if unavailable
         pass
 

@@ -17,6 +17,7 @@ repos:
           - types-pyyaml
           - types-requests
           - pydantic
+          - fastapi
           - pytest
         exclude: '^(tests/|archives/|scripts/archive/)'
   # Optionally add more hooks below

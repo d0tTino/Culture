@@ -116,7 +116,7 @@ def parse_args() -> argparse.Namespace:
         "--replay",
         action="store_true",
         help=(
-            "Restore RNG and environment state from the checkpoint to " "reproduce agent decisions"
+            "Restore RNG and environment state from the checkpoint to reproduce agent decisions"
         ),
     )
     return parser.parse_args()

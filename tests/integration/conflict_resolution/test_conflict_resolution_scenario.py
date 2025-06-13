@@ -895,9 +895,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             # Agent A's turn was step 3 of the simulation (0-indexed overall steps).
 
             agent_a_message_to_c_found = False
-            for (
-                msg
-            ) in (
+            for msg in (
                 self.simulation.pending_messages_for_next_round
             ):  # Check messages generated THIS turn
                 if (
