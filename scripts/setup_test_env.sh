@@ -3,6 +3,14 @@
 
 set -euo pipefail
 
+# Load environment variables from .env if available
+if [ -f ".env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 VENV_DIR=".venv"
 
 if [ ! -d "$VENV_DIR" ]; then

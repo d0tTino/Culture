@@ -4,6 +4,14 @@
 
 set -euxo pipefail
 
+# Load environment variables from .env if available
+if [ -f ".env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 # install required system packages
 apt-get update
 apt-get install -y git build-essential python3-venv
