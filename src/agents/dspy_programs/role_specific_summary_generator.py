@@ -8,7 +8,6 @@ when available.
 """
 
 import logging
-import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -268,7 +267,7 @@ class RoleSpecificSummaryGenerator:
             self.l2_predictors = {}
             self.fallback_l1_generator = L1SummaryGenerator()
             self.fallback_l2_generator = L2SummaryGenerator()
-            base_path = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            base_path = Path(__file__).resolve().parents[3]
             compiled_dir = base_path / "agents" / "dspy_programs" / "compiled"
             for role in self.SUPPORTED_ROLES:
                 role_lower = role.lower()

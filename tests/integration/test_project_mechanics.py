@@ -6,9 +6,9 @@ This script runs several test cases to verify project creation, joining, and lea
 
 import asyncio
 import logging
-import os
 import sys
 import time
+from pathlib import Path
 
 import pytest
 from typing_extensions import Self
@@ -83,7 +83,7 @@ class TestProjectCreation(TestCase):
         test_db_path = f"{CHROMA_DB_PATH}_creation_{int(time.time())}"
 
         # Initialize vector store
-        if os.path.exists(test_db_path):
+        if Path(test_db_path).exists():
             import shutil
 
             try:
@@ -221,7 +221,7 @@ class TestProjectJoining(TestCase):
         test_db_path = f"{CHROMA_DB_PATH}_joining_{int(time.time())}"
 
         # Initialize vector store
-        if os.path.exists(test_db_path):
+        if Path(test_db_path).exists():
             import shutil
 
             try:
@@ -383,7 +383,7 @@ class TestProjectMembershipLimit(TestCase):
         test_db_path = f"{CHROMA_DB_PATH}_limit_{int(time.time())}"
 
         # Initialize vector store
-        if os.path.exists(test_db_path):
+        if Path(test_db_path).exists():
             import shutil
 
             try:
@@ -584,7 +584,7 @@ class TestProjectLeaving(TestCase):
         test_db_path = f"{CHROMA_DB_PATH}_leaving_{int(time.time())}"
 
         # Initialize vector store
-        if os.path.exists(test_db_path):
+        if Path(test_db_path).exists():
             import shutil
 
             try:
@@ -729,7 +729,7 @@ class TestProjectEdgeCases(TestCase):
         test_db_path = f"{CHROMA_DB_PATH}_edge_{int(time.time())}"
 
         # Initialize vector store
-        if os.path.exists(test_db_path):
+        if Path(test_db_path).exists():
             import shutil
 
             try:

@@ -1,6 +1,6 @@
-import os
 import sys
 import time
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,8 +12,8 @@ Test script for verifying LLM call performance monitoring.
 """
 
 # Set up proper paths for imports
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-sys.path.insert(0, project_root)
+project_root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(project_root))
 
 
 class LLMTestStructure(BaseModel):

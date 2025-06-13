@@ -1,6 +1,6 @@
 # ruff: noqa: E501, ANN101
 import logging
-import os
+from pathlib import Path
 
 from src.infra.dspy_ollama_integration import dspy
 
@@ -121,13 +121,13 @@ def get_relationship_updater() -> object:
         except Exception as e:
             logger.error(f"RELATIONSHIP UPDATER: Error configuring DSPy with Ollama: {e}")
         # Try to load optimized/compiled version
-        compiled_path = os.path.join(
-            os.path.dirname(__file__), "compiled", "optimized_relationship_updater.json"
+        compiled_path = (
+            Path(__file__).resolve().parent / "compiled" / "optimized_relationship_updater.json"
         )
         updater = dspy.Predict(RelationshipUpdaterSignature)
-        if os.path.exists(compiled_path):
+        if compiled_path.exists():
             try:
-                updater.load(compiled_path)
+                updater.load(str(compiled_path))
                 logger.info(f"RELATIONSHIP UPDATER: Loaded optimized updater from {compiled_path}")
                 return updater
             except Exception as e:

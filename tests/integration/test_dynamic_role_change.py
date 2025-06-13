@@ -4,9 +4,9 @@ Integration tests for dynamic role change scenarios.
 """
 
 import logging
-import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -45,7 +45,7 @@ class TestDynamicRoleChange(unittest.IsolatedAsyncioTestCase):
         logger.info("Setting up TestDynamicRoleChange...")
 
         # Clean up previous test DB if it exists
-        if os.path.exists(CHROMA_DB_PATH_DYNAMIC_ROLE):
+        if Path(CHROMA_DB_PATH_DYNAMIC_ROLE).exists():
             import shutil
 
             try:
@@ -148,7 +148,7 @@ class TestDynamicRoleChange(unittest.IsolatedAsyncioTestCase):
             except Exception as e:
                 logger.warning(f"Error resetting ChromaDB client: {e}")
 
-        if os.path.exists(CHROMA_DB_PATH_DYNAMIC_ROLE):
+        if Path(CHROMA_DB_PATH_DYNAMIC_ROLE).exists():
             import shutil
 
             try:

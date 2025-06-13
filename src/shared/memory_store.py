@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
@@ -32,13 +32,14 @@ class ChromaMemoryStore(MemoryStore):
 
     def __init__(self: Self, persist_directory: str | None = None) -> None:
         self._store: list[dict[str, Any]] = []
-        self._persist_path: str | None = None
+        self._persist_path: Path | None = None
         if persist_directory is not None:
-            os.makedirs(persist_directory, exist_ok=True)
-            self._persist_path = os.path.join(persist_directory, "chroma_memory.json")
-            if os.path.exists(self._persist_path):
+            persist_dir = Path(persist_directory)
+            persist_dir.mkdir(parents=True, exist_ok=True)
+            self._persist_path = persist_dir / "chroma_memory.json"
+            if self._persist_path.exists():
                 try:
-                    with open(self._persist_path, encoding="utf-8") as fh:
+                    with self._persist_path.open(encoding="utf-8") as fh:
                         self._store = json.load(fh)
                 except Exception:
                     self._store = []
@@ -48,7 +49,7 @@ class ChromaMemoryStore(MemoryStore):
             entry = {"content": doc, "metadata": meta, "id": str(uuid.uuid4())}
             self._store.append(entry)
         if self._persist_path is not None:
-            with open(self._persist_path, "w", encoding="utf-8") as fh:
+            with self._persist_path.open("w", encoding="utf-8") as fh:
                 json.dump(self._store, fh)
 
     def query(self: Self, query: str, top_k: int = 1) -> list[dict[str, Any]]:
@@ -64,7 +65,7 @@ class ChromaMemoryStore(MemoryStore):
                 remaining.append(entry)
         self._store = remaining
         if self._persist_path is not None:
-            with open(self._persist_path, "w", encoding="utf-8") as fh:
+            with self._persist_path.open("w", encoding="utf-8") as fh:
                 json.dump(self._store, fh)
 
 

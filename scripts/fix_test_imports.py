@@ -6,8 +6,8 @@ This script updates sys.path.append lines in test files to correctly point
 to the project root directory.
 """
 
-import os
 import re
+from pathlib import Path
 
 
 def fix_imports_in_file(file_path: str) -> None:
@@ -46,12 +46,11 @@ def main() -> None:
     Find all Python test files in the tests directory and fix their imports.
     """
     # Get all Python files in the tests directory
-    tests_dir = os.path.join("tests", "integration")
+    tests_dir = Path("tests") / "integration"
     modified_files = 0
 
-    for filename in os.listdir(tests_dir):
-        if filename.endswith(".py"):
-            file_path = os.path.join(tests_dir, filename)
+    for file_path in tests_dir.iterdir():
+        if file_path.suffix == ".py":
             fix_imports_in_file(file_path)
             print(f"Checked imports in {file_path}")
             modified_files += 1

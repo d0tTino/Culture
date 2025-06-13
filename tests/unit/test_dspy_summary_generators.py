@@ -5,7 +5,6 @@ These tests focus on verifying the loading of compiled programs and fallback beh
 """
 
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -56,7 +55,7 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
             "module_type": "dspy.Predict",
         }
 
-        filepath = os.path.join(self.temp_dir_name, filename)
+        filepath = Path(self.temp_dir_name) / filename
         with open(filepath, "w") as f:
             json.dump(compiled_data, f)
 
@@ -64,7 +63,7 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
 
     def _create_corrupted_l1_compiled_file(self, filename: str) -> str:
         """Create an invalid/corrupted JSON file."""
-        filepath = os.path.join(self.temp_dir_name, filename)
+        filepath = Path(self.temp_dir_name) / filename
         with open(filepath, "w") as f:
             f.write("{This is not valid JSON!")
 
@@ -105,7 +104,7 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
         # Assert that the result is the mocked summary
         self.assertEqual(result, self.sample_summary)
 
-    @patch("src.agents.dspy_programs.l1_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l1_summary_generator.Path.exists")
     @patch("src.agents.dspy_programs.l1_summary_generator.logger")
     def test_fallback_if_l1_program_missing(
         self, mock_logger: MagicMock, mock_exists: MagicMock
@@ -129,7 +128,7 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
             mock_predictor.return_value = mock_prediction
 
             # Specify a non-existent file path
-            non_existent_path = os.path.join(self.temp_dir_name, "non_existent_file.json")
+            non_existent_path = Path(self.temp_dir_name) / "non_existent_file.json"
 
             # Instantiate the L1SummaryGenerator with the non-existent file path
             l1_generator = L1SummaryGenerator(compiled_program_path=non_existent_path)
@@ -155,7 +154,7 @@ class TestL1SummaryGeneratorLoading(unittest.TestCase):
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l1_summary)
 
-    @patch("src.agents.dspy_programs.l1_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l1_summary_generator.Path.exists")
     @patch("src.agents.dspy_programs.l1_summary_generator.logger")
     def test_fallback_if_l1_program_corrupted(
         self, mock_logger: MagicMock, mock_exists: MagicMock
@@ -282,7 +281,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             "module_type": "dspy.Predict",
         }
 
-        filepath = os.path.join(self.temp_dir_name, filename)
+        filepath = Path(self.temp_dir_name) / filename
         with open(filepath, "w") as f:
             json.dump(compiled_data, f)
 
@@ -290,7 +289,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
 
     def _create_corrupted_l2_compiled_file(self, filename: str) -> str:
         """Create an invalid/corrupted JSON file."""
-        filepath = os.path.join(self.temp_dir_name, filename)
+        filepath = Path(self.temp_dir_name) / filename
         with open(filepath, "w") as f:
             f.write("{This is not valid JSON for L2 summarizer!")
 
@@ -337,7 +336,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
         # Assert that the result is the mocked summary
         self.assertEqual(result, self.sample_summary)
 
-    @patch("src.agents.dspy_programs.l2_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l2_summary_generator.Path.exists")
     @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_missing(
         self, mock_logger: MagicMock, mock_exists: MagicMock
@@ -361,7 +360,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             mock_predictor.return_value = mock_prediction
 
             # Specify a non-existent file path
-            non_existent_path = os.path.join(self.temp_dir_name, "non_existent_l2_file.json")
+            non_existent_path = Path(self.temp_dir_name) / "non_existent_l2_file.json"
 
             # Instantiate the L2SummaryGenerator with the non-existent file path
             l2_generator = L2SummaryGenerator(compiled_program_path=non_existent_path)
@@ -393,7 +392,7 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l2_summary)
 
-    @patch("src.agents.dspy_programs.l2_summary_generator.os.path.exists")
+    @patch("src.agents.dspy_programs.l2_summary_generator.Path.exists")
     @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_corrupted(
         self, mock_logger: MagicMock, mock_exists: MagicMock
