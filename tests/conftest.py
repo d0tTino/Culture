@@ -8,11 +8,14 @@ import shutil
 import socket
 import sys
 import tempfile
+import types
 from collections.abc import Generator
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+
+from tests.utils.dummy_chromadb import setup_dummy_chromadb
 
 # Ensure np.float_ exists for libraries expecting NumPy <2.0
 if not hasattr(np, "float_"):
@@ -75,6 +78,33 @@ from tests.utils.mock_llm import MockLLM  # noqa: E402
 
 
 configure_warning_filters()  # Apply filters
+setup_dummy_chromadb()
+if "weaviate" not in sys.modules:
+    weaviate_mod = types.ModuleType("weaviate")
+
+    class Client:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+    weaviate_mod.Client = Client
+    classes_mod = types.ModuleType("weaviate.classes")
+    weaviate_mod.classes = classes_mod
+    sys.modules["weaviate"] = weaviate_mod
+    sys.modules["weaviate.classes"] = classes_mod
+
+if "sse_starlette.sse" not in sys.modules:
+    sse_mod = types.ModuleType("sse_starlette.sse")
+    from starlette.responses import Response
+
+    class EventSourceResponse(Response):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            super().__init__("", *args, **kwargs)
+
+    sse_mod.EventSourceResponse = EventSourceResponse
+    pkg = types.ModuleType("sse_starlette")
+    pkg.sse = sse_mod
+    sys.modules["sse_starlette"] = pkg
+    sys.modules["sse_starlette.sse"] = sse_mod
 
 
 def is_ollama_running() -> Optional[bool]:

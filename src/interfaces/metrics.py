@@ -6,15 +6,29 @@ try:
     from prometheus_client import Counter, Gauge, start_http_server
 except Exception:  # pragma: no cover - optional dependency
 
+    class _Value:
+        def __init__(self) -> None:
+            self._val = 0
+
+        def get(self) -> int:
+            return self._val
+
     class _Dummy:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._value = _Value()
+
         def __call__(self, *args: object, **kwargs: object) -> "_Dummy":
             return self
 
-        def inc(self, *args: object, **kwargs: object) -> None:  # pragma: no cover - noop
-            pass
+        def inc(
+            self, amount: int = 1, *args: object, **kwargs: object
+        ) -> None:  # pragma: no cover - noop
+            self._value._val += amount
 
-        def set(self, *args: object, **kwargs: object) -> None:  # pragma: no cover - noop
-            pass
+        def set(
+            self, value: int = 0, *args: object, **kwargs: object
+        ) -> None:  # pragma: no cover - noop
+            self._value._val = value
 
     Counter = Gauge = _Dummy  # type: ignore[assignment]
 

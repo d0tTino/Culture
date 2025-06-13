@@ -373,26 +373,49 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         raise ValueError("Invalid memory_store_manager provided")
 
     @model_validator(mode="after")  # type: ignore[arg-type]
-    def _validate_model_after(cls, model: "AgentState") -> "AgentState":
+    def _validate_model_after(cls, model: Any) -> Any:
         """Ensure LLM client and history fields are initialized."""
-        if not model.llm_client:
-            if model.mock_llm_client:
-                model.llm_client = model.mock_llm_client
-            elif model.llm_client_config:
-                cfg = model.llm_client_config
+        # Pydantic v1 passes a ``dict`` while v2 passes the actual model instance
+        if isinstance(model, dict):
+            values = model
+            if not values.get("llm_client"):
+                if values.get("mock_llm_client"):
+                    values["llm_client"] = values["mock_llm_client"]
+                elif values.get("llm_client_config"):
+                    cfg = values["llm_client_config"]
+                    if isinstance(cfg, BaseModel):
+                        config_data = cfg.model_dump() if hasattr(cfg, "model_dump") else cfg.dict()
+                    else:
+                        config_data = cast(dict[str, Any], cfg)
+                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
+                else:
+                    values["llm_client"] = get_default_llm_client()
+
+            if not values.get("role_history"):
+                values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
+            if not values.get("mood_history"):
+                values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
+            return values
+
+        obj = cast("AgentState", model)
+        if not obj.llm_client:
+            if obj.mock_llm_client:
+                obj.llm_client = obj.mock_llm_client
+            elif obj.llm_client_config:
+                cfg = obj.llm_client_config
                 if isinstance(cfg, BaseModel):
                     config_data = cfg.model_dump() if hasattr(cfg, "model_dump") else cfg.dict()
                 else:
                     config_data = cast(dict[str, Any], cfg)
-                model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+                obj.llm_client = LLMClient(config=LLMClientConfig(**config_data))
             else:
-                model.llm_client = get_default_llm_client()
+                obj.llm_client = get_default_llm_client()
 
-        if not model.role_history:
-            model.role_history = [(model.step_counter, model.current_role)]
-        if not model.mood_history:
-            model.mood_history = [(model.step_counter, model.mood_level)]
-        return model
+        if not obj.role_history:
+            obj.role_history = [(obj.step_counter, obj.current_role)]
+        if not obj.mood_history:
+            obj.mood_history = [(obj.step_counter, obj.mood_level)]
+        return obj
 
     def get_llm_client(self) -> Any:
         if not self.llm_client:
@@ -410,7 +433,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
+        if hasattr(self, "model_dump"):
+            return self.model_dump(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
+        return self.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
