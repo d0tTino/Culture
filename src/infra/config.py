@@ -19,7 +19,7 @@ except ImportError:
 except Exception as e:
     logging.warning(f"Failed to load environment variables from .env file: {e}")
 
-# Configure logger
+# Initialize module logger for configuration messages
 logger = logging.getLogger(__name__)
 
 # Allow runtime overrides of configuration values. Used in testing.
@@ -242,6 +242,9 @@ def load_config() -> dict[str, object]:
         },
     }
 
+    # Log the entire configuration for debugging. This may reveal sensitive
+    # values, so consider adjusting the log level or redacting secrets in
+    # production.
     logger.info(f"Configuration loaded. _CONFIG contains: {_CONFIG}")
     # Fail fast if critical config is missing
     if not _CONFIG.get("OLLAMA_API_BASE"):
@@ -489,9 +492,7 @@ def get_redis_config() -> dict[str, object]:
     return {"host": REDIS_HOST, "port": REDIS_PORT, "db": REDIS_DB, "password": REDIS_PASSWORD}
 
 
-logger = logging.getLogger(__name__)
-
-# Log loaded configuration for verification (optional, be careful with sensitive data)
+# Log loaded configuration for verification. Avoid including sensitive data.
 logger.info("Configuration loaded successfully")
 
 
