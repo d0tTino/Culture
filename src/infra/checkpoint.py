@@ -22,14 +22,37 @@ from src.sim.simulation import Simulation
 logger = logging.getLogger(__name__)
 
 
-def capture_rng_state() -> tuple[Any, ...]:
-    """Return the current ``random`` module state."""
-    return random.getstate()
+def capture_rng_state() -> dict[str, Any]:
+    """Return the current RNG state for ``random`` and ``numpy``."""
+    state = {"random": random.getstate()}
+    try:  # pragma: no cover - optional dependency
+        import numpy as np
+
+        state["numpy"] = np.random.get_state()
+    except ImportError:
+        # ``numpy`` is optional; ignore if unavailable
+        pass
+
+    return state
 
 
-def restore_rng_state(state: tuple[Any, ...]) -> None:
-    """Restore the ``random`` module to ``state``."""
-    random.setstate(state)
+def restore_rng_state(state: Any) -> None:
+    """Restore RNG state for ``random`` and ``numpy``."""
+    if isinstance(state, dict):
+        random_state = state.get("random")
+    else:  # backward compatibility
+        random_state = state
+
+    if random_state is not None:
+        random.setstate(random_state)
+
+    if isinstance(state, dict) and "numpy" in state:
+        try:  # pragma: no cover - optional dependency
+            import numpy as np
+
+            np.random.set_state(state["numpy"])
+        except ImportError:
+            pass
 
 
 def capture_environment() -> dict[str, Any]:
