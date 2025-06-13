@@ -21,21 +21,30 @@ from src.sim.simulation import Simulation
 
 logger = logging.getLogger(__name__)
 
+# Prefixes for project-specific environment variables that should be captured
+ENV_PREFIXES: tuple[str, ...] = (
+    "CULTURE_",
+    "OLLAMA_",
+    "REDIS_",
+    "WEAVIATE_",
+    "OPENAI_",
+    "ANTHROPIC_",
+    "DISCORD_",
+    "MEMORY_",
+    "ROLE_",
+    "IP_",
+    "DU_",
+)
 
+
+def capture_rng_state() -> dict[str, Any]:
     """Return the current RNG state for ``random`` and ``numpy`` if available."""
-    """Restore RNG state for ``random`` and ``numpy``.
-
-    Accepts states from :func:`capture_rng_state` or the legacy tuple-based
-    format used in older checkpoints.
-    """
-    """Return the current RNG state for ``random`` and ``numpy``."""
     state = {"random": random.getstate()}
     try:  # pragma: no cover - optional dependency
         import numpy as np
 
         state["numpy"] = np.random.get_state()
     except ImportError:
-
         # ``numpy`` is optional; ignore if unavailable
         pass
 
@@ -53,13 +62,11 @@ def restore_rng_state(state: Any) -> None:
         random.setstate(random_state)
 
     if isinstance(state, dict) and "numpy" in state:
-
         try:  # pragma: no cover - optional dependency
             import numpy as np
 
             np.random.set_state(state["numpy"])
         except ImportError:
-
             pass
 
 
