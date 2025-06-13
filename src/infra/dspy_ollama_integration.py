@@ -5,7 +5,6 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 
 # ruff: noqa: ANN101, ANN102
 
-import json
 import logging
 import sys
 import time
@@ -14,17 +13,17 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 try:  # pragma: no cover - optional dependency
-    import requests
+    import requests  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - fallback when requests missing
     requests = MagicMock()
 from typing_extensions import Self
 
 # Import DSPy and Ollama, providing fallbacks when unavailable
 try:
-    import dspy
-except Exception:  # pragma: no cover - attempt dspy_ai fallback
+    import dspy_ai as dspy
+except Exception:  # pragma: no cover - attempt dspy fallback
     try:
-        import dspy_ai as dspy
+        import dspy
     except Exception:
         dspy = None
 
@@ -60,7 +59,7 @@ else:
 
     class OutputField:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+            self.name = kwargs.get("name")
 
     class Prediction(SimpleNamespace):
         """Minimal stand-in for ``dspy.Prediction``."""
@@ -71,28 +70,11 @@ else:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def __call__(self, question: str | None = None, *args: Any, **kwargs: Any) -> Prediction:
-            if _CONFIGURED_LM is None:
-                intent = "PROPOSE_IDEA"
-            else:
-                result = _CONFIGURED_LM(question or "")
-                if isinstance(result, list):
-                    result = result[0]
-                if isinstance(result, str):
-                    try:
-                        parsed = json.loads(result)
-                    except Exception:
-                        intent = result.strip()
-                    else:
-                        if isinstance(parsed, dict) and "intent" in parsed:
-                            intent = str(parsed["intent"])
-                        else:
-                            intent = result.strip()
-                elif isinstance(result, dict):
-                    intent = str(result.get("intent", result))
-                else:
-                    intent = str(result)
-            return Prediction(intent=intent)
+        def __call__(self, *args: Any, **kwargs: Any) -> Prediction:
+            agent_role = kwargs.get("agent_role", "Agent")
+            situation = kwargs.get("current_situation", "")
+            thought_process = f"As a {agent_role}, {situation}"
+            return Prediction(thought_process=thought_process)
 
         @staticmethod
         def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
