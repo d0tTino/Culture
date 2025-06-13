@@ -156,6 +156,13 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
      * Role change parameters
    * See `docs/configuration_system.md` for detailed configuration documentation
 
+Once Ollama is running you can launch a basic simulation:
+```bash
+python -m src.app --steps 5 --discord
+```
+See [docs/windows_setup.md#run-the-simulation](docs/windows_setup.md#run-the-simulation) for a step-by-step guide on Windows.
+
+
 ## Code Linting and Formatting
 
 This project uses **Ruff** and **Black** for linting and formatting. Ruff handles

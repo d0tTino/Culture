@@ -22,6 +22,7 @@ from src.sim.simulation import Simulation
 logger = logging.getLogger(__name__)
 
 
+
 def capture_rng_state() -> dict[str, Any]:
     """Return the current RNG state for ``random`` and ``numpy``."""
     state = {"random": random.getstate()}
@@ -30,6 +31,7 @@ def capture_rng_state() -> dict[str, Any]:
 
         state["numpy"] = np.random.get_state()
     except ImportError:
+
         # ``numpy`` is optional; ignore if unavailable
         pass
 
@@ -47,11 +49,13 @@ def restore_rng_state(state: Any) -> None:
         random.setstate(random_state)
 
     if isinstance(state, dict) and "numpy" in state:
+
         try:  # pragma: no cover - optional dependency
             import numpy as np
 
             np.random.set_state(state["numpy"])
         except ImportError:
+
             pass
 
 
@@ -59,14 +63,18 @@ def capture_environment() -> dict[str, Any]:
     """Capture relevant environment variables and system info."""
     from src.infra.config import DEFAULT_CONFIG
 
-    env = {key: os.environ.get(key) for key in DEFAULT_CONFIG}
+    env: dict[str, Any] = {}
+    prefixes = ENV_PREFIXES
+    for key, value in os.environ.items():
+        if key in DEFAULT_CONFIG or any(key.startswith(p) for p in prefixes):
+            env[key] = value
     env["python_version"] = sys.version
     env["platform"] = platform.platform()
     return env
 
 
 def restore_environment(env: dict[str, Any]) -> None:
-    """Restore environment variables from ``env``."""
+    """Restore environment variables captured by :func:`capture_environment`."""
     from src.infra import config
 
     for key, value in env.items():

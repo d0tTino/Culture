@@ -16,6 +16,7 @@ pytestmark = pytest.mark.unit
 
 def test_checkpoint_save_and_load(tmp_path, monkeypatch):
     monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    monkeypatch.setenv("CULTURE_CUSTOM_VAR", "xyz")
     random.seed(1234)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
 
@@ -31,6 +32,7 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
 
     assert os.environ["ROLE_DU_GENERATION"] == '{"A":1, "B":1}'
     assert "random" in meta["rng_state"]
+
     assert random.random() == expected_next
     assert loaded.agents[0].state.current_role == sim.agents[0].state.current_role
 
