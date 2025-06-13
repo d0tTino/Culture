@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from src.agents.core.agent_state import AgentState
 from src.agents.core.base_agent import Agent
 
 try:  # pragma: no cover - optional dependency
@@ -60,9 +59,8 @@ def restore_environment(env: dict[str, Any]) -> None:
 def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
     """Convert a ``Simulation`` instance into a serializable dictionary."""
     return {
-        "agents": [
-            cast("AgentState", agent.state).to_dict(exclude_none=True) for agent in sim.agents
-        ],
+        "agents": [cast(Agent, agent).state.to_dict(exclude_none=True) for agent in sim.agents],
+
         "current_step": sim.current_step,
         "current_agent_index": sim.current_agent_index,
         "scenario": sim.scenario,

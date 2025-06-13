@@ -21,7 +21,7 @@ try:  # pragma: no cover - optional dependency
     from chromadb.utils.embedding_functions import (
         SentenceTransformerEmbeddingFunction,
     )
-except Exception:  # pragma: no cover - fallback when chromadb missing
+except ImportError:  # pragma: no cover - fallback when chromadb missing
     chromadb = None
 
     class _SentenceTransformerEmbeddingFunction:
@@ -105,8 +105,11 @@ class ChromaVectorStoreManager(MemoryStore):
                 embedding_function = SentenceTransformerEmbeddingFunction(
                     model_name="all-MiniLM-L6-v2"
                 )
-            except Exception:  # pragma: no cover - dependency missing
-                logger.warning("sentence-transformers not available, using dummy embeddings")
+            except ImportError as e:  # pragma: no cover - dependency missing
+                logger.warning(
+                    "sentence-transformers not available, using dummy embeddings",
+                    exc_info=True,
+                )
 
                 def _dummy_embedding(texts: Sequence[str]) -> list[list[float]]:
                     return [[0.0] * 384 for _ in texts]
@@ -706,8 +709,11 @@ class ChromaVectorStoreManager(MemoryStore):
             for period in role_history:
                 if period["role"] == role:
                     role_periods.append(period)
-        except Exception as e:
-            logger.error(f"Error retrieving role history for agent {agent_id}: {e}")
+        except ChromaDBException as e:
+            logger.error(
+                f"Error retrieving role history for agent {agent_id}: {e}",
+                exc_info=True,
+            )
             # If we can't get role history, we'll just proceed with semantic search
 
         # If we have role periods and query is None, retrieve memories from those periods
@@ -858,10 +864,11 @@ class ChromaVectorStoreManager(MemoryStore):
         try:
             # Query for all memories with memory_type "chapter_summary"
             results = self.collection.get(
-                where={"memory_type": "chapter_summary"}, include=["metadatas"]
+                where={"memory_type": "chapter_summary"},
+                include=["metadatas"],
             )
-        except Exception as e:
-            logger.error(f"Error querying L2 summaries: {e!s}")
+        except ChromaDBException as e:
+            logger.error("Error querying L2 summaries: %s", e, exc_info=True)
             return []
 
         if not results or not results.get("ids"):
@@ -962,12 +969,17 @@ class ChromaVectorStoreManager(MemoryStore):
                     ids[i : i + 10] for i in range(0, len(ids), 10)
                 ]:  # Check in chunks of 10
                     try:
-                        check_results = self.collection.get(ids=id_chunk, include=["metadatas"])
+                        check_results = self.collection.get(
+                            ids=id_chunk,
+                            include=["metadatas"],
+                        )
                         if check_results.get("ids") and check_results["ids"] is not None:
                             still_exist.extend(check_results["ids"])
-                    except Exception as check_error:
+                    except ChromaDBException as check_error:
                         logger.error(
-                            f"Error checking existence of IDs after deletion: {check_error}"
+                            "Error checking existence of IDs after deletion: %s",
+                            check_error,
+                            exc_info=True,
                         )
 
                 if still_exist:
@@ -977,8 +989,12 @@ class ChromaVectorStoreManager(MemoryStore):
 
                 return False
 
-        except Exception as e:
-            logger.error(f"Error deleting memories from ChromaDB: {e}", exc_info=True)
+        except ChromaDBException as e:
+            logger.error(
+                "Error deleting memories from ChromaDB: %s",
+                e,
+                exc_info=True,
+            )
             return False
 
     def get_memory_ids_in_step_range(
@@ -1087,8 +1103,12 @@ class ChromaVectorStoreManager(MemoryStore):
 
             return []
 
-        except Exception as e:
-            logger.error(f"Error retrieving memory IDs in step range: {e}", exc_info=True)
+        except ChromaDBException as e:
+            logger.error(
+                "Error retrieving memory IDs in step range: %s",
+                e,
+                exc_info=True,
+            )
             return []
 
     def _calculate_mus(self: Self, metadata: dict[str, Any]) -> float:
@@ -1115,10 +1135,15 @@ class ChromaVectorStoreManager(MemoryStore):
         # Query all L1 summaries
         try:
             results = self.collection.get(
-                where={"memory_type": "consolidated_summary"}, include=["metadatas"]
+                where={"memory_type": "consolidated_summary"},
+                include=["metadatas"],
             )
-        except Exception as e:
-            logger.error(f"Error querying L1 summaries for MUS pruning: {e}")
+        except ChromaDBException as e:
+            logger.error(
+                "Error querying L1 summaries for MUS pruning: %s",
+                e,
+                exc_info=True,
+            )
             return []
         if not results or not results.get("ids"):
             logger.info("No L1 summaries found for MUS pruning.")
@@ -1135,10 +1160,11 @@ class ChromaVectorStoreManager(MemoryStore):
             try:
                 created_dt = datetime.fromisoformat(timestamp_str)
                 age_days = (now - created_dt).days
-            except Exception as e:
+            except ValueError as e:
                 logger.warning(
                     f"Invalid simulation_step_timestamp for L1 summary {doc_id}: "
-                    f"{timestamp_str} ({e})"
+                    f"{timestamp_str} ({e})",
+                    exc_info=True,
                 )
                 continue
             if age_days < min_age_days:
@@ -1180,10 +1206,15 @@ class ChromaVectorStoreManager(MemoryStore):
         # Query all L2 summaries
         try:
             results = self.collection.get(
-                where={"memory_type": "chapter_summary"}, include=["metadatas"]
+                where={"memory_type": "chapter_summary"},
+                include=["metadatas"],
             )
-        except Exception as e:
-            logger.error(f"Error querying L2 summaries for MUS pruning: {e}")
+        except ChromaDBException as e:
+            logger.error(
+                "Error querying L2 summaries for MUS pruning: %s",
+                e,
+                exc_info=True,
+            )
             return []
 
         if not results or not results.get("ids"):
@@ -1205,10 +1236,11 @@ class ChromaVectorStoreManager(MemoryStore):
             try:
                 created_dt = datetime.fromisoformat(timestamp_str)
                 age_days = (now - created_dt).days
-            except Exception as e:
+            except ValueError as e:
                 logger.warning(
                     f"Invalid simulation_step_end_timestamp for L2 summary {doc_id}: "
-                    f"{timestamp_str} ({e})"
+                    f"{timestamp_str} ({e})",
+                    exc_info=True,
                 )
                 continue
 
@@ -1268,8 +1300,8 @@ class ChromaVectorStoreManager(MemoryStore):
         try:
             embeddings = self.embedding_function([text])
             return list(embeddings[0])
-        except Exception as e:
-            logger.error(f"Error generating embedding: {e}")
+        except RuntimeError as e:
+            logger.error("Error generating embedding: %s", e, exc_info=True)
             return [0.0] * 384
 
     def get_metadata_without_tracking(self: Self, memory_ids: list[str]) -> list[dict[str, Any]]:
@@ -1290,6 +1322,10 @@ class ChromaVectorStoreManager(MemoryStore):
                 return []
 
             return [dict(m) for m in results["metadatas"]]
-        except Exception as e:
-            logger.error(f"Error getting metadata without tracking: {e}")
+        except ChromaDBException as e:
+            logger.error(
+                "Error getting metadata without tracking: %s",
+                e,
+                exc_info=True,
+            )
             return []

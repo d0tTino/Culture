@@ -404,7 +404,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self, *, exclude_none: bool = False) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return cast(BaseModel, self).dict(
+        return cast(BaseModel, self).model_dump(
             exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
         )
 
