@@ -173,6 +173,8 @@ To install development dependencies (including linting tools), run:
 ```bash
 pip install -r requirements-dev.txt
 ```
+These development requirements now include `numpy>=2` alongside tools like Ruff,
+Black, and Mypy.
 
 To run the linters and type checker locally, use the helper scripts:
 ```bash
@@ -380,7 +382,7 @@ To customize the simulation:
    pip install -r requirements.txt -r requirements-dev.txt
    ```
    The development requirements include tools such as `pytest-xdist`,
-   `pytest-asyncio`, and `requests` which are required for the full test suite.
+   `pytest-asyncio`, `requests`, and `numpy>=2` which are required for the full test suite.
    You can also run `scripts/setup_test_env.sh` to automate these steps.
    Optional packages like `chromadb`, `weaviate-client`, and `langgraph` are
    included so tests won't be skipped unexpectedly.
