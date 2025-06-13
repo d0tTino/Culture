@@ -68,3 +68,14 @@ ollama serve &
 
 The script launches three agents for a few steps and stores their memories in
 ChromaDB. See `docs/walking_vertical_slice.md` for details.
+
+## Run the Simulation
+
+Once Ollama is running and your `.env` is configured, launch the main application:
+
+```bash
+python -m src.app --steps 5 --discord
+```
+
+The `--steps` flag sets how many iterations to perform before exiting. Use `--discord` to enable interaction with your configured Discord bot.
+
