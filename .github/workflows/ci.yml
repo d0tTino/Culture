@@ -76,6 +76,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
@@ -177,6 +178,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
@@ -214,6 +216,7 @@ jobs:
           PIP_DEFAULT_TIMEOUT: '120'
         run: |
           python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           pip install garak
