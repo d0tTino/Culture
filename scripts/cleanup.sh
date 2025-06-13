@@ -9,7 +9,22 @@ if [ -f ".env" ]; then
   source .env
   set +a
 fi
-rm -rf __pycache__ .mypy_cache .ruff_cache .pytest_cache htmlcov logs temp chroma_db scripts/temp data/logs archives/__pycache__ scripts/archive/__pycache__ src/agents/__pycache__ src/agents/core/__pycache__ src/agents/memory/__pycache__ src/agents/dspy_programs/__pycache__ tests/__pycache__ tests/unit/__pycache__ tests/integration/__pycache__
+
+prompt_delete_dir() {
+  local target=$1
+  if [ -d "$target" ]; then
+    read -rp "Remove $target? [y/N] " response
+    if [[ $response =~ ^[Yy]$ ]]; then
+      rm -rf "$target"
+    else
+      echo "Skipping $target"
+    fi
+  fi
+}
+
+rm -rf __pycache__ .mypy_cache .ruff_cache .pytest_cache htmlcov logs temp scripts/temp data/logs archives/__pycache__ scripts/archive/__pycache__ src/agents/__pycache__ src/agents/core/__pycache__ src/agents/memory/__pycache__ src/agents/dspy_programs/__pycache__ tests/__pycache__ tests/unit/__pycache__ tests/integration/__pycache__
+prompt_delete_dir chroma_db
+prompt_delete_dir .venv
 find . -name '*.log' -delete
 find . -name '*.txt' -delete
 find . -name '*.out' -delete

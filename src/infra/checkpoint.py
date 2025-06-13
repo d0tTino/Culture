@@ -39,12 +39,14 @@ ENV_PREFIXES: tuple[str, ...] = (
 
 def capture_rng_state() -> dict[str, Any]:
     """Return the current RNG state for ``random`` and ``numpy``."""
+
     state = {"random": random.getstate()}
     try:  # pragma: no cover - optional dependency
         import numpy as np
 
         state["numpy"] = np.random.get_state()
     except ImportError:
+
         # ``numpy`` is optional; ignore if unavailable
         pass
 
@@ -52,7 +54,11 @@ def capture_rng_state() -> dict[str, Any]:
 
 
 def restore_rng_state(state: Any) -> None:
-    """Restore RNG state for ``random`` and ``numpy``."""
+    """Restore RNG state for ``random`` and ``numpy``.
+
+    Accepts states from :func:`capture_rng_state` or the legacy tuple-based
+    format used in older checkpoints.
+    """
     if isinstance(state, dict):
         random_state = state.get("random")
     else:  # backward compatibility
