@@ -26,7 +26,35 @@ if [ -z "$CODE_FILES" ]; then
 fi
 
 # Check for non-comment additions
-NON_COMMENT_LINES=$(git diff "$BASE_SHA" HEAD -- $CODE_FILES | grep -E '^\+' | grep -vE '^\+\+' | sed 's/^+//' | grep -vE '^\s*(#|//|\*|"""|$)' || true)
+DIFF_OUTPUT=$(git diff "$BASE_SHA" HEAD -- $CODE_FILES)
+
+# Extract added lines that are not comments or docstrings
+NON_COMMENT_LINES=$(echo "$DIFF_OUTPUT" | awk '
+  BEGIN { in_triple = 0 }
+  /^@@/ { next }
+  /^\+\+\+|^---/ { next }
+  {
+    sign = substr($0, 1, 1)
+    if (sign == "+" || sign == "-" || sign == " ") {
+      line = substr($0, 2)
+    } else {
+      line = $0
+    }
+
+    quote_count = gsub(/"""/, "", line)
+    doc_line = (in_triple || quote_count > 0)
+
+    if (sign == "+") {
+      if (!doc_line && line !~ /^\s*(#|\/\/|\*|$)/) {
+        print line
+      }
+    }
+
+    if (quote_count % 2 == 1) {
+      in_triple = !in_triple
+    }
+  }
+')
 
 if [ -z "$NON_COMMENT_LINES" ]; then
   echo "Only comments changed."
