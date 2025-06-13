@@ -14,6 +14,7 @@ except Exception:  # pragma: no cover - fallback for pydantic<2
     from pydantic import root_validator as model_validator
     from pydantic import validator as field_validator
 
+
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -30,7 +31,8 @@ from src.infra.llm_client import LLMClient, LLMClientConfig
 logger = logging.getLogger(__name__)
 
 
-try:  # Support pydantic >= 2 if installed
+_PYDANTIC_V2 = True
+try:
     from pydantic import field_validator as _field_validator  # type: ignore[attr-defined]
     from pydantic import model_validator as _model_validator  # type: ignore[attr-defined]
 
@@ -39,21 +41,20 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
     from pydantic import root_validator as _model_validator
     from pydantic import validator as _field_validator
 
+
     _PYDANTIC_V2 = False
 
 
 def field_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic field validators."""
     if not _PYDANTIC_V2:
         kwargs.pop("mode", None)
-    return _field_validator(*args, **kwargs)
+    return _base_field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic model validators."""
     if not _PYDANTIC_V2:
         kwargs.pop("mode", None)
-    return _model_validator(*args, **kwargs)
+    return _base_model_validator(*args, **kwargs)
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -123,7 +124,7 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
 
 class AgentStateData(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     agent_id: str
     name: str
@@ -391,11 +392,19 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 else:
                     values["llm_client"] = get_default_llm_client()
 
+
+        if isinstance(data, dict):
             if not values.get("role_history"):
                 values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
             if not values.get("mood_history"):
                 values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
             return values
+        else:
+            if not model.role_history:
+                model.role_history = [(model.step_counter, model.current_role)]
+            if not model.mood_history:
+                model.mood_history = [(model.step_counter, model.mood_level)]
+            return model
 
         obj = cast("AgentState", model)
         if not obj.llm_client:
@@ -431,11 +440,12 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     # Serialization helpers for tests
     # ------------------------------------------------------------------
-    def to_dict(self: Self) -> dict[str, Any]:
+    def to_dict(self: Self, *, exclude_none: bool = False) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
         if hasattr(self, "model_dump"):
             return self.model_dump(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
         return self.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
+
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":

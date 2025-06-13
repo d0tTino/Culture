@@ -15,6 +15,7 @@ from src.infra.checkpoint import (
     restore_rng_state,
     save_checkpoint,
 )
+
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.infra.warning_filters import configure_warning_filters
@@ -65,7 +66,11 @@ def create_simulation(
         vector_store_manager=(
             None
             if not use_vector_store
-            else ChromaVectorStoreManager(persist_directory=vector_store_dir)
+            else (
+                ChromaVectorStoreManager(persist_directory=vector_store_dir)
+                if ChromaVectorStoreManager is not None
+                else None
+            )
         ),
         scenario=scenario,
         discord_bot=discord_bot,
