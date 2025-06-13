@@ -45,6 +45,7 @@ def capture_rng_state() -> dict[str, Any]:
 
         state["numpy"] = np.random.get_state()
     except Exception:
+
         # ``numpy`` is optional; ignore if unavailable
         pass
 
