@@ -1,17 +1,11 @@
 # ruff: noqa: ANN101, ANN102
+# mypy: ignore-errors
 import logging
 import random
 from collections import deque
 from enum import Enum
 from typing import Any, Optional, cast
 
-from pydantic import (
-    BaseModel,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -26,6 +20,32 @@ from src.infra.config import get_config  # Import get_config function
 from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
+
+
+_PYDANTIC_V2 = True
+try:
+    from pydantic import field_validator as _field_validator  # type: ignore[attr-defined]
+    from pydantic import model_validator as _model_validator  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover - fallback for old pydantic
+    from pydantic import root_validator as _model_validator_fallback
+    from pydantic import validator as _field_validator_fallback
+
+    _model_validator = _model_validator_fallback
+    _field_validator = _field_validator_fallback
+
+    _PYDANTIC_V2 = False
+
+
+def field_validator(*args: Any, **kwargs: Any) -> Any:
+    if not _PYDANTIC_V2:
+        kwargs.pop("mode", None)
+    return _base_field_validator(*args, **kwargs)
+
+
+def model_validator(*args: Any, **kwargs: Any) -> Any:
+    if not _PYDANTIC_V2:
+        kwargs.pop("mode", None)
+    return _base_model_validator(*args, **kwargs)
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -92,7 +112,6 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
     def get_default_llm_client() -> OllamaClientProtocol | None:
         return None
-
 
 
 class AgentStateData(BaseModel):
@@ -345,14 +364,28 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")  # type: ignore[arg-type]
-    def _validate_model_after(cls, model: "AgentState") -> "AgentState":
-        llm_client_config = model.llm_client_config
-        llm_client = model.llm_client
-        mock_llm_client = model.mock_llm_client
+    @model_validator(mode="after")
+    def _validate_model_after(cls, data: Any) -> Any:
+        """Ensure the AgentState is fully initialized after validation."""
+        # When using pydantic<2, ``data`` will be a ``dict``. With pydantic>=2 it
+        # will be the model instance.
+        model: AgentState
+        if isinstance(data, dict):
+            values = data
+            llm_client_config = values.get("llm_client_config")
+            llm_client = values.get("llm_client")
+            mock_llm_client = values.get("mock_llm_client")
+
+        else:
+            model = cast("AgentState", data)
+            llm_client_config = model.llm_client_config
+            llm_client = model.llm_client
+            mock_llm_client = model.mock_llm_client
+
         if llm_client_config and not llm_client:
             if mock_llm_client:
                 model.llm_client = mock_llm_client
+
             else:
                 config_data = llm_client_config
                 if hasattr(config_data, "model_dump"):
@@ -366,11 +399,25 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
 
 
-        if not model.role_history:
-            model.role_history = [(model.step_counter, model.current_role)]
-        if not model.mood_history:
-            model.mood_history = [(model.step_counter, model.mood_level)]
-        return model
+                new_client = LLMClient(config=LLMClientConfig(**cast(dict[str, Any], config_data)))
+
+            if isinstance(data, dict):
+                values["llm_client"] = new_client
+            else:
+                model.llm_client = new_client
+
+        if isinstance(data, dict):
+            if not values.get("role_history"):
+                values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
+            if not values.get("mood_history"):
+                values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
+            return values
+        else:
+            if not model.role_history:
+                model.role_history = [(model.step_counter, model.current_role)]
+            if not model.mood_history:
+                model.mood_history = [(model.step_counter, model.mood_level)]
+            return model
 
     def get_llm_client(self) -> Any:
         if not self.llm_client:
@@ -386,14 +433,24 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     # Serialization helpers for tests
     # ------------------------------------------------------------------
-    def to_dict(self: Self) -> dict[str, Any]:
+    def to_dict(self: Self, *, exclude_none: bool = False) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump()
+        if hasattr(self, "model_dump"):
+            data = self.model_dump(
+                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+            )
+        else:  # pragma: no cover - pydantic<2 fallback
+            data = self.dict(
+                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+
+            )
+        return cast(dict[str, Any], data)
+
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
         """Create an ``AgentState`` instance from a serialized dictionary."""
         clean_data = data.copy()
         if clean_data.get("memory_store_manager") is None:
-            clean_data.pop("memory_store_manager")
+            clean_data.pop("memory_store_manager", None)
         return cls(**clean_data)

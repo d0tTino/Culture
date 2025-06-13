@@ -38,9 +38,13 @@ def test_walking_vertical_slice(monkeypatch: MonkeyPatch) -> None:
     dashboard_stub.AgentMessage = _AgentMessage
     dashboard_stub.message_sse_queue = asyncio.Queue()
 
-    sys.modules["src.agents.memory.vector_store"] = vector_store_stub
-    sys.modules["src.agents.memory.weaviate_vector_store_manager"] = weaviate_store_stub
-    sys.modules["src.interfaces.dashboard_backend"] = dashboard_stub
+    monkeypatch.setitem(sys.modules, "src.agents.memory.vector_store", vector_store_stub)
+    monkeypatch.setitem(
+        sys.modules,
+        "src.agents.memory.weaviate_vector_store_manager",
+        weaviate_store_stub,
+    )
+    monkeypatch.setitem(sys.modules, "src.interfaces.dashboard_backend", dashboard_stub)
 
     from src.agents.core.agent_state import AgentState
 
@@ -50,7 +54,7 @@ def test_walking_vertical_slice(monkeypatch: MonkeyPatch) -> None:
     langgraph_stub = types.ModuleType("langgraph.graph")
     langgraph_stub.StateGraph = object
     langgraph_stub.END = "END"
-    sys.modules["langgraph.graph"] = langgraph_stub
+    monkeypatch.setitem(sys.modules, "langgraph.graph", langgraph_stub)
 
     async def _ainvoke(state: dict) -> dict:
         kb = state.get("knowledge_board")
@@ -69,7 +73,7 @@ def test_walking_vertical_slice(monkeypatch: MonkeyPatch) -> None:
 
     bag_stub = types.ModuleType("src.agents.graphs.basic_agent_graph")
     bag_stub.compile_agent_graph = lambda: stub_executor
-    sys.modules["src.agents.graphs.basic_agent_graph"] = bag_stub
+    monkeypatch.setitem(sys.modules, "src.agents.graphs.basic_agent_graph", bag_stub)
 
     from src.app import create_simulation
 

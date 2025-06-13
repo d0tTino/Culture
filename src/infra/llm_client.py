@@ -1,4 +1,4 @@
-# ruff: noqa: ANN401
+# ruff: noqa: ANN401, ANN101, ANN102
 """Provides a client for interacting with the Ollama LLM service."""
 
 from __future__ import annotations
@@ -52,8 +52,6 @@ except Exception:  # pragma: no cover - fallback when requests missing
         pass
 
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
@@ -64,6 +62,7 @@ else:  # pragma: no cover - runtime import
         from pydantic.v1.fields import ModelField
     except Exception:  # pragma: no cover - fallback for pydantic<2
         from pydantic.fields import ModelField  # type: ignore[attr-defined]  # noqa: F401
+
 
 
 from src.shared.decorator_utils import monitor_llm_call
@@ -98,8 +97,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -177,7 +175,10 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+        response: requests.Response = requests.get(
+            f"{OLLAMA_API_BASE}", timeout=1
+        )
+
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")
@@ -290,8 +291,7 @@ def generate_text(
         )
 
     response, error = _retry_with_backoff(call)
-    response = cast(LLMChatResponse | None, response)
-    response = cast(LLMChatResponse | None, response)
+    # Cast for static type checkers; _retry_with_backoff returns T | None
     response = cast(LLMChatResponse | None, response)
 
     if error:
@@ -443,6 +443,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> float | None:
         )
 
     response, error = _retry_with_backoff(call)
+    # Cast for static type checkers; _retry_with_backoff returns T | None
     response = cast(LLMChatResponse | None, response)
     if error:
         logger.error(f"Failed to analyze sentiment after retries: {error}")
@@ -532,7 +533,11 @@ def generate_structured_output(
                             base_fields = base_fields()
                         mock_fields = base_fields or {}
                     for field_name, field in mock_fields.items():
-                        if field.is_required():
+                        if hasattr(field, "is_required") and callable(field.is_required):
+                            required = bool(field.is_required())
+                        else:
+                            required = bool(getattr(field, "required", False))
+                        if required:
                             if field.annotation is str:
                                 mocked_fields[field_name] = str(
                                     mock_data.get(field_name, f"Mock {field_name}")
@@ -575,8 +580,10 @@ def generate_structured_output(
 
             def is_required(f: FieldInfo | Any) -> bool:
                 if isinstance(f, FieldInfo):
-                    return bool(f.is_required())
-                return bool(f.required)
+                    if hasattr(f, "is_required") and callable(f.is_required):
+                        return bool(f.is_required())
+                    return bool(getattr(f, "required", False))
+                return bool(getattr(f, "required", False))
 
             for field_name, field in fields:
                 if is_required(field):

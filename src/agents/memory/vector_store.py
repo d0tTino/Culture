@@ -16,8 +16,21 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 from typing import Any, TypeVar, Union, cast
 
-import chromadb
-from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+try:  # pragma: no cover - optional dependency
+    import chromadb
+    from chromadb.utils.embedding_functions import (
+        SentenceTransformerEmbeddingFunction,
+    )
+except Exception:  # pragma: no cover - fallback when chromadb missing
+    chromadb = None
+
+    class _SentenceTransformerEmbeddingFunction:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise ImportError("chromadb is required for SentenceTransformerEmbeddingFunction")
+
+    SentenceTransformerEmbeddingFunction = _SentenceTransformerEmbeddingFunction
+
+
 from pydantic import ValidationError
 from typing_extensions import Self
 
@@ -562,35 +575,71 @@ class ChromaVectorStoreManager(MemoryStore):
                 result_ids = getattr(results, "ids", None)
                 metadatas = getattr(results, "metadatas", None)
 
-            role_history = []
+            role_history: list[dict[str, Any]] = []
 
             # Process the results to build role periods
-            if results and result_ids:
-                # Use metadatas from above variable
-                if metadatas is not None:
-                    # Sort by step to ensure chronological order
-                    sorted_indices = sorted(
-                        range(len(metadatas)),
-                        key=lambda i: int(
-                            metadatas[i]["step"]
-                            if isinstance(metadatas[i], dict)
-                            else getattr(metadatas[i], "step", 0)
-                        ),
-                    )
+            if results and result_ids and metadatas is not None:
+                # Sort by step to ensure chronological order
+                sorted_indices = sorted(
+                    range(len(metadatas)),
+                    key=lambda i: int(
+                        metadatas[i]["step"]
+                        if isinstance(metadatas[i], dict)
+                        else getattr(metadatas[i], "step", 0)
+                    ),
+                )
 
+                prev_role = "unknown"
+                start_step = 0
+
+                for idx in sorted_indices:
+                    metadata = metadatas[idx]
+                    if isinstance(metadata, dict):
+                        step = int(metadata.get("step", 0))
+                        new_role = str(metadata.get("new_role", "unknown"))
+                    else:
+                        step = int(getattr(metadata, "step", 0))
+                        new_role = str(getattr(metadata, "new_role", "unknown"))
+
+                    if prev_role != "unknown":
+                        role_history.append(
+                            {
+                                "role": prev_role,
+                                "start_step": start_step,
+                                "end_step": step - 1,
+                            }
+                        )
+
+                    prev_role = new_role
+                    start_step = step
+
+                if prev_role != "unknown":
+                    role_history.append(
+                        {
+                            "role": prev_role,
+                            "start_step": start_step,
+                            "end_step": None,
+                        }
+                    )
+            elif hasattr(self.roles_collection, "docs"):
+                docs = [
+                    d.get("metadata", {})
+                    for d in getattr(self.roles_collection, "docs", [])
+                    if d.get("metadata")
+                    and d["metadata"].get("agent_id") == agent_id
+                    and d["metadata"].get("event_type") == "role_change"
+                ]
+                if docs:
+                    sorted_indices = sorted(
+                        range(len(docs)),
+                        key=lambda i: int(docs[i].get("step", 0)),
+                    )
                     prev_role = "unknown"
                     start_step = 0
-
                     for idx in sorted_indices:
-                        metadata = metadatas[idx]
-                        if isinstance(metadata, dict):
-                            step = int(metadata.get("step", 0))
-                            new_role = str(metadata.get("new_role", "unknown"))
-                        else:
-                            step = int(getattr(metadata, "step", 0))
-                            new_role = str(getattr(metadata, "new_role", "unknown"))
-
-                        # Add the previous role period
+                        metadata = docs[idx]
+                        step = int(metadata.get("step", 0))
+                        new_role = str(metadata.get("new_role", "unknown"))
                         if prev_role != "unknown":
                             role_history.append(
                                 {
@@ -599,18 +648,14 @@ class ChromaVectorStoreManager(MemoryStore):
                                     "end_step": step - 1,
                                 }
                             )
-
-                        # Update for next period
                         prev_role = new_role
                         start_step = step
-
-                    # Add the final role period (which continues to the present)
                     if prev_role != "unknown":
                         role_history.append(
                             {
                                 "role": prev_role,
                                 "start_step": start_step,
-                                "end_step": None,  # None means "to the present"
+                                "end_step": None,
                             }
                         )
 
