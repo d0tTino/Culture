@@ -6,8 +6,6 @@ from collections import deque
 from enum import Enum
 from typing import Any, Optional, cast
 
-from pydantic import BaseModel, Extra, Field, PrivateAttr
-
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -386,13 +384,20 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
         if llm_client_config and not llm_client:
             if mock_llm_client:
-                new_client = mock_llm_client
+                model.llm_client = mock_llm_client
+
             else:
                 config_data = llm_client_config
                 if hasattr(config_data, "model_dump"):
                     config_data = cast(dict[str, Any], config_data.model_dump())
                 elif not isinstance(config_data, dict):
                     raise ValueError("llm_client_config must be a Pydantic model or a dict")
+
+                if isinstance(llm_client_config, BaseModel):
+                    model.llm_client = LLMClient(config=llm_client_config)  # type: ignore[arg-type]
+                else:
+                    model.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+
 
                 new_client = LLMClient(config=LLMClientConfig(**cast(dict[str, Any], config_data)))
 
