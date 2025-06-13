@@ -392,7 +392,6 @@ class Agent:
         # Convert the state to dictionary for compatibility with the existing graph
         state_dict = cast(BaseModel, self._state).dict()
 
-
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
         # 2. From a flat 'goal' in the state_dict (legacy format)
@@ -414,7 +413,7 @@ class Agent:
             "current_state": cast(BaseModel, self._state).dict(
                 exclude_none=True
             ),  # Current full state
-imulation_step": simulation_step,
+            "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
             "environment_perception": environment_perception,
             "perceived_messages": copy.deepcopy(
