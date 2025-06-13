@@ -37,14 +37,30 @@ ENV_PREFIXES: tuple[str, ...] = (
 )
 
 
-def capture_rng_state() -> tuple[Any, ...]:
-    """Return the current ``random`` module state."""
-    return random.getstate()
+def capture_rng_state() -> dict[str, Any]:
+    """Return the current RNG state for ``random`` and ``numpy``."""
+    state = {"random": random.getstate()}
+    try:  # pragma: no cover - optional dependency
+        import numpy as np
+
+        state["numpy"] = np.random.get_state()
+    except Exception:
+        # ``numpy`` is optional; ignore if unavailable
+        pass
+
+    return state
 
 
-def restore_rng_state(state: tuple[Any, ...]) -> None:
-    """Restore the ``random`` module to ``state``."""
-    random.setstate(state)
+def restore_rng_state(state: dict[str, Any]) -> None:
+    """Restore RNG state for ``random`` and ``numpy``."""
+    random.setstate(state.get("random"))
+    if "numpy" in state:
+        try:  # pragma: no cover - optional dependency
+            import numpy as np
+
+            np.random.set_state(state["numpy"])
+        except Exception:
+            pass
 
 
 def capture_environment() -> dict[str, Any]:

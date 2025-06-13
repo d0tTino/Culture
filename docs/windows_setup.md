@@ -57,10 +57,12 @@ ollama serve &
 
 ## Run the Example Vertical Slice
 
-1. Install project requirements from the repository root:
+1. Install the CUDA-enabled PyTorch build and the remaining project requirements:
    ```bash
+   pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
    pip install -r requirements.txt -r requirements-dev.txt
    ```
+   The requirements file pins this PyTorch version, so ensure your system has CUDA 12.1 drivers installed.
 2. Execute the demo using your running Ollama instance:
    ```bash
    python -m examples.walking_vertical_slice
@@ -68,3 +70,14 @@ ollama serve &
 
 The script launches three agents for a few steps and stores their memories in
 ChromaDB. See `docs/walking_vertical_slice.md` for details.
+
+## Run the Simulation
+
+Once Ollama is running and your `.env` is configured, launch the main application:
+
+```bash
+python -m src.app --steps 5 --discord
+```
+
+The `--steps` flag sets how many iterations to perform before exiting. Use `--discord` to enable interaction with your configured Discord bot.
+
