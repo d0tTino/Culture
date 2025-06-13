@@ -3,7 +3,6 @@
 import argparse
 import asyncio
 import logging
-import sys
 import time
 from typing import TYPE_CHECKING, Any, Optional, cast
 
@@ -12,6 +11,7 @@ from typing_extensions import Self
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
+from src.infra.logging_config import setup_logging
 from src.shared.typing import SimulationMessage
 from src.sim.knowledge_board import KnowledgeBoard
 
@@ -20,14 +20,6 @@ if TYPE_CHECKING:
     from src.agents.core.base_agent import Agent
     from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.interfaces.discord_bot import SimulationDiscordBot
-
-# Configure root logger to show all levels of messages to stdout
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-
 
 # Configure the logger for this module
 logger = logging.getLogger(__name__)
@@ -759,7 +751,8 @@ def main() -> None:
     args = parse_args()
 
     # Configure logging
-    logging.basicConfig(level=getattr(logging, args.verbosity))
+    setup_logging()
+    logging.getLogger().setLevel(getattr(logging, args.verbosity))
 
     # Test DSPy modules
     logging.info("SIMULATION: Attempting to import DSPy role_thought_generator as a test...")

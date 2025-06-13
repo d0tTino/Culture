@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 import pickle
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from pydantic import BaseModel
 
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -16,7 +18,7 @@ logger = logging.getLogger(__name__)
 def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
     """Convert a ``Simulation`` instance into a serializable dictionary."""
     return {
-        "agents": [agent.state.model_dump() for agent in sim.agents],
+        "agents": [cast(BaseModel, agent.state).dict() for agent in sim.agents],
         "current_step": sim.current_step,
         "current_agent_index": sim.current_agent_index,
         "scenario": sim.scenario,

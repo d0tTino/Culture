@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
+from pydantic import BaseModel
 from typing_extensions import Self
 
 # LangGraph imports
@@ -383,7 +384,7 @@ class Agent:
         # --- End Extract Perceived Messages ---
 
         # Convert the state to dictionary for compatibility with the existing graph
-        state_dict = self._state.model_dump()
+        state_dict = cast(BaseModel, self._state).dict()
 
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
@@ -403,7 +404,9 @@ class Agent:
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
-            "current_state": self._state.model_dump(exclude_none=True),  # Current full state
+            "current_state": cast(BaseModel, self._state).dict(
+                exclude_none=True
+            ),  # Current full state
             "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
             "environment_perception": environment_perception,

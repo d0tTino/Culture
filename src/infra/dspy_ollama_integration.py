@@ -63,7 +63,7 @@ else:
             pass
 
     class Prediction(SimpleNamespace):
-        """Minimal stand-in for ``dspy.Prediction``."""
+        """Minimal stand-in for ``dspy.Prediction`` that stores arbitrary fields."""
 
     class Predict:
         """Basic callable stub used when DSPy is unavailable."""
@@ -72,9 +72,13 @@ else:
             pass
 
         def __call__(self, question: str | None = None, *args: Any, **kwargs: Any) -> Prediction:
-            if _CONFIGURED_LM is None:
-                intent = "PROPOSE_IDEA"
-            else:
+            role = kwargs.get("agent_role")
+            situation = kwargs.get("current_situation")
+            if role and situation:
+                thought = f"As a {role}, {situation}"
+                return Prediction(thought_process=thought)
+
+            if _CONFIGURED_LM is not None:
                 result = _CONFIGURED_LM(question or "")
                 if isinstance(result, list):
                     result = result[0]
@@ -82,17 +86,16 @@ else:
                     try:
                         parsed = json.loads(result)
                     except Exception:
-                        intent = result.strip()
+                        return Prediction(intent=result.strip())
                     else:
-                        if isinstance(parsed, dict) and "intent" in parsed:
-                            intent = str(parsed["intent"])
-                        else:
-                            intent = result.strip()
-                elif isinstance(result, dict):
-                    intent = str(result.get("intent", result))
-                else:
-                    intent = str(result)
-            return Prediction(intent=intent)
+                        if isinstance(parsed, dict):
+                            return Prediction(**parsed)
+                        return Prediction(intent=str(parsed))
+                if isinstance(result, dict):
+                    return Prediction(**result)
+                return Prediction(result=result)
+
+            return Prediction(intent="PROPOSE_IDEA")
 
         @staticmethod
         def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
@@ -119,7 +122,6 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dspy_ollama")
 
 __all__ = [

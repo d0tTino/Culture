@@ -5,14 +5,7 @@ from collections import deque
 from enum import Enum
 from typing import Any, Optional, cast
 
-from pydantic import BaseModel, Field, PrivateAttr
-
-try:  # pragma: no cover - prefer Pydantic v2 validators
-    from pydantic import field_validator, model_validator
-except Exception:  # pragma: no cover - fallback for pydantic<2
-    from pydantic import root_validator as model_validator
-    from pydantic import validator as field_validator
-
+from pydantic import BaseModel, Extra, Field, PrivateAttr
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -22,34 +15,25 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
     ConfigDict = dict  # type: ignore[misc, assignment]
 
 # Local imports (ensure these are correct and not causing cycles if possible)
+from pydantic import field_validator as _field_validator
+from pydantic import model_validator as _model_validator
+
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 from src.infra.config import get_config  # Import get_config function
 from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
-
-try:  # Support pydantic >= 2 if installed
-    from pydantic import field_validator as _field_validator  # type: ignore[attr-defined]
-    from pydantic import model_validator as _model_validator  # type: ignore[attr-defined]
-    _PYDANTIC_V2 = True
-except ImportError:  # pragma: no cover - fallback for old pydantic
-    from pydantic import root_validator as _model_validator
-    from pydantic import validator as _field_validator
-    _PYDANTIC_V2 = False
+_PYDANTIC_V2 = True
 
 
 def field_validator(*args: Any, **kwargs: Any) -> Any:
     """Compatibility wrapper for Pydantic field validators."""
-    if not _PYDANTIC_V2:
-        kwargs.pop("mode", None)
     return _field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
     """Compatibility wrapper for Pydantic model validators."""
-    if not _PYDANTIC_V2:
-        kwargs.pop("mode", None)
     return _model_validator(*args, **kwargs)
 
 
@@ -117,7 +101,6 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
     def get_default_llm_client() -> OllamaClientProtocol | None:
         return None
-
 
 
 class AgentStateData(BaseModel):
@@ -370,7 +353,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")  # type: ignore[arg-type]
+    @model_validator(mode="after")
     def _validate_model_after(cls, model: "AgentState") -> "AgentState":
         llm_client_config = model.llm_client_config
         llm_client = model.llm_client
@@ -381,35 +364,17 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 model.llm_client = mock_llm_client
             elif llm_client_config:
                 if isinstance(llm_client_config, BaseModel):
-                    model.llm_client = LLMClient(
-                        config=cast(LLMClientConfig, llm_client_config)
-                    )
+                    model.llm_client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
                 else:
-                    model.llm_client = LLMClient(
-                        config=LLMClientConfig(**llm_client_config)
-                    )
+                    model.llm_client = LLMClient(config=LLMClientConfig(**llm_client_config))
             else:
                 model.llm_client = get_default_llm_client()
 
-
-                else:
-                    if isinstance(llm_client_config, BaseModel):
-                        if hasattr(llm_client_config, "model_dump"):
-                            config_data = llm_client_config.model_dump()
-                        else:
-                            config_data = llm_client_config.dict()
-                    else:
-                        config_data = cast(dict[str, Any], llm_client_config)
-
-                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
-            elif not llm_client:
-                values["llm_client"] = get_default_llm_client()
-
-            if not values.get("role_history"):
-                values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
-            if not values.get("mood_history"):
-                values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
-            return values
+        if not model.role_history:
+            model.role_history = [(model.step_counter, model.current_role)]
+        if not model.mood_history:
+            model.mood_history = [(model.step_counter, model.mood_level)]
+        return model
 
     def get_llm_client(self) -> Any:
         if not self.llm_client:
@@ -427,10 +392,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump(
+        return cast(BaseModel, self).dict(
             exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
         )
-
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":

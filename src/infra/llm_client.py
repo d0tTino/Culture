@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any, Callable, ParamSpec, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, cast
 
 from src.shared.typing import (
     JSONDict,
@@ -30,26 +30,28 @@ except Exception:  # pragma: no cover - optional dependency
 
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
-try:  # pragma: no cover - optional dependency
-    import requests  # type: ignore[import-untyped]
-    from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
-except Exception:  # pragma: no cover - fallback when requests missing
-    logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
-    from unittest.mock import MagicMock
+if TYPE_CHECKING:
+    import requests
+    from requests.exceptions import RequestException, Timeout
+else:
+    try:  # pragma: no cover - optional dependency
+        import requests
+        from requests.exceptions import RequestException, Timeout
+    except Exception:  # pragma: no cover - fallback when requests missing
+        logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
+        from unittest.mock import MagicMock
 
-    requests = MagicMock()
+        requests = MagicMock()
 
-    # requests defines RequestException; use a stub when missing
-    class RequestException(Exception):  # type: ignore[no-redef]
-        """Fallback RequestException when requests is unavailable."""
+        class RequestException(Exception):
+            """Fallback RequestException when requests is unavailable."""
 
-        pass
+            pass
 
-    # Timeout depends on requests; ignore redefinition when stubbed
-    class Timeout(RequestException):  # type: ignore[no-redef, no-any-unimported]
-        """Fallback Timeout when requests is unavailable."""
+        class Timeout(RequestException):
+            """Fallback Timeout when requests is unavailable."""
 
-        pass
+            pass
 
 
 from pydantic import BaseModel, ValidationError
@@ -59,14 +61,17 @@ from src.shared.decorator_utils import monitor_llm_call
 
 from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config values
 
-try:
+if TYPE_CHECKING:
     from litellm.exceptions import APIError
-except Exception:
-    # litellm provides APIError; define fallback if absent
-    class APIError(Exception):  # type: ignore[no-redef]
-        """Fallback APIError when litellm is unavailable."""
+else:
+    try:
+        from litellm.exceptions import APIError
+    except Exception:
 
-        pass
+        class APIError(Exception):
+            """Fallback APIError when litellm is unavailable."""
+
+            pass
 
 
 _RequestException = RequestException
@@ -87,8 +92,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -166,9 +170,7 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(  # type: ignore[no-any-unimported]
-            f"{OLLAMA_API_BASE}", timeout=1
-        )
+        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")
@@ -523,10 +525,7 @@ def generate_structured_output(
                             base_fields = base_fields()
                         mock_fields = base_fields or {}
                     for field_name, field in mock_fields.items():
-                        if (
-                            hasattr(field, "is_required")
-                            and callable(field.is_required)
-                        ):
+                        if hasattr(field, "is_required") and callable(field.is_required):
                             required = bool(field.is_required())
                         else:
                             required = bool(getattr(field, "required", False))
