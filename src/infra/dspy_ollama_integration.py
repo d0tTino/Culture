@@ -20,10 +20,17 @@ from typing_extensions import Self
 
 # Import DSPy and Ollama, providing fallbacks when unavailable
 try:
-    import dspy_ai as dspy
-except Exception:  # pragma: no cover - attempt dspy fallback
+    import dspy
+
+    if not hasattr(dspy, "LM"):
+        raise AttributeError("dspy.LM missing")
+except Exception:  # pragma: no cover - attempt dspy_ai fallback
     try:
-        import dspy
+        import dspy_ai as dspy
+
+        if not hasattr(dspy, "LM"):
+            raise AttributeError("dspy_ai.LM missing")
+
     except Exception:
         dspy = None
 

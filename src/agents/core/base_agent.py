@@ -389,10 +389,9 @@ class Agent:
         # --- End Extract Perceived Messages ---
 
         # Convert the state to dictionary for compatibility with the existing graph
-        if hasattr(self._state, "model_dump"):
-            state_dict = self._state.model_dump()
-        else:  # pragma: no cover - pydantic<2 fallback
-            state_dict = self._state.dict()
+        state_dict = (
+            self._state.model_dump() if hasattr(self._state, "model_dump") else self._state.dict()
+        )
 
 
         # Extract agent goal - handle goals which may be in different formats:
