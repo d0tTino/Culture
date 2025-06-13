@@ -60,7 +60,6 @@ def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
     """Convert a ``Simulation`` instance into a serializable dictionary."""
     return {
         "agents": [cast(Agent, agent).state.to_dict(exclude_none=True) for agent in sim.agents],
-
         "current_step": sim.current_step,
         "current_agent_index": sim.current_agent_index,
         "scenario": sim.scenario,

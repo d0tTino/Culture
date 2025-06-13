@@ -136,6 +136,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
    ```bash
    pip install -r requirements.txt
    ```
+   The project currently supports **DSPy 2.6.27**; `requirements.txt` pins `dspy-ai==2.6.27`.
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
