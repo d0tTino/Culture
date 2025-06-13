@@ -1,7 +1,11 @@
 import importlib.metadata as im
 
+import pytest
+from packaging.version import Version
 
-def test_dspy_version():
-    v = im.version("dspy-ai")
-    major, minor, *_ = map(int, v.split(".")[:2])
-    assert major == 2 and 24 <= minor < 7, f"Unsupported DSPy version: {v}"
+
+@pytest.mark.unit
+def test_dspy_version() -> None:
+    """Ensure the installed DSPy version is within the supported 2.6 range."""
+    v = Version(im.version("dspy-ai"))
+    assert Version("2.6.24") <= v < Version("2.7.0"), f"Unsupported DSPy version: {v}"
