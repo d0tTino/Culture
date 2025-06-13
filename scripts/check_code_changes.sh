@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# Load environment variables from .env if available
+if [ -f ".env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 # Determine base commit for diff
 BASE_SHA="${GITHUB_BASE_SHA:-${GITHUB_EVENT_BEFORE}}"
 if [ -z "$BASE_SHA" ]; then

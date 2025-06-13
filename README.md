@@ -124,6 +124,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
    ```bash
    git clone https://github.com/d0tTino/Culture.git
    cd Culture
+   cp .env.example .env  # create local environment file
    ```
 
 2. Create and activate a virtual environment (optional but recommended):
@@ -490,6 +491,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```bash
    git clone https://github.com/d0tTino/Culture.git
    cd Culture
+   cp .env.example .env  # create local environment file
    ```
 2. **Create and activate a virtual environment:**
    ```bash

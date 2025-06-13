@@ -196,7 +196,7 @@ class Agent:
         self._state = AgentState(**agent_state_kwargs)
 
         # Initialize Langchain graph by calling the compiler function
-        self.graph = compile_agent_graph()  # MODIFIED: Call imported function
+        self.graph = compile_agent_graph()
 
         # Vector Store Manager Initialization
         if vector_store_manager:
@@ -418,7 +418,7 @@ class Agent:
             "environment_perception": environment_perception,
             "perceived_messages": copy.deepcopy(
                 environment_perception.get("perceived_messages", [])
-            ),  # MODIFIED
+            ),
             "memory_history_list": [],  # Placeholder
             "turn_sentiment_score": 0,  # Placeholder
             "individual_message_sentiments": [],  # Initialize empty list for per-message sentiments
