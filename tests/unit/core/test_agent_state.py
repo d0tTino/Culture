@@ -3,6 +3,7 @@ Test script to verify the AgentState refactoring.
 This script initializes a simulation with agents using the new AgentState model
 and runs several steps to verify the state management is working correctly.
 """
+# mypy: ignore-errors
 
 import logging
 import sys
@@ -10,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("langgraph")
-pytest.importorskip("chromadb")
-
 from src.agents.core.agent_state import AgentState
 from src.agents.core.base_agent import Agent
 from src.sim.simulation import Simulation
 from tests.utils.mock_llm import MockLLM
+
+pytest.importorskip("langgraph")
+pytest.importorskip("chromadb")
 
 # Set up proper paths for imports
 project_root = Path(__file__).resolve().parents[2]
@@ -75,9 +76,9 @@ async def test_agent_state() -> None:
         # Verify the agents have been created with AgentState objects
         for i, agent in enumerate(agents):
             logger.info(f"Verifying agent {i} state structure")
-            assert isinstance(
-                agent.state, AgentState
-            ), f"Agent {i} state is not an AgentState object"
+            assert isinstance(agent.state, AgentState), (
+                f"Agent {i} state is not an AgentState object"
+            )
             logger.info(f"Agent {i} state: {agent.state}")
 
             # Verify the state has the expected fields
@@ -115,9 +116,9 @@ async def test_agent_state() -> None:
             initial_du = agent.state.du
 
             # Verify state object is still valid
-            assert isinstance(
-                agent.state, AgentState
-            ), f"Agent {i} state is not an AgentState object"
+            assert isinstance(agent.state, AgentState), (
+                f"Agent {i} state is not an AgentState object"
+            )
 
             # Check that history fields have been updated
             # Note: We use logging.info instead of assertions here as exact values

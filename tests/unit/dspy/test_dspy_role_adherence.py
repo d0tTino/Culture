@@ -2,17 +2,16 @@ import logging
 import sys
 from typing import cast
 
+import dspy
+import ollama
 import pytest
+from typing_extensions import Self
 
 pytest.importorskip("dspy")
 pytest.importorskip("ollama")
 
-import dspy
-import ollama
-
 if not hasattr(dspy, "Predict"):
     pytest.skip("dspy Predict not available", allow_module_level=True)
-from typing_extensions import Self
 
 # Configure logging
 logging.basicConfig(
@@ -169,9 +168,9 @@ def test_role_prefix_adherence() -> None:
         )
 
     # Using assertion instead of return value
-    assert (
-        success_count == total_tests
-    ), f"Only {success_count}/{total_tests} role adherence tests passed"
+    assert success_count == total_tests, (
+        f"Only {success_count}/{total_tests} role adherence tests passed"
+    )
 
 
 if __name__ == "__main__":
