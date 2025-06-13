@@ -5,6 +5,7 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 
 # ruff: noqa: ANN101, ANN102
 
+import json
 import logging
 import sys
 import time
@@ -102,7 +103,6 @@ else:
                 return Prediction(result=result)
 
             return Prediction(intent="PROPOSE_IDEA")
-
 
         @staticmethod
         def load(path: str, *args: Any, **kwargs: Any) -> "Predict":

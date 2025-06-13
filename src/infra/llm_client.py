@@ -21,7 +21,7 @@ from src.shared.typing import (
 
 try:
     import ollama
-except Exception:  # pragma: no cover - optional dependency
+except ImportError:  # pragma: no cover - optional dependency
     logging.getLogger(__name__).warning(
         "ollama package not installed; using MagicMock stub for ollama"
     )
@@ -31,13 +31,13 @@ except Exception:  # pragma: no cover - optional dependency
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
 if TYPE_CHECKING:
-    import requests
-    from requests.exceptions import RequestException, Timeout
+    import requests  # type: ignore[import-untyped]
+    from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
 else:
     try:  # pragma: no cover - optional dependency
-        import requests
-        from requests.exceptions import RequestException, Timeout
-    except Exception:  # pragma: no cover - fallback when requests missing
+        import requests  # type: ignore[import-untyped]
+        from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
+    except ImportError:  # pragma: no cover - fallback when requests missing
         logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
         from unittest.mock import MagicMock
 
@@ -51,7 +51,6 @@ else:
         class Timeout(RequestException):
             """Fallback Timeout when requests is unavailable."""
 
-
             pass
 
 
@@ -63,9 +62,8 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - runtime import
     try:  # Support pydantic >= 2 if installed
         from pydantic.v1.fields import ModelField
-    except Exception:  # pragma: no cover - fallback for pydantic<2
+    except ImportError:  # pragma: no cover - fallback for pydantic<2
         from pydantic.fields import ModelField  # type: ignore[attr-defined]  # noqa: F401
-
 
 
 from src.shared.decorator_utils import monitor_llm_call
@@ -77,7 +75,7 @@ if TYPE_CHECKING:
 else:
     try:
         from litellm.exceptions import APIError
-    except Exception:
+    except ImportError:
 
         class APIError(Exception):
             """Fallback APIError when litellm is unavailable."""
@@ -181,7 +179,7 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+        response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
 
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
@@ -242,13 +240,6 @@ def _retry_with_backoff(
             e = exc
             logger.error(
                 f"LLM call failed (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True
-            )
-            time.sleep(base_delay * (2**attempt))
-        except Exception as exc:
-            e = exc
-            logger.error(
-                f"Unexpected error in LLM call (attempt {attempt + 1}/{max_retries}): {e}",
-                exc_info=True,
             )
             time.sleep(base_delay * (2**attempt))
     return None, e
