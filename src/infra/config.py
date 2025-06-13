@@ -242,10 +242,8 @@ def load_config() -> dict[str, object]:
         },
     }
 
-    # Log the entire configuration for debugging. This may reveal sensitive
-    # values, so consider adjusting the log level or redacting secrets in
-    # production.
-    logger.info(f"Configuration loaded. _CONFIG contains: {_CONFIG}")
+    # Log minimal information to avoid leaking sensitive values
+    logger.info("Configuration loaded")
     # Fail fast if critical config is missing
     if not _CONFIG.get("OLLAMA_API_BASE"):
         logger.critical("OLLAMA_API_BASE is missing from configuration. Exiting.")
