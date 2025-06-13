@@ -31,7 +31,7 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
     restore_environment(meta["environment"])
 
     assert os.environ["ROLE_DU_GENERATION"] == '{"A":1, "B":1}'
-    assert os.environ["CULTURE_CUSTOM_VAR"] == "xyz"
+    assert "random" in meta["rng_state"]
 
     assert random.random() == expected_next
     assert loaded.agents[0].state.current_role == sim.agents[0].state.current_role

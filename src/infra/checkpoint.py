@@ -21,45 +21,45 @@ from src.sim.simulation import Simulation
 
 logger = logging.getLogger(__name__)
 
-# Prefixes for project-specific environment variables that should be captured
-ENV_PREFIXES: tuple[str, ...] = (
-    "CULTURE_",
-    "OLLAMA_",
-    "REDIS_",
-    "WEAVIATE_",
-    "OPENAI_",
-    "ANTHROPIC_",
-    "DISCORD_",
-    "MEMORY_",
-    "ROLE_",
-    "IP_",
-    "DU_",
-)
 
+    """Return the current RNG state for ``random`` and ``numpy`` if available."""
+    """Restore RNG state for ``random`` and ``numpy``.
 
-def capture_rng_state() -> dict[str, Any]:
+    Accepts states from :func:`capture_rng_state` or the legacy tuple-based
+    format used in older checkpoints.
+    """
     """Return the current RNG state for ``random`` and ``numpy``."""
     state = {"random": random.getstate()}
     try:  # pragma: no cover - optional dependency
         import numpy as np
 
         state["numpy"] = np.random.get_state()
-    except Exception:
+    except ImportError:
+
         # ``numpy`` is optional; ignore if unavailable
         pass
 
     return state
 
 
-def restore_rng_state(state: dict[str, Any]) -> None:
+def restore_rng_state(state: Any) -> None:
     """Restore RNG state for ``random`` and ``numpy``."""
-    random.setstate(state.get("random"))
-    if "numpy" in state:
+    if isinstance(state, dict):
+        random_state = state.get("random")
+    else:  # backward compatibility
+        random_state = state
+
+    if random_state is not None:
+        random.setstate(random_state)
+
+    if isinstance(state, dict) and "numpy" in state:
+
         try:  # pragma: no cover - optional dependency
             import numpy as np
 
             np.random.set_state(state["numpy"])
-        except Exception:
+        except ImportError:
+
             pass
 
 
