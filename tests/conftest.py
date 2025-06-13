@@ -2,14 +2,13 @@
 Pytest fixtures for use across test files.
 """
 
-import os
-import pathlib
 import shutil
 import socket
 import sys
 import tempfile
 import types
 from collections.abc import Generator
+from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
@@ -58,7 +57,7 @@ import pytest
 from pytest import FixtureRequest, MonkeyPatch
 
 # Add the project root to path to allow importing src modules
-project_root = str(pathlib.Path(__file__).parent.parent.absolute())
+project_root = str(Path(__file__).parent.parent.absolute())
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -159,11 +158,11 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[str, None, None]:
     Auto-deletes the directory after the session.
     """
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
-    if sys.platform.startswith("linux") and os.path.exists("/dev/shm"):
+    if sys.platform.startswith("linux") and Path("/dev/shm").exists():
         base_dir = f"/dev/shm/chroma_tests/{worker_id}"
     else:
         base_dir = tempfile.mkdtemp(prefix=f"chroma_tests_{worker_id}_")
-    os.makedirs(base_dir, exist_ok=True)
+    Path(base_dir).mkdir(parents=True, exist_ok=True)
     yield base_dir
     # Teardown: remove the directory after the session
     try:

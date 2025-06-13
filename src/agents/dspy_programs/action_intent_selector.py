@@ -8,8 +8,8 @@ action intents for agents based on their role, goals, and current situation.
 
 import json
 import logging
-import os
 import sys
+from pathlib import Path
 from typing import Any
 
 # Configure logging
@@ -65,8 +65,8 @@ class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported]
 
 select_action_intent_module = dspy.Predict(ActionIntentSelection)
 
-OPTIMIZED_PROGRAM_PATH = os.path.join(
-    os.path.dirname(__file__), "compiled", "optimized_action_selector.json"
+OPTIMIZED_PROGRAM_PATH = (
+    Path(__file__).resolve().parent / "compiled" / "optimized_action_selector.json"
 )
 
 
@@ -81,13 +81,13 @@ def load_optimized_program() -> dict[str, Any] | None:
         f"ACTION SELECTOR: Attempting to load optimized program from {OPTIMIZED_PROGRAM_PATH}"
     )
     try:
-        if not os.path.exists(OPTIMIZED_PROGRAM_PATH):
+        if not OPTIMIZED_PROGRAM_PATH.exists():
             logger.warning(
                 f"ACTION SELECTOR: Optimized program file not found at {OPTIMIZED_PROGRAM_PATH}"
             )
             return None
 
-        with open(OPTIMIZED_PROGRAM_PATH) as f:
+        with OPTIMIZED_PROGRAM_PATH.open() as f:
             program_data = json.load(f)
         if isinstance(program_data, dict):
             logger.info("ACTION SELECTOR: Successfully loaded optimized action intent selector")

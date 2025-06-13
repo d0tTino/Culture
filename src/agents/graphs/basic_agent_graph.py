@@ -4,9 +4,9 @@ Defines the basic LangGraph structure for an agent's turn.
 """
 
 import logging
-import os
 import random
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_controller import AgentController
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # At the top of the file, after other DSPy imports
 try:
-    import os  # Redundant but harmless
+    from pathlib import Path
 
     from dspy import Predict
 
@@ -45,14 +45,14 @@ try:
 
     _relationship_updater = get_relationship_updater()
 
-    _REL_UPDATER_PATH = os.path.join(
-        os.path.dirname(__file__),
-        "../dspy_programs/compiled/optimized_relationship_updater.json",
+    _REL_UPDATER_PATH = (
+        Path(__file__).resolve().parent
+        / "../dspy_programs/compiled/optimized_relationship_updater.json"
     )
-    if os.path.exists(_REL_UPDATER_PATH):
+    if _REL_UPDATER_PATH.exists():
         _optimized_relationship_updater = Predict.load(
             _relationship_updater,
-            _REL_UPDATER_PATH,
+            str(_REL_UPDATER_PATH),
         )
     else:
         _optimized_relationship_updater = None
@@ -64,7 +64,7 @@ except Exception as e:
 # Add dspy imports with detailed error handling
 try:
     logging.info("Attempting to import DSPy modules...")
-    sys.path.insert(0, os.path.abspath("."))  # Ensure the root directory is in the path
+    sys.path.insert(0, str(Path(".").resolve()))  # Ensure the root directory is in the path
     import dspy
 
     from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector

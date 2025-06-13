@@ -4,15 +4,15 @@ Integration tests for multi-agent conflict resolution scenarios,
 focusing on Knowledge Board interactions, agent state changes, and facilitation.
 """
 
-import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Ensure project root is on sys.path before importing src modules
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+project_root = Path(__file__).resolve().parents[2]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 import pytest
 
@@ -60,7 +60,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
         logger.info("Setting up TestConflictResolution...")
 
         # Clean up previous test DB if it exists
-        if os.path.exists(CHROMA_DB_PATH_CONFLICT):
+        if Path(CHROMA_DB_PATH_CONFLICT).exists():
             import shutil
 
             try:
@@ -170,7 +170,7 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             except Exception as e:
                 logger.warning(f"Error during ChromaDB client interaction in teardown: {e}")
 
-        if os.path.exists(CHROMA_DB_PATH_CONFLICT):
+        if Path(CHROMA_DB_PATH_CONFLICT).exists():
             import shutil
 
             try:

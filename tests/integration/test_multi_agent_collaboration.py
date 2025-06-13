@@ -5,9 +5,9 @@ focusing on Knowledge Board interactions and their impact on agent states.
 """
 
 import logging
-import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,9 +16,9 @@ pytest.importorskip("langgraph")
 pytest.importorskip("chromadb")
 
 # Add project root to sys.path to allow importing src modules
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+project_root = Path(__file__).resolve().parents[1]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent, AgentActionOutput
@@ -51,7 +51,7 @@ class TestMultiAgentCollaboration(unittest.IsolatedAsyncioTestCase):
         logger.info("Setting up TestMultiAgentCollaboration...")
 
         # Clean up previous test DB if it exists
-        if os.path.exists(CHROMA_DB_PATH_COLLAB):
+        if Path(CHROMA_DB_PATH_COLLAB).exists():
             import shutil
 
             try:
@@ -141,7 +141,7 @@ class TestMultiAgentCollaboration(unittest.IsolatedAsyncioTestCase):
             except Exception as e:
                 logger.warning(f"Error resetting ChromaDB client: {e}")
 
-        if os.path.exists(CHROMA_DB_PATH_COLLAB):
+        if Path(CHROMA_DB_PATH_COLLAB).exists():
             import shutil
 
             try:
