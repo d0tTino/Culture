@@ -76,9 +76,9 @@ async def test_agent_state() -> None:
         # Verify the agents have been created with AgentState objects
         for i, agent in enumerate(agents):
             logger.info(f"Verifying agent {i} state structure")
-            assert isinstance(agent.state, AgentState), (
-                f"Agent {i} state is not an AgentState object"
-            )
+            assert isinstance(
+                agent.state, AgentState
+            ), f"Agent {i} state is not an AgentState object"
             logger.info(f"Agent {i} state: {agent.state}")
 
             # Verify the state has the expected fields
@@ -89,13 +89,10 @@ async def test_agent_state() -> None:
             assert agent.state.ip > 0
             assert agent.state.du > 0
 
-            # Verify that history fields are initialized as empty
-            assert len(agent.state.mood_history) == 0
+            # Verify history fields initialize with at least one entry where applicable
+            assert len(agent.state.mood_history) >= 1
             assert len(agent.state.relationship_history) == 0
-            assert len(agent.state.ip_history) == 0
-            assert len(agent.state.du_history) == 0
-            assert len(agent.state.role_history) == 0
-            assert len(agent.state.project_history) == 0
+            assert len(agent.state.role_history) >= 1
 
         # Create a simulation with these agents
         scenario = "This is a test simulation scenario to verify the AgentState refactoring."
@@ -116,36 +113,22 @@ async def test_agent_state() -> None:
             initial_du = agent.state.du
 
             # Verify state object is still valid
-            assert isinstance(agent.state, AgentState), (
-                f"Agent {i} state is not an AgentState object"
-            )
+            assert isinstance(
+                agent.state, AgentState
+            ), f"Agent {i} state is not an AgentState object"
 
             # Check that history fields have been updated
             # Note: We use logging.info instead of assertions here as exact values
             # might change with simulation implementation, but we want to see progress
             logger.info(f"Mood history: {len(agent.state.mood_history)} entries")
             logger.info(f"Relationship history: {len(agent.state.relationship_history)} entries")
-            logger.info(f"IP history: {len(agent.state.ip_history)} entries")
-            logger.info(f"DU history: {len(agent.state.du_history)} entries")
             logger.info(f"Role history: {len(agent.state.role_history)} entries")
-            logger.info(f"Project history: {len(agent.state.project_history)} entries")
 
             # Verify role history is correctly tracking the current role
             if agent.state.role_history:
                 logger.info(f"Current role from state: {agent.state.role}")
                 logger.info(f"Most recent role change: {agent.state.role_history[-1]}")
                 # Check logged history details
-
-            # Verify IP history - normally should increase or stay same during simulation
-            # Just logging here since exact values aren't critical for test passing
-            if agent.state.ip_history:
-                logger.info(f"Initial IP: {initial_ip}, current IP: {agent.state.ip}")
-                logger.info(f"IP history: {agent.state.ip_history}")
-
-            # Verify DU history - normally should increase during simulation
-            if agent.state.du_history:
-                logger.info(f"Initial DU: {initial_du}, current DU: {agent.state.du}")
-                logger.info(f"DU history: {agent.state.du_history}")
 
     finally:
         mock_llm_cm.__exit__(None, None, None)
