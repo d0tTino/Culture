@@ -22,8 +22,12 @@ from src.sim.simulation import Simulation
 logger = logging.getLogger(__name__)
 
 
+    """Return the current RNG state for ``random`` and ``numpy`` if available."""
+    """Restore RNG state for ``random`` and ``numpy``.
 
-def capture_rng_state() -> dict[str, Any]:
+    Accepts states from :func:`capture_rng_state` or the legacy tuple-based
+    format used in older checkpoints.
+    """
     """Return the current RNG state for ``random`` and ``numpy``."""
     state = {"random": random.getstate()}
     try:  # pragma: no cover - optional dependency
