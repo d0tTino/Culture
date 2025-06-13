@@ -62,7 +62,8 @@ ChromaMetaList = list[ChromaMeta]
 T = TypeVar("T")
 
 # Ensure chromadb version compatibility (optional, for debugging)
-logger.info(f"Using ChromaDB version: {chromadb.__version__}")
+if chromadb is not None:
+    logger.info(f"Using ChromaDB version: {chromadb.__version__}")
 
 
 def first_list_element(lst: list[list[T]] | object) -> list[T]:
