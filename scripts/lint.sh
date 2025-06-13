@@ -3,6 +3,14 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+# Load environment variables from .env if available
+if [ -f ".env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 FORMAT=0
 if [[ "$1" == "--format" || "$1" == "-f" ]]; then
   FORMAT=1

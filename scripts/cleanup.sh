@@ -1,5 +1,14 @@
 #!/bin/bash
 # Aggressive cleanup for Python/AI project
+set -e
+
+# Load environment variables from .env if available
+if [ -f ".env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
 rm -rf __pycache__ .mypy_cache .ruff_cache .pytest_cache htmlcov logs temp chroma_db scripts/temp data/logs archives/__pycache__ scripts/archive/__pycache__ src/agents/__pycache__ src/agents/core/__pycache__ src/agents/memory/__pycache__ src/agents/dspy_programs/__pycache__ tests/__pycache__ tests/unit/__pycache__ tests/integration/__pycache__
 find . -name '*.log' -delete
 find . -name '*.txt' -delete
