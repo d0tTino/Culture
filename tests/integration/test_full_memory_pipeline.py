@@ -16,17 +16,17 @@ The test simulates:
 
 import logging
 import math
-import os
 import shutil
 import sys
 import unittest
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Add the project root to the Python path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(project_root)
+project_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(project_root))
 
 import pytest
 
@@ -78,7 +78,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
 
         # Create test-specific ChromaDB directory
         cls.vector_store_dir = f"./test_full_memory_pipeline_{uuid.uuid4().hex[:6]}"
-        if os.path.exists(cls.vector_store_dir):
+        if Path(cls.vector_store_dir).exists():
             logger.info(f"Removing previous test ChromaDB at {cls.vector_store_dir}")
             shutil.rmtree(cls.vector_store_dir)
 
@@ -106,7 +106,7 @@ class TestFullMemoryPipeline(unittest.TestCase):
         cls.llm_patcher.stop()
 
         # Clean up ChromaDB directory
-        if os.path.exists(cls.vector_store_dir):
+        if Path(cls.vector_store_dir).exists():
             try:
                 shutil.rmtree(cls.vector_store_dir)
                 logger.info(f"Removed test ChromaDB directory: {cls.vector_store_dir}")

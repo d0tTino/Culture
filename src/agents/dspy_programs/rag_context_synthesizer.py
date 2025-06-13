@@ -10,8 +10,8 @@ The module handles the "]]" prefix artifact that sometimes appears in DSPy-Ollam
 """
 
 import logging
-import os
 import re
+from pathlib import Path
 from typing import Optional
 
 # Configure logging
@@ -74,8 +74,8 @@ class RAGContextSynthesizer:
         logger.info("Initializing RAGContextSynthesizer")
         self.failsafe = FailsafeRAGContextSynthesizer()
         if compiled_program_path is None:
-            compiled_program_path = os.path.join(
-                os.path.dirname(__file__), "compiled", "optimized_rag_synthesizer.json"
+            compiled_program_path = str(
+                Path(__file__).resolve().parent / "compiled" / "optimized_rag_synthesizer.json"
             )
         try:
             configure_dspy_with_ollama(model_name="mistral:latest", temperature=0.1)
@@ -84,7 +84,7 @@ class RAGContextSynthesizer:
             logger.error(f"Error configuring DSPy with Ollama: {e}")
             logger.warning("DSPy configuration failed, synthesis may not work properly")
         try:
-            self.dspy_program = self._load_program(compiled_program_path)
+            self.dspy_program = self._load_program(str(compiled_program_path))
         except Exception as e:
             logger.critical(f"Failed to load RAGContextSynthesizer program: {e}. Using failsafe.")
             self.dspy_program = None
@@ -101,7 +101,8 @@ class RAGContextSynthesizer:
         """
         default_module = dspy.Predict(RAGSynthesis)
 
-        if not os.path.exists(compiled_program_path):
+        path = Path(compiled_program_path)
+        if not path.exists():
             logger.warning(f"Compiled program not found at {compiled_program_path}")
             logger.info("Using default (unoptimized) RAG synthesis module")
             return default_module
@@ -110,7 +111,7 @@ class RAGContextSynthesizer:
             logger.info(f"Loading compiled program from {compiled_program_path}")
             program = default_module
             try:
-                program.load(compiled_program_path)
+                program.load(str(path))
                 logger.info("Successfully loaded compiled RAG synthesis program")
                 return program
             except KeyError as ke:

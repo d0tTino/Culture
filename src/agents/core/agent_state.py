@@ -17,8 +17,16 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
     ConfigDict = dict  # type: ignore[misc, assignment]
 
 # Local imports (ensure these are correct and not causing cycles if possible)
-from pydantic import field_validator as _field_validator
-from pydantic import model_validator as _model_validator
+try:  # pragma: no cover - pydantic>=2 preferred
+    from pydantic import field_validator as _field_validator
+    from pydantic import model_validator as _model_validator
+
+    _PYDANTIC_V2 = True
+except Exception:  # pragma: no cover - fallback to pydantic<2
+    from pydantic import root_validator as _model_validator
+    from pydantic import validator as _field_validator
+
+    _PYDANTIC_V2 = False
 
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 from src.infra.config import get_config  # Import get_config function
@@ -26,18 +34,19 @@ from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
-_PYDANTIC_V2 = True
-
 
 def field_validator(*args: Any, **kwargs: Any) -> Any:
     """Compatibility wrapper for Pydantic field validators."""
+    if not _PYDANTIC_V2:
+        kwargs.pop("mode", None)
     return _field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
     """Compatibility wrapper for Pydantic model validators."""
+    if not _PYDANTIC_V2:
+        kwargs.pop("mode", None)
     return _model_validator(*args, **kwargs)
-
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -379,7 +388,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             model.mood_history = [(model.step_counter, model.mood_level)]
         return model
 
-
     def get_llm_client(self) -> Any:
         if not self.llm_client:
             raise ValueError("LLM client not initialized")
@@ -399,7 +407,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         return cast(BaseModel, self).dict(
             exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
         )
-
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":

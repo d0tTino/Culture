@@ -1,6 +1,6 @@
 # ruff: noqa: E501, ANN101, ANN401
 import logging
-import os
+from pathlib import Path
 
 from src.infra.dspy_ollama_integration import dspy
 
@@ -63,14 +63,14 @@ def get_role_thought_generator() -> object:
             # await configure_dspy_ollama_async() # Still keep this part commented for now to see if global config holds
 
         # Try to load optimized/compiled version
-        compiled_path = os.path.join(
-            os.path.dirname(__file__), "compiled", "optimized_role_thought_generator.json"
+        compiled_path = (
+            Path(__file__).resolve().parent / "compiled" / "optimized_role_thought_generator.json"
         )
         generator = dspy.Predict(RoleThoughtGenerator)
-        if os.path.exists(compiled_path):
+        if compiled_path.exists():
             logger.debug(f"Attempting to load optimized RoleThoughtGenerator from {compiled_path}")
             try:
-                generator.load(compiled_path)
+                generator.load(str(compiled_path))
                 logger.info(
                     f"ROLE THOUGHT GENERATOR: Loaded optimized generator from {compiled_path}"
                 )

@@ -11,7 +11,7 @@ shows a 16.7% improvement in summary quality based on LLM-as-judge evaluations.
 """
 
 import logging
-import os
+from pathlib import Path
 from typing import Optional
 
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
@@ -100,9 +100,9 @@ class L2SummaryGenerator:
             self.l2_predictor = dspy.Predict(GenerateL2SummarySignature)
 
             # Try to load the compiled program if provided and exists
-            if compiled_program_path and os.path.exists(compiled_program_path):
+            if compiled_program_path and Path(compiled_program_path).exists():
                 try:
-                    self.l2_predictor.load(compiled_program_path)
+                    self.l2_predictor.load(str(compiled_program_path))
                     logger.info(
                         f"Successfully loaded compiled L2 summarizer from {compiled_program_path}"
                     )

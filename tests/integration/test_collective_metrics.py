@@ -8,7 +8,6 @@ This script validates that collective IP and DU are correctly:
 """
 
 import logging
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -46,8 +45,8 @@ from src.infra import config
 LOG_FILE = "collective_metrics_test.log"
 
 # Remove any existing log file to start fresh
-if os.path.exists(LOG_FILE):
-    os.remove(LOG_FILE)
+if Path(LOG_FILE).exists():
+    Path(LOG_FILE).unlink()
 
 # Setup logging configuration
 logging.basicConfig(
@@ -55,7 +54,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(os.path.join("data", "logs", LOG_FILE)),
+        logging.FileHandler(Path("data") / "logs" / LOG_FILE),
     ],
 )
 

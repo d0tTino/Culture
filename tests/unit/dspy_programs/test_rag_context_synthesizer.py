@@ -34,7 +34,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
         # Create the synthesizer
         self.synthesizer = RAGContextSynthesizer()
 
-    @patch("src.agents.dspy_programs.rag_context_synthesizer.os.path.exists")
+    @patch("src.agents.dspy_programs.rag_context_synthesizer.Path.exists")
     def test_initialization_without_compiled_program(self: Self, mock_exists: MagicMock) -> None:
         """Test that the class initializes correctly when no compiled program exists."""
         # Set up mock
@@ -49,7 +49,7 @@ class TestRAGContextSynthesizer(unittest.TestCase):
         # Check that we have a dspy_program attribute that's not None
         self.assertIsNotNone(synthesizer.dspy_program)
 
-    @patch("src.agents.dspy_programs.rag_context_synthesizer.os.path.exists")
+    @patch("src.agents.dspy_programs.rag_context_synthesizer.Path.exists")
     @patch("dspy.Predict.load")
     def test_initialization_with_compiled_program(
         self: Self, mock_load: MagicMock, mock_exists: MagicMock
