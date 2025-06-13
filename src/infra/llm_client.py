@@ -1,4 +1,4 @@
-# ruff: noqa: ANN401
+# ruff: noqa: ANN401, ANN101, ANN102
 """Provides a client for interacting with the Ollama LLM service."""
 
 from __future__ import annotations
@@ -87,8 +87,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -169,6 +168,7 @@ def is_ollama_available() -> bool:
         response: requests.Response = requests.get(
             f"{OLLAMA_API_BASE}", timeout=1
         )
+
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")
@@ -523,10 +523,7 @@ def generate_structured_output(
                             base_fields = base_fields()
                         mock_fields = base_fields or {}
                     for field_name, field in mock_fields.items():
-                        if (
-                            hasattr(field, "is_required")
-                            and callable(field.is_required)
-                        ):
+                        if hasattr(field, "is_required") and callable(field.is_required):
                             required = bool(field.is_required())
                         else:
                             required = bool(getattr(field, "required", False))

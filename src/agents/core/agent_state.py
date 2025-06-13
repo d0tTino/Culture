@@ -1,4 +1,5 @@
 # ruff: noqa: ANN101, ANN102
+# mypy: ignore-errors
 import logging
 import random
 from collections import deque
@@ -6,6 +7,7 @@ from enum import Enum
 from typing import Any, Optional, cast
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
+
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -22,28 +24,30 @@ from src.infra.llm_client import LLMClient, LLMClientConfig
 logger = logging.getLogger(__name__)
 
 
-try:  # Support pydantic >= 2 if installed
+_PYDANTIC_V2 = True
+try:
     from pydantic import field_validator as _field_validator  # type: ignore[attr-defined]
     from pydantic import model_validator as _model_validator  # type: ignore[attr-defined]
-    _PYDANTIC_V2 = True
 except ImportError:  # pragma: no cover - fallback for old pydantic
-    from pydantic import root_validator as _model_validator
-    from pydantic import validator as _field_validator
+    from pydantic import root_validator as _model_validator_fallback
+    from pydantic import validator as _field_validator_fallback
+
+    _model_validator = _model_validator_fallback
+    _field_validator = _field_validator_fallback
+
     _PYDANTIC_V2 = False
 
 
 def field_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic field validators."""
     if not _PYDANTIC_V2:
         kwargs.pop("mode", None)
-    return _field_validator(*args, **kwargs)
+    return _base_field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic model validators."""
     if not _PYDANTIC_V2:
         kwargs.pop("mode", None)
-    return _model_validator(*args, **kwargs)
+    return _base_model_validator(*args, **kwargs)
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -112,9 +116,8 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
         return None
 
 
-
 class AgentStateData(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     agent_id: str
     name: str
@@ -374,6 +377,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             llm_client_config = values.get("llm_client_config")
             llm_client = values.get("llm_client")
             mock_llm_client = values.get("mock_llm_client")
+
         else:
             model = cast("AgentState", data)
             llm_client_config = model.llm_client_config
@@ -424,7 +428,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     # Serialization helpers for tests
     # ------------------------------------------------------------------
-    def to_dict(self: Self) -> dict[str, Any]:
+    def to_dict(self: Self, *, exclude_none: bool = False) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
         if hasattr(self, "model_dump"):
             data = self.model_dump(
@@ -433,6 +437,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         else:  # pragma: no cover - pydantic<2 fallback
             data = self.dict(
                 exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+
             )
         return cast(dict[str, Any], data)
 

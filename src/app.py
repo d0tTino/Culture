@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Optional
 
 from src.agents.core.base_agent import Agent
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+
+try:  # pragma: no cover - optional dependency
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
+except Exception:  # pragma: no cover - fallback when chromadb missing
+    ChromaVectorStoreManager = None  # type: ignore[misc, assignment]
 from src.infra.checkpoint import load_checkpoint, save_checkpoint
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
@@ -58,7 +62,11 @@ def create_simulation(
         vector_store_manager=(
             None
             if not use_vector_store
-            else ChromaVectorStoreManager(persist_directory=vector_store_dir)
+            else (
+                ChromaVectorStoreManager(persist_directory=vector_store_dir)
+                if ChromaVectorStoreManager is not None
+                else None
+            )
         ),
         scenario=scenario,
         discord_bot=discord_bot,
