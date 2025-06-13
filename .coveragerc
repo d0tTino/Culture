@@ -1,10 +1,5 @@
 [run]
 omit =
-    src/agents/*
-    src/infra/*
-    src/sim/*
-    src/interfaces/*
-    src/utils/*
     src/app.py
     src/http_app.py
     src/shared/async_utils.py

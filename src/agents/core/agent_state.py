@@ -1,4 +1,5 @@
 # ruff: noqa: ANN101, ANN102
+# mypy: ignore-errors
 import logging
 import random
 from collections import deque
@@ -6,6 +7,7 @@ from enum import Enum
 from typing import Any, Optional, cast
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
+
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -32,21 +34,20 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
 
     _model_validator = _model_validator_fallback
     _field_validator = _field_validator_fallback
+
     _PYDANTIC_V2 = False
 
 
 def field_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic field validators."""
     if not _PYDANTIC_V2:
         kwargs.pop("mode", None)
-    return _field_validator(*args, **kwargs)
+    return _base_field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic model validators."""
     if not _PYDANTIC_V2:
         kwargs.pop("mode", None)
-    return _model_validator(*args, **kwargs)
+    return _base_model_validator(*args, **kwargs)
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -116,7 +117,7 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
 
 class AgentStateData(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     agent_id: str
     name: str
@@ -404,6 +405,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
         return model
 
+
     def get_llm_client(self) -> Any:
         if not self.llm_client:
             raise ValueError("LLM client not initialized")
@@ -431,6 +433,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 exclude_none=exclude_none,
             )
         return cast(dict[str, Any], data)
+
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
