@@ -1,12 +1,7 @@
 import importlib.metadata as im
 
-import pytest
 
-
-@pytest.mark.unit
-def test_dspy_version() -> None:
+def test_dspy_version():
     v = im.version("dspy-ai")
-    major, minor, patch, *_ = map(int, v.split("."))
-    assert (
-        major == 2 and minor == 6 and patch >= 24 and patch < 100
-    ), f"Unsupported DSPy version: {v}"
+    major, minor, *_ = map(int, v.split(".")[:2])
+    assert major == 2 and 24 <= minor < 7, f"Unsupported DSPy version: {v}"
