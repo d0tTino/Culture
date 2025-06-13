@@ -540,6 +540,8 @@ newer). Expose port `11434` to your host when launching Ollama so the Python
 services can reach it. Configure the connection with the `OLLAMA_API_BASE` and
 `OLLAMA_REQUEST_TIMEOUT` variables in your `.env` (see `.env.example`). GPU
 acceleration is only available when running Ollama through Docker or WSL2.
+For step-by-step instructions, see
+[docs/windows_setup.md](docs/windows_setup.md).
 
 ### Running the Simulation
 Run a basic simulation (default parameters):
