@@ -165,7 +165,10 @@ def is_ollama_available() -> bool:
 
     try:
         # Try to connect to Ollama with a small timeout
-        response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+        response: requests.Response = requests.get(
+            f"{OLLAMA_API_BASE}", timeout=1
+        )
+
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")

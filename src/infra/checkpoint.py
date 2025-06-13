@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
     """Convert a ``Simulation`` instance into a serializable dictionary."""
     return {
-        "agents": [agent.state.to_dict() for agent in sim.agents],
+        "agents": [
+            agent.state.model_dump() if hasattr(agent.state, "model_dump") else agent.state.dict()
+            for agent in sim.agents
+        ],
+
         "current_step": sim.current_step,
         "current_agent_index": sim.current_agent_index,
         "scenario": sim.scenario,

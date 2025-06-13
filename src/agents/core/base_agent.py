@@ -389,7 +389,11 @@ class Agent:
         # --- End Extract Perceived Messages ---
 
         # Convert the state to dictionary for compatibility with the existing graph
-        state_dict = self._state.to_dict()
+        if hasattr(self._state, "model_dump"):
+            state_dict = self._state.model_dump()
+        else:  # pragma: no cover - pydantic<2 fallback
+            state_dict = self._state.dict()
+
 
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
@@ -409,7 +413,12 @@ class Agent:
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
-            "current_state": self._state.to_dict(exclude_none=True),  # Current full state
+            "current_state": (
+                self._state.model_dump(exclude_none=True)
+                if hasattr(self._state, "model_dump")
+                else self._state.dict(exclude_none=True)
+            ),  # Current full state
+
             "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
             "environment_perception": environment_perception,
