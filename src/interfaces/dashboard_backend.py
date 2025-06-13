@@ -44,6 +44,6 @@ async def stream_messages(request: Request) -> EventSourceResponse:  # type: ign
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
 
