@@ -21,6 +21,21 @@ from src.sim.simulation import Simulation
 
 logger = logging.getLogger(__name__)
 
+# Prefixes for project-specific environment variables that should be captured
+ENV_PREFIXES: tuple[str, ...] = (
+    "CULTURE_",
+    "OLLAMA_",
+    "REDIS_",
+    "WEAVIATE_",
+    "OPENAI_",
+    "ANTHROPIC_",
+    "DISCORD_",
+    "MEMORY_",
+    "ROLE_",
+    "IP_",
+    "DU_",
+)
+
 
 def capture_rng_state() -> tuple[Any, ...]:
     """Return the current ``random`` module state."""
@@ -36,14 +51,18 @@ def capture_environment() -> dict[str, Any]:
     """Capture relevant environment variables and system info."""
     from src.infra.config import DEFAULT_CONFIG
 
-    env = {key: os.environ.get(key) for key in DEFAULT_CONFIG}
+    env: dict[str, Any] = {}
+    prefixes = ENV_PREFIXES
+    for key, value in os.environ.items():
+        if key in DEFAULT_CONFIG or any(key.startswith(p) for p in prefixes):
+            env[key] = value
     env["python_version"] = sys.version
     env["platform"] = platform.platform()
     return env
 
 
 def restore_environment(env: dict[str, Any]) -> None:
-    """Restore environment variables from ``env``."""
+    """Restore environment variables captured by :func:`capture_environment`."""
     from src.infra import config
 
     for key, value in env.items():
