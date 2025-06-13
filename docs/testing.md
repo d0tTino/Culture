@@ -11,7 +11,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 ```
 You can also run `scripts/setup_test_env.sh` to automatically create a virtual
 environment and install these dependencies.
-The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, and `requests` for HTTP utilities.
+The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, `requests` for HTTP utilities, and `numpy>=2` for compatibility with certain examples.
 
 ## Test Markers and Suite Structure
 

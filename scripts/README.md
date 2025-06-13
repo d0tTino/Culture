@@ -54,6 +54,17 @@ scripts/start_vllm.sh  # uses defaults
 VLLM_MODEL=my/model VLLM_SWAP_SPACE=16 scripts/start_vllm.sh
 ```
 
+### `cleanup.sh`
+
+Aggressively removes build artifacts and caches. The script now prompts before
+removing directories such as `chroma_db` and `.venv`. Confirming deletion will
+permanently erase these folders.
+
+Usage:
+```bash
+bash scripts/cleanup.sh
+```
+
 # Culture.ai Scripts
 
 ## Code Quality & Compliance
