@@ -4,7 +4,7 @@ Defines common types used in the agent's LangGraph state.
 
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Extra, Field
 
 from src.shared.typing import SimulationMessage
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class AgentActionOutput(BaseModel):
     """Defines the expected structured output from the LLM."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra=Extra.forbid)
     thought: str = Field(
         ...,
         json_schema_extra={

@@ -5,14 +5,7 @@ from collections import deque
 from enum import Enum
 from typing import Any, Optional, cast
 
-from pydantic import BaseModel, Field, PrivateAttr
-
-try:  # pragma: no cover - prefer Pydantic v2 validators
-    from pydantic import field_validator, model_validator
-except Exception:  # pragma: no cover - fallback for pydantic<2
-    from pydantic import root_validator as model_validator
-    from pydantic import validator as field_validator
-
+from pydantic import BaseModel, Extra, Field, PrivateAttr
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -370,46 +363,52 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")  # type: ignore[arg-type]
-    def _validate_model_after(cls, model: "AgentState") -> "AgentState":
-        llm_client_config = model.llm_client_config
-        llm_client = model.llm_client
-        mock_llm_client = model.mock_llm_client
+    @model_validator(mode="after")
+    def _validate_model_after(cls, data: Any) -> Any:
+        """Ensure the AgentState is fully initialized after validation."""
+        # When using pydantic<2, ``data`` will be a ``dict``. With pydantic>=2 it
+        # will be the model instance.
+        model: AgentState
+        if isinstance(data, dict):
+            values = data
+            llm_client_config = values.get("llm_client_config")
+            llm_client = values.get("llm_client")
+            mock_llm_client = values.get("mock_llm_client")
+        else:
+            model = cast("AgentState", data)
+            llm_client_config = model.llm_client_config
+            llm_client = model.llm_client
+            mock_llm_client = model.mock_llm_client
 
-        if not llm_client:
+        if llm_client_config and not llm_client:
             if mock_llm_client:
-                model.llm_client = mock_llm_client
-            elif llm_client_config:
-                if isinstance(llm_client_config, BaseModel):
-                    model.llm_client = LLMClient(
-                        config=cast(LLMClientConfig, llm_client_config)
-                    )
-                else:
-                    model.llm_client = LLMClient(
-                        config=LLMClientConfig(**llm_client_config)
-                    )
+                new_client = mock_llm_client
             else:
-                model.llm_client = get_default_llm_client()
+                config_data = llm_client_config
+                if hasattr(config_data, "model_dump"):
+                    config_data = cast(dict[str, Any], config_data.model_dump())
+                elif not isinstance(config_data, dict):
+                    raise ValueError("llm_client_config must be a Pydantic model or a dict")
 
+                new_client = LLMClient(config=LLMClientConfig(**cast(dict[str, Any], config_data)))
 
-                else:
-                    if isinstance(llm_client_config, BaseModel):
-                        if hasattr(llm_client_config, "model_dump"):
-                            config_data = llm_client_config.model_dump()
-                        else:
-                            config_data = llm_client_config.dict()
-                    else:
-                        config_data = cast(dict[str, Any], llm_client_config)
+            if isinstance(data, dict):
+                values["llm_client"] = new_client
+            else:
+                model.llm_client = new_client
 
-                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
-            elif not llm_client:
-                values["llm_client"] = get_default_llm_client()
-
+        if isinstance(data, dict):
             if not values.get("role_history"):
                 values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
             if not values.get("mood_history"):
                 values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
             return values
+        else:
+            if not model.role_history:
+                model.role_history = [(model.step_counter, model.current_role)]
+            if not model.mood_history:
+                model.mood_history = [(model.step_counter, model.mood_level)]
+            return model
 
     def get_llm_client(self) -> Any:
         if not self.llm_client:
@@ -427,9 +426,15 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        return self.model_dump(
-            exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
-        )
+        if hasattr(self, "model_dump"):
+            data = self.model_dump(
+                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+            )
+        else:  # pragma: no cover - pydantic<2 fallback
+            data = self.dict(
+                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+            )
+        return cast(dict[str, Any], data)
 
 
     @classmethod
