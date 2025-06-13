@@ -6,14 +6,7 @@ from collections import deque
 from enum import Enum
 from typing import Any, Optional, cast
 
-from pydantic import BaseModel, Field, PrivateAttr, Extra
-
-try:  # pragma: no cover - prefer Pydantic v2 validators
-    from pydantic import field_validator, model_validator
-except Exception:  # pragma: no cover - fallback for pydantic<2
-    from pydantic import root_validator as model_validator
-    from pydantic import validator as field_validator
-
+from pydantic import BaseModel, Extra, Field, PrivateAttr
 
 from typing_extensions import Self
 
@@ -24,37 +17,27 @@ except ImportError:  # pragma: no cover - fallback for old pydantic
     ConfigDict = dict  # type: ignore[misc, assignment]
 
 # Local imports (ensure these are correct and not causing cycles if possible)
+from pydantic import field_validator as _field_validator
+from pydantic import model_validator as _model_validator
+
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 from src.infra.config import get_config  # Import get_config function
 from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
-
 _PYDANTIC_V2 = True
-try:
-    from pydantic import field_validator as _field_validator  # type: ignore[attr-defined]
-    from pydantic import model_validator as _model_validator  # type: ignore[attr-defined]
-
-    _PYDANTIC_V2 = True
-except ImportError:  # pragma: no cover - fallback for old pydantic
-    from pydantic import root_validator as _model_validator
-    from pydantic import validator as _field_validator
-
-
-    _PYDANTIC_V2 = False
 
 
 def field_validator(*args: Any, **kwargs: Any) -> Any:
-    if not _PYDANTIC_V2:
-        kwargs.pop("mode", None)
-    return _base_field_validator(*args, **kwargs)
+    """Compatibility wrapper for Pydantic field validators."""
+    return _field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
-    if not _PYDANTIC_V2:
-        kwargs.pop("mode", None)
-    return _base_model_validator(*args, **kwargs)
+    """Compatibility wrapper for Pydantic model validators."""
+    return _model_validator(*args, **kwargs)
+
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -373,58 +356,29 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")  # type: ignore[arg-type]
-    def _validate_model_after(cls, model: Any) -> Any:
-        """Ensure LLM client and history fields are initialized."""
-        # Pydantic v1 passes a ``dict`` while v2 passes the actual model instance
-        if isinstance(model, dict):
-            values = model
-            if not values.get("llm_client"):
-                if values.get("mock_llm_client"):
-                    values["llm_client"] = values["mock_llm_client"]
-                elif values.get("llm_client_config"):
-                    cfg = values["llm_client_config"]
-                    if isinstance(cfg, BaseModel):
-                        config_data = cfg.model_dump() if hasattr(cfg, "model_dump") else cfg.dict()
-                    else:
-                        config_data = cast(dict[str, Any], cfg)
-                    values["llm_client"] = LLMClient(config=LLMClientConfig(**config_data))
+    @model_validator(mode="after")
+    def _validate_model_after(cls, model: "AgentState") -> "AgentState":
+        llm_client_config = model.llm_client_config
+        llm_client = model.llm_client
+        mock_llm_client = model.mock_llm_client
+
+        if not llm_client:
+            if mock_llm_client:
+                model.llm_client = mock_llm_client
+            elif llm_client_config:
+                if isinstance(llm_client_config, BaseModel):
+                    model.llm_client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
                 else:
-                    values["llm_client"] = get_default_llm_client()
-
-
-        if isinstance(data, dict):
-            if not values.get("role_history"):
-                values["role_history"] = [(values.get("step_counter"), values.get("current_role"))]
-            if not values.get("mood_history"):
-                values["mood_history"] = [(values.get("step_counter"), values.get("mood_level"))]
-            return values
-        else:
-            if not model.role_history:
-                model.role_history = [(model.step_counter, model.current_role)]
-            if not model.mood_history:
-                model.mood_history = [(model.step_counter, model.mood_level)]
-            return model
-
-        obj = cast("AgentState", model)
-        if not obj.llm_client:
-            if obj.mock_llm_client:
-                obj.llm_client = obj.mock_llm_client
-            elif obj.llm_client_config:
-                cfg = obj.llm_client_config
-                if isinstance(cfg, BaseModel):
-                    config_data = cfg.model_dump() if hasattr(cfg, "model_dump") else cfg.dict()
-                else:
-                    config_data = cast(dict[str, Any], cfg)
-                obj.llm_client = LLMClient(config=LLMClientConfig(**config_data))
+                    model.llm_client = LLMClient(config=LLMClientConfig(**llm_client_config))
             else:
-                obj.llm_client = get_default_llm_client()
+                model.llm_client = get_default_llm_client()
 
-        if not obj.role_history:
-            obj.role_history = [(obj.step_counter, obj.current_role)]
-        if not obj.mood_history:
-            obj.mood_history = [(obj.step_counter, obj.mood_level)]
-        return obj
+        if not model.role_history:
+            model.role_history = [(model.step_counter, model.current_role)]
+        if not model.mood_history:
+            model.mood_history = [(model.step_counter, model.mood_level)]
+        return model
+
 
     def get_llm_client(self) -> Any:
         if not self.llm_client:
@@ -442,9 +396,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     # ------------------------------------------------------------------
     def to_dict(self: Self, *, exclude_none: bool = False) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
-        if hasattr(self, "model_dump"):
-            return self.model_dump(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
-        return self.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
+        return cast(BaseModel, self).dict(
+            exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+        )
 
 
     @classmethod

@@ -18,6 +18,7 @@ from src.infra.checkpoint import (
 
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
+from src.infra.logging_config import setup_logging
 from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
@@ -123,7 +124,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    setup_logging()
     args = parse_args()
 
     configure_warning_filters(

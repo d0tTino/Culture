@@ -549,6 +549,10 @@ Start the HTTP dashboard backend (optional):
 python -m src.http_app
 ```
 
+The application initializes logging using `setup_logging()` from
+`src.infra.logging_config`. Log files are written to the `logs/` directory by
+default. Adjust the log level or path as needed by customizing this function.
+
 ### Prometheus Metrics
 The simulation exposes Prometheus metrics on port 8000 when `src.interfaces.metrics` is imported.
 Metrics include `llm_latency_ms`, `llm_calls_total`, `knowledge_board_size`, and `active_agent_count`. You can scrape them with a Prometheus server and

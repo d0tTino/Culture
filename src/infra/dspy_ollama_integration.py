@@ -69,7 +69,7 @@ else:
             self.name = kwargs.get("name")
 
     class Prediction(SimpleNamespace):
-        """Minimal stand-in for ``dspy.Prediction``."""
+        """Minimal stand-in for ``dspy.Prediction`` that stores arbitrary fields."""
 
     class Predict:
         """Basic callable stub used when DSPy is unavailable."""
@@ -77,11 +77,32 @@ else:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def __call__(self, *args: Any, **kwargs: Any) -> Prediction:
-            agent_role = kwargs.get("agent_role", "Agent")
-            situation = kwargs.get("current_situation", "")
-            thought_process = f"As a {agent_role}, {situation}"
-            return Prediction(thought_process=thought_process)
+        def __call__(self, question: str | None = None, *args: Any, **kwargs: Any) -> Prediction:
+            role = kwargs.get("agent_role")
+            situation = kwargs.get("current_situation")
+            if role and situation:
+                thought = f"As a {role}, {situation}"
+                return Prediction(thought_process=thought)
+
+            if _CONFIGURED_LM is not None:
+                result = _CONFIGURED_LM(question or "")
+                if isinstance(result, list):
+                    result = result[0]
+                if isinstance(result, str):
+                    try:
+                        parsed = json.loads(result)
+                    except Exception:
+                        return Prediction(intent=result.strip())
+                    else:
+                        if isinstance(parsed, dict):
+                            return Prediction(**parsed)
+                        return Prediction(intent=str(parsed))
+                if isinstance(result, dict):
+                    return Prediction(**result)
+                return Prediction(result=result)
+
+            return Prediction(intent="PROPOSE_IDEA")
+
 
         @staticmethod
         def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
@@ -108,7 +129,6 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dspy_ollama")
 
 __all__ = [

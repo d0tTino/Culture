@@ -17,7 +17,6 @@ from typing import Optional
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configure DSPy with Ollama LM

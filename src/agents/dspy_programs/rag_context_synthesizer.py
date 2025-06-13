@@ -15,7 +15,6 @@ import re
 from typing import Optional
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.info("====== IMPORTING DSPY RAG CONTEXT SYNTHESIZER MODULE ======")
 

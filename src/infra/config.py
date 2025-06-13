@@ -7,7 +7,7 @@ Manages environment variables and configuration settings.
 import importlib
 import logging
 import os
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 try:
     from dotenv import load_dotenv
@@ -489,11 +489,6 @@ def get_redis_config() -> dict[str, object]:
     return {"host": REDIS_HOST, "port": REDIS_PORT, "db": REDIS_DB, "password": REDIS_PASSWORD}
 
 
-# Configure basic logging
-logging.basicConfig(
-    level=getattr(logging, cast(str, DEFAULT_LOG_LEVEL)),
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 # Log loaded configuration for verification (optional, be careful with sensitive data)

@@ -12,8 +12,7 @@ import os
 import sys
 from typing import Any
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging
 logger = logging.getLogger(__name__)
 logger.info("====== IMPORTING DSPY ACTION INTENT SELECTOR MODULE ======")
 
@@ -223,6 +222,5 @@ def get_failsafe_output(*args: object, **kwargs: object) -> object:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     if "--test" in sys.argv:
         test_module()

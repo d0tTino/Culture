@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from collections.abc import Iterable
-from typing import Any, Callable, ParamSpec, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, cast
 
 from src.shared.typing import (
     JSONDict,
@@ -30,26 +30,29 @@ except Exception:  # pragma: no cover - optional dependency
 
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
-try:  # pragma: no cover - optional dependency
+if TYPE_CHECKING:
     import requests
     from requests.exceptions import RequestException, Timeout
-except Exception:  # pragma: no cover - fallback when requests missing
-    logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
-    from unittest.mock import MagicMock
+else:
+    try:  # pragma: no cover - optional dependency
+        import requests
+        from requests.exceptions import RequestException, Timeout
+    except Exception:  # pragma: no cover - fallback when requests missing
+        logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
+        from unittest.mock import MagicMock
 
-    requests = MagicMock()
+        requests = MagicMock()
 
-    # requests defines RequestException; use a stub when missing
-    class RequestException(Exception):  # type: ignore[no-redef]
-        """Fallback RequestException when requests is unavailable."""
+        class RequestException(Exception):
+            """Fallback RequestException when requests is unavailable."""
 
-        pass
+            pass
 
-    # Timeout depends on requests; ignore redefinition when stubbed
-    class Timeout(RequestException):  # type: ignore[no-redef]
-        """Fallback Timeout when requests is unavailable."""
+        class Timeout(RequestException):
+            """Fallback Timeout when requests is unavailable."""
 
-        pass
+
+            pass
 
 
 from pydantic import BaseModel, ValidationError
@@ -69,14 +72,17 @@ from src.shared.decorator_utils import monitor_llm_call
 
 from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config values
 
-try:
+if TYPE_CHECKING:
     from litellm.exceptions import APIError
-except Exception:
-    # litellm provides APIError; define fallback if absent
-    class APIError(Exception):  # type: ignore[no-redef]
-        """Fallback APIError when litellm is unavailable."""
+else:
+    try:
+        from litellm.exceptions import APIError
+    except Exception:
 
-        pass
+        class APIError(Exception):
+            """Fallback APIError when litellm is unavailable."""
+
+            pass
 
 
 _RequestException = RequestException
