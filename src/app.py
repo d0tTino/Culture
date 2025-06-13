@@ -15,7 +15,6 @@ from src.infra.checkpoint import (
     restore_rng_state,
     save_checkpoint,
 )
-
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.infra.logging_config import setup_logging
