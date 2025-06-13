@@ -29,8 +29,7 @@ from .interaction_handlers import (
 )
 
 
-def build_graph() -> StateGraph:  # type: ignore[no-any-unimported]
-
+def build_graph() -> Any:
     graph_builder = StateGraph(AgentTurnState)
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
     graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)

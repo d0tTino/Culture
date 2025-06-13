@@ -18,7 +18,11 @@ from typing_extensions import Self
 from src.agents.graphs.basic_agent_graph import (
     compile_agent_graph,  # NEW: Import the graph compiler function
 )
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+
+try:  # pragma: no cover - optional dependency
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
+except Exception:  # pragma: no cover - fallback when chromadb missing
+    ChromaVectorStoreManager = None  # type: ignore[misc, assignment]
 from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra import config
 from src.infra.config import get_config
@@ -211,6 +215,8 @@ class Agent:
                     # Should be set to the SentenceTransformer instance if needed
                 )
             else:
+                if ChromaVectorStoreManager is None:
+                    raise ImportError("chromadb is required for ChromaVectorStoreManager")
                 self.vector_store_manager = ChromaVectorStoreManager(
                     persist_directory=getattr(config, "VECTOR_STORE_DIR", "./chroma_db")
                 )
@@ -386,6 +392,7 @@ class Agent:
         # Convert the state to dictionary for compatibility with the existing graph
         state_dict = cast(BaseModel, self._state).dict()
 
+
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
         # 2. From a flat 'goal' in the state_dict (legacy format)
@@ -407,7 +414,7 @@ class Agent:
             "current_state": cast(BaseModel, self._state).dict(
                 exclude_none=True
             ),  # Current full state
-            "simulation_step": simulation_step,
+imulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
             "environment_perception": environment_perception,
             "perceived_messages": copy.deepcopy(

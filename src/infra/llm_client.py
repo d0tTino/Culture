@@ -1,4 +1,4 @@
-# ruff: noqa: ANN401
+# ruff: noqa: ANN401, ANN101, ANN102
 """Provides a client for interacting with the Ollama LLM service."""
 
 from __future__ import annotations
@@ -51,11 +51,22 @@ else:
         class Timeout(RequestException):
             """Fallback Timeout when requests is unavailable."""
 
+
             pass
 
 
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
+
+if TYPE_CHECKING:
+    from pydantic.v1.fields import ModelField
+else:  # pragma: no cover - runtime import
+    try:  # Support pydantic >= 2 if installed
+        from pydantic.v1.fields import ModelField
+    except Exception:  # pragma: no cover - fallback for pydantic<2
+        from pydantic.fields import ModelField  # type: ignore[attr-defined]  # noqa: F401
+
+
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -171,6 +182,7 @@ def is_ollama_available() -> bool:
     try:
         # Try to connect to Ollama with a small timeout
         response: requests.Response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
+
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
         logger.debug(f"Ollama is not available: {e}")

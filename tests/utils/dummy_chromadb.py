@@ -37,8 +37,13 @@ def setup_dummy_chromadb() -> None:
             for doc, meta, _id in zip(documents, metadatas, ids):
                 self.docs.append({"id": _id, "metadata": meta, "document": doc})
 
-        def get(self, where: dict | None = None, include: list[str] | None = None) -> dict:
-            ids: list[str] = []
+        def get(
+            self,
+            where: dict | None = None,
+            include: list[str] | None = None,
+            ids: list[str] | None = None,
+        ) -> dict:
+            result_ids: list[str] = []
             metas: list[dict[str, object]] = []
             conditions = where.get("$and", [where]) if where else []
             for item in self.docs:
@@ -52,11 +57,11 @@ def setup_dummy_chromadb() -> None:
                     if not match:
                         break
                 if match:
-                    ids.append(item["id"])
+                    result_ids.append(item["id"])
                     metas.append(meta)
-            return {"ids": ids, "metadatas": metas}
+            return {"ids": result_ids, "metadatas": metas}
 
-    class DummyClient:
+    class _DummyClient:
         def __init__(self, path: str | None = None) -> None:
             self.collections: dict[str, DummyCollection] = {}
 
@@ -67,7 +72,7 @@ def setup_dummy_chromadb() -> None:
                 self.collections[name] = DummyCollection()
             return self.collections[name]
 
-    chromadb.PersistentClient = DummyClient
+    chromadb.PersistentClient = _DummyClient
     chromadb.__version__ = "0.0"
 
     exc = types.ModuleType("chromadb.exceptions")

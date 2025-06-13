@@ -5,7 +5,6 @@ Provides a proper implementation of DSPy's LM interface for Ollama models.
 
 # ruff: noqa: ANN101, ANN102
 
-import json
 import logging
 import sys
 import time
@@ -14,7 +13,7 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 try:  # pragma: no cover - optional dependency
-    import requests
+    import requests  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - fallback when requests missing
     requests = MagicMock()
 from typing_extensions import Self
@@ -22,9 +21,16 @@ from typing_extensions import Self
 # Import DSPy and Ollama, providing fallbacks when unavailable
 try:
     import dspy
+
+    if not hasattr(dspy, "LM"):
+        raise AttributeError("dspy.LM missing")
 except Exception:  # pragma: no cover - attempt dspy_ai fallback
     try:
         import dspy_ai as dspy
+
+        if not hasattr(dspy, "LM"):
+            raise AttributeError("dspy_ai.LM missing")
+
     except Exception:
         dspy = None
 
@@ -60,7 +66,7 @@ else:
 
     class OutputField:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+            self.name = kwargs.get("name")
 
     class Prediction(SimpleNamespace):
         """Minimal stand-in for ``dspy.Prediction`` that stores arbitrary fields."""
@@ -96,6 +102,7 @@ else:
                 return Prediction(result=result)
 
             return Prediction(intent="PROPOSE_IDEA")
+
 
         @staticmethod
         def load(path: str, *args: Any, **kwargs: Any) -> "Predict":
