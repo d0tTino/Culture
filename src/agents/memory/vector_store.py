@@ -16,6 +16,12 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 from typing import Any, TypeVar, Union, cast
 
+from pydantic import ValidationError
+from typing_extensions import Self
+
+from src.shared.memory_store import MemoryStore
+
+chromadb: Any
 try:  # pragma: no cover - optional dependency
     import chromadb
     from chromadb.utils.embedding_functions import (
@@ -28,13 +34,7 @@ except ImportError:  # pragma: no cover - fallback when chromadb missing
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise ImportError("chromadb is required for SentenceTransformerEmbeddingFunction")
 
-    SentenceTransformerEmbeddingFunction = _SentenceTransformerEmbeddingFunction
-
-
-from pydantic import ValidationError
-from typing_extensions import Self
-
-from src.shared.memory_store import MemoryStore
+    SentenceTransformerEmbeddingFunction: Any = _SentenceTransformerEmbeddingFunction  # type: ignore[no-redef]
 
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:

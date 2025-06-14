@@ -3,6 +3,14 @@ import logging
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
+
+class DummyVectorStore:
+    async def aretrieve_relevant_memories(
+        self, agent_id: str, query: str = "", k: int = 5
+    ) -> list[dict[str, str]]:
+        return [{"content": "memory1"}]
+
+
 import pytest
 from pytest import LogCaptureFixture
 
@@ -67,9 +75,9 @@ async def test_dspy_call_timeout_in_graph(
     mock_program_callable = AsyncMock(side_effect=mock_slow_dspy_call)
 
     logger.info(f"Simple agent dict before hasattr: {simple_agent.__dict__}")
-    assert hasattr(simple_agent, "action_intent_selector_program"), (
-        "Agent should have action_intent_selector_program before patch"
-    )
+    assert hasattr(
+        simple_agent, "action_intent_selector_program"
+    ), "Agent should have action_intent_selector_program before patch"
 
     # Prepare a minimal AgentTurnState
     initial_turn_state = AgentTurnState(
@@ -87,7 +95,7 @@ async def test_dspy_call_timeout_in_graph(
             simple_agent.state.goals[0]["description"] if simple_agent.state.goals else "Test Goal"
         ),
         updated_state={},  # Will be populated by graph
-        vector_store_manager=None,  # Not strictly needed for this test focus
+        vector_store_manager=DummyVectorStore(),
         rag_summary="(No rag summary for this test)",
         knowledge_board_content=[],
         knowledge_board=None,  # Not strictly needed
@@ -118,14 +126,17 @@ async def test_dspy_call_timeout_in_graph(
         final_structured_output = final_state.get("structured_output")
         assert final_structured_output is not None, "Final state should have structured_output"
         # Default fallback is often 'idle'
-        assert final_structured_output.action_intent == AgentActionIntent.IDLE.value, (
-            f"Expected fallback action_intent to be IDLE due to timeout, got {final_structured_output.action_intent}"
-        )
+        assert (
+            final_structured_output.action_intent == AgentActionIntent.IDLE.value
+        ), f"Expected fallback action_intent to be IDLE due to timeout, got {final_structured_output.action_intent}"
         assert (
             "timeout" in final_structured_output.thought.lower()
             or "fallback" in final_structured_output.thought.lower()
             or "default" in final_structured_output.thought.lower()
         ), f"Expected thought to indicate timeout/fallback, got: {final_structured_output.thought}"
+        assert final_state[
+            "memory_history_list"
+        ], "memory_history_list should contain retrieved memories"
 
 
 @pytest.mark.asyncio
@@ -162,7 +173,7 @@ async def test_dspy_call_exception_in_graph(
             simple_agent.state.goals[0]["description"] if simple_agent.state.goals else "Test Goal"
         ),
         updated_state={},
-        vector_store_manager=None,
+        vector_store_manager=DummyVectorStore(),
         rag_summary="(No rag summary for this test)",
         knowledge_board_content=[],
         knowledge_board=None,
@@ -191,21 +202,22 @@ async def test_dspy_call_exception_in_graph(
         #    The generate_thought_and_message_node should produce a default/fallback
         #    AgentActionOutput if async_select_action_intent raises an exception.
         final_structured_output_exc = final_state.get("structured_output")
-        assert final_structured_output_exc is not None, (
-            "Final state should have structured_output after exception"
-        )
+        assert (
+            final_structured_output_exc is not None
+        ), "Final state should have structured_output after exception"
         # Default fallback is often 'idle'
-        assert final_structured_output_exc.action_intent == AgentActionIntent.IDLE.value, (
-            f"Expected fallback action_intent to be IDLE due to exception, got {final_structured_output_exc.action_intent}"
-        )
+        assert (
+            final_structured_output_exc.action_intent == AgentActionIntent.IDLE.value
+        ), f"Expected fallback action_intent to be IDLE due to exception, got {final_structured_output_exc.action_intent}"
         assert (
             "error" in final_structured_output_exc.thought.lower()
             or "fallback" in final_structured_output_exc.thought.lower()
             or "exception" in final_structured_output_exc.thought.lower()
             or "default" in final_structured_output_exc.thought.lower()
-        ), (
-            f"Expected thought to indicate error/fallback, got: {final_structured_output_exc.thought}"
-        )
+        ), f"Expected thought to indicate error/fallback, got: {final_structured_output_exc.thought}"
+        assert final_state[
+            "memory_history_list"
+        ], "memory_history_list should contain retrieved memories"
 
         # 3. Optional: Verify the specific error log from the mock if it appears, but don't fail if not,
         #    as primary check is the fallback action.
