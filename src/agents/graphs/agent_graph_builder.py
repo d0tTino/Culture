@@ -6,7 +6,7 @@ try:
     from langgraph.graph import END, StateGraph
 except Exception:  # pragma: no cover - optional dependency
     END = "END"
-    StateGraph = Any
+    StateGraph: Any = Any  # type: ignore[no-redef]
 
 from .basic_agent_types import AgentTurnState
 from .graph_nodes import (

@@ -389,6 +389,23 @@ class Agent:
         logger.debug(f"  Retrieved {len(perceived_messages)} perceived messages")
         # --- End Extract Perceived Messages ---
 
+        # --- Retrieve Memory History ---
+        memory_history_list: list[dict[str, Any]] = []
+        active_store = vector_store_manager or getattr(self, "vector_store_manager", None)
+        if active_store is not None and hasattr(active_store, "aretrieve_relevant_memories"):
+            try:
+                retrieved_memories = await cast(Any, active_store).aretrieve_relevant_memories(
+                    self.agent_id,
+                    query="",
+                    k=5,
+                )
+                memory_history_list.extend(retrieved_memories)
+            except Exception as e:  # pragma: no cover - defensive
+                logger.error(
+                    f"Agent {self.agent_id}: failed to retrieve memories: {e}",
+                    exc_info=True,
+                )
+
         # Convert the state to dictionary for compatibility with the existing graph
         state_dict = cast(BaseModel, self._state).dict()
 
@@ -419,7 +436,7 @@ class Agent:
             "perceived_messages": copy.deepcopy(
                 environment_perception.get("perceived_messages", [])
             ),
-            "memory_history_list": [],  # Placeholder
+            "memory_history_list": memory_history_list,
             "turn_sentiment_score": 0,  # Placeholder
             "individual_message_sentiments": [],  # Initialize empty list for per-message sentiments
             "prompt_modifier": "",  # Initialize prompt modifier

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Extra, Field
 
@@ -98,7 +98,7 @@ class AgentTurnState(TypedDict):
     previous_thought: str | None
     environment_perception: dict[str, object]
     perceived_messages: list[dict[str, object]]
-    memory_history_list: list[dict[str, object]]
+    memory_history_list: list[dict[str, Any]]
     turn_sentiment_score: int
     prompt_modifier: str
     structured_output: AgentActionOutput | None
