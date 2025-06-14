@@ -36,3 +36,15 @@ pytest tests/integration/agents/test_vertical_slice_real_llm.py -m integration
 ```
 
 The test is skipped automatically if Ollama is unavailable.
+
+## Troubleshooting
+
+If you encounter database lock errors while running the demo, enable SQLite debug
+mode:
+
+```bash
+export DEBUG_SQLITE=1
+```
+
+This configures the underlying ChromaDB database to use WAL mode and logs
+connection details to help diagnose issues.
