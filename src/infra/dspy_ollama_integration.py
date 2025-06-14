@@ -9,6 +9,7 @@ import json
 import logging
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
 from unittest.mock import MagicMock
@@ -359,9 +360,35 @@ class OllamaLM(BaseLM):  # type: ignore[misc, valid-type]
             return self.__call__(prompt=prompt)
 
     def _try_load_compiled_program(self: Self, program_path: str) -> bool:
-        # Implementation of _try_load_compiled_program method
-        # This method should return a boolean indicating whether the program was loaded successfully
-        return False  # Placeholder return, actual implementation needed
+        """Attempt to load a compiled DSPy program from ``program_path``.
+
+        This helper is primarily used in tests to verify that a compiled
+        program JSON can be read successfully. It simply ensures the file
+        exists and contains valid JSON.
+
+        Args:
+            program_path: Path to the compiled DSPy program JSON file.
+
+        Returns:
+            ``True`` if the program file exists and can be parsed, ``False`` otherwise.
+        """
+
+        path = Path(program_path)
+        if not path.exists():
+            logger.error("Compiled DSPy program not found at %s", program_path)
+            return False
+
+        try:
+            with path.open() as f:
+                json.load(f)
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to load compiled DSPy program from %s: %s",
+                program_path,
+                e,
+            )
+            return False
 
 
 def configure_dspy_with_ollama(
