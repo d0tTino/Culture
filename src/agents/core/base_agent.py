@@ -395,6 +395,7 @@ class Agent:
         # --- Retrieve Memory History ---
         # Start with any memories retrieved in previous turns
         memory_history_list: list[dict[str, Any]] = list(self._memory_history)
+
         active_store = vector_store_manager or getattr(self, "vector_store_manager", None)
         if active_store is not None and hasattr(active_store, "aretrieve_relevant_memories"):
             try:
@@ -406,6 +407,7 @@ class Agent:
                 # Persist and accumulate retrieved memories for this agent
                 self._memory_history.extend(retrieved_memories)
                 memory_history_list = list(self._memory_history)
+
             except Exception as e:  # pragma: no cover - defensive
                 logger.error(
                     f"Agent {self.agent_id}: failed to retrieve memories: {e}",

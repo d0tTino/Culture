@@ -132,6 +132,10 @@ class ChromaVectorStoreManager(MemoryStore):
                 Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory)
             )
 
+        self.debug_sqlite = os.getenv("DEBUG_SQLITE", "").lower() in {"1", "true", "yes"}
+        if self.debug_sqlite:
+            self._enable_sqlite_debug(persist_directory)
+
         # Get or create a collection for agent memories
         collection_name = "agent_memories"
         self.collection: Any = self.client.get_or_create_collection(
@@ -162,6 +166,25 @@ class ChromaVectorStoreManager(MemoryStore):
 
         # For tracking event count
         self.event_count = 0
+
+    def _enable_sqlite_debug(self: Self, persist_directory: str) -> None:
+        """Enable verbose SQLite debugging and set performance pragmas."""
+        try:
+            import sqlite3
+
+            db_path = os.path.join(persist_directory, "chroma.sqlite3")
+            if not os.path.exists(db_path):
+                logger.debug("SQLite debug enabled but %s not found", db_path)
+                return
+            logger.debug("Connecting to SQLite database at %s", db_path)
+            conn = sqlite3.connect(db_path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            logger.debug("Set journal_mode=WAL and busy_timeout=5000")
+            conn.close()
+            logger.debug("SQLite debug connection closed")
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to enable SQLite debug: %s", exc, exc_info=True)
 
     # ------------------------------------------------------------------
     # MemoryStore protocol implementation

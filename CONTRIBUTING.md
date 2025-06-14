@@ -9,6 +9,7 @@ Welcome! We're excited that you're interested in contributing to Culture.ai. Thi
 - [Mypy](http://mypy-lang.org/) for static type checking
 - Install dependencies from `requirements-dev.txt` (includes `pytest-xdist`) in addition to `requirements.txt`.
 - Set up your environment and dependencies as described in the README.
+- If you modify dependencies, run `scripts/check_requirements.sh` to ensure `requirements.txt` is in sync with `requirements.in`.
 
 ## Code Style Guidelines
 - **Follow [PEP 8](https://peps.python.org/pep-0008/)** for Python code style.
@@ -39,6 +40,7 @@ Welcome! We're excited that you're interested in contributing to Culture.ai. Thi
   ```bash
   python -m pytest --cov=src --cov-report=term-missing tests/
   ```
+- **Dependency lock check:** `scripts/check_requirements.sh` verifies that `requirements.txt` matches the output of `pip-compile`. The CI workflow runs this step automatically.
 - See [docs/testing.md](docs/testing.md) for advanced test strategies, markers, and troubleshooting.
 
 ## Reporting Bugs & Requesting Features
