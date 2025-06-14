@@ -237,6 +237,9 @@ class Agent:
         self.role_thought_generator_program = get_role_thought_generator()
         self.relationship_updater_program = get_relationship_updater()
 
+        # Track retrieved memories across turns for debugging/analysis
+        self._memory_history: list[dict[str, Any]] = []
+
         logger.info(
             f"Agent {self.agent_id} __init__: self.action_intent_selector_program is {type(self.action_intent_selector_program)}"
         )
@@ -390,7 +393,9 @@ class Agent:
         # --- End Extract Perceived Messages ---
 
         # --- Retrieve Memory History ---
-        memory_history_list: list[dict[str, Any]] = []
+        # Start with any memories retrieved in previous turns
+        memory_history_list: list[dict[str, Any]] = list(self._memory_history)
+
         active_store = vector_store_manager or getattr(self, "vector_store_manager", None)
         if active_store is not None and hasattr(active_store, "aretrieve_relevant_memories"):
             try:
@@ -399,7 +404,10 @@ class Agent:
                     query="",
                     k=5,
                 )
-                memory_history_list.extend(retrieved_memories)
+                # Persist and accumulate retrieved memories for this agent
+                self._memory_history.extend(retrieved_memories)
+                memory_history_list = list(self._memory_history)
+
             except Exception as e:  # pragma: no cover - defensive
                 logger.error(
                     f"Agent {self.agent_id}: failed to retrieve memories: {e}",

@@ -20,6 +20,7 @@ pytest.importorskip("chromadb")
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent
 from src.agents.graphs.basic_agent_graph import AgentTurnState
+from src.agents.graphs.basic_agent_types import AgentActionOutput
 from src.shared.async_utils import AsyncDSPyManager
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,9 @@ async def test_dspy_call_timeout_in_graph(
         influence_points=int(simple_agent.state.ip),
         steps_in_current_role=simple_agent.state.steps_in_current_role,
         data_units=int(simple_agent.state.du),
-        current_project_affiliation=simple_agent.state.current_project_affiliation,
+        current_project_affiliation=getattr(
+            simple_agent.state, "current_project_affiliation", None
+        ),
         available_projects={},
         state=simple_agent.state,  # Pass the AgentState object
         agent_instance=simple_agent,  # Pass the agent instance
@@ -112,7 +115,18 @@ async def test_dspy_call_timeout_in_graph(
         collective_du=None,
     )
 
-    with patch.object(simple_agent, "async_select_action_intent", mock_program_callable):
+    with (
+        patch.object(simple_agent, "async_select_action_intent", mock_program_callable),
+        patch(
+            "src.agents.graphs.graph_nodes.generate_structured_output",
+            return_value=AgentActionOutput(
+                thought="timeout",
+                message_content=None,
+                message_recipient_id=None,
+                action_intent=AgentActionIntent.IDLE.value,
+            ),
+        ),
+    ):
         # Execute the graph
         assert simple_agent.graph is not None, "Agent graph should be initialized by BaseAgent"
         final_state = await simple_agent.graph.ainvoke(initial_turn_state)
@@ -182,7 +196,9 @@ async def test_dspy_call_exception_in_graph(
         influence_points=int(simple_agent.state.ip),
         steps_in_current_role=simple_agent.state.steps_in_current_role,
         data_units=int(simple_agent.state.du),
-        current_project_affiliation=simple_agent.state.current_project_affiliation,
+        current_project_affiliation=getattr(
+            simple_agent.state, "current_project_affiliation", None
+        ),
         available_projects={},
         state=simple_agent.state,
         agent_instance=simple_agent,
@@ -190,7 +206,18 @@ async def test_dspy_call_exception_in_graph(
         collective_du=None,
     )
 
-    with patch.object(simple_agent, "async_select_action_intent", mock_program_callable_err):
+    with (
+        patch.object(simple_agent, "async_select_action_intent", mock_program_callable_err),
+        patch(
+            "src.agents.graphs.graph_nodes.generate_structured_output",
+            return_value=AgentActionOutput(
+                thought="error",
+                message_content=None,
+                message_recipient_id=None,
+                action_intent=AgentActionIntent.IDLE.value,
+            ),
+        ),
+    ):
         # Execute the graph
         assert simple_agent.graph is not None, "Agent graph should be initialized by BaseAgent"
         final_state = await simple_agent.graph.ainvoke(initial_turn_state)
