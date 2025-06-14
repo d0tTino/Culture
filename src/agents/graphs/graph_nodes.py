@@ -40,11 +40,11 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
     return {"prompt_modifier": "Relationships:\n" + "\n".join(lines)}
 
 
-async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, str]:
+async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
     manager = state.get("vector_store_manager")
     agent = state.get("agent_instance")
     if not manager or not agent:
-        return {"rag_summary": "(No memory retrieval)"}
+        return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
     memories = await manager.aretrieve_relevant_memories(  # type: ignore[attr-defined]
         state["agent_id"], query="", k=5
     )
@@ -53,7 +53,7 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         state.get("current_role", ""), "\n".join(memories_content), ""
     )
     summary = getattr(summary_result, "summary", "")
-    return {"rag_summary": summary}
+    return {"rag_summary": summary, "memory_history_list": memories}
 
 
 async def generate_thought_and_message_node(
@@ -78,6 +78,7 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
             "message_recipient_id": None,
             "action_intent": "idle",
             "updated_agent_state": state["state"],
+            "memory_history_list": state.get("memory_history_list", []),
         }
     return {
         "message_content": output.message_content,
@@ -85,6 +86,7 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
         "action_intent": output.action_intent,
         "updated_agent_state": state["state"],
         "is_targeted": output.message_recipient_id is not None,
+        "memory_history_list": state.get("memory_history_list", []),
     }
 
 
