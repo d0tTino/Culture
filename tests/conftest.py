@@ -14,7 +14,12 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from tests.utils.dummy_chromadb import setup_dummy_chromadb
+# Ensure the project root is on sys.path before importing test utilities
+project_root = str(Path(__file__).parent.parent.absolute())
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from tests.utils.dummy_chromadb import setup_dummy_chromadb  # noqa: E402
 
 # Ensure np.float_ exists for libraries expecting NumPy <2.0
 if not hasattr(np, "float_"):
@@ -53,8 +58,8 @@ try:
 except Exception:
     pass
 
-import pytest
-from pytest import FixtureRequest, MonkeyPatch
+import pytest  # noqa: E402
+from pytest import FixtureRequest, MonkeyPatch  # noqa: E402
 
 # Add the project root to path to allow importing src modules
 project_root = str(Path(__file__).parent.parent.absolute())

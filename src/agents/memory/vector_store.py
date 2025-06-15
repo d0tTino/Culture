@@ -6,6 +6,8 @@ This module is part of the agent memory system, handling persistence and retriev
 of agent memories using vector embeddings for semantic search capabilities.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -33,7 +35,9 @@ except ImportError:  # pragma: no cover - fallback when chromadb missing
     chromadb = None
 
     class _SentenceTransformerEmbeddingFunction:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(
+            self: _SentenceTransformerEmbeddingFunction, *args: Any, **kwargs: Any
+        ) -> None:
             raise ImportError("chromadb is required for SentenceTransformerEmbeddingFunction")
 
     SentenceTransformerEmbeddingFunction: Any = _SentenceTransformerEmbeddingFunction  # type: ignore[no-redef]
