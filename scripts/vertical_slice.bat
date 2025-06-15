@@ -1,5 +1,5 @@
 @echo off
-REM Run the walking vertical slice demo. Activates venv if present.
+REM Run the walking vertical slice demo. Activates venv or .venv if present.
 if exist venv\Scripts\activate.bat (
     call venv\Scripts\activate.bat
 ) else if exist .venv\Scripts\activate.bat (
