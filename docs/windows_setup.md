@@ -81,6 +81,8 @@ ollama serve &
    scripts\vertical_slice.bat
    ```
 
+The script checks for both `venv` and `.venv` directories and activates the first one it finds.
+
 The script launches three agents for a few steps and stores their memories in
 ChromaDB. See `docs/walking_vertical_slice.md` for details.
 
