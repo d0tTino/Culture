@@ -48,7 +48,8 @@ def test_prepare_relationship_prompt_node() -> None:
 async def test_retrieve_and_summarize_memories_node_no_manager() -> None:
     state = {"agent_id": "a"}
     out = await retrieve_and_summarize_memories_node(state)
-    assert out == {"rag_summary": "(No memory retrieval)"}
+    assert out["rag_summary"] == "(No memory retrieval)"
+    assert out["memory_history_list"] == []
 
 
 class DummyManager:
@@ -75,7 +76,8 @@ async def test_retrieve_and_summarize_memories_node_with_manager() -> None:
         "current_role": "r",
     }
     out = await retrieve_and_summarize_memories_node(state)
-    assert out == {"rag_summary": "SUM"}
+    assert out["rag_summary"] == "SUM"
+    assert out["memory_history_list"] == [{"content": "m1"}, {"content": "m2"}]
 
 
 @pytest.mark.asyncio
