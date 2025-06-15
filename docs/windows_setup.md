@@ -71,7 +71,12 @@ ollama serve &
    pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
    pip install -r requirements.txt -r requirements-dev.txt
    ```
-   The requirements file pins this PyTorch version, so ensure your system has CUDA 12.1 drivers installed.
+   The requirements file pins this PyTorch version, so ensure your system has CUDA 12.1 or a compatible driver installed.
+   If your Windows setup lacks a supported CUDA driver, install the CPU-only build instead:
+   ```bash
+   pip install torch==2.3.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+   ```
+   You may also consult the [PyTorch installation selector](https://pytorch.org/get-started/locally/) for alternate versions.
 2. Execute the demo using your running Ollama instance:
    ```bash
    python -m examples.walking_vertical_slice
