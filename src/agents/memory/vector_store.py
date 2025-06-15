@@ -21,12 +21,14 @@ from typing_extensions import Self
 
 from src.shared.memory_store import MemoryStore
 
-chromadb: Any
+chromadb: Any = None
 try:  # pragma: no cover - optional dependency
-    import chromadb
+    import chromadb as chromadb_module
     from chromadb.utils.embedding_functions import (
         SentenceTransformerEmbeddingFunction,
     )
+
+    chromadb = chromadb_module
 except ImportError:  # pragma: no cover - fallback when chromadb missing
     chromadb = None
 
