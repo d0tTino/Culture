@@ -80,6 +80,14 @@ ollama serve &
 The script launches three agents for a few steps and stores their memories in
 ChromaDB. See `docs/walking_vertical_slice.md` for details.
 
+To verify the setup you can also run the integration test:
+
+```bash
+pytest tests/integration/agents/test_vertical_slice_real_llm.py -m integration
+```
+
+This test is skipped automatically if Ollama is not running.
+
 ## Run the Simulation
 
 Once Ollama is running and your `.env` is configured, launch the main application:
