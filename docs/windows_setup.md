@@ -33,6 +33,15 @@ python3.10 -m venv venv
 source venv/bin/activate
 ```
 
+Copy the example environment file and customize it if needed:
+
+```bash
+cp .env.example .env
+# Use `copy .env.example .env` from PowerShell
+```
+
+Edit `OLLAMA_API_BASE` in `.env` if your Ollama server uses a different URL.
+
 ## Install Ollama (≥0.1.34)
 
 Culture.ai relies on the WSL build of **Ollama**. Install or upgrade it with:
