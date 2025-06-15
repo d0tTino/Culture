@@ -551,6 +551,7 @@ services can reach it. Configure the connection with the `OLLAMA_API_BASE` and
 acceleration is only available when running Ollama through Docker or WSL2.
 For step-by-step instructions, see
 [docs/windows_setup.md](docs/windows_setup.md).
+The provided `scripts\vertical_slice.bat` detects both `venv` and `.venv` virtual environments when activating the demo.
 
 ### Running the Simulation
 Run a basic simulation (default parameters):
