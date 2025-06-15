@@ -33,6 +33,13 @@ python3.10 -m venv venv
 source venv/bin/activate
 ```
 
+Alternatively, run the helper script to automatically create `.venv` and
+install all test requirements:
+
+```cmd
+scripts\setup_test_env.bat
+```
+
 Copy the example environment file and customize it if needed:
 
 ```bash
