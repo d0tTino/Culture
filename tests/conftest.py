@@ -9,12 +9,20 @@ import tempfile
 import types
 from collections.abc import Generator
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 from unittest.mock import MagicMock, patch
 
-import numpy as np
+try:
+    import numpy as np
+except Exception:
+    np = types.SimpleNamespace(float_=float)  # type: ignore[assignment]
 
-from tests.utils.dummy_chromadb import setup_dummy_chromadb
+# Ensure the project root is on sys.path before importing test utilities
+project_root = str(Path(__file__).parent.parent.absolute())
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from tests.utils.dummy_chromadb import setup_dummy_chromadb  # noqa: E402
 
 # Ensure np.float_ exists for libraries expecting NumPy <2.0
 if not hasattr(np, "float_"):
@@ -53,8 +61,8 @@ try:
 except Exception:
     pass
 
-import pytest
-from pytest import FixtureRequest, MonkeyPatch
+import pytest  # noqa: E402
+from pytest import FixtureRequest, MonkeyPatch  # noqa: E402
 
 # Add the project root to path to allow importing src modules
 project_root = str(Path(__file__).parent.parent.absolute())
@@ -90,6 +98,34 @@ if "weaviate" not in sys.modules:
     weaviate_mod.classes = classes_mod
     sys.modules["weaviate"] = weaviate_mod
     sys.modules["weaviate.classes"] = classes_mod
+
+if "fastapi" not in sys.modules:
+    fastapi_mod = types.ModuleType("fastapi")
+
+    class FastAPI:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def get(self, *args: object, **kwargs: object):
+            def decorator(fn: Callable[..., object]) -> Callable[..., object]:
+                return fn
+
+            return decorator
+
+    class Request:
+        async def is_disconnected(self) -> bool:  # type: ignore[override]
+            return True
+
+    class Response:  # pragma: no cover - simple stub
+        pass
+
+    fastapi_mod.FastAPI = FastAPI
+    fastapi_mod.Request = Request
+    fastapi_mod.Response = Response
+    responses_mod = types.ModuleType("fastapi.responses")
+    responses_mod.JSONResponse = Response
+    sys.modules["fastapi"] = fastapi_mod
+    sys.modules["fastapi.responses"] = responses_mod
 
 if "sse_starlette.sse" not in sys.modules:
     sse_mod = types.ModuleType("sse_starlette.sse")

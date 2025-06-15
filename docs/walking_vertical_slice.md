@@ -20,9 +20,9 @@ This example demonstrates a minimal end-to-end run of the Culture.ai simulation 
    ollama pull mistral:latest
    ollama serve &  # if not already running
    ```
-3. Execute the demo script:
+3. Execute the demo script (automatically activates your virtual environment):
    ```bash
-   python -m examples.walking_vertical_slice
+   scripts/vertical_slice.sh  # Windows: scripts\vertical_slice.bat
    ```
 
 The demo now spins up **three** agents for three steps. Memories are persisted to ChromaDB and displayed on the Knowledge Board. All LLM calls go through your local Ollama instance; no mocking is applied.
