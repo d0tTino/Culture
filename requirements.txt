@@ -6,6 +6,9 @@ discord.py==2.3.0
 weaviate-client==3.25.0
 chromadb==0.4.24
 dspy-ai==2.6.27
+ollama>=0.1.34
+opentelemetry-sdk==1.25.0
+opentelemetry-exporter-otlp==1.25.0
 
 pydantic==2.3.0
 pydantic-settings==2.0.3

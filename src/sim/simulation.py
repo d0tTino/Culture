@@ -12,6 +12,7 @@ from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.logging_config import setup_logging
+from src.infra.snapshot import save_snapshot
 from src.shared.typing import SimulationMessage
 from src.sim.knowledge_board import KnowledgeBoard
 
@@ -404,6 +405,23 @@ class Simulation:
                 f"Collective metrics after Global Turn {self.current_step} - IP: {self.collective_ip:.1f}, "
                 f"DU: {self.collective_du:.1f}"
             )
+
+            if self.current_step % 100 == 0:
+                snapshot = {
+                    "step": self.current_step,
+                    "collective_ip": self.collective_ip,
+                    "collective_du": self.collective_du,
+                    "agents": [
+                        {
+                            "agent_id": ag.agent_id,
+                            "ip": ag.state.ip,
+                            "du": ag.state.du,
+                            "mood": ag.state.mood_level,
+                        }
+                        for ag in self.agents
+                    ],
+                }
+                save_snapshot(self.current_step, snapshot)
 
             # Advance to the next agent for the next turn
             self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)

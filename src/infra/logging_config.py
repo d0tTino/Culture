@@ -6,6 +6,15 @@ import logging
 import logging.handlers
 from pathlib import Path
 
+try:  # pragma: no cover - optional dependency
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+    from opentelemetry.sdk._logs import BatchLogProcessor, LoggerProvider, LoggingHandler
+    from opentelemetry.sdk.resources import Resource
+
+    OTEL_AVAILABLE = True
+except Exception:  # pragma: no cover - optional
+    OTEL_AVAILABLE = False
+
 
 def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger]:
     """
@@ -41,6 +50,17 @@ def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger
     )
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
+
+    if OTEL_AVAILABLE:
+        try:  # pragma: no cover - best effort
+            resource = Resource.create({"service.name": "culture"})
+            provider = LoggerProvider(resource=resource)
+            exporter = OTLPLogExporter(endpoint="http://localhost:4318/v1/logs")
+            provider.add_log_processor(BatchLogProcessor(exporter))
+            otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+            root_logger.addHandler(otel_handler)
+        except Exception as exc:  # pragma: no cover - safety
+            root_logger.debug("Failed to configure OTEL exporter: %s", exc)
 
     # Set up dedicated logger for LLM performance metrics
     llm_perf_logger = logging.getLogger("llm_performance")

@@ -16,6 +16,7 @@ import time
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, TypeVar, Union, cast
 
 from pydantic import ValidationError
@@ -105,7 +106,8 @@ class ChromaVectorStoreManager(MemoryStore):
                 heavy ``sentence-transformers`` dependency isn't required.
         """
         # Ensure the directory exists
-        os.makedirs(persist_directory, exist_ok=True)
+        persist_path = Path(persist_directory)
+        persist_path.mkdir(parents=True, exist_ok=True)
 
         if embedding_function is None:
             try:
@@ -126,21 +128,19 @@ class ChromaVectorStoreManager(MemoryStore):
         self.embedding_function: Any = embedding_function
 
         # Initialize the persistent ChromaDB client
-        logger.info(
-            f"Initializing ChromaDB client with persistence directory: {persist_directory}"
-        )
+        logger.info(f"Initializing ChromaDB client with persistence directory: {persist_path}")
         if hasattr(chromadb, "PersistentClient"):
-            self.client = chromadb.PersistentClient(path=persist_directory)
+            self.client = chromadb.PersistentClient(path=str(persist_path))
         else:  # pragma: no cover - old chromadb
             from chromadb.config import Settings
 
             self.client = chromadb.Client(
-                Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory)
+                Settings(chroma_db_impl="duckdb+parquet", persist_directory=str(persist_path))
             )
 
         self.debug_sqlite = os.getenv("DEBUG_SQLITE", "").lower() in {"1", "true", "yes"}
         if self.debug_sqlite:
-            self._enable_sqlite_debug(persist_directory)
+            self._enable_sqlite_debug(str(persist_path))
 
         # Get or create a collection for agent memories
         collection_name = "agent_memories"
@@ -159,7 +159,7 @@ class ChromaVectorStoreManager(MemoryStore):
         logger.info(
             f"Chroma collections '{collection_name}' and "
             f"'{role_collection_name}' loaded/created from "
-            f"'{persist_directory}'."
+            f"'{persist_path}'."
         )
 
         # Import lazily to avoid a circular dependency with memory_tracking_manager
@@ -178,12 +178,12 @@ class ChromaVectorStoreManager(MemoryStore):
         try:
             import sqlite3
 
-            db_path = os.path.join(persist_directory, "chroma.sqlite3")
-            if not os.path.exists(db_path):
+            db_path = Path(persist_directory) / "chroma.sqlite3"
+            if not db_path.exists():
                 logger.debug("SQLite debug enabled but %s not found", db_path)
                 return
             logger.debug("Connecting to SQLite database at %s", db_path)
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(db_path.as_posix())
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA busy_timeout=5000")
             logger.debug("Set journal_mode=WAL and busy_timeout=5000")

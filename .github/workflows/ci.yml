@@ -27,6 +27,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
+      fail-fast: true
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -120,7 +121,7 @@ jobs:
         if: steps.changes.outputs.CODE_CHANGES == 'true'
         shell: bash
         run: |
-          pytest --maxfail=1 --disable-warnings -q --cov=src --cov-report=xml --cov-fail-under=90
+          pytest -q -n auto --durations=10 --maxfail=1 --disable-warnings --cov=src --cov-report=xml --cov-fail-under=90
 
       - name: Run Integration Tests
         if: steps.changes.outputs.CODE_CHANGES == 'true' && matrix.os == 'ubuntu-latest'
