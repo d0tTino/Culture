@@ -76,6 +76,10 @@ ollama serve &
    ```bash
    python -m examples.walking_vertical_slice
    ```
+   On Windows you can instead run the convenience script:
+   ```cmd
+   scripts\vertical_slice.bat
+   ```
 
 The script launches three agents for a few steps and stores their memories in
 ChromaDB. See `docs/walking_vertical_slice.md` for details.
