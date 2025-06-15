@@ -44,7 +44,7 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     manager = state.get("vector_store_manager")
     agent = state.get("agent_instance")
     if not manager or not agent:
-        return {"rag_summary": "(No memory retrieval)"}
+        return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
     memories = await manager.aretrieve_relevant_memories(  # type: ignore[attr-defined]
         state["agent_id"], query="", k=5
     )
@@ -53,7 +53,7 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         state.get("current_role", ""), "\n".join(memories_content), ""
     )
     summary = getattr(summary_result, "summary", "")
-    return {"rag_summary": summary}
+    return {"rag_summary": summary, "memory_history_list": memories}
 
 
 async def generate_thought_and_message_node(

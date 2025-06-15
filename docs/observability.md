@@ -25,3 +25,27 @@ docker run -d -p 3000:3000 grafana/grafana
 
 Once running, access Grafana at [http://localhost:3000](http://localhost:3000) and follow the import steps above.
 
+## 4. OpenTelemetry Logs
+
+Culture.ai can export structured logs via the OpenTelemetry OTLP exporter. The exporter is
+enabled by default and sends logs to `localhost:4318`.
+
+To receive these logs locally, run an OTLP-compatible collector such as the
+[OpenTelemetry Collector](https://opentelemetry.io/docs/collector/):
+
+```bash
+otelcol --config=your_config.yaml
+```
+
+You should then see logs arriving on port `4318`.
+
+## 5. Debugging SQLite Locks
+
+If you encounter database lock errors during development, enable SQLite debug mode:
+
+```bash
+export DEBUG_SQLITE=1
+```
+
+This sets the database to WAL mode and increases the busy timeout to help diagnose locking issues.
+

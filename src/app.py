@@ -22,6 +22,14 @@ from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
+if sys.platform != "win32":
+    try:  # pragma: no cover - optional performance boost
+        import uvloop
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    except Exception:  # pragma: no cover - fallback silently
+        logging.getLogger(__name__).debug("uvloop not available; using default event loop")
+
 try:
     from src.interfaces.discord_bot import SimulationDiscordBot
 
