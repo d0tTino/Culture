@@ -56,7 +56,10 @@ def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger
         try:  # pragma: no cover - best effort
             resource = Resource.create({"service.name": "culture"})
             provider = LoggerProvider(resource=resource)
-            exporter = OTLPLogExporter(endpoint="http://localhost:4318/v1/logs")
+            from .config import get_config
+
+            endpoint = get_config("OTEL_EXPORTER_ENDPOINT")
+            exporter = OTLPLogExporter(endpoint=endpoint)
             provider.add_log_processor(BatchLogProcessor(exporter))
             otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
             root_logger.addHandler(otel_handler)
