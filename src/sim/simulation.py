@@ -78,9 +78,9 @@ class Simulation:
         logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -115,9 +115,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -366,9 +366,9 @@ class Simulation:
             logger.info(f"  - DU: {current_agent_state.du:.1f} (from {current_agent_state.du})")
 
             # Update the agent state in the simulation's list of agents
-            self.agents[agent_to_run_index] = (
-                agent  # Ensure the agent object itself is updated if it was replaced
-            )
+            self.agents[
+                agent_to_run_index
+            ] = agent  # Ensure the agent object itself is updated if it was replaced
             self.agents[agent_to_run_index].update_state(current_agent_state)
 
             # Determine next agent index based on role change event this turn
