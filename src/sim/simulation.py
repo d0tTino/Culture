@@ -249,9 +249,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -366,9 +364,9 @@ class Simulation:
             logger.info(f"  - DU: {current_agent_state.du:.1f} (from {current_agent_state.du})")
 
             # Update the agent state in the simulation's list of agents
-            self.agents[
-                agent_to_run_index
-            ] = agent  # Ensure the agent object itself is updated if it was replaced
+            self.agents[agent_to_run_index] = (
+                agent  # Ensure the agent object itself is updated if it was replaced
+            )
             self.agents[agent_to_run_index].update_state(current_agent_state)
 
             # Determine next agent index based on role change event this turn
