@@ -82,9 +82,12 @@ DEFAULT_CONFIG: dict[str, object] = {
     "REDIS_DB": 0,
     "DISCORD_BOT_TOKEN": "",
     "DISCORD_CHANNEL_ID": None,
+    "DISCORD_TOKENS_DB_URL": "",
     "OPENAI_API_KEY": "",
     "ANTHROPIC_API_KEY": "",
     "DEFAULT_LOG_LEVEL": "INFO",
+    # Endpoint for sending logs via OpenTelemetry
+    "OTEL_EXPORTER_ENDPOINT": "http://localhost:4318/v1/logs",
     "MEMORY_PRUNING_ENABLED": False,
     "MEMORY_PRUNING_L2_ENABLED": True,
     "MEMORY_PRUNING_L1_MUS_ENABLED": False,
@@ -288,6 +291,7 @@ WEAVIATE_URL = get_config("WEAVIATE_URL")
 
 # --- Basic Configuration ---
 DEFAULT_LOG_LEVEL = get_config("DEFAULT_LOG_LEVEL")
+OTEL_EXPORTER_ENDPOINT = get_config("OTEL_EXPORTER_ENDPOINT")
 
 # --- API Keys ---
 OPENAI_API_KEY = get_config("OPENAI_API_KEY")
@@ -308,6 +312,7 @@ REDIS_PASSWORD = get_config("REDIS_PASSWORD")
 DISCORD_BOT_TOKEN = get_config("DISCORD_BOT_TOKEN")
 DISCORD_CHANNEL_ID = get_config("DISCORD_CHANNEL_ID")
 OPA_URL = get_config("OPA_URL")
+
 
 # --- Memory Pruning Settings ---
 # Whether to enable automatic memory pruning (default to False for safety)

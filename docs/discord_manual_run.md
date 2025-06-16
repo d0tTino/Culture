@@ -33,3 +33,22 @@ Displays runtime statistics similar to:
 LLM latency: 0 ms; KB size: 0
 ```
 These commands are helpful for manual smoke testing of the Discord interface.
+
+### Using Multiple Bot Tokens
+You can run the simulation with several Discord bot accounts. Store the tokens
+in a PostgreSQL table named `discord_tokens` with columns `agent_id` and `token`.
+Set `DISCORD_TOKENS_DB_URL` to the database connection URL. When present,
+`DISCORD_BOT_TOKEN` can be left blank or contain a comma-separated fallback
+list.
+
+Initialize the table:
+
+```sql
+-- scripts/init_discord_tokens.sql
+CREATE TABLE IF NOT EXISTS discord_tokens (
+    agent_id TEXT PRIMARY KEY,
+    token TEXT NOT NULL
+);
+```
+
+Load the SQL with `psql $DISCORD_TOKENS_DB_URL < scripts/init_discord_tokens.sql`.

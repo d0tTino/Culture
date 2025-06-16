@@ -539,6 +539,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
     - `WEAVIATE_URL` (e.g., http://localhost:8080)
     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
     - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
+    - `DISCORD_TOKENS_DB_URL` for Postgres storage of additional bot tokens
 
    - See `.env.example` and `docs/testing.md` for details.
 

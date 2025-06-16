@@ -88,6 +88,10 @@ class KnowledgeBoard:
         """Returns a copy of all entries on the board."""
         return list(self.entries)  # Return a copy
 
+    def to_dict(self: Self) -> dict[str, Any]:
+        """Serialize the knowledge board to a dictionary."""
+        return {"entries": self.get_full_entries()}
+
     def get_recent_entries_for_prompt(self: Self, max_entries: int = 5) -> list[str]:
         """
         Returns a list of formatted strings for the most recent entries, suitable for an LLM prompt.
