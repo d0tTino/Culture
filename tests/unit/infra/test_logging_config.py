@@ -11,7 +11,6 @@ def test_custom_otel_endpoint(monkeypatch, tmp_path):
     monkeypatch.setenv("ENABLE_OTEL", "1")
     monkeypatch.setenv("OTEL_EXPORTER_ENDPOINT", "http://example.com:4318/v1/logs")
 
-    # Reload configuration to pick up the new environment variable
     config.load_config()
 
     endpoints: list[str] = []
