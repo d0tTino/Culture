@@ -29,7 +29,7 @@ Once running, access Grafana at [http://localhost:3000](http://localhost:3000) a
 
 Culture.ai can export structured logs via the OpenTelemetry OTLP exporter. The exporter
 sends logs to `localhost:4318/v1/logs` by default. Set `OTEL_EXPORTER_ENDPOINT` to
-override this URL.
+override this URL, and set `ENABLE_OTEL=1` in your `.env` file to activate the exporter.
 
 To receive these logs locally, run an OTLP-compatible collector such as the
 [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/):
