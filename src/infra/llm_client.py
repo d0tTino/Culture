@@ -31,8 +31,8 @@ except ImportError:  # pragma: no cover - optional dependency
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
 if TYPE_CHECKING:
-    import requests  # type: ignore[import-untyped]
-    from requests.exceptions import RequestException, Timeout  # type: ignore[import-untyped]
+    import requests
+    from requests.exceptions import RequestException, Timeout
 else:
     try:  # pragma: no cover - optional dependency
         import requests  # type: ignore[import-untyped]
