@@ -117,6 +117,7 @@ def retrieve_relevant_memories(
 ### 5.1. Usage
 - Use type hints for all function signatures.
 - Use type hints for complex variables where the type is not obvious.
+- Mypy strict mode is enforced globally via `strict = true` in `pyproject.toml`.
 - Import types from the `typing` module: `List`, `Dict`, `Optional`, etc.
 
 ### 5.2. Examples
