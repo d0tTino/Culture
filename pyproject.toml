@@ -67,7 +67,7 @@ exclude = [
 files = ["src"]
 # Temporarily disable the Pydantic mypy plugin due to compatibility issues
 # plugins = ["pydantic.mypy"]
-# strict = true  # Uncomment if your mypy version supports this global flag
+strict = true  # Global strict typing
 
 #[tool.ruff.lint.per-file-ignores] # This line and the following are removed as they are now under [tool.ruff.per-file-ignores]
 #"src/agents/dspy_programs/*_examples.py" = ["E501"]
