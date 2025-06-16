@@ -31,6 +31,8 @@ Create a virtual environment for the project:
 ```bash
 python3.10 -m venv venv
 source venv/bin/activate
+# Windows:
+# venv\Scripts\activate.bat (or .venv\Scripts\activate.bat)
 ```
 
 Alternatively, run the helper script to automatically create `.venv` and

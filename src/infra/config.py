@@ -36,6 +36,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "VECTOR_STORE_BACKEND": "chroma",  # chroma or weaviate
     "WEAVIATE_URL": "http://localhost:8080",
     "OLLAMA_REQUEST_TIMEOUT": 10,
+    "OPA_URL": "",
     "TARGETED_MESSAGE_MULTIPLIER": 3.0,
     "POSITIVE_RELATIONSHIP_LEARNING_RATE": 0.3,
     "NEGATIVE_RELATIONSHIP_LEARNING_RATE": 0.4,
@@ -310,7 +311,8 @@ REDIS_PASSWORD = get_config("REDIS_PASSWORD")
 # --- Discord Bot Settings ---
 DISCORD_BOT_TOKEN = get_config("DISCORD_BOT_TOKEN")
 DISCORD_CHANNEL_ID = get_config("DISCORD_CHANNEL_ID")
-DISCORD_TOKENS_DB_URL = get_config("DISCORD_TOKENS_DB_URL")
+OPA_URL = get_config("OPA_URL")
+
 
 # --- Memory Pruning Settings ---
 # Whether to enable automatic memory pruning (default to False for safety)
