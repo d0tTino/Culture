@@ -11,7 +11,7 @@ import typing
 from typing import TYPE_CHECKING, Any, Optional
 
 from src.interfaces import metrics
-from src.utils.policy import allow_message
+from src.utils.policy import allow_message, evaluate_with_opa
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     import discord
@@ -128,6 +128,11 @@ class SimulationDiscordBot:
         if not allow_message(content):
             logger.debug("Message blocked by policy")
             return False
+        if content is not None:
+            allowed, content = await evaluate_with_opa(content)
+            if not allowed:
+                logger.debug("Message blocked by OPA policy")
+                return False
         try:
             client = self._select_client(agent_id)
             channel = client.get_channel(self.channel_id)
