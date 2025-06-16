@@ -412,7 +412,7 @@ class Simulation:
                     "step": self.current_step,
                     "collective_ip": self.collective_ip,
                     "collective_du": self.collective_du,
-                    "knowledge_board": self.knowledge_board.get_full_entries(),
+                    "knowledge_board": self.knowledge_board.to_dict(),
                     "agents": [
                         {
                             "agent_id": ag.agent_id,
