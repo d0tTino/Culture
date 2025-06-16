@@ -540,6 +540,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
     - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
     - `DISCORD_TOKENS_DB_URL` for Postgres storage of additional bot tokens
+    - `ENABLE_OTEL=1` to activate OpenTelemetry log export
 
    - See `.env.example` and `docs/testing.md` for details.
 
