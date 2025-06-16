@@ -49,3 +49,15 @@ export DEBUG_SQLITE=1
 
 This sets the database to WAL mode and increases the busy timeout to help diagnose locking issues.
 
+## 6. Policy Engine (OPA)
+
+Culture.ai can optionally send outgoing messages through an [Open Policy Agent](https://www.openpolicyagent.org/) service for additional filtering. Set the `OPA_URL` environment variable to point at your OPA policy endpoint (for example `http://localhost:8181/v1/data/discord/allow`). The endpoint should return JSON in the form:
+
+```json
+{
+  "result": {"allow": true, "content": "optional modified text"}
+}
+```
+
+If `allow` is `false`, the message will be blocked. If `content` is returned, it will replace the original text before sending.
+

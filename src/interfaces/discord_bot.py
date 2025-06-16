@@ -10,6 +10,9 @@ import logging
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+import requests
+
+from src.infra import config
 from src.interfaces import metrics
 from src.utils.policy import allow_message
 
@@ -28,6 +31,25 @@ else:  # pragma: no cover - runtime import with fallback
 from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
+
+
+async def _evaluate_with_opa(content: str) -> tuple[bool, str]:
+    """Check message content against OPA policy."""
+    url = typing.cast(str, config.get_config("OPA_URL"))
+    if not url:
+        return True, content
+    try:
+        response = await asyncio.to_thread(
+            requests.post, url, json={"input": {"message": content}}, timeout=2
+        )
+        data = response.json()
+        result = typing.cast(dict[str, typing.Any], data.get("result", {}))
+        allow = typing.cast(bool, result.get("allow", True))
+        new_content = typing.cast(str, result.get("content", content))
+        return allow, new_content
+    except Exception as e:  # pragma: no cover - network failures
+        logger.warning(f"OPA evaluation failed: {e}")
+        return True, content
 
 
 class SimulationDiscordBot:
@@ -112,6 +134,11 @@ class SimulationDiscordBot:
         if not allow_message(content):
             logger.debug("Message blocked by policy")
             return False
+        if content is not None:
+            allowed, content = await _evaluate_with_opa(content)
+            if not allowed:
+                logger.debug("Message blocked by OPA policy")
+                return False
         try:
             channel = self.client.get_channel(self.channel_id)
             if not channel:
