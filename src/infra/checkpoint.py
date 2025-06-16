@@ -102,6 +102,7 @@ def restore_environment(env: dict[str, Any]) -> None:
         else:
             os.environ[key] = str(value)
     config.load_config()
+    log_event({"type": "environment_change", "env": env})
 
 
 def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
@@ -131,8 +132,14 @@ def save_checkpoint(sim: Simulation, path: str | Path) -> None:
     log_event({"type": "checkpoint", "path": str(p), "step": data.get("current_step")})
 
 
-def load_checkpoint(path: str | Path) -> tuple[Simulation, dict[str, Any]]:
-    """Restore a ``Simulation`` instance and metadata from ``path``."""
+def load_checkpoint(
+    path: str | Path, *, replay: bool = False
+) -> tuple[Simulation, dict[str, Any]]:
+    """Restore a ``Simulation`` instance and metadata from ``path``.
+
+    If ``replay`` is ``True`` the function will retrieve events from the
+    Redpanda log and apply them to the simulation after loading.
+    """
     p = Path(path)
     with p.open("rb") as fh:
         data = pickle.load(fh)
@@ -168,4 +175,10 @@ def load_checkpoint(path: str | Path) -> tuple[Simulation, dict[str, Any]]:
         "environment": data.get("environment"),
     }
     log_event({"type": "load_checkpoint", "path": str(p), "step": data.get("current_step")})
+    if replay:
+        from src.infra.event_log import fetch_events
+
+        events = fetch_events(after_step=sim.current_step)
+        for event in events:
+            sim.apply_event(event)
     return sim, meta

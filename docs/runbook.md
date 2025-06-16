@@ -33,6 +33,9 @@ This runbook outlines routine operations for working with Culture.ai.
    ```bash
    python -m src.app --steps 5 --checkpoint my_sim.pkl --replay
    ```
+   When `--replay` is provided and `ENABLE_REDPANDA=1`, the simulation will
+   restore RNG/environment state and replay agent actions from the Redpanda
+   event log.
 
 ## Running Tests
 Run the full suite with coverage:

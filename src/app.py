@@ -141,7 +141,7 @@ def main() -> None:
     meta: dict[str, object] | None = None
     if args.checkpoint and Path(args.checkpoint).exists():
         logging.info("Loading simulation from checkpoint %s", args.checkpoint)
-        sim, meta = load_checkpoint(args.checkpoint)
+        sim, meta = load_checkpoint(args.checkpoint, replay=args.replay)
         sim.steps_to_run = args.steps
     else:
         sim = create_simulation(
