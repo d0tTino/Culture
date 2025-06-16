@@ -102,11 +102,16 @@ class FailsafeRelationshipUpdater:
 
 
 def get_relationship_updater() -> object:
-    """
-    Get the relationship updater module with robust fallback logic.
-    Returns the optimized module if available, else the base, else a failsafe.
+    """Return a relationship updater with fallbacks.
+
+    This checks dynamically whether ``dspy`` is available so tests can
+    simulate its absence by manipulating ``sys.modules``.
     """
     try:
+        import importlib
+
+        importlib.import_module("dspy")
+
         from src.infra import dspy_ollama_integration
 
         if not getattr(dspy_ollama_integration, "DSPY_AVAILABLE", False):

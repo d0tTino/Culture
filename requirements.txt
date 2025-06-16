@@ -17,3 +17,4 @@ requests==2.32.3
 sqlite-web
 
 prometheus-client==0.20.0
+confluent-kafka==2.10.1

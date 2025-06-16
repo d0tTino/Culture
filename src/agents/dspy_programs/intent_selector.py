@@ -66,5 +66,13 @@ class IntentSelectorProgram:
         self._predict = dspy.Predict(IntentPrompt)
 
     def run(self: Self) -> str:
-        result = self._predict(question="What proposal should the agent make?")
-        return getattr(result, "intent", "PROPOSE_IDEA")
+        """Return the chosen intent, falling back to raw LM output on errors."""
+        try:
+            result = self._predict(question="What proposal should the agent make?")
+        except Exception as e:  # pragma: no cover - DSPy parsing errors
+            raw: Any = self.lm("What proposal should the agent make?")
+            if isinstance(raw, list):
+                raw = raw[0]
+            return str(raw).strip()
+
+        return getattr(result, "intent", str(result).strip())

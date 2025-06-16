@@ -11,6 +11,7 @@ from typing_extensions import Self
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
+from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
 from src.infra.snapshot import save_snapshot
 from src.shared.typing import SimulationMessage
@@ -411,6 +412,7 @@ class Simulation:
                     "step": self.current_step,
                     "collective_ip": self.collective_ip,
                     "collective_du": self.collective_du,
+                    "knowledge_board": self.knowledge_board.get_full_entries(),
                     "agents": [
                         {
                             "agent_id": ag.agent_id,
@@ -422,6 +424,7 @@ class Simulation:
                     ],
                 }
                 save_snapshot(self.current_step, snapshot)
+                log_event({"type": "snapshot", **snapshot})
 
             # Advance to the next agent for the next turn
             self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
