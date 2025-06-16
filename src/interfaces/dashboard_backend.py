@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -46,4 +47,6 @@ async def stream_messages(request: Request) -> EventSourceResponse:  # type: ign
 
 @app.get("/health")
 async def health() -> Response:
+
     return JSONResponse({"status": "ok"})
+
