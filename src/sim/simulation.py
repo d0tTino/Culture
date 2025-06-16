@@ -78,9 +78,9 @@ class Simulation:
         logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -115,9 +115,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -199,7 +199,10 @@ class Simulation:
         return other_agents_info
 
     async def send_discord_update(
-        self: Self, message: Optional[str] = None, embed: Optional[object] = None
+        self: Self,
+        message: Optional[str] = None,
+        embed: Optional[object] = None,
+        agent_id: Optional[str] = None,
     ) -> None:
         """
         Send an update to Discord if the discord_bot is available.
@@ -211,7 +214,9 @@ class Simulation:
         if self.discord_bot:
             # Use asyncio.create_task to avoid blocking the simulation
             _ = asyncio.create_task(
-                self.discord_bot.send_simulation_update(content=message, embed=embed)
+                self.discord_bot.send_simulation_update(
+                    content=message, embed=embed, agent_id=agent_id
+                )
             )
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
@@ -244,7 +249,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -577,7 +584,9 @@ class Simulation:
                 agent_id=creator_agent_id,
                 step=self.current_step,
             )
-            _ = asyncio.create_task(self.discord_bot.send_simulation_update(embed=embed))
+            _ = asyncio.create_task(
+                self.discord_bot.send_simulation_update(embed=embed, agent_id=creator_agent_id)
+            )
 
         return project_id
 
@@ -651,7 +660,9 @@ class Simulation:
                 agent_id=agent_id,
                 step=self.current_step,
             )
-            _ = asyncio.create_task(self.discord_bot.send_simulation_update(embed=embed))
+            _ = asyncio.create_task(
+                self.discord_bot.send_simulation_update(embed=embed, agent_id=agent_id)
+            )
 
         return True
 
@@ -708,7 +719,9 @@ class Simulation:
                 agent_id=agent_id,
                 step=self.current_step,
             )
-            _ = asyncio.create_task(self.discord_bot.send_simulation_update(embed=embed))
+            _ = asyncio.create_task(
+                self.discord_bot.send_simulation_update(embed=embed, agent_id=agent_id)
+            )
 
         return True
 

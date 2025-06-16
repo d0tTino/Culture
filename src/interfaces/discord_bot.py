@@ -39,7 +39,12 @@ class SimulationDiscordBot:
     role changes, and other significant state changes.
     """
 
-    def __init__(self: Self, bot_token: str | list[str], channel_id: int) -> None:
+    def __init__(
+        self: Self,
+        bot_token: str | list[str],
+        channel_id: int,
+        token_lookup: Optional[typing.Callable[[str], str]] | None = None,
+    ) -> None:
         """
         Initialize the Discord bot with token and target channel.
 
@@ -53,14 +58,24 @@ class SimulationDiscordBot:
             self.bot_tokens = bot_token
         self.channel_id = channel_id
         self.is_ready = False
+        self.token_lookup = token_lookup
 
         # Set up intents (permissions)
         intents = discord.Intents.default()
         intents.message_content = True  # Enable if you plan to add commands later
 
         # Create Discord clients (one per token)
-        self.clients: list[Any] = [discord.Client(intents=intents) for _ in self.bot_tokens]
-        self.client = self.clients[0]
+        self.clients: dict[str, Any] = {
+            token: discord.Client(intents=intents) for token in self.bot_tokens
+        }
+        self.client = self.clients[self.bot_tokens[0]]
+
+    def _select_client(self: Self, agent_id: Optional[str]) -> Any:
+        """Return the Discord client for the given agent."""
+        if agent_id and self.token_lookup:
+            token = self.token_lookup(agent_id)
+            return self.clients.get(token, self.client)
+        return self.client
 
         # Set up event handlers for the first client only
         @self.client.event
@@ -95,6 +110,7 @@ class SimulationDiscordBot:
         self: Self,
         content: Optional[str] = None,
         embed: Optional[Any] = None,
+        agent_id: Optional[str] = None,
     ) -> Optional[bool]:
         """
         Send a simulation update message to the configured Discord channel.
@@ -113,14 +129,14 @@ class SimulationDiscordBot:
             logger.debug("Message blocked by policy")
             return False
         try:
-            channel = self.client.get_channel(self.channel_id)
+            client = self._select_client(agent_id)
+            channel = client.get_channel(self.channel_id)
             if not channel:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
                 return False
             if embed:
                 if isinstance(channel, (discord.TextChannel, discord.Thread)):
-                    for client in self.clients:
-                        await channel.send(embed=embed)
+                    await channel.send(embed=embed)
                     logger.debug("Sent Discord embed update")
                     return True
                 else:
@@ -136,8 +152,7 @@ class SimulationDiscordBot:
                 if len(content) > 1990:
                     content = content[:1990] + "..."
                 if isinstance(channel, (discord.TextChannel, discord.Thread)):
-                    for client in self.clients:
-                        await channel.send(content)
+                    await channel.send(content)
                     logger.debug(f"Sent Discord text update: {content[:50]}...")
                     return True
                 else:
@@ -342,7 +357,7 @@ class SimulationDiscordBot:
         """
         try:
             logger.info(f"Starting Discord bot(s), connecting to channel ID: {self.channel_id}")
-            tasks = [client.start(token) for client, token in zip(self.clients, self.bot_tokens)]
+            tasks = [client.start(token) for token, client in self.clients.items()]
             await asyncio.gather(*tasks)
         except (discord.DiscordException, OSError) as e:
             logger.error(f"Error starting Discord bot: {e}")
@@ -369,7 +384,7 @@ class SimulationDiscordBot:
                             )
                         else:
                             logger.warning("Attempted to send message to a None channel.")
-            for client in self.clients:
+            for client in self.clients.values():
                 await client.close()
             self.is_ready = False
             logger.info("Discord bot stopped")

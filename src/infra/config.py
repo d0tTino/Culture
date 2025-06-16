@@ -81,6 +81,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "REDIS_DB": 0,
     "DISCORD_BOT_TOKEN": "",
     "DISCORD_CHANNEL_ID": None,
+    "DISCORD_TOKENS_DB_URL": "",
     "OPENAI_API_KEY": "",
     "ANTHROPIC_API_KEY": "",
     "DEFAULT_LOG_LEVEL": "INFO",
@@ -306,6 +307,7 @@ REDIS_PASSWORD = get_config("REDIS_PASSWORD")
 # --- Discord Bot Settings ---
 DISCORD_BOT_TOKEN = get_config("DISCORD_BOT_TOKEN")
 DISCORD_CHANNEL_ID = get_config("DISCORD_CHANNEL_ID")
+DISCORD_TOKENS_DB_URL = get_config("DISCORD_TOKENS_DB_URL")
 
 # --- Memory Pruning Settings ---
 # Whether to enable automatic memory pruning (default to False for safety)
