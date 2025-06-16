@@ -406,6 +406,16 @@ class Simulation:
                 f"Collective metrics after Global Turn {self.current_step} - IP: {self.collective_ip:.1f}, "
                 f"DU: {self.collective_du:.1f}"
             )
+            log_event(
+                {
+                    "type": "agent_action",
+                    "agent_id": agent_id,
+                    "step": self.current_step,
+                    "action_intent": action_intent_str,
+                    "ip": current_agent_state.ip,
+                    "du": current_agent_state.du,
+                }
+            )
 
             if self.current_step % 100 == 0:
                 snapshot = {
@@ -465,6 +475,27 @@ class Simulation:
             "Simulation completed "
             f"{total_steps_executed} steps in {elapsed_time:.2f} seconds (async)"
         )
+
+    def apply_event(self: Self, event: dict[str, Any]) -> None:
+        """Apply an event from the Redpanda log to the simulation."""
+        if event.get("type") == "agent_action":
+            aid = event.get("agent_id")
+            for agent in self.agents:
+                if agent.agent_id == aid:
+                    if "ip" in event:
+                        agent.state.ip = float(event["ip"])
+                    if "du" in event:
+                        agent.state.du = float(event["du"])
+                    break
+            step = event.get("step")
+            if isinstance(step, int) and step > self.current_step:
+                self.current_step = step
+        elif event.get("type") == "environment_change":
+            env = event.get("env", {})
+            if isinstance(env, dict):
+                from src.infra.checkpoint import restore_environment
+
+                restore_environment(env)
 
     async def run_turns_concurrent(self: Self, agents: list["Agent"]) -> list[dict[str, Any]]:
         """Run a batch of agent turns concurrently.
