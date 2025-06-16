@@ -85,6 +85,8 @@ DEFAULT_CONFIG: dict[str, object] = {
     "OPENAI_API_KEY": "",
     "ANTHROPIC_API_KEY": "",
     "DEFAULT_LOG_LEVEL": "INFO",
+    # Endpoint for sending logs via OpenTelemetry
+    "OTEL_EXPORTER_ENDPOINT": "http://localhost:4318/v1/logs",
     "MEMORY_PRUNING_ENABLED": False,
     "MEMORY_PRUNING_L2_ENABLED": True,
     "MEMORY_PRUNING_L1_MUS_ENABLED": False,
@@ -288,6 +290,7 @@ WEAVIATE_URL = get_config("WEAVIATE_URL")
 
 # --- Basic Configuration ---
 DEFAULT_LOG_LEVEL = get_config("DEFAULT_LOG_LEVEL")
+OTEL_EXPORTER_ENDPOINT = get_config("OTEL_EXPORTER_ENDPOINT")
 
 # --- API Keys ---
 OPENAI_API_KEY = get_config("OPENAI_API_KEY")
