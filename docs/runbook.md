@@ -3,7 +3,7 @@
 This runbook outlines routine operations for working with Culture.ai.
 
 ## Starting a Simulation
-1. Activate your virtual environment (on Windows run `venv\Scripts\activate.bat`).
+1. Activate your virtual environment (on Windows run `venv\Scripts\activate.bat` or `.venv\Scripts\activate.bat`).
 2. Ensure dependencies are installed:
    ```bash
    pip install -r requirements.txt -r requirements-dev.txt

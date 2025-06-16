@@ -130,7 +130,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 2. Create and activate a virtual environment (optional but recommended):
    ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate.bat
+   source venv/bin/activate  # On Windows: venv\Scripts\activate.bat (or .venv\Scripts\activate.bat)
    ```
 
 3. Install required dependencies:

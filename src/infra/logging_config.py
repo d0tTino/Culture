@@ -4,6 +4,7 @@ Logging configuration for the Culture.ai project.
 
 import logging
 import logging.handlers
+import os
 from pathlib import Path
 
 try:  # pragma: no cover - optional dependency
@@ -51,7 +52,7 @@ def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
 
-    if OTEL_AVAILABLE:
+    if OTEL_AVAILABLE and os.getenv("ENABLE_OTEL", "0") == "1":
         try:  # pragma: no cover - best effort
             resource = Resource.create({"service.name": "culture"})
             provider = LoggerProvider(resource=resource)

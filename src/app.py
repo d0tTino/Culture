@@ -21,14 +21,9 @@ from src.infra.logging_config import setup_logging
 from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
+from src.utils.loop_helper import use_uvloop_if_available
 
-if sys.platform != "win32":
-    try:  # pragma: no cover - optional performance boost
-        import uvloop
-
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    except Exception:  # pragma: no cover - fallback silently
-        logging.getLogger(__name__).debug("uvloop not available; using default event loop")
+use_uvloop_if_available()
 
 try:
     from src.interfaces.discord_bot import SimulationDiscordBot
@@ -58,10 +53,13 @@ def create_simulation(
 
     discord_bot = None
     if use_discord and simulation_discord_bot_class:
-        bot_token = str(get_config("DISCORD_BOT_TOKEN"))
+        bot_token_raw = str(get_config("DISCORD_BOT_TOKEN"))
         channel_id = get_config("DISCORD_CHANNEL_ID")
-        if bot_token and channel_id:
-            bot = simulation_discord_bot_class(bot_token, int(channel_id))
+        if bot_token_raw and channel_id:
+            tokens = [tok.strip() for tok in bot_token_raw.split(",") if tok.strip()]
+            bot = simulation_discord_bot_class(
+                tokens if len(tokens) > 1 else tokens[0], int(channel_id)
+            )
             if bot.is_ready:
                 discord_bot = bot
             else:

@@ -16,6 +16,7 @@ try:  # pragma: no cover - optional dependency
     from src.agents.memory.vector_store import ChromaVectorStoreManager
 except Exception:  # pragma: no cover - fallback when chromadb missing
     ChromaVectorStoreManager = None  # type: ignore[misc, assignment]
+from src.infra.event_log import log_event
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
@@ -127,6 +128,7 @@ def save_checkpoint(sim: Simulation, path: str | Path) -> None:
     with p.open("wb") as fh:
         pickle.dump(data, fh)
     logger.info("Checkpoint saved to %s", p)
+    log_event({"type": "checkpoint", "path": str(p), "step": data.get("current_step")})
 
 
 def load_checkpoint(path: str | Path) -> tuple[Simulation, dict[str, Any]]:
@@ -165,4 +167,5 @@ def load_checkpoint(path: str | Path) -> tuple[Simulation, dict[str, Any]]:
         "rng_state": data.get("rng_state"),
         "environment": data.get("environment"),
     }
+    log_event({"type": "load_checkpoint", "path": str(p), "step": data.get("current_step")})
     return sim, meta
