@@ -13,6 +13,6 @@ pydantic==2.3.0
 pydantic-settings==2.0.3
 langgraph
 requests
-sqlite-web==0.6.4
+sqlite-web
 prometheus-client
 confluent-kafka==2.10.1

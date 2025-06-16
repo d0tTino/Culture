@@ -15,7 +15,7 @@ from typing import Any, Callable
 from unittest.mock import MagicMock
 
 try:  # pragma: no cover - optional dependency
-    import requests
+    import requests  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - fallback when requests missing
     requests = MagicMock()
 from typing_extensions import Self

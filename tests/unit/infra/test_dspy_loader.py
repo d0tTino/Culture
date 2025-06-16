@@ -17,9 +17,7 @@ def test_try_load_compiled_program_success(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_try_load_compiled_program_failure(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_try_load_compiled_program_failure(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     missing_path = tmp_path / "missing.json"
     with patch("src.infra.dspy_ollama_integration.ollama.Client", MagicMock()):
         lm = OllamaLM()
