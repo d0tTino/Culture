@@ -440,7 +440,7 @@ class Simulation:
                         for ag in self.agents
                     ],
                 }
-                save_snapshot(self.current_step, snapshot)
+                save_snapshot(self.current_step, snapshot, compress=True)
                 log_event({"type": "snapshot", **snapshot})
 
             # Advance to the next agent for the next turn

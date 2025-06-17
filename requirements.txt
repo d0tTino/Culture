@@ -18,3 +18,4 @@ sqlite-web
 
 prometheus-client==0.20.0
 confluent-kafka==2.10.1
+zstandard==0.23.0

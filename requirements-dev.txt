@@ -17,3 +17,4 @@ pre-commit
 dspy-ai==2.6.27
 numpy>=2
 pip-tools
+zstandard==0.23.0
