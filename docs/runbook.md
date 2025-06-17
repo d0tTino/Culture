@@ -38,7 +38,12 @@ This runbook outlines routine operations for working with Culture.ai.
    event log.
 8. Snapshots of the simulation state are written every 100 ticks. Set the
    `SNAPSHOT_COMPRESS` environment variable to `1` to save them as
-   zstandard-compressed files (`snapshot_<step>.json.zst`).
+   zstandard-compressed files (`snapshot_<step>.json.zst`). Use the `zstd`
+   command line tool or Python's `zstandard` module to decompress them, e.g.:
+
+   ```bash
+   zstd -d snapshot_100.json.zst -o snapshot_100.json
+   ```
 
 ## Running Tests
 Run the full suite with coverage:
