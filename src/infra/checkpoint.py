@@ -119,6 +119,9 @@ def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
         ),
         "rng_state": capture_rng_state(),
         "environment": capture_environment(),
+        "collective_ip": sim.collective_ip,
+        "collective_du": sim.collective_du,
+        "knowledge_board": sim.knowledge_board.to_dict(),
     }
 
 
@@ -166,9 +169,12 @@ def load_checkpoint(
         vector_store_manager=vector_store_manager,
         scenario=data.get("scenario", ""),
     )
-    sim.knowledge_board = KnowledgeBoard()
+    kb_entries = data.get("knowledge_board", {}).get("entries", [])
+    sim.knowledge_board = KnowledgeBoard(entries=kb_entries)
     sim.current_step = data.get("current_step", 0)
     sim.current_agent_index = data.get("current_agent_index", 0)
+    sim.collective_ip = data.get("collective_ip", 0.0)
+    sim.collective_du = data.get("collective_du", 0.0)
 
     meta = {
         "rng_state": data.get("rng_state"),
