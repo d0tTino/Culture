@@ -10,15 +10,15 @@ import re
 from pathlib import Path
 
 
-def fix_imports_in_file(file_path: str) -> None:
+def fix_imports_in_file(file_path: Path) -> bool:
     """
     Fix the import paths in a single test file.
 
     Args:
-        file_path: Path to the test file to fix
+        file_path: Path to the test file to fix.
 
     Returns:
-        bool: True if the file was modified, False otherwise
+        bool: True if the file was modified, False otherwise.
     """
     with open(file_path, encoding="utf-8") as f:
         content = f.read()
@@ -29,7 +29,7 @@ def fix_imports_in_file(file_path: str) -> None:
 
     # Check if we need to replace anything
     if not re.search(old_pattern, content):
-        return
+        return False
 
     # Replace the pattern
     new_content = re.sub(old_pattern, new_path, content)
@@ -38,7 +38,7 @@ def fix_imports_in_file(file_path: str) -> None:
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(new_content)
 
-    return
+    return True
 
 
 def main() -> None:
@@ -51,9 +51,11 @@ def main() -> None:
 
     for file_path in tests_dir.iterdir():
         if file_path.suffix == ".py":
-            fix_imports_in_file(file_path)
-            print(f"Checked imports in {file_path}")
-            modified_files += 1
+            if fix_imports_in_file(file_path):
+                modified_files += 1
+                print(f"Fixed imports in {file_path}")
+            else:
+                print(f"Checked imports in {file_path}")
 
     print(f"\nChecked imports in {modified_files} files.")
 
