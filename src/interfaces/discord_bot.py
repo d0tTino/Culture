@@ -42,22 +42,47 @@ class SimulationDiscordBot:
 
     def __init__(
         self: Self,
-        bot_token: str | list[str],
+        bot_token: str | list[str] | None,
         channel_id: int,
-        token_lookup: Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]]
-        | None = None,
+        token_lookup: (
+            Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]] | None
+        ) = None,
     ) -> None:
         """
         Initialize the Discord bot with token and target channel.
 
         Args:
-            bot_token (str): The Discord bot token for authentication
+            bot_token (str | list[str] | None): Discord bot token(s) or ``None`` to
+                load from the database.
             channel_id (int): The ID of the Discord channel to send updates to
         """
-        if isinstance(bot_token, str):
-            self.bot_tokens = [bot_token]
+        tokens: list[str] = []
+        if bot_token:
+            tokens = [bot_token] if isinstance(bot_token, str) else list(bot_token)
         else:
-            self.bot_tokens = bot_token
+            db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
+            if db_url:
+                try:
+                    from .token_store import list_tokens
+
+                    async def _load() -> list[str]:
+                        return await list_tokens()
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        tokens = asyncio.run(_load())
+                    else:
+                        new_loop = asyncio.new_event_loop()
+                        try:
+                            tokens = new_loop.run_until_complete(_load())
+                        finally:
+                            new_loop.close()
+                except Exception:
+                    logger.exception("Failed to load tokens from store")
+        if not tokens:
+            raise RuntimeError("No Discord bot tokens provided")
+        self.bot_tokens = tokens
         self.channel_id = channel_id
         self.is_ready = False
         if token_lookup is None:
