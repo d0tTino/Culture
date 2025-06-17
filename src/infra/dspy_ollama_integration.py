@@ -11,13 +11,16 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 from unittest.mock import MagicMock
 
-try:  # pragma: no cover - optional dependency
+if TYPE_CHECKING:
     import requests
-except Exception:  # pragma: no cover - fallback when requests missing
-    requests = MagicMock()
+else:
+    try:  # pragma: no cover - optional dependency
+        import requests
+    except Exception:  # pragma: no cover - fallback when requests missing
+        requests = MagicMock()
 from typing_extensions import Self
 
 # Import DSPy and Ollama, providing fallbacks when unavailable
@@ -122,13 +125,17 @@ else:
     sys.modules.setdefault("dspy", dspy)
     DSPY_AVAILABLE = False
 
-try:
+if TYPE_CHECKING:
     import ollama
     from ollama import _types as ollama_types
-except Exception:  # pragma: no cover - optional dependency
-    logging.getLogger(__name__).warning("ollama package not installed; using MagicMock stub")
-    ollama = MagicMock()
-    ollama_types = SimpleNamespace(Options=dict)  # type: ignore[assignment]
+else:
+    try:
+        import ollama
+        from ollama import _types as ollama_types
+    except Exception:  # pragma: no cover - optional dependency
+        logging.getLogger(__name__).warning("ollama package not installed; using MagicMock stub")
+        ollama = MagicMock()
+        ollama_types: Any = SimpleNamespace(Options=dict)
 
 
 # Configure logging
