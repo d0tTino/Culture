@@ -165,7 +165,7 @@ class ChromaVectorStoreManager(MemoryStore):
         # Import lazily to avoid a circular dependency with memory_tracking_manager
         from .memory_tracking_manager import MemoryTrackingManager
 
-        self.tracking_manager = MemoryTrackingManager(self.collection)
+        self.tracking_manager = MemoryTrackingManager(self)
 
         # For tracking memory retrieval performance
         self.retrieval_times: list[float] = []

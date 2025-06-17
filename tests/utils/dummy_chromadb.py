@@ -23,6 +23,9 @@ def setup_dummy_chromadb() -> None:
         ) -> None:  # pragma: no cover - simple stub
             pass
 
+        def __call__(self, texts: list[str]) -> list[list[float]]:
+            return [[0.0] * 384 for _ in texts]
+
     emb.SentenceTransformerEmbeddingFunction = SentenceTransformerEmbeddingFunction
     utils.embedding_functions = emb
     chromadb.utils = utils
@@ -32,7 +35,11 @@ def setup_dummy_chromadb() -> None:
             self.docs: list[dict[str, object]] = []
 
         def add(
-            self, documents: list[str], metadatas: list[dict[str, object]], ids: list[str]
+            self,
+            documents: list[str],
+            metadatas: list[dict[str, object]],
+            ids: list[str],
+            embeddings: list[list[float]] | None = None,
         ) -> None:
             for doc, meta, _id in zip(documents, metadatas, ids):
                 self.docs.append({"id": _id, "metadata": meta, "document": doc})
@@ -42,11 +49,14 @@ def setup_dummy_chromadb() -> None:
             where: dict | None = None,
             include: list[str] | None = None,
             ids: list[str] | None = None,
+            limit: int | None = None,
         ) -> dict:
             result_ids: list[str] = []
             metas: list[dict[str, object]] = []
+            docs: list[str] = []
             conditions = where.get("$and", [where]) if where else []
-            for item in self.docs:
+            items = [d for d in self.docs if ids is None or d["id"] in ids]
+            for item in items:
                 meta = item["metadata"]
                 match = True
                 for cond in conditions:
@@ -59,7 +69,49 @@ def setup_dummy_chromadb() -> None:
                 if match:
                     result_ids.append(item["id"])
                     metas.append(meta)
-            return {"ids": result_ids, "metadatas": metas}
+                    docs.append(item["document"])
+            result = {"ids": result_ids[:limit], "metadatas": metas[:limit]}
+            docs = docs[:limit] if limit is not None else docs
+            if include is None or "documents" in include:
+                result["documents"] = docs
+            if include is not None and "embeddings" in include:
+                ids_len = len(result["ids"])
+                result["embeddings"] = [[0.0] * 1 for _ in range(ids_len)]
+            return result
+
+        def query(
+            self,
+            query_embeddings: list[list[float]] | None = None,
+            n_results: int | None = None,
+            where: dict | None = None,
+            include: list[str] | None = None,
+        ) -> dict:
+            """Return a basic query result ignoring embeddings."""
+            res = self.get(where=where, include=include, limit=n_results)
+            ids = res.get("ids", [])
+            # Chroma's query returns nested lists
+            return {
+                "ids": [ids],
+                "metadatas": [res.get("metadatas", [])],
+                "documents": [res.get("documents", [])],
+                "distances": [[0.0 for _ in ids]],
+            }
+
+        def update(self, ids: list[str], metadatas: list[dict[str, object]]) -> None:
+            """Update metadata for existing documents."""
+            id_to_meta = dict(zip(ids, metadatas))
+            for doc in self.docs:
+                if doc["id"] in id_to_meta:
+                    doc["metadata"].update(id_to_meta[doc["id"]])
+
+        def delete(self, ids: list[str] | None = None) -> None:
+            if ids is None:
+                self.docs.clear()
+            else:
+                self.docs = [d for d in self.docs if d["id"] not in ids]
+
+        def count(self) -> int:
+            return len(self.docs)
 
     class _DummyClient:
         def __init__(self, path: str | None = None) -> None:

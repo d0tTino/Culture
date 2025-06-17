@@ -91,7 +91,7 @@ class L1SummaryGenerator:
             self.l1_predictor = dspy.Predict(GenerateL1SummarySignature)
             if compiled_program_path and Path(compiled_program_path).exists():
                 try:
-                    self.l1_predictor.load(str(compiled_program_path))
+                    self.l1_predictor.load(compiled_program_path)
                     logger.info(
                         f"Successfully loaded compiled L1 summarizer from {compiled_program_path}"
                     )

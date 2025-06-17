@@ -27,10 +27,11 @@ async def test_opa_blocks_message(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": False}}
     monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
-    with patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient), patch(
-        "src.interfaces.discord_bot.discord.TextChannel", DummyChannel
-    ), patch("src.interfaces.discord_bot.discord.Thread", DummyChannel), patch(
-        "src.interfaces.discord_bot.discord.DiscordException", Exception
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient),
+        patch("src.interfaces.discord_bot.discord.TextChannel", DummyChannel),
+        patch("src.interfaces.discord_bot.discord.Thread", DummyChannel),
+        patch("src.interfaces.discord_bot.discord.DiscordException", Exception),
     ):
         bot = SimulationDiscordBot("token", 1)
         bot.is_ready = True
@@ -48,10 +49,11 @@ async def test_opa_modifies_message(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": True, "content": "bar"}}
     monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
-    with patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient), patch(
-        "src.interfaces.discord_bot.discord.TextChannel", DummyChannel
-    ), patch("src.interfaces.discord_bot.discord.Thread", DummyChannel), patch(
-        "src.interfaces.discord_bot.discord.DiscordException", Exception
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient),
+        patch("src.interfaces.discord_bot.discord.TextChannel", DummyChannel),
+        patch("src.interfaces.discord_bot.discord.Thread", DummyChannel),
+        patch("src.interfaces.discord_bot.discord.DiscordException", Exception),
     ):
         bot = SimulationDiscordBot("token", 1)
         bot.is_ready = True

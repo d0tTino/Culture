@@ -62,7 +62,8 @@ exclude = [
     "\\.venv",
     "build/",
     "tests/",
-    "src/agents/core/agent_state.py"
+    "src/agents/core/agent_state.py",
+    "src/ollama/.*"
 ]
 # Only type-check the application source code for now
 files = ["src"]

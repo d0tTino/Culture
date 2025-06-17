@@ -101,8 +101,8 @@ class RAGContextSynthesizer:
         """
         default_module = dspy.Predict(RAGSynthesis)
 
-        path = Path(compiled_program_path)
-        if not path.exists():
+        # Call Path.exists as a class method so tests can easily patch it
+        if not Path.exists(Path(compiled_program_path)):
             logger.warning(f"Compiled program not found at {compiled_program_path}")
             logger.info("Using default (unoptimized) RAG synthesis module")
             return default_module
@@ -111,7 +111,7 @@ class RAGContextSynthesizer:
             logger.info(f"Loading compiled program from {compiled_program_path}")
             program = default_module
             try:
-                program.load(str(path))
+                program.load(str(compiled_program_path))
                 logger.info("Successfully loaded compiled RAG synthesis program")
                 return program
             except KeyError as ke:

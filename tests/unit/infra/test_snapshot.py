@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 import zstandard as zstd
@@ -6,9 +7,6 @@ import zstandard as zstd
 from src.infra.snapshot import save_snapshot
 
 pytestmark = pytest.mark.unit
-
-
-from pathlib import Path
 
 
 def test_save_snapshot_compressed(tmp_path: Path) -> None:
