@@ -44,6 +44,27 @@ async def get_token(agent_id: str) -> Optional[str]:
     return row["token"] if row else None
 
 
+async def lookup_token(agent_id: str) -> Optional[str]:
+    """Return or automatically assign the Discord token for ``agent_id``."""
+    token = await get_token(agent_id)
+    if token:
+        return token
+
+    env_tokens = os.environ.get("DISCORD_BOT_TOKEN") or str(
+        config.get_config("DISCORD_BOT_TOKEN") or ""
+    )
+    tokens = [t.strip() for t in env_tokens.split(",") if t.strip()]
+    if not tokens:
+        return None
+
+    token = tokens[hash(agent_id) % len(tokens)]
+    try:
+        await save_token(agent_id, token)
+    except Exception:
+        logger.exception("Failed to persist token mapping")
+    return token
+
+
 async def save_token(agent_id: str, token: str) -> None:
     """Insert or update a Discord token for the given agent ID."""
     pool = await _get_pool()

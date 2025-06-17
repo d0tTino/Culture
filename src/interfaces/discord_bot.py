@@ -89,7 +89,7 @@ class SimulationDiscordBot:
             db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
             if db_url:
                 try:
-                    from .token_store import get_token as db_lookup
+                    from .token_store import lookup_token as db_lookup
                 except Exception:
                     logger.exception("Failed to load token store")
                 else:
