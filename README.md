@@ -543,6 +543,14 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
     - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
    - `DISCORD_TOKENS_DB_URL` for Postgres storage of additional bot tokens
+     (`postgresql://user:pass@localhost/dbname`). Initialize the table with
+     `scripts/init_discord_tokens.sql`:
+     ```sql
+     CREATE TABLE IF NOT EXISTS discord_tokens (
+         agent_id TEXT PRIMARY KEY,
+         token TEXT NOT NULL
+     );
+     ```
    - `ENABLE_OTEL=1` to activate OpenTelemetry log export
    - `ENABLE_REDPANDA=1` to log events to Redpanda
    - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker

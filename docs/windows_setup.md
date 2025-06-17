@@ -51,6 +51,16 @@ cp .env.example .env
 
 Edit `OLLAMA_API_BASE` in `.env` if your Ollama server uses a different URL.
 
+If you plan to run Discord bots, also set `DISCORD_TOKENS_DB_URL` to your
+PostgreSQL connection string and create the required table:
+
+```sql
+CREATE TABLE IF NOT EXISTS discord_tokens (
+    agent_id TEXT PRIMARY KEY,
+    token TEXT NOT NULL
+);
+```
+
 ## Install Ollama (≥0.1.34)
 
 Culture.ai relies on the WSL build of **Ollama**. Install or upgrade it with:

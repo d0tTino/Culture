@@ -32,7 +32,7 @@ This task list distills the key actions from the May 2025 audit report. Completi
 ## Next Sprint Prep
 
 - [x] Support multiple Discord bot tokens via separate gateway shards.
-- [ ] Map agent IDs to bot tokens in a shared PostgreSQL table.
+- [x] Map agent IDs to bot tokens in a shared PostgreSQL table.
 - [x] Filter outgoing messages through an OPA policy engine.
 
 Completing these tasks will bring the project in line with the audit's recommendations and ready the codebase for stable multi-bot orchestration.
