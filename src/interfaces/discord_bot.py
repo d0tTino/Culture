@@ -93,12 +93,13 @@ class SimulationDiscordBot:
                     color=discord.Color.blue(),
                 )
                 embed.set_footer(text=f"Channel ID: {self.channel_id}")
-                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                if hasattr(channel, "send"):
                     await channel.send(embed=embed)
                 else:
                     if channel is not None:
+                        chan_id = getattr(channel, "id", "unknown")
                         logger.warning(
-                            f"Attempted to send message to channel {channel.id} "
+                            f"Attempted to send message to channel {chan_id} "
                             f"of type {type(channel).__name__}, which does not support .send()"
                         )
                     else:
@@ -140,14 +141,15 @@ class SimulationDiscordBot:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
                 return False
             if embed:
-                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                if hasattr(channel, "send"):
                     await channel.send(embed=embed)
                     logger.debug("Sent Discord embed update")
                     return True
                 else:
                     if channel is not None:
+                        chan_id = getattr(channel, "id", "unknown")
                         logger.warning(
-                            f"Attempted to send embed to channel {channel.id} "
+                            f"Attempted to send embed to channel {chan_id} "
                             f"of type {type(channel).__name__}, which does not support .send()"
                         )
                     else:
@@ -156,14 +158,15 @@ class SimulationDiscordBot:
             elif content:
                 if len(content) > 1990:
                     content = content[:1990] + "..."
-                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                if hasattr(channel, "send"):
                     await channel.send(content)
                     logger.debug(f"Sent Discord text update: {content[:50]}...")
                     return True
                 else:
                     if channel is not None:
+                        chan_id = getattr(channel, "id", "unknown")
                         logger.warning(
-                            f"Attempted to send text to channel {channel.id} "
+                            f"Attempted to send text to channel {chan_id} "
                             f"of type {type(channel).__name__}, which does not support .send()"
                         )
                     else:
@@ -362,8 +365,13 @@ class SimulationDiscordBot:
         """
         try:
             logger.info(f"Starting Discord bot(s), connecting to channel ID: {self.channel_id}")
-            tasks = [client.start(token) for token, client in self.clients.items()]
+            tasks = []
+            for token, client in self.clients.items():
+                setattr(client, "token", token)
+                tasks.append(client.start(token))
             await asyncio.gather(*tasks)
+            # Mark bot as ready when all clients have started
+            self.is_ready = True
         except (discord.DiscordException, OSError) as e:
             logger.error(f"Error starting Discord bot: {e}")
 
@@ -373,18 +381,19 @@ class SimulationDiscordBot:
             logger.info("Stopping Discord bot...")
             if self.is_ready:
                 channel = self.client.get_channel(self.channel_id)
-                if channel:
+                if channel and len(self.bot_tokens) == 1:
                     embed = discord.Embed(
                         title="🛑 Simulation Complete",
                         description="The Culture simulation has ended. Bot going offline.",
                         color=discord.Color.red(),
                     )
-                    if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                    if hasattr(channel, "send"):
                         await channel.send(embed=embed)
                     else:
                         if channel is not None:
+                            chan_id = getattr(channel, "id", "unknown")
                             logger.warning(
-                                f"Attempted to send message to channel {channel.id} "
+                                f"Attempted to send message to channel {chan_id} "
                                 f"of type {type(channel).__name__}, which does not support .send()"
                             )
                         else:

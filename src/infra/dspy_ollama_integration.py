@@ -11,11 +11,11 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any, Callable, cast
 from unittest.mock import MagicMock
 
 try:  # pragma: no cover - optional dependency
-    import requests  # type: ignore[import-untyped]
+    import requests
 except Exception:  # pragma: no cover - fallback when requests missing
     requests = MagicMock()
 from typing_extensions import Self
@@ -124,9 +124,11 @@ else:
 
 try:
     import ollama
+    from ollama import _types as ollama_types
 except Exception:  # pragma: no cover - optional dependency
     logging.getLogger(__name__).warning("ollama package not installed; using MagicMock stub")
     ollama = MagicMock()
+    ollama_types = SimpleNamespace(Options=dict)  # type: ignore[assignment]
 
 
 # Configure logging
@@ -211,12 +213,12 @@ class OllamaLM(BaseLM):  # type: ignore[misc, valid-type]
         start_time = time.time()
 
         # Merge default kwargs with provided kwargs
-        request_kwargs: dict[str, float | int | object] = {
+        request_kwargs: ollama_types.Options = {
             "temperature": self.temperature,
             "num_predict": self.max_tokens,
         }
-        request_kwargs.update(self.kwargs)
-        request_kwargs.update(kwargs)
+        request_kwargs.update(cast(Any, self.kwargs))
+        request_kwargs.update(cast(Any, kwargs))
 
         try:
             logger.debug(
