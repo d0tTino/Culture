@@ -10,6 +10,7 @@ import logging
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+from src.infra import config
 from src.interfaces import metrics
 from src.utils.policy import allow_message, evaluate_with_opa
 
@@ -43,7 +44,8 @@ class SimulationDiscordBot:
         self: Self,
         bot_token: str | list[str],
         channel_id: int,
-        token_lookup: Optional[typing.Callable[[str], str]] | None = None,
+        token_lookup: Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]]
+        | None = None,
     ) -> None:
         """
         Initialize the Discord bot with token and target channel.
@@ -58,6 +60,15 @@ class SimulationDiscordBot:
             self.bot_tokens = bot_token
         self.channel_id = channel_id
         self.is_ready = False
+        if token_lookup is None:
+            db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
+            if db_url:
+                try:
+                    from .token_store import get_token as db_lookup
+                except Exception:
+                    logger.exception("Failed to load token store")
+                else:
+                    token_lookup = db_lookup
         self.token_lookup = token_lookup
 
         # Set up intents (permissions)
@@ -70,11 +81,14 @@ class SimulationDiscordBot:
         }
         self.client = self.clients[self.bot_tokens[0]]
 
-    def _select_client(self: Self, agent_id: Optional[str]) -> Any:
+    async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
         """Return the Discord client for the given agent."""
         if agent_id and self.token_lookup:
             token = self.token_lookup(agent_id)
-            return self.clients.get(token, self.client)
+            if asyncio.iscoroutine(token):
+                token = await token
+            if isinstance(token, str):
+                return self.clients.get(token, self.client)
         return self.client
 
         # Set up event handlers for the first client only
@@ -135,7 +149,7 @@ class SimulationDiscordBot:
                 logger.debug("Message blocked by OPA policy")
                 return False
         try:
-            client = self._select_client(agent_id)
+            client = await self._select_client(agent_id)
             channel = client.get_channel(self.channel_id)
             if not channel:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
