@@ -109,19 +109,32 @@ class WeaviateVectorStoreManager(MemoryStore):
                 self.client.collections.get(self.collection_name),
             )
         else:
-            from weaviate.classes.config import Configure, DataType, Property
+            try:
+                from weaviate.classes.config import Configure, DataType, Property
 
-            properties = [
-                Property(name="text", data_type=DataType.TEXT),
-                Property(name="timestamp", data_type=DataType.NUMBER),
-                Property(name="agent_id", data_type=DataType.TEXT),
-                Property(name="uuid", data_type=DataType.TEXT),
-            ]
-            collection = self.client.collections.create(
-                name=self.collection_name,
-                properties=properties,
-                vectorizer_config=Configure.Vectorizer.none(),
-            )
+                properties = [
+                    Property(name="text", data_type=DataType.TEXT),
+                    Property(name="timestamp", data_type=DataType.NUMBER),
+                    Property(name="agent_id", data_type=DataType.TEXT),
+                    Property(name="uuid", data_type=DataType.TEXT),
+                ]
+                collection = self.client.collections.create(
+                    name=self.collection_name,
+                    properties=properties,
+                    vectorizer_config=Configure.Vectorizer.none(),
+                )
+            except (ImportError, AttributeError):
+                # Fall back to a minimal config for older weaviate-client versions
+                collection = self.client.collections.create(
+                    name=self.collection_name,
+                    properties=[
+                        {"name": "text", "dataType": ["text"]},
+                        {"name": "timestamp", "dataType": ["number"]},
+                        {"name": "agent_id", "dataType": ["text"]},
+                        {"name": "uuid", "dataType": ["text"]},
+                    ],
+                    vectorizer_config={"vectorizer": "none"},
+                )
             logger.info(
                 f"Created Weaviate collection '{self.collection_name}' with "
                 f"external vector support."
@@ -153,7 +166,9 @@ class WeaviateVectorStoreManager(MemoryStore):
             if hasattr(wvc, "data") and hasattr(wvc.data, "DataObject"):
                 data_obj = wvc.data.DataObject(properties=props, vector=vector, uuid=uuid_val)
             else:  # Fallback for older/newer weaviate classes
-                data_obj = {"properties": props, "vector": vector, "uuid": uuid_val}
+                from types import SimpleNamespace
+
+                data_obj = SimpleNamespace(properties=props, vector=vector, uuid=uuid_val)
             data_objects.append(data_obj)
             self._store.append({"content": text, "metadata": meta, "id": uuid_val})
         try:
@@ -177,19 +192,21 @@ class WeaviateVectorStoreManager(MemoryStore):
             List of dicts with text, metadata, and distance
         """
         filters: Any = None
-        if filter_dict:
-            # Build Weaviate v4 filter
+        if filter_dict and hasattr(wvc, "query") and hasattr(wvc.query, "Filter"):
             filters = None
             for k, v in filter_dict.items():
                 f = wvc.query.Filter.by_property(k).equal(v)
                 filters = f if filters is None else filters & f
+        metadata_query: Any = None
+        if hasattr(wvc, "query") and hasattr(wvc.query, "MetadataQuery"):
+            metadata_query = wvc.query.MetadataQuery(distance=True)
         try:
             result = self.collection.query.near_vector(
                 near_vector=query_vector,
                 limit=n_results,
                 filters=filters,
                 return_properties=["text", "timestamp", "agent_id", "uuid"],
-                return_metadata=wvc.query.MetadataQuery(distance=True),
+                return_metadata=metadata_query,
             )
             return [
                 {

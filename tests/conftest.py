@@ -95,6 +95,59 @@ if "weaviate" not in sys.modules:
 
     weaviate_mod.Client = Client
     classes_mod = types.ModuleType("weaviate.classes")
+
+    # Provide query stubs for Filter and MetadataQuery used in tests
+    class _Filter:
+        def __init__(self, target: str, value: object) -> None:
+            self.operator = types.SimpleNamespace(name="EQUAL")
+            self.target = target
+            self.value = value
+
+        def __and__(self, other: "_Filter") -> "_Filter":
+            return self
+
+        @classmethod
+        def by_property(cls, prop: str) -> "_FilterBuilder":
+            return _FilterBuilder(prop)
+
+    class _FilterBuilder:
+        def __init__(self, prop: str) -> None:
+            self.prop = prop
+
+        def equal(self, value: object) -> _Filter:
+            return _Filter(self.prop, value)
+
+    class _MetadataQuery:
+        def __init__(self, distance: bool = False) -> None:
+            self.distance = distance
+
+    query_mod = types.SimpleNamespace(Filter=_Filter, MetadataQuery=_MetadataQuery)
+
+    # Provide a minimal config stub so code importing weaviate.classes.config works
+    class _Vectorizer:
+        @staticmethod
+        def none() -> str:
+            return "none"
+
+    class _Configure:
+        Vectorizer = _Vectorizer()
+
+    class _DataType:
+        TEXT = "text"
+        NUMBER = "number"
+
+    class _Property:
+        def __init__(self, name: str, data_type: str) -> None:
+            self.name = name
+            self.data_type = data_type
+
+    config_mod = types.SimpleNamespace(
+        Configure=_Configure, DataType=_DataType, Property=_Property
+    )
+    classes_mod.config = config_mod
+    classes_mod.query = query_mod
+    sys.modules["weaviate.classes.config"] = config_mod
+    sys.modules["weaviate.classes.query"] = query_mod
     weaviate_mod.classes = classes_mod
     sys.modules["weaviate"] = weaviate_mod
     sys.modules["weaviate.classes"] = classes_mod
