@@ -589,6 +589,13 @@ This spins up three agents for a few steps using your local Ollama instance and
 persists their memories to ChromaDB. See
 [docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
 
+You can also launch the demo using Make:
+```bash
+make local-slice
+```
+This command activates `.venv` if available, installs the required packages, and
+executes `scripts/vertical_slice.sh` (or the Windows `.bat` version).
+
 ### Running Tests
 Run the full test suite (after installing development dependencies):
 ```bash
