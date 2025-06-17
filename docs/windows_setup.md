@@ -118,3 +118,5 @@ python -m src.app --steps 5 --discord
 
 The `--steps` flag sets how many iterations to perform before exiting. Use `--discord` to enable interaction with your configured Discord bot.
 
+To enable deterministic replay of simulations, follow [docs/redpanda_setup.md](redpanda_setup.md) to install Redpanda and set the `ENABLE_REDPANDA` and `REDPANDA_BROKER` environment variables.
+
