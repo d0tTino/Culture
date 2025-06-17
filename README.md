@@ -555,7 +555,8 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    - `ENABLE_REDPANDA=1` to log events to Redpanda
    - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
 
-   - See `.env.example`, `docs/testing.md`, and `docs/redpanda_setup.md` for details.
+   - See `.env.example`, `docs/testing.md`, `docs/redpanda_setup.md`,
+     and `docs/opa_setup.md` for details.
 
 ### Windows / WSL2 Notes
 
