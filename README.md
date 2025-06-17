@@ -542,10 +542,12 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
     - `WEAVIATE_URL` (e.g., http://localhost:8080)
     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
     - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
-    - `DISCORD_TOKENS_DB_URL` for Postgres storage of additional bot tokens
-    - `ENABLE_OTEL=1` to activate OpenTelemetry log export
+   - `DISCORD_TOKENS_DB_URL` for Postgres storage of additional bot tokens
+   - `ENABLE_OTEL=1` to activate OpenTelemetry log export
+   - `ENABLE_REDPANDA=1` to log events to Redpanda
+   - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
 
-   - See `.env.example` and `docs/testing.md` for details.
+   - See `.env.example`, `docs/testing.md`, and `docs/redpanda_setup.md` for details.
 
 ### Windows / WSL2 Notes
 
