@@ -11,6 +11,10 @@ pip install -r requirements.txt -r requirements-dev.txt
 ```
 You can also run `scripts/setup_test_env.sh` to automatically create a virtual
 environment and install these dependencies.
+`requirements-dev.txt` also installs **pip-tools**, which provides the
+`pip-compile` command used by `scripts/check_requirements.sh`.
+Run this script to verify that `requirements.txt` matches
+`requirements.in` whenever dependencies change.
 The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, `requests` for HTTP utilities, and `numpy>=2` for compatibility with certain examples.
 
 ## Test Markers and Suite Structure

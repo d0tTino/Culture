@@ -9,7 +9,8 @@ from pathlib import Path
 
 try:  # pragma: no cover - optional dependency
     from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-    from opentelemetry.sdk._logs import BatchLogProcessor, LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
     from opentelemetry.sdk.resources import Resource
 
     OTEL_AVAILABLE = True
@@ -60,7 +61,7 @@ def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger
 
             endpoint = get_config("OTEL_EXPORTER_ENDPOINT")
             exporter = OTLPLogExporter(endpoint=endpoint)
-            provider.add_log_processor(BatchLogProcessor(exporter))
+            provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
             otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
             root_logger.addHandler(otel_handler)
         except Exception as exc:  # pragma: no cover - safety

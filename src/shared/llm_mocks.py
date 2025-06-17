@@ -78,10 +78,10 @@ class MockLLMResponse:
 def create_mock_ollama_client() -> MagicMock:
     """Create a mock Ollama client"""
     original_client = getattr(ollama, "Client", MagicMock)
-    if isinstance(original_client, MagicMock):  # If already mocked, avoid spec
-        mock_client = MagicMock()
+    if isinstance(original_client, type):
+        mock_client = MagicMock(spec=original_client)  # Use spec when class available
     else:
-        mock_client = MagicMock(spec=original_client)  # Use spec for better mocking
+        mock_client = MagicMock()
 
     # Mock the chat method with more specific behavior for sentiment
     def mock_chat_for_sentiment_and_general(*args: Any, **kwargs: Any) -> LLMChatResponse:
