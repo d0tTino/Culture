@@ -36,6 +36,9 @@ This runbook outlines routine operations for working with Culture.ai.
    When `--replay` is provided and `ENABLE_REDPANDA=1`, the simulation will
    restore RNG/environment state and replay agent actions from the Redpanda
    event log.
+8. Snapshots of the simulation state are written every 100 ticks. Set the
+   `SNAPSHOT_COMPRESS` environment variable to `1` to save them as
+   zstandard-compressed files (`snapshot_<step>.json.zst`).
 
 ## Running Tests
 Run the full suite with coverage:
