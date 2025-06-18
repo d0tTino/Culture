@@ -185,3 +185,6 @@ logs/
 # Profiler output
 prof/
 *.prof
+
+# Ignore generic log files
+*.log
