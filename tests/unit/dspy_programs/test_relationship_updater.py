@@ -48,4 +48,4 @@ def test_get_relationship_updater_fallback(monkeypatch: MonkeyPatch) -> None:
 @pytest.mark.unit
 def test_update_relationship_placeholder() -> None:
     result = update_relationship("agent_a", "agent_b", "ally", 0.3)
-    assert result == "Relationship updated (placeholder)"
+    assert result == "ally from agent_a to agent_b: 0.30"

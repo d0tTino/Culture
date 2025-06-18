@@ -15,6 +15,7 @@ from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
 from src.infra.snapshot import save_snapshot
 from src.shared.typing import SimulationMessage
+from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
@@ -74,8 +75,12 @@ class Simulation:
             logger.warning("Simulation initialized without a scenario description.")
 
         # --- NEW: Initialize Knowledge Board ---
-        self.knowledge_board = KnowledgeBoard()
-        logger.info("Simulation initialized with Knowledge Board.")
+        if config.KNOWLEDGE_BOARD_BACKEND == "graph":
+            self.knowledge_board = GraphKnowledgeBoard()
+            logger.info("Simulation initialized with Graph Knowledge Board.")
+        else:
+            self.knowledge_board = KnowledgeBoard()
+            logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
         self.projects: dict[
