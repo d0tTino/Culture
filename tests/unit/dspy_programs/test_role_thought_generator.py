@@ -47,3 +47,4 @@ def test_generate_role_prefixed_thought_noncallable(monkeypatch: MonkeyPatch) ->
 
     result = generate_role_prefixed_thought("Artist", "painting")
     assert result == "Failsafe: Unable to generate thought (generator not callable)."
+

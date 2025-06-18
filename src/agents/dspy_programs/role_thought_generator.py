@@ -114,23 +114,3 @@ def generate_role_prefixed_thought(agent_role: str, current_situation: str) -> s
 def get_failsafe_output(*args: object, **kwargs: object) -> str:
     role_name = args[0] if args else kwargs.get("role_name", "unknown")
     return f"Failsafe: Unable to generate thought for role {role_name}."
-
-
-def test_role_prefixed_thought() -> None:
-    # Implementation of test_role_prefixed_thought method
-    pass
-
-
-def test_signature_fields() -> None:
-    # Implementation of test_signature_fields method
-    pass
-
-
-def test_signature_output() -> None:
-    # Implementation of test_signature_output method
-    pass
-
-
-def test_signature_input_fields() -> None:
-    # Implementation of test_signature_input_fields method
-    pass
