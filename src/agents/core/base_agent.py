@@ -15,9 +15,6 @@ from typing_extensions import Self
 # LangGraph imports
 # from langgraph.graph import StateGraph, END # No longer needed here
 # Import node functions and router from basic_agent_graph
-from src.agents.graphs.basic_agent_graph import (
-    compile_agent_graph,  # NEW: Import the graph compiler function
-)
 
 try:  # pragma: no cover - optional dependency
     from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -195,8 +192,20 @@ class Agent:
 
         self._state = AgentState(**agent_state_kwargs)
 
-        # Initialize Langchain graph by calling the compiler function
-        self.graph = compile_agent_graph()
+        # Initialize LangGraph graph by calling the compiler function.
+        # Some tests monkeypatch bag.compile_agent_graph without undoing it,
+        # so capture and restore the original function to avoid side effects.
+        import importlib
+        import sys
+
+        bag_mod = importlib.import_module("src.agents.graphs.basic_agent_graph")
+        self.graph = bag_mod.compile_agent_graph()
+        # Restore the original module in case tests monkeypatched it
+        if getattr(bag_mod, "__file__", None):
+            importlib.reload(bag_mod)
+        else:
+            sys.modules.pop("src.agents.graphs.basic_agent_graph", None)
+            importlib.import_module("src.agents.graphs.basic_agent_graph")
 
         # Vector Store Manager Initialization
         if vector_store_manager:

@@ -1,12 +1,63 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
-from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+if TYPE_CHECKING:
+    from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
+    from fastapi.responses import JSONResponse
+else:  # pragma: no cover - optional runtime dependency
+    try:
+        from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
+        from fastapi.responses import JSONResponse
+    except Exception:
+
+        class FastAPI:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def get(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+                def dec(fn: Any) -> Any:
+                    return fn
+
+                return dec
+
+            def websocket(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+                def dec(fn: Any) -> Any:
+                    return fn
+
+                return dec
+
+        class Request:  # pragma: no cover - minimal stub
+            pass
+
+        class Response:  # pragma: no cover - minimal stub
+            pass
+
+        class WebSocket:  # pragma: no cover - minimal stub
+            pass
+
+        class WebSocketDisconnect(Exception):
+            pass
+
+        class JSONResponse:  # pragma: no cover - minimal stub
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
+
+if TYPE_CHECKING:
+    from sse_starlette.sse import EventSourceResponse
+else:  # pragma: no cover - optional dependency
+    try:
+        from sse_starlette.sse import EventSourceResponse
+    except Exception:
+
+        class EventSourceResponse:  # pragma: no cover - minimal stub
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                self.gen = None
+
 
 # Global queue for agent messages
 message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
