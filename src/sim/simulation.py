@@ -56,6 +56,9 @@ class Simulation:
             discord_bot (Optional[SimulationDiscordBot]): Discord bot for sending
                 simulation updates to Discord.
         """
+        # Reload configuration to pick up any environment overrides set in tests
+        config.load_config()
+
         self.agents: list[Agent] = agents
         self.current_step: int = 0
         self.current_agent_index: int = 0

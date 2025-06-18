@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Load environment variables from .env if available
 if [ -f ".env" ]; then
@@ -10,7 +10,7 @@ if [ -f ".env" ]; then
 fi
 
 # Determine base commit for diff
-BASE_SHA="${GITHUB_BASE_SHA:-${GITHUB_EVENT_BEFORE}}"
+BASE_SHA="${GITHUB_BASE_SHA:-${GITHUB_EVENT_BEFORE:-}}"
 if [ -z "$BASE_SHA" ]; then
   if git rev-parse HEAD~1 >/dev/null 2>&1; then
     BASE_SHA=$(git rev-parse HEAD~1)

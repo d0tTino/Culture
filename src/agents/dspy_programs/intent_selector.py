@@ -5,10 +5,11 @@ from typing import Any
 
 from typing_extensions import Self
 
-import dspy_ai as dspy
+import dspy_ai as dspy  # type: ignore
 
 
-class _StubLM(dspy.LM):  # type: ignore[no-any-unimported]
+
+class _StubLM(dspy.LM):
     """Deterministic LM returning a fixed intent for tests."""
 
     def __init__(self: Self) -> None:
@@ -21,7 +22,7 @@ class _StubLM(dspy.LM):  # type: ignore[no-any-unimported]
         return ['{"intent": "PROPOSE_IDEA"}']
 
 
-class _CallableLM(dspy.LM):  # type: ignore[no-any-unimported]
+class _CallableLM(dspy.LM):
     """Wrap a simple callable so it can be used as a DSPy LM."""
 
     def __init__(self: Self, fn: Callable[[str | None], str | list[str]]) -> None:
@@ -41,7 +42,7 @@ INTENTS = ["PROPOSE_IDEA", "CONTINUE_COLLABORATION"]
 
 
 # dspy lacks type hints, so Signature resolves to Any
-class IntentPrompt(dspy.Signature):  # type: ignore[no-any-unimported]
+class IntentPrompt(dspy.Signature):
     question = dspy.InputField()
     intent = dspy.OutputField()
 

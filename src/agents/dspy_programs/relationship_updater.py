@@ -188,5 +188,4 @@ def update_relationship(
     new_strength = max(-1.0, min(1.0, current + float(strength)))
     other_rel[relationship_type] = new_strength
 
-    # Match the expected legacy string format used in tests
     return f"{relationship_type} from {agent_id} to {other_agent_id}: {new_strength:.2f}"

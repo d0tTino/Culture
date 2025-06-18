@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Iterable
 from typing import Any
 
 from neo4j import Driver, GraphDatabase
@@ -37,7 +36,7 @@ class GraphKnowledgeBoard:
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
 
     # --- Internal helpers -------------------------------------------------
-    def _run(self: Self, query: str, **params: Any) -> Iterable[Any]:
+    def _run(self: Self, query: str, **params: Any) -> list[Any]:
         with self.driver.session() as session:
             result = session.run(query, **params)
             return list(result)

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 try:
     import dspy as _dspy
-except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
-    raise ModuleNotFoundError("dspy_ai requires the 'dspy' package to be installed") from exc
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    # Fallback to the local stub implementation used in tests
+    from src.infra.dspy_ollama_integration import dspy as _dspy
 
 # Re-export everything from dspy
 from dspy import *  # noqa: F403

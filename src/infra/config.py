@@ -256,6 +256,7 @@ def load_config() -> dict[str, object]:
 
     # Log minimal information to avoid leaking sensitive values
     logger.info("Configuration loaded")
+    _refresh_module_vars()
     # Fail fast if critical config is missing
     if not _CONFIG.get("OLLAMA_API_BASE"):
         logger.critical("OLLAMA_API_BASE is missing from configuration. Exiting.")
@@ -263,6 +264,30 @@ def load_config() -> dict[str, object]:
 
         sys.exit(1)
     return _CONFIG
+
+
+def _refresh_module_vars() -> None:
+    """Update module-level constants from the current configuration."""
+    globals().update(
+        {
+            "OLLAMA_API_BASE": get_config("OLLAMA_API_BASE"),
+            "OLLAMA_REQUEST_TIMEOUT": get_config("OLLAMA_REQUEST_TIMEOUT"),
+            "DEFAULT_LLM_MODEL": get_config("DEFAULT_LLM_MODEL"),
+            "MEMORY_THRESHOLD_L1": get_config("MEMORY_THRESHOLD_L1"),
+            "MEMORY_THRESHOLD_L2": get_config("MEMORY_THRESHOLD_L2"),
+            "VECTOR_STORE_DIR": get_config("VECTOR_STORE_DIR"),
+            "VECTOR_STORE_BACKEND": get_config("VECTOR_STORE_BACKEND"),
+            "WEAVIATE_URL": get_config("WEAVIATE_URL"),
+            "KNOWLEDGE_BOARD_BACKEND": get_config("KNOWLEDGE_BOARD_BACKEND"),
+            "GRAPH_DB_URI": get_config("GRAPH_DB_URI"),
+            "GRAPH_DB_USER": get_config("GRAPH_DB_USER"),
+            "GRAPH_DB_PASSWORD": get_config("GRAPH_DB_PASSWORD"),
+            "DEFAULT_LOG_LEVEL": get_config("DEFAULT_LOG_LEVEL"),
+            "OTEL_EXPORTER_ENDPOINT": get_config("OTEL_EXPORTER_ENDPOINT"),
+            "OPENAI_API_KEY": get_config("OPENAI_API_KEY"),
+            "ANTHROPIC_API_KEY": get_config("ANTHROPIC_API_KEY"),
+        }
+    )
 
 
 def get_config(key: Optional[str] = None) -> Any:
@@ -287,6 +312,7 @@ def get_config(key: Optional[str] = None) -> Any:
 
 # Initialize the configuration on module import
 load_config()
+_refresh_module_vars()
 
 OLLAMA_API_BASE = get_config("OLLAMA_API_BASE")
 OLLAMA_REQUEST_TIMEOUT = get_config("OLLAMA_REQUEST_TIMEOUT")
