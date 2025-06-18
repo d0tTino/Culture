@@ -454,13 +454,13 @@ def configure_dspy_with_ollama(
 # === AsyncDSPyManager Design (Task 137 Phase 2) ===
 
 # The ``AsyncDSPyManager`` class originally lived in this file as a placeholder
-# design. It now resides in ``src.shared.async_utils`` as a fully functional
+# design. It now resides in ``src.infra.async_dspy_manager`` as a fully functional
 # implementation. All production code should import it from that module. The
 # commented stub below remains only for historical reference.
 
 
 # class AsyncDSPyManager:  # pragma: no cover - unused placeholder
-#     """Deprecated stub. Use :class:`src.shared.async_utils.AsyncDSPyManager`."""
+#     """Deprecated stub. Use :class:`src.infra.async_dspy_manager.AsyncDSPyManager`."""
 #
 #     def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
 #         pass

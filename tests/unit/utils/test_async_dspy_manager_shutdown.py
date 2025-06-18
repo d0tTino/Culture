@@ -1,6 +1,6 @@
 import pytest
 
-from src.shared.async_utils import AsyncDSPyManager
+from src.infra.async_dspy_manager import AsyncDSPyManager
 
 
 @pytest.mark.unit

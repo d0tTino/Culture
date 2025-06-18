@@ -5,7 +5,7 @@ from collections.abc import Generator
 import pytest
 from pytest import LogCaptureFixture
 
-from src.shared.async_utils import AsyncDSPyManager
+from src.infra.async_dspy_manager import AsyncDSPyManager
 
 
 @pytest.fixture(scope="module")

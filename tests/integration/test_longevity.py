@@ -9,7 +9,7 @@ pytest.importorskip("chromadb")
 from src.agents.core import roles
 from src.agents.core.base_agent import Agent
 from src.agents.memory.vector_store import ChromaVectorStoreManager
-from src.shared.async_utils import AsyncDSPyManager
+from src.infra.async_dspy_manager import AsyncDSPyManager
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
