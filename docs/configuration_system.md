@@ -55,7 +55,8 @@ The configuration is organized into the following categories:
 
 - `DISCORD_BOT_TOKEN` - Discord bot token or comma-separated tokens
 - `DISCORD_CHANNEL_ID` - Discord channel ID
-- `DISCORD_TOKENS_DB_URL` - PostgreSQL URL for the `discord_tokens` table
+- `DISCORD_TOKENS_DB_URL` - PostgreSQL URL for the `discord_tokens` table. The
+  table is created automatically via SQLAlchemy when this value is set.
 
 ### Memory Pruning Settings
 
