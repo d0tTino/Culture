@@ -162,13 +162,24 @@ def get_failsafe_output(*args: float, **kwargs: float) -> object:
     )()
 
 
+_RELATIONSHIPS: dict[str, dict[str, dict[str, float]]] = {}
+
+
 def update_relationship(
     agent_id: str, other_agent_id: str, relationship_type: str, strength: float
 ) -> str:
-    # Implementation of the function
-    return "Relationship updated (placeholder)"
+    """Adjust and store the relationship strength between two agents.
 
+    This function maintains a simple in-memory mapping of relationships. The
+    ``strength`` value is treated as a delta and added to the current stored
+    value. The final score is clamped to ``[-1.0, 1.0]``.
+    """
 
-def test_relationship_update() -> None:
-    # Implementation of the function
-    pass
+    agent_rel = _RELATIONSHIPS.setdefault(agent_id, {})
+    other_rel = agent_rel.setdefault(other_agent_id, {})
+    current = float(other_rel.get(relationship_type, 0.0))
+
+    new_strength = max(-1.0, min(1.0, current + float(strength)))
+    other_rel[relationship_type] = new_strength
+
+    return f"{relationship_type} from {agent_id} to {other_agent_id}: {new_strength:.2f}"
