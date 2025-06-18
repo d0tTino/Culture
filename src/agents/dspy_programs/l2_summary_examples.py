@@ -9,7 +9,7 @@ These examples represent realistic L1 summaries and ideal L2 summaries for vario
 # See docs/coding_standards.md for details.
 """
 
-import dspy
+import dspy_ai as dspy
 
 # Example 1: Innovator role with creative problem-solving progression
 example1 = dspy.Example(
