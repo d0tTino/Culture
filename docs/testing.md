@@ -84,6 +84,7 @@ The CI workflow can run this suite by triggering the `run-redteam` input of the 
 
 - Fast unit tests run on every push/PR
 - Full suite runs on main branch merges
+
 - See `.github/workflows/ci.yml` for details
 - Pushes that only modify Markdown files or documentation paths are ignored by CI
 - A small integration subset runs on Windows to verify ChromaDB paths and Discord bot startup
