@@ -14,5 +14,7 @@ pydantic-settings==2.0.3
 langgraph
 requests
 sqlite-web
+sqlalchemy
+asyncpg
 prometheus-client
 confluent-kafka==2.10.1

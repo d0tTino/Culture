@@ -5,7 +5,7 @@ This module provides example data for training and testing DSPy-based L2 summary
 specifically tailored for agents in the Analyzer role.
 """
 
-import dspy
+import dspy_ai as dspy
 
 # Example 1: Analyzer working through complex data analysis project
 example1 = dspy.Example(

@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 try:
     from pathlib import Path
 
-    from dspy import Predict
+    from dspy_ai import Predict
 
     # Mypy: Suppressing noise from transformers internal error
     # Use the robust DSPy relationship updater loader with fallback logic
@@ -65,7 +65,7 @@ except Exception as e:
 try:
     logging.info("Attempting to import DSPy modules...")
     sys.path.insert(0, str(Path(".").resolve()))  # Ensure the root directory is in the path
-    import dspy
+    import dspy_ai as dspy
 
     from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector
 

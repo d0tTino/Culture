@@ -5,7 +5,7 @@ This module provides example data for training and testing DSPy-based L1 summary
 These examples represent realistic agent memory events and ideal L1 summaries.
 """
 
-import dspy
+import dspy_ai as dspy
 
 # Example 1: Innovator role with collaborative exploration
 example1 = dspy.Example(

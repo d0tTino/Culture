@@ -21,7 +21,7 @@ from src.agents.core.agent_state import AgentActionIntent
 from src.agents.core.base_agent import Agent
 from src.agents.graphs.basic_agent_graph import AgentTurnState
 from src.agents.graphs.basic_agent_types import AgentActionOutput
-from src.shared.async_utils import AsyncDSPyManager
+from src.infra.async_dspy_manager import AsyncDSPyManager
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ async def test_dspy_call_timeout_in_graph(
     simple_agent: Agent, async_manager: AsyncDSPyManager, caplog: LogCaptureFixture
 ) -> None:
     caplog.set_level(
-        logging.WARNING, logger="src.shared.async_utils"
+        logging.WARNING, logger="src.infra.async_dspy_manager"
     )  # For timeout test, we expect WARNING
     caplog.set_level(logging.DEBUG)  # General debug for other logs if needed
 

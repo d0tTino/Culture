@@ -128,6 +128,15 @@ jobs:
         shell: bash
         run: pytest -m "integration" --disable-warnings -q
 
+      - name: Run Windows Path/Discord Integration
+        if: steps.changes.outputs.CODE_CHANGES == 'true' && matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          pytest \
+            tests/integration/test_hierarchical_memory_persistence.py \
+            tests/integration/interfaces/test_discord_bot.py \
+            -m "integration" --disable-warnings -q
+
       - name: Upload coverage artifact
         if: steps.changes.outputs.CODE_CHANGES == 'true'
         uses: actions/upload-artifact@v4

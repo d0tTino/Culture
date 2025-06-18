@@ -34,6 +34,12 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MEMORY_THRESHOLD_L2": 0.3,
     "VECTOR_STORE_DIR": "./chroma_db",
     "VECTOR_STORE_BACKEND": "chroma",  # chroma or weaviate
+    # Knowledge board backend: "memory" or "graph"
+    "KNOWLEDGE_BOARD_BACKEND": "memory",
+    # Neo4j connection details for graph-backed knowledge board
+    "GRAPH_DB_URI": "bolt://localhost:7687",
+    "GRAPH_DB_USER": "neo4j",
+    "GRAPH_DB_PASSWORD": "test",
     "WEAVIATE_URL": "http://localhost:8080",
     "OLLAMA_REQUEST_TIMEOUT": 10,
     "OPA_URL": "",
@@ -290,6 +296,10 @@ MEMORY_THRESHOLD_L2 = get_config("MEMORY_THRESHOLD_L2")
 VECTOR_STORE_DIR = get_config("VECTOR_STORE_DIR")
 VECTOR_STORE_BACKEND = get_config("VECTOR_STORE_BACKEND")
 WEAVIATE_URL = get_config("WEAVIATE_URL")
+KNOWLEDGE_BOARD_BACKEND = get_config("KNOWLEDGE_BOARD_BACKEND")
+GRAPH_DB_URI = get_config("GRAPH_DB_URI")
+GRAPH_DB_USER = get_config("GRAPH_DB_USER")
+GRAPH_DB_PASSWORD = get_config("GRAPH_DB_PASSWORD")
 
 # --- Basic Configuration ---
 DEFAULT_LOG_LEVEL = get_config("DEFAULT_LOG_LEVEL")

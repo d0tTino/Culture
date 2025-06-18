@@ -86,6 +86,7 @@ The CI workflow can run this suite by triggering the `run-redteam` input of the 
 - Full suite runs nightly and on main branch merges
 - See `.github/workflows/ci.yml` for details
 - Pushes that only modify Markdown files or documentation paths are ignored by CI
+- A small integration subset runs on Windows to verify ChromaDB paths and Discord bot startup
 - After tests complete, the `coverage.xml` file is uploaded as a GitHub Actions artifact. In the workflow run summary, look under **Artifacts** to download it.
 
 ## Adding/Updating Markers

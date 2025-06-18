@@ -21,21 +21,21 @@ else:
         import requests
     except Exception:  # pragma: no cover - fallback when requests missing
         requests = MagicMock()
+
 from typing_extensions import Self
 
-# Import DSPy and Ollama, providing fallbacks when unavailable
-try:
-    import dspy
+# Import DSPy from dspy-ai, falling back to stub implementations when missing
+dspy: Any | None
+if TYPE_CHECKING:  # pragma: no cover - static typing only
+    import importlib
 
-    if not hasattr(dspy, "LM"):
-        raise AttributeError("dspy.LM missing")
-except Exception:  # pragma: no cover - attempt dspy_ai fallback
+    dspy = importlib.import_module("dspy")
+else:
     try:
         import dspy_ai as dspy
 
         if not hasattr(dspy, "LM"):
             raise AttributeError("dspy_ai.LM missing")
-
     except Exception:
         dspy = None
 
@@ -441,6 +441,7 @@ def configure_dspy_with_ollama(
     try:
         # Create and configure the OllamaLM instance
         ollama_lm = OllamaLM(model_name=model_name, api_base=api_base, temperature=temperature)
+        assert dspy is not None
         dspy.settings.configure(lm=ollama_lm)
         logger.info(
             f"DSPy LM successfully configured with Ollama model '{model_name}' at '{api_base}'."
@@ -454,13 +455,13 @@ def configure_dspy_with_ollama(
 # === AsyncDSPyManager Design (Task 137 Phase 2) ===
 
 # The ``AsyncDSPyManager`` class originally lived in this file as a placeholder
-# design. It now resides in ``src.shared.async_utils`` as a fully functional
+# design. It now resides in ``src.infra.async_dspy_manager`` as a fully functional
 # implementation. All production code should import it from that module. The
 # commented stub below remains only for historical reference.
 
 
 # class AsyncDSPyManager:  # pragma: no cover - unused placeholder
-#     """Deprecated stub. Use :class:`src.shared.async_utils.AsyncDSPyManager`."""
+#     """Deprecated stub. Use :class:`src.infra.async_dspy_manager.AsyncDSPyManager`."""
 #
 #     def __init__(self: Self, max_workers: int = 4, default_timeout: float = 10.0) -> None:
 #         pass
