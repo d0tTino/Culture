@@ -1,0 +1,9 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Dependabot will scan all requirement files in this directory,
+    # including `requirements.txt` and `requirements-dev.txt`.
+    allow-prereleases: false

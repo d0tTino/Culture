@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import pytest
 from pytest import MonkeyPatch
 
@@ -46,6 +47,16 @@ def test_get_relationship_updater_fallback(monkeypatch: MonkeyPatch) -> None:
 
 
 @pytest.mark.unit
-def test_update_relationship_placeholder() -> None:
-    result = update_relationship("agent_a", "agent_b", "ally", 0.3)
-    assert result == "Relationship updated (placeholder)"
+def test_update_relationship_adjusts_strength() -> None:
+    from src.agents.dspy_programs.relationship_updater import _RELATIONSHIPS
+
+    _RELATIONSHIPS.clear()
+
+    msg = update_relationship("agent_a", "agent_b", "ally", 0.3)
+    assert _RELATIONSHIPS["agent_a"]["agent_b"]["ally"] == pytest.approx(0.3)
+    assert msg == "ally from agent_a to agent_b: 0.30"
+
+    msg = update_relationship("agent_a", "agent_b", "ally", 0.8)
+    # Should clamp to 1.0
+    assert _RELATIONSHIPS["agent_a"]["agent_b"]["ally"] == pytest.approx(1.0)
+    assert msg == "ally from agent_a to agent_b: 1.00"
