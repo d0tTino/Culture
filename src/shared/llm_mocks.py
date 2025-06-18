@@ -9,6 +9,8 @@ import socket
 from typing import Any
 from unittest.mock import MagicMock
 
+from typing_extensions import Self
+
 from src.shared.typing import LLMChatResponse, OllamaGenerateResponse
 
 # Handle optional Ollama dependency
@@ -22,26 +24,25 @@ except ImportError:
 
 # Handle optional DSPy OllamaLocal dependency
 try:
-    from dspy.predict.ollama import OllamaLocal
+    from dspy_ai.predict.ollama import OllamaLocal
 except ImportError:
     logging.getLogger(__name__).warning(
-        "dspy.predict.ollama not available; using stub OllamaLocal"
+        "dspy_ai.predict.ollama not available; using stub OllamaLocal"
     )
 
     class OllamaLocal:  # type: ignore[no-redef]
         """
-        Stub for DSPy OllamaLocal when dspy.predict.ollama is unavailable.
+        Stub for DSPy OllamaLocal when dspy_ai.predict.ollama is unavailable.
         """
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
+        def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def __call__(self, prompt: str, *args: Any, **kwargs: Any) -> list[str]:
+        def __call__(self: Self, prompt: str, *args: Any, **kwargs: Any) -> list[str]:
             return [f"Stubbed OllamaLocal response to prompt: {prompt}"]
 
 
 from pytest import MonkeyPatch
-from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +307,7 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
     try:
         # Check if dspy and OllamaLocal are available before attempting to patch
         # import dspy
-        # from dspy.predict.ollama import OllamaLocal
+        # from dspy_ai.predict.ollama import OllamaLocal
 
         # Create a mock instance of OllamaLocal
         mock_dspy_ollama_local_instance = MagicMock(spec=OllamaLocal)
@@ -316,7 +317,7 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
 
         # Patch dspy.OllamaLocal to return our mock instance
         monkeypatch.setattr(
-            "dspy.predict.ollama.OllamaLocal",
+            "dspy_ai.predict.ollama.OllamaLocal",
             lambda *args, **kwargs: mock_dspy_ollama_local_instance,
         )
         logger.info("Successfully mocked dspy.OllamaLocal.")

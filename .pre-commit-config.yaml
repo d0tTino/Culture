@@ -27,3 +27,11 @@ repos:
   #     - id: check-yaml
   #     - id: end-of-file-fixer
   #     - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: no-dspy-imports
+        name: "Forbid direct dspy imports"
+        entry: scripts/check_no_dspy_import.sh
+        language: system
+        types: [python]
