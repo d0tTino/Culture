@@ -9,7 +9,7 @@ specifically tailored for agents in the Innovator role.
 # See docs/coding_standards.md for details.
 """
 
-import dspy
+import dspy_ai as dspy
 
 # Example 1: Innovator leading disruptive technology development
 example1 = dspy.Example(

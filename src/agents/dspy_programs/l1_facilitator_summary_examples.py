@@ -5,7 +5,7 @@ This module provides example data for training and testing DSPy-based L1 summary
 specifically tailored for agents in the Facilitator role.
 """
 
-import dspy
+import dspy_ai as dspy
 
 # Example 1: Facilitator managing group disagreement
 example1 = dspy.Example(

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Knowledge Board Activity</title>
+    <script>
+    window.addEventListener('DOMContentLoaded', () => {
+        const es = new EventSource('/stream/events');
+        es.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            const list = document.getElementById('events');
+            const li = document.createElement('li');
+            li.textContent = JSON.stringify(data);
+            list.appendChild(li);
+        };
+    });
+    </script>
+</head>
+<body>
+    <h1>Knowledge Board Activity</h1>
+    <ul id="events"></ul>
+</body>
+</html>

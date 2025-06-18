@@ -16,7 +16,9 @@ try:  # pragma: no cover - optional dependency
     from src.agents.memory.vector_store import ChromaVectorStoreManager
 except Exception:  # pragma: no cover - fallback when chromadb missing
     ChromaVectorStoreManager = None  # type: ignore[misc, assignment]
+from src.infra import config
 from src.infra.event_log import log_event
+from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
@@ -170,7 +172,13 @@ def load_checkpoint(
         scenario=data.get("scenario", ""),
     )
     kb_entries = data.get("knowledge_board", {}).get("entries", [])
-    sim.knowledge_board = KnowledgeBoard(entries=kb_entries)
+    if config.KNOWLEDGE_BOARD_BACKEND == "graph":
+        board = GraphKnowledgeBoard()
+        for e in kb_entries:
+            board.add_entry(e["content_full"], e["agent_id"], int(e["step"]))
+        sim.knowledge_board = board
+    else:
+        sim.knowledge_board = KnowledgeBoard(entries=kb_entries)
     sim.current_step = data.get("current_step", 0)
     sim.current_agent_index = data.get("current_agent_index", 0)
     sim.collective_ip = data.get("collective_ip", 0.0)
