@@ -105,4 +105,3 @@ class GraphKnowledgeBoard:
     def clear_board(self: Self) -> None:
         self._run("MATCH (e:KBEntry) DETACH DELETE e")
         metrics.KNOWLEDGE_BOARD_SIZE.set(0)
-

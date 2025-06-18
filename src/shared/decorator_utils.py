@@ -65,9 +65,9 @@ def monitor_llm_call(
                             metrics_data["error_message"] = exc_value.response.text
                     else:
                         metrics_data["error_type"] = "UnknownError"
-                        metrics_data[
-                            "error_message"
-                        ] = "Function returned None, indicating an error"
+                        metrics_data["error_message"] = (
+                            "Function returned None, indicating an error"
+                        )
                 else:
                     metrics_data["success"] = True
                     if result is not None and hasattr(result, "usage"):

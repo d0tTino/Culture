@@ -153,32 +153,39 @@ if "weaviate" not in sys.modules:
     sys.modules["weaviate.classes"] = classes_mod
 
 if "fastapi" not in sys.modules:
-    fastapi_mod = types.ModuleType("fastapi")
+    try:  # pragma: no cover - optional dependency
+        import fastapi  # noqa: F401
+    except ImportError:
+        fastapi_mod = types.ModuleType("fastapi")
 
-    class FastAPI:
-        def __init__(self, *args: object, **kwargs: object) -> None:
+        class FastAPI:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def get(self, *args: object, **kwargs: object):
+                def decorator(fn: Callable[..., object]) -> Callable[..., object]:
+                    return fn
+
+                return decorator
+
+        class Request:
+            async def is_disconnected(self) -> bool:  # type: ignore[override]
+                return True
+
+        class Response:  # pragma: no cover - simple stub
             pass
 
-        def get(self, *args: object, **kwargs: object):
-            def decorator(fn: Callable[..., object]) -> Callable[..., object]:
-                return fn
+        from starlette.websockets import WebSocket, WebSocketDisconnect
 
-            return decorator
-
-    class Request:
-        async def is_disconnected(self) -> bool:  # type: ignore[override]
-            return True
-
-    class Response:  # pragma: no cover - simple stub
-        pass
-
-    fastapi_mod.FastAPI = FastAPI
-    fastapi_mod.Request = Request
-    fastapi_mod.Response = Response
-    responses_mod = types.ModuleType("fastapi.responses")
-    responses_mod.JSONResponse = Response
-    sys.modules["fastapi"] = fastapi_mod
-    sys.modules["fastapi.responses"] = responses_mod
+        fastapi_mod.FastAPI = FastAPI
+        fastapi_mod.Request = Request
+        fastapi_mod.Response = Response
+        fastapi_mod.WebSocket = WebSocket
+        fastapi_mod.WebSocketDisconnect = WebSocketDisconnect
+        responses_mod = types.ModuleType("fastapi.responses")
+        responses_mod.JSONResponse = Response
+        sys.modules["fastapi"] = fastapi_mod
+        sys.modules["fastapi.responses"] = responses_mod
 
 if "sse_starlette.sse" not in sys.modules:
     sse_mod = types.ModuleType("sse_starlette.sse")
