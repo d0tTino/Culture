@@ -116,7 +116,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
 - Additional development and testing dependencies in `requirements-dev.txt` (required for the full test suite)
-- `pydantic==2.3.0` is pinned for both runtime and development to ensure consistency
+- `pydantic` is required for both runtime and development
 
 ## Installation
 
@@ -640,7 +640,7 @@ and download the file from the **Artifacts** section.
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
 
 For advanced testing, parallelization, and CI details, see [docs/testing.md](docs/testing.md).
-CI workflows are skipped when a commit only modifies documentation (`*.md` files or files under `docs/`).
+CI workflows are skipped when a commit only modifies documentation (`*.md` files or files under `docs/`) or contains only code comments. A dedicated `changes` job detects comment-only changes and prevents unnecessary runs.
 Outdated runs on the same branch are automatically canceled, and heavy test suites run on a self-hosted Linux runner.
 See [docs/ci_status.md](docs/ci_status.md) for tips on checking CI status with the GitHub interface or the `gh` CLI. Because this repository has no remote configured by default, you'll need to add your GitHub remote before checking statuses.
 
