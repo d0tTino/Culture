@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import pytest
 from pytest import MonkeyPatch
 
@@ -51,10 +52,12 @@ def test_update_relationship_adjusts_strength() -> None:
 
     _RELATIONSHIPS.clear()
 
-    msg = update_relationship("a", "b", "friendship", 0.3)
-    assert _RELATIONSHIPS["a"]["b"]["friendship"] == pytest.approx(0.3)
-    assert "a to b" in msg
+    msg = update_relationship("agent_a", "agent_b", "ally", 0.3)
+    assert _RELATIONSHIPS["agent_a"]["agent_b"]["ally"] == pytest.approx(0.3)
+    assert msg == "ally from agent_a to agent_b: 0.30"
 
-    msg = update_relationship("a", "b", "friendship", 0.8)
+    msg = update_relationship("agent_a", "agent_b", "ally", 0.8)
     # Should clamp to 1.0
-    assert _RELATIONSHIPS["a"]["b"]["friendship"] == pytest.approx(1.0)
+    assert _RELATIONSHIPS["agent_a"]["agent_b"]["ally"] == pytest.approx(1.0)
+    assert msg == "ally from agent_a to agent_b: 1.00"
+
