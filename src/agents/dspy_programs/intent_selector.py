@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import dspy_ai as dspy
 from typing_extensions import Self
+
+import dspy_ai as dspy
 
 
 class _StubLM(dspy.LM):  # type: ignore[no-any-unimported]

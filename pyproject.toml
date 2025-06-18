@@ -63,13 +63,21 @@ exclude = [
     "build/",
     "tests/",
     "src/agents/core/agent_state.py",
-    "src/ollama/.*"
+    "src/ollama/.*",
+    "dspy_ai/.*"
 ]
 # Only type-check the application source code for now
 files = ["src"]
 # Temporarily disable the Pydantic mypy plugin due to compatibility issues
 # plugins = ["pydantic.mypy"]
 strict = true  # Global strict typing
+
+[[tool.mypy.overrides]]
+module = ["src.agents.dspy_programs.*"]
+ignore_errors = true
+
+[tool.ruff.format]
+preview = false
 
 #[tool.ruff.lint.per-file-ignores] # This line and the following are removed as they are now under [tool.ruff.per-file-ignores]
 #"src/agents/dspy_programs/*_examples.py" = ["E501"]

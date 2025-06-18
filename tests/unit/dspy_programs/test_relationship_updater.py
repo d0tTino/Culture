@@ -60,4 +60,3 @@ def test_update_relationship_adjusts_strength() -> None:
     # Should clamp to 1.0
     assert _RELATIONSHIPS["agent_a"]["agent_b"]["ally"] == pytest.approx(1.0)
     assert msg == "ally from agent_a to agent_b: 1.00"
-
