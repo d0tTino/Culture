@@ -157,6 +157,9 @@ coverage_*.txt
 
 # Archives and experiments
 archives/
+# Ensure no Python cache directories or compiled files are stored in archives
+archives/**/__pycache__/
+archives/**/*.py[cod]
 scripts/archive/
 
 # Virtual environments
