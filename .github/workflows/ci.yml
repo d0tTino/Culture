@@ -17,8 +17,6 @@ on:
       - 'scripts/**'
       - '.github/**'
       - 'pyproject.toml'
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       run-redteam:
@@ -162,7 +160,7 @@ jobs:
         run: black --check .
 
   full-suite:
-    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ["self-hosted", "linux"]
     steps:
       - name: Checkout code
@@ -179,14 +177,13 @@ jobs:
           done < .env
 
       - name: Detect non-comment code changes
-        if: github.event_name != 'schedule'
         id: changes
         shell: bash
         run: |
           bash scripts/check_code_changes.sh
 
       - name: Skip workflow if only docs or comments changed
-        if: github.event_name != 'schedule' && steps.changes.outputs.CODE_CHANGES == 'false'
+        if: steps.changes.outputs.CODE_CHANGES == 'false'
         run: |
           echo "No non-comment code changes detected. Skipping remaining steps."
           exit 0
@@ -224,7 +221,6 @@ jobs:
 
   redteam:
     if: |
-      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run-redteam == 'true') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-redteam'))
     runs-on: ["self-hosted", "linux"]
