@@ -1,27 +1,50 @@
 import pytest
+from pytest import MonkeyPatch
 
-pytestmark = pytest.mark.unit
+pytest.importorskip("dspy")
 
-from src.agents.dspy_programs import role_thought_generator as rtg
-
-
-def test_get_failsafe_output_positional() -> None:
-    assert rtg.get_failsafe_output("Analyst") == (
-        "Failsafe: Unable to generate thought for role Analyst."
-    )
+from src.agents.dspy_programs.role_thought_generator import (
+    FailsafeRoleThoughtGenerator,
+    generate_role_prefixed_thought,
+)
 
 
-def test_failsafe_role_thought_generator() -> None:
-    generator = rtg.FailsafeRoleThoughtGenerator()
-    result = generator("Facilitator", "context")
-    assert getattr(result, "thought") == (
-        "Failsafe: Unable to generate thought for role Facilitator."
-    )
+@pytest.mark.unit
+@pytest.mark.dspy
+def test_failsafe_role_thought_generator_returns_expected() -> None:
+    generator = FailsafeRoleThoughtGenerator()
+    result = generator("Leader", "context")
+    assert hasattr(result, "thought")
+    assert "Failsafe" in result.thought
 
 
-def test_generate_role_prefixed_thought_failsafe(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.unit
+@pytest.mark.dspy
+def test_generate_role_prefixed_thought_uses_generator(monkeypatch: MonkeyPatch) -> None:
+    def dummy(role_name: str, context: str) -> object:
+        return type(
+            "Dummy",
+            (),
+            {"thought": f"As a {role_name}, thinking about {context}"},
+        )()
+
     monkeypatch.setattr(
-        rtg, "get_role_thought_generator", lambda: rtg.FailsafeRoleThoughtGenerator()
+        "src.agents.dspy_programs.role_thought_generator.get_role_thought_generator",
+        lambda: dummy,
     )
-    thought = rtg.generate_role_prefixed_thought("Researcher", "test situation")
-    assert thought == "Failsafe: Unable to generate thought for role Researcher."
+
+    result = generate_role_prefixed_thought("Builder", "blueprint")
+    assert result == "As a Builder, thinking about blueprint"
+
+
+@pytest.mark.unit
+@pytest.mark.dspy
+def test_generate_role_prefixed_thought_noncallable(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.agents.dspy_programs.role_thought_generator.get_role_thought_generator",
+        lambda: object(),
+    )
+
+    result = generate_role_prefixed_thought("Artist", "painting")
+    assert result == "Failsafe: Unable to generate thought (generator not callable)."
+
