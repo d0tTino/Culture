@@ -9,7 +9,7 @@ ollama
 opentelemetry-sdk
 opentelemetry-exporter-otlp
 dspy-ai==2.6.27
-pydantic==2.3.0
+pydantic>=2.11
 pydantic-settings==2.0.3
 langgraph
 requests
