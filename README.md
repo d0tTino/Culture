@@ -133,11 +133,12 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
    source venv/bin/activate  # On Windows: venv\Scripts\activate.bat (or .venv\Scripts\activate.bat)
    ```
 
-3. Install required dependencies:
+3. Install all required dependencies (including development packages):
    ```bash
-   pip install -r requirements.txt
+   pip install -r requirements.txt -r requirements-dev.txt
    ```
    The project currently supports **DSPy 2.6.27**; `requirements.txt` pins `dspy-ai==2.6.27`.
+   You **must** install the development requirements before running `pytest`.
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
