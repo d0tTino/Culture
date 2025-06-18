@@ -7,6 +7,7 @@ from src.agents.dspy_programs.relationship_updater import (
     FailsafeRelationshipUpdater,
     get_failsafe_output,
     get_relationship_updater,
+    update_relationship,
 )
 
 
@@ -42,3 +43,18 @@ def test_get_relationship_updater_fallback(monkeypatch: MonkeyPatch) -> None:
     assert hasattr(result, "relationship_change_rationale")
     assert result.new_relationship_score == 0.1
     assert "Failsafe" in result.relationship_change_rationale
+
+
+@pytest.mark.unit
+def test_update_relationship_adjusts_strength() -> None:
+    from src.agents.dspy_programs.relationship_updater import _RELATIONSHIPS
+
+    _RELATIONSHIPS.clear()
+
+    msg = update_relationship("a", "b", "friendship", 0.3)
+    assert _RELATIONSHIPS["a"]["b"]["friendship"] == pytest.approx(0.3)
+    assert "a to b" in msg
+
+    msg = update_relationship("a", "b", "friendship", 0.8)
+    # Should clamp to 1.0
+    assert _RELATIONSHIPS["a"]["b"]["friendship"] == pytest.approx(1.0)
