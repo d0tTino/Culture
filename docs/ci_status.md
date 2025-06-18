@@ -2,6 +2,8 @@
 
 Culture.ai uses GitHub Actions to run tests and linters on each branch. This repository does not include a remote by default, so you must add your GitHub remote to view CI results.
 
+Long-running jobs execute on a self-hosted Linux runner. Each workflow also cancels previous runs on the same branch to save time.
+
 ## Adding the Remote
 
 Use the `git remote add` command to connect your local clone to the GitHub repository:
