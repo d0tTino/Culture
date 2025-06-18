@@ -8,6 +8,7 @@ from typing_extensions import Self
 import dspy_ai as dspy  # type: ignore
 
 
+
 class _StubLM(dspy.LM):
     """Deterministic LM returning a fixed intent for tests."""
 
