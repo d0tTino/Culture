@@ -74,18 +74,8 @@ jobs:
       - name: Run pre-commit
         shell: bash
         run: pre-commit run --all-files
+        # Ruff linting and Mypy type checks are executed within pre-commit
 
-      - name: Run Ruff (Lint)
-        shell: bash
-        run: ruff check . --output-format=full
-
-      - name: Run Ruff Format (Formatter)
-        shell: bash
-        run: ruff format --check .
-
-      - name: Run Mypy (Type Check)
-        shell: bash
-        run: mypy src/ --strict
 
       - name: Run Tests & Coverage
         shell: bash
