@@ -46,6 +46,12 @@ class AsyncDSPyManager:
     ) -> None:
         self.shutdown()
 
+    def __del__(self: Self) -> None:  # pragma: no cover - best effort cleanup
+        try:
+            self.shutdown()
+        except Exception:
+            logger.debug("AsyncDSPyManager shutdown failed during __del__", exc_info=True)
+
     async def submit(
         self: Self,
         dspy_callable: Callable[..., object],

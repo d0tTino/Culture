@@ -17,3 +17,15 @@ def test_save_snapshot_compressed(tmp_path: Path) -> None:
     with fname.open("rb") as f:
         decompressed = zstd.ZstdDecompressor().decompress(f.read())
     assert json.loads(decompressed.decode("utf-8")) == data
+
+
+def test_save_snapshot_compress_without_zstd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = {"a": 1}
+    from src import infra
+
+    monkeypatch.setattr(infra.snapshot, "zstd", None)
+
+    with pytest.raises(RuntimeError):
+        save_snapshot(1, data, directory=tmp_path, compress=True)

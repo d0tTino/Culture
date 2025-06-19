@@ -21,7 +21,7 @@ else:  # pragma: no cover - runtime import with fallback
     try:
         import discord  # type: ignore
         from discord.ext import commands  # type: ignore
-    except Exception:  # pragma: no cover - optional dependency
+    except ImportError:  # pragma: no cover - optional dependency
         from unittest.mock import MagicMock
 
         discord = MagicMock()
@@ -64,22 +64,26 @@ class SimulationDiscordBot:
             if db_url:
                 try:
                     from .token_store import list_tokens
+                except ImportError:
+                    logger.exception("Failed to import token store for loading tokens")
+                else:
 
                     async def _load() -> list[str]:
                         return await list_tokens()
 
                     try:
-                        loop = asyncio.get_running_loop()
-                    except RuntimeError:
-                        tokens = asyncio.run(_load())
-                    else:
-                        new_loop = asyncio.new_event_loop()
                         try:
-                            tokens = new_loop.run_until_complete(_load())
-                        finally:
-                            new_loop.close()
-                except Exception:
-                    logger.exception("Failed to load tokens from store")
+                            loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            tokens = asyncio.run(_load())
+                        else:
+                            new_loop = asyncio.new_event_loop()
+                            try:
+                                tokens = new_loop.run_until_complete(_load())
+                            finally:
+                                new_loop.close()
+                    except Exception:
+                        logger.exception("Failed to load tokens from store")
         if not tokens:
             raise RuntimeError("No Discord bot tokens provided")
         self.bot_tokens = tokens
@@ -90,8 +94,8 @@ class SimulationDiscordBot:
             if db_url:
                 try:
                     from .token_store import lookup_token as db_lookup
-                except Exception:
-                    logger.exception("Failed to load token store")
+                except ImportError:
+                    logger.exception("Failed to import token store")
                 else:
                     token_lookup = db_lookup
         self.token_lookup = token_lookup

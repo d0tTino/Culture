@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-import zstandard as zstd
+try:
+    import zstandard as zstd
+except ImportError:  # pragma: no cover - optional dependency
+    zstd = None
 
 from .config import SNAPSHOT_COMPRESS
 
@@ -34,6 +37,10 @@ def save_snapshot(
     path.mkdir(parents=True, exist_ok=True)
 
     if compress:
+        if zstd is None:
+            raise RuntimeError(
+                "Compression requires the optional 'zstandard' package. Install via 'pip install zstandard'."
+            )
         file_path = path / f"snapshot_{step}.json.zst"
         compressed = zstd.ZstdCompressor().compress(json.dumps(data, indent=2).encode("utf-8"))
         with file_path.open("wb") as f:
