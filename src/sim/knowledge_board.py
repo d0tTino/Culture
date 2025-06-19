@@ -156,7 +156,6 @@ class KnowledgeBoard:
                 "content_display": formatted_content,  # Store formatted entry for display
             }
             self.entries.append(new_entry_dict)  # Append first
-            metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
             # Enforce maximum board size
             max_entries = int(config.MAX_KB_ENTRIES)
@@ -168,6 +167,8 @@ class KnowledgeBoard:
                     excess,
                     max_entries,
                 )
+
+            metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
             logger.info(  # Log after append
                 f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "
