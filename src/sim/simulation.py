@@ -379,6 +379,7 @@ class Simulation:
 
             # Determine next agent index based on role change event this turn
             # If agent changed role this turn, retain the same index for immediate extra turn
+            next_agent_index = (agent_to_run_index + 1) % len(self.agents)
             try:
                 # Check for a 'role_change' memory entry at this simulation step
                 has_role_change = any(
@@ -389,13 +390,10 @@ class Simulation:
                     logger.debug(
                         f"Agent {agent_id} changed role at step {self.current_step}, retaining turn for index {agent_to_run_index}"
                     )
-                    self.current_agent_index = agent_to_run_index
-                else:
-                    # Normal rotation to next agent
-                    self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                    next_agent_index = agent_to_run_index
             except Exception:
                 # Fallback to normal rotation on any error
-                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                next_agent_index = (agent_to_run_index + 1) % len(self.agents)
 
             # --- Log Agent A's relationship to B if they exist (USER REQUEST) ---
             for ag_check in self.agents:
@@ -450,7 +448,7 @@ class Simulation:
                 log_event({"type": "snapshot", **snapshot})
 
             # Advance to the next agent for the next turn
-            self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+            self.current_agent_index = next_agent_index
             self.total_turns_executed += 1
             turn_counter_this_run_step += 1
 
