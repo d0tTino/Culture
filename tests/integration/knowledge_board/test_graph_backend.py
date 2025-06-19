@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Iterable
 from typing import Any
 
@@ -50,6 +51,15 @@ class DummyDriver:
         return DummySession(self.store)
 
 
+class CloseTrackingDriver(DummyDriver):
+    def __init__(self) -> None:
+        super().__init__()
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
 @pytest.mark.integration
 def test_simulation_uses_graph_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
@@ -70,3 +80,14 @@ def test_graph_board_add_and_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
     assert board.get_state() == []
     board.add_entry("idea", "agent", 1)
     assert board.get_state() == ["Step 1 (Agent: agent): idea"]
+
+
+@pytest.mark.integration
+def test_simulation_closes_graph_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
+    config.load_config()
+    driver = CloseTrackingDriver()
+    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: driver)
+    sim = Simulation(agents=[])
+    asyncio.run(sim.async_run(0))
+    assert driver.closed
