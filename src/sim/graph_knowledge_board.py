@@ -104,3 +104,10 @@ class GraphKnowledgeBoard:
     def clear_board(self: Self) -> None:
         self._run("MATCH (e:KBEntry) DETACH DELETE e")
         metrics.KNOWLEDGE_BOARD_SIZE.set(0)
+
+    def close(self: Self) -> None:
+        """Close the underlying Neo4j driver."""
+        try:
+            self.driver.close()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("GraphKnowledgeBoard: failed to close driver: %s", exc)
