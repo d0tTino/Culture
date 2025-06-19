@@ -460,7 +460,10 @@ class Simulation:
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
             try:
-                self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
+                pruned = self.vector_store_manager.prune(
+                    int(config.MEMORY_STORE_TTL_SECONDS)
+                )
+                logger.info("Pruned %s memory entries", pruned)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Memory store prune failed: %s", exc)
             self._last_memory_prune_step = self.current_step
