@@ -637,8 +637,9 @@ def generate_structured_output(
     try:
         logger.debug(f"Sending structured prompt to Ollama model '{model}':")
         logger.debug(f"---PROMPT START---\n{structured_prompt}\n---PROMPT END---")
+        url = f"{OLLAMA_API_BASE.rstrip('/')}/api/generate"
         response = requests.post(
-            "http://localhost:11434/api/generate",
+            url,
             json={
                 "model": model,
                 "prompt": structured_prompt,
