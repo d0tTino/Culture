@@ -29,3 +29,9 @@ def test_get_config_value_with_missing_module() -> None:
         )
         == "def"
     )
+
+
+@pytest.mark.unit
+def test_get_config_value_with_default_args() -> None:
+    """Ensure default arguments return the provided default value."""
+    assert config.get_config_value_with_override("MISSING_KEY", default="def") == "def"
