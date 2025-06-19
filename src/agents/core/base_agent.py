@@ -960,13 +960,22 @@ class Agent:
         for msg_data in messages:
             enriched_msg = msg_data.copy()
             if "sentiment_score" not in enriched_msg:  # If sentiment not already present
-                content = enriched_msg.get("content", "").lower()
+                content = str(enriched_msg.get("content", ""))
+                content_lower = content.lower()
                 mock_sentiment = 0.0  # Default
-                if "disagree" in content or "problematic" in content or "concern" in content:
+                if (
+                    "disagree" in content_lower
+                    or "problematic" in content_lower
+                    or "concern" in content_lower
+                ):
                     mock_sentiment = -0.7
-                elif "agree" in content or "great idea" in content or "support" in content:
+                elif (
+                    "agree" in content_lower
+                    or "great idea" in content_lower
+                    or "support" in content_lower
+                ):
                     mock_sentiment = 0.6
-                elif "question" in content or "clarify" in content:
+                elif "question" in content_lower or "clarify" in content_lower:
                     mock_sentiment = 0.0
                 else:
                     mock_sentiment = 0.05  # Slight positive for generic
