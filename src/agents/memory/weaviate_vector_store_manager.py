@@ -67,7 +67,7 @@ class WeaviateVectorStoreManager(MemoryStore):
         vector = self.embedding_function(query)
         return self.query_memories(vector, n_results=top_k)
 
-    def prune(self: Self, ttl_seconds: int) -> None:
+    def prune(self: Self, ttl_seconds: int) -> int:
         cutoff = time.time() - ttl_seconds
         ids_to_delete = []
         remaining = []
@@ -80,6 +80,7 @@ class WeaviateVectorStoreManager(MemoryStore):
         self._store = remaining
         if ids_to_delete:
             self.delete_memories(ids_to_delete)
+        return len(ids_to_delete)
 
     def _connect_client(self: Self, url: str) -> object:
         # Parse host/port from URL

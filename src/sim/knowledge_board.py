@@ -8,6 +8,7 @@ from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
 
+from src.infra import config
 from src.interfaces import metrics
 
 # Configure logger
@@ -72,6 +73,9 @@ class KnowledgeBoard:
         Returns:
             list[str]: The most recent entries on the board, up to max_entries.
         """
+        if max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+
         # Return the display_content for the most recent entries, up to max_entries
         recent_entries = (
             [entry["content_display"] for entry in self.entries[-max_entries:]]
@@ -102,6 +106,9 @@ class KnowledgeBoard:
         Returns:
             list[str]: A list of formatted strings, e.g., "[Step X, Agent Y]: Content..."
         """
+        if max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+
         if not self.entries:
             return ["(Knowledge Board is empty)"]
 
@@ -150,6 +157,17 @@ class KnowledgeBoard:
             }
             self.entries.append(new_entry_dict)  # Append first
             metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+
+            # Enforce maximum board size
+            max_entries = int(config.MAX_KB_ENTRIES)
+            if len(self.entries) > max_entries:
+                excess = len(self.entries) - max_entries
+                del self.entries[:excess]
+                logger.info(
+                    "KnowledgeBoard: pruned %s old entries to maintain max size %s",
+                    excess,
+                    max_entries,
+                )
 
             logger.info(  # Log after append
                 f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "

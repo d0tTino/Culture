@@ -381,6 +381,7 @@ class Simulation:
 
             # Determine next agent index based on role change event this turn
             # If agent changed role this turn, retain the same index for immediate extra turn
+            next_agent_index = (agent_to_run_index + 1) % len(self.agents)
             try:
                 # Check for a 'role_change' memory entry at this simulation step
                 has_role_change = any(
@@ -404,6 +405,7 @@ class Simulation:
                     exc,
                 )
                 self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+
 
             # --- Log Agent A's relationship to B if they exist (USER REQUEST) ---
             for ag_check in self.agents:
@@ -458,7 +460,7 @@ class Simulation:
                 log_event({"type": "snapshot", **snapshot})
 
             # Advance to the next agent for the next turn
-            self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+            self.current_agent_index = next_agent_index
             self.total_turns_executed += 1
             turn_counter_this_run_step += 1
 
@@ -475,6 +477,7 @@ class Simulation:
                 OSError,
             ) as exc:  # pragma: no cover - defensive
                 logger.error("Failed to prune memory store: %s", exc)
+
             self._last_memory_prune_step = self.current_step
 
         return turn_counter_this_run_step  # Return number of agent turns actually processed

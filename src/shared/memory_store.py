@@ -19,8 +19,11 @@ class MemoryStore(Protocol):
     def query(self: Any, query: str, top_k: int = 1) -> list[dict[str, Any]]:
         """Return the ``top_k`` most relevant documents."""
 
-    def prune(self: Any, ttl_seconds: int) -> None:
-        """Remove entries older than ``ttl_seconds`` based on ``timestamp`` metadata."""
+    def prune(self: Any, ttl_seconds: int) -> int:
+        """Remove entries older than ``ttl_seconds`` based on ``timestamp`` metadata.
+
+        Returns the number of entries removed.
+        """
 
 
 class ChromaMemoryStore(MemoryStore):
@@ -56,17 +59,21 @@ class ChromaMemoryStore(MemoryStore):
         # Ignore query text for this simplified implementation
         return list(self._store[-top_k:])
 
-    def prune(self: Self, ttl_seconds: int) -> None:
+    def prune(self: Self, ttl_seconds: int) -> int:
         threshold = time.time() - ttl_seconds
         remaining: list[dict[str, Any]] = []
+        pruned = 0
         for entry in self._store:
             ts = entry.get("metadata", {}).get("timestamp")
             if ts is None or ts >= threshold:
                 remaining.append(entry)
+            else:
+                pruned += 1
         self._store = remaining
         if self._persist_path is not None:
             with self._persist_path.open("w", encoding="utf-8") as fh:
                 json.dump(self._store, fh)
+        return pruned
 
 
 class WeaviateMemoryStore(MemoryStore):
@@ -114,9 +121,10 @@ class WeaviateMemoryStore(MemoryStore):
             )
         return docs
 
-    def prune(self: Self, ttl_seconds: int) -> None:
+    def prune(self: Self, ttl_seconds: int) -> int:
         threshold = time.time() - ttl_seconds
         remaining: list[dict[str, Any]] = []
+        pruned = 0
         for entry in self._store:
             ts = entry.get("metadata", {}).get("timestamp")
             if ts is None or ts >= threshold:
@@ -124,4 +132,6 @@ class WeaviateMemoryStore(MemoryStore):
             else:
                 if hasattr(self.collection.data, "delete_by_id"):
                     self.collection.data.delete_by_id(entry["id"])
+                pruned += 1
         self._store = remaining
+        return pruned
