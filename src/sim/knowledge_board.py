@@ -121,6 +121,7 @@ class KnowledgeBoard:
             step = entry.get("step", "N/A")
             agent_id = entry.get("agent_id", "Unknown Agent")
             content_summary = entry.get("content_summary", entry.get("content_full", "N/A"))
+            # Convert to string so None or other types won't break length checks
             content_summary = str(content_summary)
             # Truncate content for brevity in prompt if necessary
             max_content_len = 150  # Example max length
