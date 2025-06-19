@@ -61,34 +61,13 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code_changed == 'true'
     steps:
+
+      # Setup Python, cache pip, and install dependencies
+      # (handled inside the custom action)
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
 
-      - name: Cache pip
-        # actions/cache needs write permission to create caches
-        permissions:
-          actions: write
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pip
-            ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
-      - name: Check locked requirements (prod and dev)
-        shell: bash
-        run: bash scripts/check_requirements.sh
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
 
       # Cache pre-commit environment for faster runs
 
@@ -146,34 +125,12 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.code_changed == 'true'
     runs-on: ["self-hosted", "linux"]
     steps:
+      # Setup Python, cache pip, and install dependencies
+      # (handled inside the custom action)
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
 
-      - name: Cache pip
-        # actions/cache needs write permission to create caches
-        permissions:
-          actions: write
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pip
-            ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Check locked requirements (prod and dev)
-        shell: bash
-        run: bash scripts/check_requirements.sh
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
 
       - name: Run Full Test Suite
         shell: bash
@@ -185,6 +142,8 @@ jobs:
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-redteam'))
     runs-on: ["self-hosted", "linux"]
     steps:
+      # Setup Python, cache pip, and install dependencies
+      # (handled inside the custom action)
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
