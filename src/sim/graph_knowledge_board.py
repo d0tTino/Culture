@@ -7,6 +7,11 @@ import uuid
 from typing import Any
 
 from neo4j import Driver, GraphDatabase
+
+try:  # pragma: no cover - optional dependency
+    from neo4j.exceptions import Neo4jError
+except Exception:  # pragma: no cover - handle missing package
+    Neo4jError = Exception
 from typing_extensions import Self
 
 from src.infra import config
@@ -109,5 +114,5 @@ class GraphKnowledgeBoard:
         """Close the underlying Neo4j driver."""
         try:
             self.driver.close()
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("GraphKnowledgeBoard: failed to close driver: %s", exc)
+        except Neo4jError as exc:  # pragma: no cover - defensive
+            logger.exception("GraphKnowledgeBoard: failed to close driver: %s", exc)

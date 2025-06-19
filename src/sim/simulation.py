@@ -6,10 +6,12 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional, cast
 
+from pydantic import ValidationError
 from typing_extensions import Self
 
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
+from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
@@ -393,8 +395,14 @@ class Simulation:
                 else:
                     # Normal rotation to next agent
                     self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
-            except Exception:
-                # Fallback to normal rotation on any error
+            except (AttributeError, TypeError) as exc:
+                # Fallback to normal rotation on attribute or type errors
+                logger.error(
+                    "Error determining next agent after role change for %s at step %s: %s",
+                    agent_id,
+                    self.current_step,
+                    exc,
+                )
                 self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
 
             # --- Log Agent A's relationship to B if they exist (USER REQUEST) ---
@@ -461,8 +469,12 @@ class Simulation:
         ):
             try:
                 self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Memory store prune failed: %s", exc)
+            except (
+                ChromaDBException,
+                ValidationError,
+                OSError,
+            ) as exc:  # pragma: no cover - defensive
+                logger.error("Failed to prune memory store: %s", exc)
             self._last_memory_prune_step = self.current_step
 
         return turn_counter_this_run_step  # Return number of agent turns actually processed
@@ -553,13 +565,13 @@ class Simulation:
         if hasattr(self.knowledge_board, "close"):
             try:
                 self.knowledge_board.close()  # type: ignore[attr-defined]
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Knowledge board close failed: %s", exc)
+            except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
+                logger.exception("Failed to close knowledge board: %s", exc)
         if self.vector_store_manager and hasattr(self.vector_store_manager, "close"):
             try:
                 self.vector_store_manager.close()  # type: ignore[attr-defined]
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Vector store manager close failed: %s", exc)
+            except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
+                logger.exception("Failed to close vector store manager: %s", exc)
 
     def create_project(
         self: Self,

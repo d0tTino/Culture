@@ -246,8 +246,8 @@ class WeaviateVectorStoreManager(MemoryStore):
     def close(self: Self) -> None:
         try:
             self.client.close()
-        except Exception:
-            pass
+        except (OSError, RuntimeError) as exc:
+            logger.exception("Failed to close Weaviate client: %s", exc)
 
     async def aretrieve_relevant_memories(
         self: Self,
