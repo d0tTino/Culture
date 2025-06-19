@@ -46,4 +46,4 @@ def test_get_recent_entries_with_none_summary() -> None:
     kb.add_entry("entry", agent_id="A", step=1)
     kb.entries[-1]["content_summary"] = None
     result = kb.get_recent_entries_for_prompt(1)
-    assert result == ["[Step 1, A]: None"]
+    assert result == ["[Step 1, A]: entry"]

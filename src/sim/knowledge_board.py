@@ -122,7 +122,10 @@ class KnowledgeBoard:
         for entry in recent_raw_entries:
             step = entry.get("step", "N/A")
             agent_id = entry.get("agent_id", "Unknown Agent")
-            content_summary = entry.get("content_summary", entry.get("content_full", "N/A"))
+            content_summary = entry.get("content_summary") or entry.get(
+                "content_full",
+                "N/A",
+            )
             # Cast to string so None or other non-string values don't raise
             # errors when we check the length for truncation
             content_summary = str(content_summary)
