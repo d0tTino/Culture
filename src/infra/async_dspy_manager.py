@@ -71,7 +71,14 @@ class AsyncDSPyManager:
         Returns:
             asyncio.Future: The future representing the asynchronous execution.
         """
-        loop = asyncio.get_running_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError as exc:
+            logger.error(
+                "AsyncDSPyManager.submit called without a running event loop: %s",
+                exc,
+            )
+            raise
         logger.info(
             f"Submitting DSPy call: {getattr(dspy_callable, '__name__', str(dspy_callable))}"
         )

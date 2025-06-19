@@ -8,6 +8,7 @@ from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
 
+from src.infra import config
 from src.interfaces import metrics
 
 # Configure logger
@@ -150,6 +151,17 @@ class KnowledgeBoard:
             }
             self.entries.append(new_entry_dict)  # Append first
             metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+
+            # Enforce maximum board size
+            max_entries = int(config.MAX_KB_ENTRIES)
+            if len(self.entries) > max_entries:
+                excess = len(self.entries) - max_entries
+                del self.entries[:excess]
+                logger.info(
+                    "KnowledgeBoard: pruned %s old entries to maintain max size %s",
+                    excess,
+                    max_entries,
+                )
 
             logger.info(  # Log after append
                 f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "

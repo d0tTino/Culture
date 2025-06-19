@@ -242,15 +242,17 @@ class ChromaVectorStoreManager(MemoryStore):
             docs.append({"content": text, "metadata": dict(meta), "id": doc_id})
         return docs
 
-    def prune(self: Self, ttl_seconds: int) -> None:
-        """Remove entries older than ``ttl_seconds``."""
+    def prune(self: Self, ttl_seconds: int) -> int:
+        """Remove entries older than ``ttl_seconds`` and return count."""
         cutoff = time.time() - ttl_seconds
+        pruned = 0
         try:
             results = self.collection.get(
                 where={"timestamp": {"$lt": cutoff}},
                 include=["ids"],
             )
             ids = results.get("ids", []) if results else []
+            pruned = len(ids)
             if ids:
                 self.collection.delete(ids=ids)
         except (
@@ -259,6 +261,7 @@ class ChromaVectorStoreManager(MemoryStore):
             OSError,
         ) as exc:  # pragma: no cover - defensive
             logger.error("Error pruning documents: %s", exc)
+        return pruned
 
     def add_memory(
         self: Self,

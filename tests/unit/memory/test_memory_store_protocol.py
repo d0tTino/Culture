@@ -12,10 +12,11 @@ def test_chroma_ttl_prune(monkeypatch: pytest.MonkeyPatch) -> None:
     store: MemoryStore = ChromaMemoryStore()
     store.add_documents(["a", "b"], [{"timestamp": 0}, {"timestamp": 10}])
     monkeypatch.setattr(time, "time", lambda: 12)
-    store.prune(5)
+    pruned = store.prune(5)
     results = store.query("", top_k=10)
     assert len(results) == 1
     assert results[0]["content"] == "b"
+    assert pruned == 1
 
 
 @pytest.mark.unit
@@ -39,8 +40,9 @@ def test_weaviate_ttl_prune(monkeypatch: pytest.MonkeyPatch) -> None:
         ],
     )
     monkeypatch.setattr(time, "time", lambda: 12)
-    store.prune(5)
+    pruned = store.prune(5)
     mock_collection.data.delete_by_id.assert_called_once_with("1")
+    assert pruned == 1
 
 
 @pytest.mark.unit
@@ -61,8 +63,9 @@ def test_chroma_manager_protocol(tmp_path: pathlib.Path, monkeypatch: pytest.Mon
     results = manager.query("doc", top_k=1)
     assert results and results[0]["content"] == "doc"
     monkeypatch.setattr(time, "time", lambda: 10)
-    manager.prune(5)
+    pruned = manager.prune(5)
     assert manager.query("doc", top_k=1) == []
+    assert pruned == 1
 
 
 @pytest.mark.unit
@@ -87,8 +90,9 @@ def test_weaviate_manager_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
         )
     manager.add_documents(["doc"], [{"timestamp": 0}])
     monkeypatch.setattr(time, "time", lambda: 10)
-    manager.prune(5)
+    pruned = manager.prune(5)
     mock_collection.data.delete_by_id.assert_called_once()
+    assert pruned == 1
 
 
 @pytest.mark.unit
