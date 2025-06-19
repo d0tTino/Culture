@@ -541,7 +541,7 @@ logger.info("Configuration loaded successfully")
 
 
 def get_config_value_with_override(
-    key: str, default: Any = None, module_name: str = "src.infra.config_default"
+    key: str, default: Any = None, module_name: str = "src.infra.config"
 ) -> Any:
     """Fetches a config value, trying overrides first, then primary, then default."""
     # Dynamically import the configuration module
