@@ -35,6 +35,10 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+# Additional step-level permissions are declared below for actions
+# that require more than read-only access (e.g., caching or
+# uploading artifacts). Update these comments if new steps need
+# other scopes.
 
 jobs:
   changes:
@@ -76,6 +80,9 @@ jobs:
           python-version: "3.10"
 
       - name: Cache pip
+        # actions/cache needs write permission to create caches
+        permissions:
+          actions: write
         uses: actions/cache@v3
         with:
           path: |
@@ -100,6 +107,9 @@ jobs:
       # Cache pre-commit environment for faster runs
 
       - name: Cache pre-commit
+        # actions/cache needs write permission to create caches
+        permissions:
+          actions: write
         uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit
@@ -143,6 +153,9 @@ jobs:
             -m "integration" --disable-warnings -q
 
       - name: Upload coverage artifact
+        # upload-artifact requires write permission
+        permissions:
+          actions: write
         uses: actions/upload-artifact@v4
         with:
           name: coverage.xml
@@ -175,6 +188,9 @@ jobs:
           python-version: "3.10"
 
       - name: Cache pip
+        # actions/cache needs write permission to create caches
+        permissions:
+          actions: write
         uses: actions/cache@v3
         with:
           path: |

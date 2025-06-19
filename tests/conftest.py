@@ -168,6 +168,12 @@ if "fastapi" not in sys.modules:
 
                 return decorator
 
+            def websocket(self, *args: object, **kwargs: object):
+                def decorator(fn: Callable[..., object]) -> Callable[..., object]:
+                    return fn
+
+                return decorator
+
         class Request:
             async def is_disconnected(self) -> bool:  # type: ignore[override]
                 return True
