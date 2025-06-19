@@ -370,8 +370,12 @@ class Simulation:
 
             # Update agent counters and report
             logger.info(f"Agent {agent_id} completed Global Turn {self.current_step}:")
-            logger.info(f"  - IP: {current_agent_state.ip:.1f} (from {current_agent_state.ip})")
-            logger.info(f"  - DU: {current_agent_state.du:.1f} (from {current_agent_state.du})")
+            logger.info(
+                f"  - IP: {current_agent_state.ip:.1f} (from {ip_start})"
+            )
+            logger.info(
+                f"  - DU: {current_agent_state.du:.1f} (from {du_start})"
+            )
 
             # Update the agent state in the simulation's list of agents
             self.agents[agent_to_run_index] = (
