@@ -72,6 +72,9 @@ class KnowledgeBoard:
         Returns:
             list[str]: The most recent entries on the board, up to max_entries.
         """
+        if max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+
         # Return the display_content for the most recent entries, up to max_entries
         recent_entries = (
             [entry["content_display"] for entry in self.entries[-max_entries:]]
@@ -102,6 +105,9 @@ class KnowledgeBoard:
         Returns:
             list[str]: A list of formatted strings, e.g., "[Step X, Agent Y]: Content..."
         """
+        if max_entries <= 0:
+            raise ValueError("max_entries must be positive")
+
         if not self.entries:
             return ["(Knowledge Board is empty)"]
 
