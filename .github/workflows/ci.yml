@@ -61,6 +61,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code_changed == 'true'
     steps:
+
+      # Setup Python, cache pip, and install dependencies
+      # (handled inside the custom action)
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
@@ -122,6 +125,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.code_changed == 'true'
     runs-on: ["self-hosted", "linux"]
     steps:
+      # Setup Python, cache pip, and install dependencies
+      # (handled inside the custom action)
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
@@ -137,6 +142,8 @@ jobs:
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-redteam'))
     runs-on: ["self-hosted", "linux"]
     steps:
+      # Setup Python, cache pip, and install dependencies
+      # (handled inside the custom action)
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
