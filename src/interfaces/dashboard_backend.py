@@ -86,7 +86,7 @@ app = FastAPI()
 
 
 @app.get("/stream/messages")
-async def stream_messages(request: Request) -> EventSourceResponse:  # type: ignore[no-any-unimported]
+async def stream_messages(request: Request) -> EventSourceResponse:
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         while True:
             if await request.is_disconnected():
@@ -110,7 +110,7 @@ async def health() -> Response:
 
 
 @app.get("/stream/events")
-async def stream_events(request: Request) -> EventSourceResponse:  # type: ignore[no-any-unimported]
+async def stream_events(request: Request) -> EventSourceResponse:
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         while True:
             if await request.is_disconnected():

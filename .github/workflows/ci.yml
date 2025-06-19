@@ -35,6 +35,10 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+# Additional step-level permissions are declared below for actions
+# that require more than read-only access (e.g., caching or
+# uploading artifacts). Update these comments if new steps need
+# other scopes.
 
 jobs:
   changes:
@@ -61,9 +65,37 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Cache pip
+        # actions/cache needs write permission to create caches
+        permissions:
+          actions: write
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+      - name: Check locked requirements (prod and dev)
+        shell: bash
+        run: bash scripts/check_requirements.sh
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
       # Cache pre-commit environment for faster runs
 
       - name: Cache pre-commit
+        # actions/cache needs write permission to create caches
+        permissions:
+          actions: write
         uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit
@@ -97,6 +129,9 @@ jobs:
             -m "integration" --disable-warnings -q
 
       - name: Upload coverage artifact
+        # upload-artifact requires write permission
+        permissions:
+          actions: write
         uses: actions/upload-artifact@v4
         with:
           name: coverage.xml
@@ -114,6 +149,31 @@ jobs:
       - uses: ./.github/actions/setup-python
         with:
           python-version: "3.10"
+
+      - name: Cache pip
+        # actions/cache needs write permission to create caches
+        permissions:
+          actions: write
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Check locked requirements (prod and dev)
+        shell: bash
+        run: bash scripts/check_requirements.sh
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch==2.3.0+cu121
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Run Full Test Suite
         shell: bash
