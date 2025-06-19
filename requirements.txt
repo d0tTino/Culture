@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 torch==2.3.0+cu121
-fastapi==0.105.0
+fastapi==0.111.1
 uvicorn==0.25.0
 discord.py==2.3.0
 weaviate-client==3.25.0
