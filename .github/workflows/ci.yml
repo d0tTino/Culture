@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -12,7 +12,7 @@ on:
       - 'requirements*.txt'
       - 'requirements*.in'
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -57,7 +57,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
       fail-fast: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ["self-hosted", "${{ matrix.os }}"]
+    timeout-minutes: 20
     needs: changes
     if: needs.changes.outputs.code_changed == 'true'
     steps:
@@ -108,6 +109,7 @@ jobs:
             -m "integration" --disable-warnings -q
 
       - name: Upload coverage artifact
+        if: matrix.os == 'ubuntu-latest'
         # upload-artifact requires write permission
         permissions:
           actions: write
@@ -124,6 +126,7 @@ jobs:
     needs: changes
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.code_changed == 'true'
     runs-on: ["self-hosted", "linux"]
+    timeout-minutes: 30
     steps:
       # Setup Python, cache pip, and install dependencies
       # (handled inside the custom action)
@@ -141,6 +144,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run-redteam == 'true') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-redteam'))
     runs-on: ["self-hosted", "linux"]
+    timeout-minutes: 30
     steps:
       # Setup Python, cache pip, and install dependencies
       # (handled inside the custom action)
