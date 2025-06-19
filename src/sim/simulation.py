@@ -6,10 +6,12 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional, cast
 
+from pydantic import ValidationError
 from typing_extensions import Self
 
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
+from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
@@ -390,10 +392,20 @@ class Simulation:
                     logger.debug(
                         f"Agent {agent_id} changed role at step {self.current_step}, retaining turn for index {agent_to_run_index}"
                     )
-                    next_agent_index = agent_to_run_index
-            except Exception:
-                # Fallback to normal rotation on any error
-                next_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                    self.current_agent_index = agent_to_run_index
+                else:
+                    # Normal rotation to next agent
+                    self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+            except (AttributeError, TypeError) as exc:
+                # Fallback to normal rotation on attribute or type errors
+                logger.error(
+                    "Error determining next agent after role change for %s at step %s: %s",
+                    agent_id,
+                    self.current_step,
+                    exc,
+                )
+                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+
 
             # --- Log Agent A's relationship to B if they exist (USER REQUEST) ---
             for ag_check in self.agents:
@@ -458,12 +470,14 @@ class Simulation:
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
             try:
-                pruned = self.vector_store_manager.prune(
-                    int(config.MEMORY_STORE_TTL_SECONDS)
-                )
-                logger.info("Pruned %s memory entries", pruned)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Memory store prune failed: %s", exc)
+                self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
+            except (
+                ChromaDBException,
+                ValidationError,
+                OSError,
+            ) as exc:  # pragma: no cover - defensive
+                logger.error("Failed to prune memory store: %s", exc)
+
             self._last_memory_prune_step = self.current_step
 
         return turn_counter_this_run_step  # Return number of agent turns actually processed
@@ -554,13 +568,13 @@ class Simulation:
         if hasattr(self.knowledge_board, "close"):
             try:
                 self.knowledge_board.close()  # type: ignore[attr-defined]
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Knowledge board close failed: %s", exc)
+            except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
+                logger.exception("Failed to close knowledge board: %s", exc)
         if self.vector_store_manager and hasattr(self.vector_store_manager, "close"):
             try:
                 self.vector_store_manager.close()  # type: ignore[attr-defined]
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Vector store manager close failed: %s", exc)
+            except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
+                logger.exception("Failed to close vector store manager: %s", exc)
 
     def create_project(
         self: Self,
