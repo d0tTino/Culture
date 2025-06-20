@@ -103,8 +103,3 @@ def MockLLM(
         except ImportError:
             # If DSPy isn't available, proceed without patching it
             yield
-
-
-def get_mock_llm_response(prompt: str) -> dict[str, str]:
-    # ... existing code ...
-    return {"response": "mock"}
