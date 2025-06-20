@@ -342,7 +342,7 @@ Phase 2 will build on these usage statistics to implement the actual pruning mec
 - **Thresholds:**
   - L1 MUS: 0.2
   - L2 MUS: 0.3
-  - Configuration: l1_low_l2_medium (see benchmarks/mus_threshold_tuning_report.md)
+  - Configuration: l1_low_l2_medium (see archives/benchmarks/mus_threshold_tuning_report.md [archived])
 
 ### Rationale
 
