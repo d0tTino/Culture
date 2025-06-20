@@ -730,7 +730,6 @@ class ChromaVectorStoreManager(MemoryStore):
                 logger.warning(
                     "Neither role nor query provided for role-specific memory retrieval"
                 )
-                return []
             return self.retrieve_relevant_memories(
                 agent_id, query, k, include_usage_stats=include_usage_stats
             )
