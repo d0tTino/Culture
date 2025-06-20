@@ -1,6 +1,12 @@
 import logging
+import os
 import sys
 from typing import cast
+
+import pytest
+
+if os.environ.get("ENABLE_DSPY_TESTS") != "1":
+    pytest.skip("DSPy tests disabled", allow_module_level=True)
 
 import dspy
 import pytest
@@ -50,6 +56,20 @@ class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
         except Exception as e:
             logger.error(f"Error calling Ollama API: {e}")
             return f"Error: {e}"
+
+    def forward(
+        self: Self,
+        prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+        **kwargs: object,
+    ) -> object:
+        if prompt is None and messages:
+            prompt = messages[0].get("content", "")
+        text = self.basic_request(prompt or "", **kwargs)
+        from types import SimpleNamespace
+
+        choice = SimpleNamespace(message=SimpleNamespace(content=text), finish_reason="stop")
+        return SimpleNamespace(model=self.model_name, choices=[choice], usage={})
 
 
 # Initialize the LM with our Ollama wrapper

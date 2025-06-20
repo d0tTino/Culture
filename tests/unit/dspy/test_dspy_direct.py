@@ -1,7 +1,13 @@
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import cast
+
+import pytest
+
+if os.environ.get("ENABLE_DSPY_TESTS") != "1":
+    pytest.skip("DSPy tests disabled", allow_module_level=True)
 
 import pytest
 from typing_extensions import Self
@@ -43,6 +49,22 @@ def test_direct_call() -> None:
 
                 self.ollama = ollama
                 logger.info(f"Initialized OllamaLM with model {self.model_name}")
+
+            def forward(
+                self: Self,
+                prompt: str | None = None,
+                messages: list[dict[str, str]] | None = None,
+                **kwargs: object,
+            ) -> object:
+                if prompt is None and messages:
+                    prompt = messages[0].get("content", "")
+                text = self.basic_request(prompt or "", **kwargs)
+                from types import SimpleNamespace
+
+                choice = SimpleNamespace(
+                    message=SimpleNamespace(content=text), finish_reason="stop"
+                )
+                return SimpleNamespace(model=self.model_name, choices=[choice], usage={})
 
             def basic_request(self: Self, prompt: str, **kwargs: object) -> str:
                 """Required method for dspy.LM that handles basic requests."""

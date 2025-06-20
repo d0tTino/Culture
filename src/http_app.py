@@ -8,19 +8,19 @@ import uvicorn
 from src.interfaces.dashboard_backend import app
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the FastAPI dashboard backend.")
     parser.add_argument(
         "--version",
         action="store_true",
         help="Show the Culture.ai version and exit.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Run the FastAPI application for the dashboard backend."""
-    args = parse_args()
+    args = parse_args(argv or [])
 
     if args.version:
         from src import __version__
@@ -38,4 +38,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main(sys.argv[1:])
