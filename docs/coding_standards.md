@@ -356,11 +356,13 @@ These coding standards provide a foundation for consistent, high-quality code in
 
 ## Known Ruff E501 (Line Too Long) Exceptions — Technical Debt
 
-As of [May 2025], the following lines in `src/agents/graphs/basic_agent_graph.py` exceed the 99-character limit (E501):
+This file historically listed every line in `src/agents/graphs/basic_agent_graph.py` that exceeded
+Ruff's 99-character limit. The file has since been refactored, so those line numbers are no longer
+accurate.
 
-393, 412, 433, 443, 453, 621, 633, 673, 697, 704, 722, 777, 784, 812, 835, 876, 880, 884, 887, 891, 895, 935, 991, 1020, 1045, 1073, 1093, 1152, 1167, 1220, 1230, 1239, 1257, 1262, 1268, 1273, 1309, 1322, 1400, 1439, 1446, 1465, 1480, 1488, 1492, 1503, 1535, 1546, 1554, 1592, 1598, 1608, 1633, 1667, 1677, 1683
-
-These are primarily string literals, docstrings, or logging statements that require careful manual splitting for readability and compliance. Automated and batch fixes were ineffective due to their complexity or formatting.
+Instead of maintaining a static list here, run `ruff check --select E501` to see the current
+violations. Any reported lines should either be shortened or tracked as technical debt via TODOs or
+GitHub issues.
 
 **Action:**
 - Marked as technical debt. Revisit and address these lines in a future refactor.
