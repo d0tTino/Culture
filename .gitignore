@@ -128,7 +128,6 @@ scripts/archive/
 # Node modules
 culture-ui/node_modules/
 
-# Requirement exceptions
-!requirements-dev.txt
-!requirements.txt
-!tests/redteam/jailbreak_prompts.txt
+# Hypothesis test directory
+.hypothesis/
+
