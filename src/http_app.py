@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import os
 
 import uvicorn
@@ -7,8 +8,26 @@ import uvicorn
 from src.interfaces.dashboard_backend import app
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the FastAPI dashboard backend.")
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Show the Culture.ai version and exit.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
     """Run the FastAPI application for the dashboard backend."""
+    args = parse_args()
+
+    if args.version:
+        from src import __version__
+
+        print(__version__)
+        return
+
     host = os.getenv("HTTP_HOST", "0.0.0.0")
     port_str = os.getenv("HTTP_PORT", "8000")
     try:
