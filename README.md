@@ -432,7 +432,12 @@ The project's direction is guided by the future directions listed above. Key fut
 
 ## License
 
+
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
+
+## How to Cite
+
+Citation metadata is provided in [CITATION.cff](CITATION.cff). Most reference managers can read this file directly. If you use Culture in your research, please cite the latest release using this metadata.
 
 ## Acknowledgements
 
@@ -659,3 +664,7 @@ As of 2025-06-11 the repository no longer relies on project-wide `mypy` or `ruff
 - `src/sim/simulation.py` – retains `mypy: ignore-errors` and ruff `RUF006` for asynchronous initialization.
 
 All other modules pass Ruff and Mypy without suppressions. DSPy integration remains fully typed with async management via `AsyncDSPyManager`. See the development log for details on the compliance process and any remaining edge cases.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
