@@ -55,15 +55,16 @@ The implementation uses ChromaDB as a vector store to persist memories for long-
 
 ## Testing
 
-Two test scripts are provided to verify the memory consolidation functionality:
+Integration tests verify the memory consolidation functionality.
+Key tests include:
 
-1. `test_memory_consolidation.py`: Tests the basic level 1 memory consolidation
-2. `test_level2_memory_consolidation.py`: Tests the full hierarchical memory system including level 2 consolidation
+1. `tests/integration/memory/test_memory_pruning_mus.py`
+2. `tests/integration/test_full_memory_pipeline.py`
 
 Run the tests using:
 
 ```bash
-python run_level2_memory_test.py
+python -m pytest tests/integration/memory
 ```
 
 ## Code Structure
