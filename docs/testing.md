@@ -17,6 +17,11 @@ Run this script to verify that `requirements.txt` matches
 `requirements.in` whenever dependencies change.
 The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, `requests` for HTTP utilities, and `numpy>=2` for compatibility with certain examples.
 
+If these optional packages are not installed, running `pytest` directly will
+raise warnings because `pytest.ini` specifies `-n auto` and
+`asyncio_mode=strict`. Use `scripts/run_tests.py` instead, which automatically
+detects available plugins and strips those options.
+
 ## Test Markers and Suite Structure
 
 Tests are categorized using pytest markers:
