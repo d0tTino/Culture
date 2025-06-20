@@ -488,17 +488,11 @@ class ChromaVectorStoreManager(MemoryStore):
             return formatted_results
 
         except (ChromaDBException, OSError, ValidationError, json.JSONDecodeError) as e:
-            logger.error(
-                f"ChromaDB retrieve_relevant_memories failed: "
-                f"agent_id={agent_id}, query={query}, error={e}",
-                exc_info=True,
-            )
-            return []
-        except (ChromaDBException, ValidationError, OSError) as e:
-            logger.error(
-                f"Unexpected error in retrieve_relevant_memories: "
-                f"agent_id={agent_id}, query={query}, error={e}",
-                exc_info=True,
+            logger.exception(
+                "ChromaDB retrieve_relevant_memories failed: agent_id=%s, query=%s, error=%s",
+                agent_id,
+                query,
+                e,
             )
             return []
 
