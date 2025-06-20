@@ -47,6 +47,7 @@ def test_retrieve_role_specific_memories_without_query(monkeypatch, tmp_path) ->
     )
 
     calls = []
+    # Track retrieval requests made by retrieve_role_specific_memories
 
     def fake_retrieve(agent_id, filters=None, limit=None, include_usage_stats=False):
         calls.append(filters)
@@ -71,7 +72,7 @@ def test_retrieve_role_specific_memories_with_query_no_role(monkeypatch, tmp_pat
     )
 
     calls = []
-
+    # Track retrieval requests made by retrieve_role_specific_memories
     def fake_retrieve(agent_id, query=None, k=0, include_usage_stats=False):
         calls.append((agent_id, query, k, include_usage_stats))
         return [{"id": 1}]
