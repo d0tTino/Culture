@@ -88,6 +88,11 @@ def create_simulation(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Culture.ai simulation.")
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Show the Culture.ai version and exit.",
+    )
     parser.add_argument("--agents", type=int, default=3, help="Number of agents.")
     parser.add_argument("--steps", type=int, default=10, help="Number of steps to run.")
     parser.add_argument(
@@ -131,6 +136,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     setup_logging()
     args = parse_args()
+
+    if args.version:
+        from src import __version__
+
+        print(__version__)
+        return
 
     configure_warning_filters(
         apply_filters=not args.no_warning_filters,

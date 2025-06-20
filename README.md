@@ -576,6 +576,12 @@ Run a basic simulation (default parameters):
 python -m src.app --steps 5
 ```
 
+Display the installed version:
+```bash
+python -m src.app --version
+python -m src.http_app --version
+```
+
 Start the HTTP dashboard backend (optional):
 ```bash
 python -m src.http_app
