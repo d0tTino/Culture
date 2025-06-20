@@ -157,7 +157,19 @@ class AgentController:
         if hasattr(state, private_attr_name):
             current_val = getattr(state, private_attr_name)
             try:
-                casted = type(current_val)(value)
+                if isinstance(current_val, bool):
+                    if isinstance(value, str):
+                        lowered = value.strip().lower()
+                        if lowered == "true":
+                            casted = True
+                        elif lowered == "false":
+                            casted = False
+                        else:
+                            casted = bool(value)
+                    else:
+                        casted = bool(value)
+                else:
+                    casted = type(current_val)(value)
                 setattr(state, private_attr_name, casted)
             except (ValueError, TypeError):
                 logger.error(
