@@ -4,7 +4,8 @@ REM Set up a Python virtual environment and install dependencies for Culture.ai 
 set VENV_DIR=.venv
 
 if not exist %VENV_DIR% (
-    python -m venv %VENV_DIR%
+    REM Guarantee Python 3.10 is used for the virtual environment
+    py -3.10 -m venv %VENV_DIR%
 )
 
 call %VENV_DIR%\Scripts\activate.bat

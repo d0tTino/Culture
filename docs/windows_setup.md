@@ -41,6 +41,7 @@ install all test requirements:
 ```cmd
 scripts\setup_test_env.bat
 ```
+This script uses `py -3.10 -m venv` to ensure it creates the environment with Python 3.10.
 
 Copy the example environment file and customize it if needed:
 
