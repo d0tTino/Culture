@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from sqlalchemy import Column, MetaData, String, Table, select
+from sqlalchemy import Column, MetaData, String, Table, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.infra import config
@@ -49,7 +49,11 @@ async def get_token(agent_id: str) -> str | None:
 
 async def save_token(agent_id: str, token: str) -> None:
     async with await _get_session() as session:
-        await session.merge({"agent_id": agent_id, "token": token})
+        stmt = text(
+            "INSERT INTO discord_tokens(agent_id, token) VALUES (:agent_id, :token) "
+            "ON CONFLICT(agent_id) DO UPDATE SET token = excluded.token"
+        )
+        await session.execute(stmt, {"agent_id": agent_id, "token": token})
         await session.commit()
 
 
