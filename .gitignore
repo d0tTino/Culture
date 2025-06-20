@@ -192,3 +192,6 @@ prof/
 # Ignore generic log files
 *.log
 culture-ui/node_modules/
+
+# Hypothesis test directory
+.hypothesis/

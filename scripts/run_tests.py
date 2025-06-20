@@ -10,7 +10,6 @@ from configparser import ConfigParser
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-
 ROOT = Path(__file__).resolve().parent.parent
 INI_FILE = ROOT / "pytest.ini"
 
