@@ -9,6 +9,7 @@ Welcome! We're excited that you're interested in contributing to Culture.ai. Thi
 - [Mypy](http://mypy-lang.org/) for static type checking
 - Install dependencies from `requirements-dev.txt` (includes `pytest-xdist`) in addition to `requirements.txt`.
 - Set up your environment and dependencies as described in the README.
+- Enable an [EditorConfig](https://editorconfig.org/) plugin in your editor if available to match the project's formatting settings.
 - If you modify dependencies, run `scripts/check_requirements.sh` to ensure `requirements.txt` is in sync with `requirements.in`.
 
 ## Code Style Guidelines
