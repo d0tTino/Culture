@@ -665,14 +665,9 @@ See [docs/ci_status.md](docs/ci_status.md) for tips on checking CI status with t
 As of 2025-06-11 the repository no longer relies on project-wide `mypy` or `ruff` ignores. The codebase is checked in strict mode and suppressions are used only where necessary:
 
 - `src/infra/llm_client.py` – fallback classes for optional dependencies use `type: ignore[no-redef]` and `no-any-unimported` annotations.
-- DSPy program modules in `src/agents/dspy_programs/` – `dspy.Signature` is dynamic, so each file keeps `mypy: ignore-errors` and ruff `noqa` directives for long example strings.
-- Graph and core modules under `src/agents/graphs/` and `src/agents/core/` – rely on runtime graph construction and maintain `mypy: ignore-errors`.
-- `src/interfaces/discord_bot.py` – optional `discord` imports require `mypy: ignore-errors` and an `ANN401` suppression.
 - `src/interfaces/dashboard_backend.py` – uses `type: ignore[no-any-unimported]` for `EventSourceResponse`.
-- `src/infra/dspy_ollama_integration.py` – dynamic LM patching requires `mypy: ignore-errors` and annotation ignores.
 - `src/infra/warning_filters.py` – overrides `warnings.showwarning` using `type: ignore[assignment]`.
 - `src/shared/llm_mocks.py` – redefines stub classes with `type: ignore[no-redef]`.
-- `src/sim/simulation.py` – retains `mypy: ignore-errors` and ruff `RUF006` for asynchronous initialization.
 
 All other modules pass Ruff and Mypy without suppressions. DSPy integration remains fully typed with async management via `AsyncDSPyManager`. See the development log for details on the compliance process and any remaining edge cases.
 

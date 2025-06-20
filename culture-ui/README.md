@@ -1,54 +1,52 @@
-# React + TypeScript + Vite
+# Culture UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This package houses the React + TypeScript front-end for the Culture project. It is managed from the monorepo root using pnpm workspaces.
 
-Currently, two official plugins are available:
+## Install dependencies
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Run pnpm from the repository root to install all workspace packages:
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+pnpm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Development server
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Start the UI in development mode with:
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```bash
+pnpm --filter culture-ui dev
 ```
+
+This launches Vite at `http://localhost:5173` by default.
+
+## Build
+
+Create an optimized production build:
+
+```bash
+pnpm --filter culture-ui build
+```
+
+Output files are written to `culture-ui/dist`.
+
+## Lint
+
+Check the UI source with ESLint:
+
+```bash
+pnpm --filter culture-ui lint
+```
+
+## Workspace integration
+
+`culture-ui` is defined in `pnpm-workspace.yaml`. Running `pnpm install` at the root installs both backend and UI dependencies. Use `--filter culture-ui` to run scripts only for the UI when needed.
+
+## Mission Overview & Agent Data Overview
+
+The UI includes pages for monitoring active missions and reviewing agent data:
+
+- **Mission Overview** – shows current missions with status and progress for each agent.
+- **Agent Data Overview** – lists observations, messages and other data gathered by agents.
+
+Screenshots will be added to this README as these pages mature.

@@ -1,14 +1,17 @@
-# Python bytecode
+# Python bytecode and caches
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
+*.pyd
+*.pyo
+*.pdb
 *.so
 .Python
-.pytest_cache/
 
 # Distribution / packaging
-dist/
 build/
+dist/
 develop-eggs/
 downloads/
 eggs/
@@ -25,62 +28,73 @@ wheels/
 MANIFEST
 
 # Virtual environments
+.venv/
 venv/
 env/
+ENV/
 test_venv/
 test_venv_clean/
 test_venv_temp/
-.env/
-.venv/
-ENV/
-env/
-venv/
-ENV/
+!tests/env/
 
-# IDE specific files
+# Environment files
+.env
+.env.*
+!.env.example
+.env/
+
+# IDE and editor directories
 .idea/
 .vscode/
+*.sublime-project
+*.sublime-workspace
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
-*.sublime-project
-*.sublime-workspace
 
 # Database files
 *.sqlite3
 *.db
 chroma_db_store/
 chroma_db_test*/
+chroma_db/
 
-# Logs
+# Logs and coverage
 logs/
 *.log
-.coverage
-htmlcov/
+coverage/
 coverage.xml
-
-# Environment variables
-.env
-.env.*
-!.env.example
+.coverage
+.coverage.*
+.coverage*
+coverage_*.txt
+htmlcov/
+final_test_suite_output.txt
+pytest_*.txt
+*.cover
+*.txt
 
 # Local configuration
 .local/
 config/
 
-# Temp files
+# Temporary files
 *.tmp
 tmp/
 temp/
-output.txt
 temp.txt
+output.txt
 simulation_debug.txt
 simulation_log.txt
 memory_pruning_analysis.txt
+scripts/temp/
+prof/
+*.prof
+*.out
 
-# ChromaDB test directories
+# Test directories and artifacts
 test_chroma_db/
 test_chroma_dbs/
 test_chroma_db_persistence_specific/
@@ -91,107 +105,29 @@ test_full_memory_pipeline_*/
 chroma_benchmark_*/
 test_chroma_*/
 memory_usage_tracking_test_*/
-
-# Mypy cache
-.mypy_cache/
-
-# Pytest cache
-.pytest_cache/
-
-# Coverage reports
-.coverage
-htmlcov/
-.coverage.*
-coverage.xml
-*.cover
-
-# Temp test directories
-/test_memory_utility_score_*
-/test_mus_pruning_*
-/temp_extract/
-/temp/ test_memory_utility_score_*
 test_mus_pruning_*
+/temp_extract/
+tests/ruff_errors.json
+*.pytest_cache/
 
-# Prevent Python cache and build artifacts
-__pycache__/
-*.py[cod]
-*.so
-*.pyd
-*.pyo
-*.pdb
-
-# Mypy, Ruff, Pytest, and other tool caches
+# Tool caches
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 
-# Coverage and test output
-htmlcov/
-.coverage*
-*.log
-*.txt
-*.out
-!requirements-dev.txt
-!requirements.txt
-!tests/redteam/jailbreak_prompts.txt
-
-# Data, logs, and temp files
-logs/
-temp/
+# Data directories
 data/logs/
-chroma_db/
-scripts/temp/
 
-# VSCode and IDE files
-.vscode/
-.idea/
-*.swp
-
-# Archives and zips
-archives/*.zip
-
-# Ignore test and experiment outputs
-final_test_suite_output.txt
-pytest_*.txt
-coverage_*.txt
-
-# Archives and experiments
+# Archives
 archives/
-# Ensure no Python cache directories or compiled files are stored in archives
+archives/*.zip
 archives/**/__pycache__/
 archives/**/*.py[cod]
 scripts/archive/
 
-# Virtual environments
-.venv/
-env/
-venv/
-!tests/env/
-
-# Editor directories and files
-.vscode/
-.idea/
-
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Test artifacts
-coverage/
-**/__pycache__/
-*.pytest_cache/
-tests/ruff_errors.json
-
-# Logs folder for test outputs
-logs/
-
-# Profiler output
-prof/
-*.prof
-
-# Ignore generic log files
-*.log
+# Node modules
 culture-ui/node_modules/
 
 # Hypothesis test directory
 .hypothesis/
+
