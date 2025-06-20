@@ -232,7 +232,7 @@ Pruning is performed using both age-based and MUS-based strategies:
 
 - **L1 MUS Threshold:** 0.2
 - **L2 MUS Threshold:** 0.3
-- **Configuration:** l1_low_l2_medium (see benchmarks/mus_threshold_tuning_report.md)
+  - **Configuration:** l1_low_l2_medium (see archives/benchmarks/mus_threshold_tuning_report.md [archived])
 
 These values were selected based on the MUS threshold tuning experiments (see report for details), balancing memory efficiency and RAG performance. Asymmetric thresholds (lower for L1, higher for L2) provide optimal tradeoff between aggressive pruning of less critical L1s and preservation of high-value L2s.
 
@@ -513,11 +513,9 @@ Various tools in the `tools/` directory:
 
 #### Benchmarking
 
-Benchmarking tools in the `benchmarks/` directory:
-- Evaluate memory system performance
-- Test memory utility scoring (MUS)
-- Compare different pruning strategies
-- Assess RAG retrieval effectiveness
+Benchmarking tools were archived with the former `benchmarks/` directory.
+These scripts evaluated memory system performance, MUS scoring, different
+pruning strategies, and overall RAG retrieval effectiveness.
 
 ## 10. Configuration Management
 
@@ -630,7 +628,7 @@ Located in `tests/integration/`, these verify:
 
 ### Benchmarks
 
-Located in `benchmarks/`, these evaluate:
+The original benchmarking suite has been archived. These tools evaluated:
 - Performance characteristics
 - Resource utilization
 - Effectiveness of algorithms (e.g., MUS pruning)

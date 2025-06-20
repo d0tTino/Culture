@@ -46,6 +46,7 @@ A multi-phase approach was used to clean the codebase:
 ## Key Directories After Cleanup:
 
 *   `archives`: Contains zipped versions of `benchmarks`, `experiments`, and `tests`.
+*   Benchmarking tools referenced in documentation were removed from the repository and archived under `archives`.
 *   `src`: Main application source code (113 files).
 *   `tests`: Minimal structure with `__init__.py` files (4 files).
 *   Other essential project files and directories (`docs`, `scripts`, `config`, etc.) with minimal file counts.
