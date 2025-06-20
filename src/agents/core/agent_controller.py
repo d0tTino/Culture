@@ -203,8 +203,7 @@ class AgentController:
 
     def reset_state(self: Self) -> None:
         state = self._require_state()
+        old_keys = list(state.relationship_history.keys())
         state.relationship_history.clear()
         state.mood_history = [(0, 0.0)]
-        state.relationship_history = {
-            name: [(0, 0.0)] for name in state.relationship_history.keys()
-        }
+        state.relationship_history = {name: [(0, 0.0)] for name in old_keys}
