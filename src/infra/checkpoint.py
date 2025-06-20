@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# mypy: ignore-errors
 import logging
 import os
 import pickle
@@ -8,7 +7,7 @@ import platform
 import random
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from src.agents.core.base_agent import Agent
 
@@ -110,7 +109,7 @@ def restore_environment(env: dict[str, Any]) -> None:
 def _serialize_simulation(sim: Simulation) -> dict[str, Any]:
     """Convert a ``Simulation`` instance into a serializable dictionary."""
     return {
-        "agents": [cast(Agent, agent).state.to_dict(exclude_none=True) for agent in sim.agents],
+        "agents": [agent.state.to_dict(exclude_none=True) for agent in sim.agents],
         "current_step": sim.current_step,
         "current_agent_index": sim.current_agent_index,
         "scenario": sim.scenario,

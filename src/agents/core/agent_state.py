@@ -1,5 +1,4 @@
 # ruff: noqa: ANN101, ANN102
-# mypy: ignore-errors
 import logging
 import random
 from collections import deque
@@ -23,8 +22,8 @@ try:  # pragma: no cover - pydantic>=2 preferred
 
     _PYDANTIC_V2 = True
 except Exception:  # pragma: no cover - fallback to pydantic<2
-    from pydantic import root_validator as _model_validator
-    from pydantic import validator as _field_validator
+    from pydantic import root_validator as _model_validator  # type: ignore[no-redef]
+    from pydantic import validator as _field_validator  # type: ignore[no-redef]
 
     _PYDANTIC_V2 = False
 

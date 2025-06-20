@@ -1,7 +1,5 @@
 """Prometheus metrics for Culture simulation."""
 
-# mypy: ignore-errors
-
 try:
     from prometheus_client import Counter, Gauge, start_http_server
 except Exception:  # pragma: no cover - optional dependency

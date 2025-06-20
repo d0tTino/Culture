@@ -4,8 +4,6 @@ This script initializes a simulation with agents using the new AgentState model
 and runs several steps to verify the state management is working correctly.
 """
 
-# mypy: ignore-errors
-
 import logging
 import sys
 from pathlib import Path

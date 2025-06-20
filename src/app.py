@@ -1,6 +1,4 @@
 import argparse
-
-# mypy: ignore-errors
 import asyncio
 import logging
 import sys
