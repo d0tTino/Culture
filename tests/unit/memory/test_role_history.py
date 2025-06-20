@@ -59,3 +59,28 @@ def test_retrieve_role_specific_memories_without_query(monkeypatch, tmp_path) ->
     assert len(memories) == 2
     assert calls[0]["step"] == {"$gte": 0, "$lte": 2}
     assert calls[1]["step"] == {"$gte": 5, "$lte": 6}
+
+
+@pytest.mark.unit
+def test_retrieve_role_specific_memories_with_query_no_role(monkeypatch, tmp_path) -> None:
+    """When no role is provided but a query is, run semantic retrieval."""
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
+
+    manager = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda x: [[0.0]]
+    )
+
+    calls = []
+
+    def fake_retrieve(agent_id, query=None, k=0, include_usage_stats=False):
+        calls.append((agent_id, query, k, include_usage_stats))
+        return [{"id": 1}]
+
+    monkeypatch.setattr(manager, "retrieve_relevant_memories", fake_retrieve)
+
+    memories = manager.retrieve_role_specific_memories(
+        "agent", query="Explain systems", role=None, k=5
+    )
+
+    assert memories == [{"id": 1}]
+    assert calls == [("agent", "Explain systems", 5, False)]
