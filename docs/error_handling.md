@@ -44,7 +44,7 @@ Culture.ai implements robust error handling and resilience mechanisms across all
 - Logs include module, function, error type, and context variables (if safe).
 
 ## Testing and Verification
-- All error handling is verified by running the full test suite (22 tests).
+- All error handling is verified by running the full test suite.
 - Manual fault injection is used to verify logging and fallback behavior.
 
 ## References

@@ -237,7 +237,7 @@ age: Annotated[int, Field(ge=0, le=120)]
 
 ### Final Verification
 - **Command:** `python -m pytest tests/ -v -W default::DeprecationWarning --tb=short`
-- **Result:** All 35 tests passed, no v1 warnings from our codebase.
+ - **Result:** All tests passed, no v1 warnings from our codebase.
 
 ---
 
