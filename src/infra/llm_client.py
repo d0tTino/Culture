@@ -562,7 +562,8 @@ def generate_structured_output(
                         mock_dict = json.loads(str(mock_data))
                         return response_model(**mock_dict)
                     except json.JSONDecodeError:
-                        pass
+                        logger.warning("Invalid mock structured output: %s", mock_data)
+                        # Fall back to field defaults when mock data is malformed
             # Only define field_defaults if not already defined
             field_defaults: JSONDict = {}
             if hasattr(response_model, "model_fields"):
