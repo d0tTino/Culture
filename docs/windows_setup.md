@@ -105,6 +105,10 @@ ollama serve &
    scripts\vertical_slice.bat
    ```
 
+   Before running the batch script copy `.env.example` to `.env` and set
+   `OLLAMA_API_BASE` to your Ollama instance URL. Once **Issue&nbsp;1** is fixed
+   the script will automatically load variables from `.env`.
+
 The script checks for both `venv` and `.venv` directories and activates the first one it finds.
 
 The script launches three agents for a few steps and stores their memories in
