@@ -202,6 +202,7 @@ class AgentController:
                 self.update_relationship(sender, 0.0, is_targeted=True)
 
     def reset_state(self: Self) -> None:
+        """Reset mood and relationship histories while preserving known agents."""
         state = self._require_state()
         old_keys = list(state.relationship_history.keys())
         state.relationship_history.clear()
