@@ -83,6 +83,16 @@ ollama pull mistral:latest
 ollama serve &
 ```
 
+Alternatively you can run the model with **vLLM**. Start the server from WSL or any
+shell where Python is available:
+
+```cmd
+scripts\start_vllm.bat
+```
+
+This script mirrors `scripts/start_vllm.sh` and honors the `VLLM_MODEL`,
+`VLLM_PORT`, and `VLLM_SWAP_SPACE` environment variables.
+
 ## Run the Example Vertical Slice
 
 1. Install the CUDA-enabled PyTorch build and the remaining project requirements:
