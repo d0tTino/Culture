@@ -147,9 +147,22 @@ Slowest 10 durations:
 0.15s call     tests/integration/test_memory_usage_tracking.py::TestMemoryUsageTracking::test_retrieve_memory_ids
 ```
 
-All tests pass green. Wall-clock time for full suite: **~1 minute** on Ryzen 7 workstation. 
+All tests pass green. Wall-clock time for full suite: **~1 minute** on Ryzen 7 workstation.
 
 ---
+
+# Redpanda Event Log Tests
+
+Integration tests for the Redpanda event logger live under
+`tests/integration/event_log/`. They use a lightweight Kafka mock so they run
+without a broker by default. To exercise them against a real broker, start
+Redpanda as described in [docs/redpanda_setup.md](redpanda_setup.md) and set
+`ENABLE_REDPANDA=1` before running `pytest`:
+
+```bash
+docker compose -f docker-compose.redpanda.yml up -d  # if not already running
+ENABLE_REDPANDA=1 pytest tests/integration/event_log -v
+```
 
 # Weaviate Local Setup for Development/Testing
 
