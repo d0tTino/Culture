@@ -86,6 +86,7 @@ class AgentController:
     def change_role(self: Self, new_role: str, current_step: int) -> bool:
         state = self._require_state()
         if self.can_change_role(new_role, current_step):
+            start_ip = state.ip
             state.ip -= state._role_change_ip_cost
             logger.info(
                 "AGENT_STATE (%s): Role changed from %s to %s. IP cost: %.2f. New IP: %.2f",
@@ -95,6 +96,17 @@ class AgentController:
                 state._role_change_ip_cost,
                 state.ip,
             )
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    state.agent_id,
+                    state.ip - start_ip,
+                    0.0,
+                    "role_change",
+                )
+            except Exception:  # pragma: no cover - ledger optional
+                logger.debug("Ledger logging failed", exc_info=True)
             state.current_role = new_role
             state.steps_in_current_role = 0
             state.role_history.append((current_step, new_role))

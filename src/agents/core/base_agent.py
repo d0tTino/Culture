@@ -192,6 +192,19 @@ class Agent:
 
         self._state = AgentState(**agent_state_kwargs)
 
+        # Record initial resources in the ledger
+        try:
+            from src.infra.ledger import ledger
+
+            ledger.log_change(
+                self.agent_id,
+                float(self._state.ip),
+                float(self._state.du),
+                "init",
+            )
+        except Exception:  # pragma: no cover - ledger failures shouldn't break init
+            logger.debug("Ledger logging failed during agent init", exc_info=True)
+
         # Initialize LangGraph graph by calling the compiler function.
         # Some tests monkeypatch bag.compile_agent_graph without undoing it,
         # so capture and restore the original function to avoid side effects.
@@ -881,6 +894,7 @@ class Agent:
         # if action_intent == AgentActionIntent.PROPOSE_IDEA.value:
         #     ip_change += getattr(config, "IP_AWARD_FOR_PROPOSAL", 0.0) # Typically cost is in graph
 
+        start_ip = state.ip
         state.ip += ip_change
         if ip_change != 0:
             logger.info(
@@ -939,6 +953,7 @@ class Agent:
         # elif action_intent == AgentActionIntent.ASK_CLARIFICATION.value:
         #     du_change -= getattr(config, "DU_COST_REQUEST_CLARIFICATION", 1.0)
 
+        start_du = state.du
         state.du += du_change
         if du_change != 0:
             logger.info(
@@ -948,6 +963,22 @@ class Agent:
         # Clamp IP and DU to non-negative values
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
+
+        # Record final deltas to ledger
+        final_ip_change = state.ip - start_ip
+        final_du_change = state.du - start_du
+        if final_ip_change or final_du_change:
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    self.agent_id,
+                    final_ip_change,
+                    final_du_change,
+                    f"action:{action_intent}",
+                )
+            except Exception:  # pragma: no cover - ledger errors should not block
+                logger.debug("Ledger logging failed", exc_info=True)
 
     def perceive_messages(self: Self, messages: list[SimulationMessage]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""

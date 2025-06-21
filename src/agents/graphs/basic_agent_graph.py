@@ -164,7 +164,19 @@ def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     if agent_state.ip < agent_state.role_change_ip_cost:
         return False
     old_role = current_role
+    start_ip = agent_state.ip
     agent_state.ip -= agent_state.role_change_ip_cost
+    try:
+        from src.infra.ledger import ledger
+
+        ledger.log_change(
+            agent_state.agent_id,
+            agent_state.ip - start_ip,
+            0.0,
+            "role_change",
+        )
+    except Exception:  # pragma: no cover - optional
+        logger.debug("Ledger logging failed", exc_info=True)
     _set_current_role(agent_state, requested_role)
     agent_state.steps_in_current_role = 0
     agent_state.role_history.append((int(agent_state.last_action_step or 0), requested_role))
@@ -198,10 +210,22 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
 
         generated_du = round(du_gen_rate * (0.5 + random.random()), 1)
         if generated_du > 0:
+            start_du = agent_state_obj.du
             agent_state_obj.du += generated_du
             logger.info(
                 f"Agent {agent_id}: Generated {generated_du} DU. Total DU: {agent_state_obj.du:.1f}"
             )
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    agent_state_obj.agent_id,
+                    0.0,
+                    agent_state_obj.du - start_du,
+                    "du_generation",
+                )
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger logging failed", exc_info=True)
         # Increment steps taken in current role after performing an action
         agent_state_obj.steps_in_current_role += 1
 
