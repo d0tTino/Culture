@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import time
@@ -68,7 +69,11 @@ else:  # pragma: no cover - runtime import
 
 from src.shared.decorator_utils import monitor_llm_call
 
-from .config import OLLAMA_API_BASE, OLLAMA_REQUEST_TIMEOUT  # Import config values
+from .config import (
+    OLLAMA_API_BASE,
+    OLLAMA_REQUEST_TIMEOUT,
+    get_config,
+)
 
 if TYPE_CHECKING:
     from litellm.exceptions import APIError
@@ -91,6 +96,23 @@ logger = logging.getLogger(__name__)
 # Define generic type variables for Pydantic models and call signatures
 T = TypeVar("T")
 P = ParamSpec("P")
+
+
+def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
+    """Deduct DU cost from the provided agent state."""
+
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        state = kwargs.get("agent_state")
+        result = func(*args, **kwargs)
+        if state is not None:
+            try:
+                state.du -= float(get_config("DU_COST_PER_ACTION"))
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"Failed to deduct DU cost: {e}")
+        return result
+
+    return wrapper
 
 
 class OllamaClientProtocol(Protocol):
@@ -245,9 +267,14 @@ def _retry_with_backoff(
     return None, e
 
 
+@charge_du_cost
 @monitor_llm_call(model_param="model", context="text_generation")
 def generate_text(
-    prompt: str, model: str = "mistral:latest", temperature: float = 0.7
+    prompt: str,
+    model: str = "mistral:latest",
+    temperature: float = 0.7,
+    *,
+    agent_state: Any | None = None,
 ) -> str | None:
     """
     Generates text using the configured Ollama client.
@@ -301,6 +328,7 @@ def generate_text(
         return None
 
 
+@charge_du_cost
 @monitor_llm_call(model_param="model", context="memory_summarization")
 def summarize_memory_context(
     memories: list[str],
@@ -308,6 +336,8 @@ def summarize_memory_context(
     current_context: str,
     model: str = "mistral:latest",
     temperature: float = 0.3,
+    *,
+    agent_state: Any | None = None,
 ) -> str:
     """
     Summarizes a list of retrieved memories based on the agent's goal and current context.
@@ -394,8 +424,14 @@ def summarize_memory_context(
         return "(Memory summarization failed due to an error)"
 
 
+@charge_du_cost
 @monitor_llm_call(model_param="model", context="sentiment_analysis")
-def analyze_sentiment(text: str, model: str = "mistral:latest") -> float | None:
+def analyze_sentiment(
+    text: str,
+    model: str = "mistral:latest",
+    *,
+    agent_state: Any | None = None,
+) -> float | None:
     """
     Analyzes the sentiment of a given text using Ollama.
 
@@ -484,6 +520,7 @@ def analyze_sentiment(text: str, model: str = "mistral:latest") -> float | None:
         return None  # Or 0.0 if float is always expected
 
 
+@charge_du_cost
 @monitor_llm_call(model_param="model", context="structured_output")
 def generate_structured_output(
     prompt: str,
@@ -491,6 +528,8 @@ def generate_structured_output(
     model: str = "mistral:latest",
     temperature: float = 0.2,
     timeout: int | None = None,
+    *,
+    agent_state: Any | None = None,
 ) -> BaseModel | None:
     """
     Generate a structured output using the LLM and parse it into the given Pydantic model.
@@ -685,8 +724,13 @@ def get_default_llm_client() -> OllamaClientProtocol | None:
     return get_ollama_client()
 
 
+@charge_du_cost
 def generate_response(
-    prompt: str, model: str = "mistral:latest", temperature: float = 0.7
+    prompt: str,
+    model: str = "mistral:latest",
+    temperature: float = 0.7,
+    *,
+    agent_state: Any | None = None,
 ) -> str | None:
     """
     Generates a response to the given prompt.
@@ -701,4 +745,4 @@ def generate_response(
         return str(val) if isinstance(val, str) else None
 
     # Otherwise use the real client
-    return generate_text(prompt, model, temperature)
+    return generate_text(prompt, model, temperature, agent_state=agent_state)

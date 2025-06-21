@@ -115,7 +115,7 @@ except Exception:  # pragma: no cover - fallback when llm_client is missing
 
 
 class AgentStateData(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)
 
     agent_id: str
     name: str
@@ -430,8 +430,12 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         """Return a dictionary representation of the agent state."""
         base_model = cast(BaseModel, self)
         if _PYDANTIC_V2:
-            return base_model.model_dump(
-                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+            return base_model.model_dump(  # type: ignore[attr-defined, no-any-return]
+                exclude={
+                    "llm_client",
+                    "mock_llm_client",
+                    "memory_store_manager",
+                },
             )
         return base_model.dict(
             exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
