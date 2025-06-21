@@ -20,7 +20,10 @@ def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
             continue
         content = msg.get("content")
         if isinstance(content, str):
-            sentiment = analyze_sentiment(content)
+            try:
+                sentiment = analyze_sentiment(content, agent_state=state.get("state"))
+            except TypeError:
+                sentiment = analyze_sentiment(content)
             if isinstance(sentiment, str):
                 mapping = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}
                 sentiment = mapping.get(sentiment.lower(), 0.0)
@@ -66,7 +69,12 @@ async def generate_thought_and_message_node(
         result = await agent.async_select_action_intent("", "", "", [])
         if result:
             action_intent = getattr(result, "chosen_action_intent", "idle")
-    structured = generate_structured_output("prompt", AgentActionOutput)
+    try:
+        structured = generate_structured_output(
+            "prompt", AgentActionOutput, agent_state=state.get("state")
+        )
+    except TypeError:
+        structured = generate_structured_output("prompt", AgentActionOutput)
     return {"structured_output": cast(AgentActionOutput | None, structured)}
 
 
