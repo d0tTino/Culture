@@ -23,8 +23,20 @@ logger = logging.getLogger(__name__)
 
 def handle_propose_idea_node(state: AgentTurnState) -> dict[str, Any]:
     agent_state = state["state"]
+    start_ip = agent_state.ip
     agent_state.ip -= IP_COST_TO_POST_IDEA
     agent_state.ip += IP_AWARD_FOR_PROPOSAL
+    try:
+        from src.infra.ledger import ledger
+
+        ledger.log_change(
+            agent_state.agent_id,
+            agent_state.ip - start_ip,
+            0.0,
+            "propose_idea",
+        )
+    except Exception:  # pragma: no cover - optional
+        logger.debug("Ledger logging failed", exc_info=True)
     return dict(state)
 
 
@@ -38,7 +50,19 @@ def handle_idle_node(state: AgentTurnState) -> dict[str, Any]:
 
 def handle_deep_analysis_node(state: AgentTurnState) -> dict[str, Any]:
     agent_state = state["state"]
+    start_du = agent_state.du
     agent_state.du -= DU_COST_DEEP_ANALYSIS
+    try:
+        from src.infra.ledger import ledger
+
+        ledger.log_change(
+            agent_state.agent_id,
+            0.0,
+            agent_state.du - start_du,
+            "deep_analysis",
+        )
+    except Exception:  # pragma: no cover - optional
+        logger.debug("Ledger logging failed", exc_info=True)
     return dict(state)
 
 
@@ -80,8 +104,21 @@ def handle_propose_idea(
     metas = [metadata]
     knowledge_board.add_documents(docs, metas)
     memory_store.add_documents(docs, metas)
+    start_ip = agent.ip
+    start_du = agent.du
     agent.ip -= IP_COST_TO_POST_IDEA
     agent.du += config.DU_AWARD_FOR_PROPOSAL
+    try:
+        from src.infra.ledger import ledger
+
+        ledger.log_change(
+            agent.id,
+            agent.ip - start_ip,
+            agent.du - start_du,
+            "propose_idea",
+        )
+    except Exception:  # pragma: no cover - optional
+        logger.debug("Ledger logging failed", exc_info=True)
 
 
 def handle_retrieve_and_update(agent: AgentAttributes, memory_store: MemoryStore) -> None:
