@@ -9,6 +9,7 @@
 - [Vision](#vision-the-crucible-of-emergent-ai)
 - [Setup](#installation)
 - [Running Tests](#running-tests)
+- [culture-ui Frontend](#culture-ui-frontend)
 
 ## Vision: The Crucible of Emergent AI
 
@@ -234,6 +235,24 @@ You can modify the `DEFAULT_SCENARIO` constant in `src/app.py` to define a speci
 ```python
 DEFAULT_SCENARIO = "The team's objective is to collaboratively design a specification for a decentralized communication protocol suitable for autonomous AI agents operating in a resource-constrained environment. Key considerations are efficiency, security, and scalability."
 ```
+
+## culture-ui Frontend
+
+The `culture-ui` folder provides a lightweight React + TypeScript web UI managed
+through **pnpm** workspaces. Install all workspace dependencies from the project
+root:
+
+```bash
+pnpm install
+```
+
+Launch the UI in development mode with:
+
+```bash
+pnpm --filter culture-ui dev
+```
+
+See [culture-ui/README.md](culture-ui/README.md) for additional details.
 
 ## Project Structure
 
