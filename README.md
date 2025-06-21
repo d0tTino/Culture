@@ -422,6 +422,8 @@ Test logs are stored in the `data/logs/` directory.
 
 The project's direction is guided by the future directions listed above. Key future work includes:
 
+* Reviewing the architectural layers summarized in the [Blueprint Memo](docs/blueprint_memo.md).
+
 * **Medium-Term:**
     * Validating and refining Memory Pruning.
     * Implementing LLM Call Performance Monitoring.
