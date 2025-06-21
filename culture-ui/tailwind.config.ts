@@ -1,15 +1,16 @@
 import type { Config } from 'tailwindcss'
+import forms from '@tailwindcss/forms'
+import typography from '@tailwindcss/typography'
 
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}"
-  ],
+  darkMode: 'class',
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        brand: { DEFAULT: '#0f172a' },
+      },
+    },
   },
-  plugins: [
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/typography'),
-  ],
+  plugins: [forms, typography],
 } satisfies Config
