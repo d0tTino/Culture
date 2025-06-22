@@ -1,30 +1,52 @@
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import MissionOverview, { reorderMissions } from './pages/MissionOverview'
+import { vi } from 'vitest'
+import MissionOverview from './pages/MissionOverview'
+import { fetchMissions } from './lib/api'
+
+vi.mock('./lib/api', () => ({
+  fetchMissions: vi.fn(),
+}))
+
+const missions = [
+  { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
+  { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
+  { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
+]
+
+function reorderMissions(data: typeof missions, activeId: number, overId: number) {
+  const oldIndex = data.findIndex((r) => r.id === activeId)
+  const newIndex = data.findIndex((r) => r.id === overId)
+  const copy = data.slice()
+  const [moved] = copy.splice(oldIndex, 1)
+  copy.splice(newIndex, 0, moved)
+  return copy
+}
 
 describe('MissionOverview', () => {
-  it('renders missions table', () => {
+  it('renders missions table', async () => {
+    ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
     render(
       <BrowserRouter>
         <MissionOverview />
       </BrowserRouter>,
     )
-    expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    expect(screen.getByRole('table')).toBeInTheDocument()
-    const table = screen.getByRole('table')
+    expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
+    const table = await screen.findByRole('table')
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('Gather Intel')
     expect(rows[1]).toHaveTextContent('Prepare Brief')
   })
 
-  it('reorders rows via drag and drop', () => {
+  it('reorders rows via drag and drop', async () => {
+    ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
     render(
       <BrowserRouter>
         <MissionOverview />
       </BrowserRouter>,
     )
-    const table = screen.getByRole('table')
+    const table = await screen.findByRole('table')
     const rowsBefore = table.querySelectorAll('tbody tr')
     expect(rowsBefore[0]).toHaveTextContent('Gather Intel')
 
