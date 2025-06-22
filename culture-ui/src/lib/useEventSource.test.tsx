@@ -1,6 +1,21 @@
-import { act, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { spawn, type ChildProcess } from 'child_process'
+import EventSourcePolyfill from 'eventsource'
+import path from 'node:path'
+import { createServer, type AddressInfo } from 'node:net'
 import { useEventSource } from './useEventSource'
+
+async function getPort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const srv = createServer()
+    srv.listen(0, () => {
+      const { port } = srv.address() as AddressInfo
+      srv.close((err) => (err ? reject(err) : resolve(port)))
+    })
+    srv.on('error', reject)
+  })
+}
 
 class MockEventSource {
   static instances: MockEventSource[] = []
@@ -146,5 +161,57 @@ describe('useEventSource', () => {
     const es = MockEventSource.instances[0]
     unmount()
     expect(es.closed).toBe(true)
+  })
+})
+
+describe('useEventSource integration with FastAPI', () => {
+  let port: number
+  let server: ChildProcess
+
+  beforeAll(async () => {
+    port = await getPort()
+    server = spawn(
+      'python',
+      ['scripts/simple_event_app.py', String(port)],
+      {
+        cwd: path.resolve(__dirname, '../../..'),
+        stdio: 'ignore',
+        env: { ...process.env, PYTHONPATH: path.resolve(__dirname, '../../..') },
+      },
+    )
+    // wait for server to be ready
+    for (let i = 0; i < 50; i++) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/health`)
+        if (res.ok) return
+      } catch {
+        /* ignore */
+      }
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    throw new Error('server did not start')
+  })
+
+  afterAll(() => {
+    server.kill()
+  })
+
+  it('receives events from the backend', async () => {
+    ;(
+      globalThis as unknown as {
+        EventSource: typeof EventSourcePolyfill
+      }
+    ).EventSource = class extends EventSourcePolyfill {
+      constructor(url: string, opts?: EventSourceInit) {
+        super(`http://127.0.0.1:${port}${url}`, opts)
+      }
+    }
+
+    render(<TestComponent />)
+    await waitFor(() => {
+      expect(screen.getByTestId('value').textContent).toBe(
+        JSON.stringify({ event_type: 'test', data: { value: 1 } }),
+      )
+    })
   })
 })
