@@ -5,6 +5,7 @@ import MissionOverview, { reorderMissions } from './pages/MissionOverview'
 import { fetchMissions } from './lib/api'
 import missions from './mock/missions.json'
 
+
 vi.mock('./lib/api', () => ({
   fetchMissions: vi.fn(),
 }))
@@ -15,6 +16,7 @@ beforeEach(() => {
 
 describe('MissionOverview', () => {
   it('renders missions table', async () => {
+
     render(
       <BrowserRouter>
         <MissionOverview />
@@ -23,6 +25,7 @@ describe('MissionOverview', () => {
     expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
     expect(screen.getByRole('table')).toBeInTheDocument()
     const table = screen.getByRole('table')
+
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('Gather Intel')
@@ -30,6 +33,7 @@ describe('MissionOverview', () => {
   })
 
   it('reorders rows via drag and drop', async () => {
+
     render(
       <BrowserRouter>
         <MissionOverview />

@@ -4,6 +4,7 @@ import asyncio
 # ruff: noqa: ANN101
 import json
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
@@ -67,6 +68,11 @@ message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
 # Queue for general simulation events streamed via SSE/WebSocket
 event_queue: asyncio.Queue["SimulationEvent | None"] = asyncio.Queue()
 
+# Path to the initial missions data bundled with the front-end
+MISSIONS_PATH = (
+    Path(__file__).resolve().parents[2] / "culture-ui" / "src" / "mock" / "missions.json"
+)
+
 
 class AgentMessage(BaseModel):
     agent_id: str
@@ -110,6 +116,14 @@ async def stream_messages(request: Request) -> EventSourceResponse:
 @app.get("/health")
 async def health() -> Response:
     return JSONResponse({"status": "ok"})
+
+
+@app.get("/api/missions")
+async def get_missions() -> Response:
+    """Return the list of missions from the bundled JSON file."""
+    with open(MISSIONS_PATH, encoding="utf-8") as f:
+        missions = json.load(f)
+    return JSONResponse(missions)
 
 
 @app.get("/stream/events")
