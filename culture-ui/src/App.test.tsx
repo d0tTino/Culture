@@ -5,8 +5,8 @@ import App from './App'
 vi.mock('./App.css', () => ({}))
 
 describe('App', () => {
-  it('renders heading', () => {
+  it('renders mission overview heading by default', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: /vite \+ react/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
   })
 })
