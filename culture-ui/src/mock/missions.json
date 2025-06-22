@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name": "Gather Intel",
+    "status": "In Progress",
+    "progress": 50
+  },
+  {
+    "id": 2,
+    "name": "Prepare Brief",
+    "status": "Pending",
+    "progress": 0
+  },
+  {
+    "id": 3,
+    "name": "Execute Plan",
+    "status": "Complete",
+    "progress": 100
+  }
+]
