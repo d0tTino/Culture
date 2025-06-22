@@ -1,38 +1,31 @@
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { vi } from 'vitest'
-import MissionOverview from './pages/MissionOverview'
+import MissionOverview, { reorderMissions } from './pages/MissionOverview'
 import { fetchMissions } from './lib/api'
+import missions from './mock/missions.json'
+
 
 vi.mock('./lib/api', () => ({
   fetchMissions: vi.fn(),
 }))
 
-const missions = [
-  { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
-  { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
-  { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
-]
-
-function reorderMissions(data: typeof missions, activeId: number, overId: number) {
-  const oldIndex = data.findIndex((r) => r.id === activeId)
-  const newIndex = data.findIndex((r) => r.id === overId)
-  const copy = data.slice()
-  const [moved] = copy.splice(oldIndex, 1)
-  copy.splice(newIndex, 0, moved)
-  return copy
-}
+beforeEach(() => {
+  ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
+})
 
 describe('MissionOverview', () => {
   it('renders missions table', async () => {
-    ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
+
     render(
       <BrowserRouter>
         <MissionOverview />
       </BrowserRouter>,
     )
     expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    const table = await screen.findByRole('table')
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    const table = screen.getByRole('table')
+
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('Gather Intel')
@@ -40,7 +33,7 @@ describe('MissionOverview', () => {
   })
 
   it('reorders rows via drag and drop', async () => {
-    ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
+
     render(
       <BrowserRouter>
         <MissionOverview />
@@ -50,17 +43,8 @@ describe('MissionOverview', () => {
     const rowsBefore = table.querySelectorAll('tbody tr')
     expect(rowsBefore[0]).toHaveTextContent('Gather Intel')
 
-    // simulate drag end
-    const newData = reorderMissions(
-      Array.from(rowsBefore).map((r) => ({
-        id: Number(r.firstChild?.textContent),
-        name: '',
-        status: '',
-        progress: 0,
-      })),
-      1,
-      2,
-    )
+    // simulate drag end using the helper
+    const newData = reorderMissions(missions, 0, 1)
 
     // update DOM with reordered data for test verification
     newData.forEach((mission, idx) => {
