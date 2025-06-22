@@ -36,6 +36,7 @@ export default function App() {
               </NavLink>
             </li>
           </ul>
+
         </nav>
       </aside>
       <main className="flex-1 p-4">
