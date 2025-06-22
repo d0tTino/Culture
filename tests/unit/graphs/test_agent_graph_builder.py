@@ -1,10 +1,12 @@
 import pytest
 
+# - allow runtime dependency checks before imports
+
 pytest.importorskip("langgraph")
 
-from langgraph.graph.graph import END, START, Graph
+from langgraph.graph.graph import END, START, Graph  # noqa: E402
 
-from src.agents.graphs.agent_graph_builder import build_graph
+from src.agents.graphs.agent_graph_builder import build_graph  # noqa: E402
 
 
 @pytest.mark.unit

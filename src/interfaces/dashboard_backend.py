@@ -1,4 +1,7 @@
 import asyncio
+
+# Skip self argument annotation warnings in stub classes
+# ruff: noqa: ANN101
 import json
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Callable

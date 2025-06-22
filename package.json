@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "scripts": {
+    "lint": "pre-commit run -a"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@tailwindcss/oxide"
+    ]
+  }
+}
+

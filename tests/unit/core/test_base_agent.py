@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock
 import pytest
 from pytest import MonkeyPatch
 
+from src.agents.core.base_agent import Agent
+
 pytest.importorskip("langgraph")
 pytest.importorskip("chromadb")
-
-from src.agents.core.base_agent import Agent
 
 
 @pytest.mark.unit
