@@ -15,13 +15,26 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+
+export function reorderMissions(
+  items: Mission[],
+  fromId: number,
+  toId: number,
+): Mission[] {
+  const copy = [...items]
+  const fromIdx = copy.findIndex((m) => m.id === fromId)
+  const toIdx = copy.findIndex((m) => m.id === toId)
+  if (fromIdx === -1 || toIdx === -1) return items
+  const [item] = copy.splice(fromIdx, 1)
+  copy.splice(toIdx, 0, item)
+  return copy
+}
 
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({

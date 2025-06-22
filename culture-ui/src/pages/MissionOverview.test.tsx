@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 
 vi.mock('../lib/api', () => ({
   fetchMissions: vi.fn(),
@@ -14,7 +14,7 @@ const missions = [
 
 describe('MissionOverview', () => {
   it('renders missions returned by fetchMissions', async () => {
-    ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
+    ;(fetchMissions as unknown as Mock).mockResolvedValue(missions)
     render(<MissionOverview />)
     expect(await screen.findByText('Test Mission')).toBeInTheDocument()
   })
