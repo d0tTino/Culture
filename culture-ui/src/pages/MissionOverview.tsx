@@ -112,9 +112,7 @@ export default function MissionOverview() {
         sensors={sensors}
         onDragEnd={({ active, over }) => {
           if (over && active.id !== over.id) {
-            const oldIndex = table.getRowModel().rows.findIndex((r) => r.id === active.id)
-            const newIndex = table.getRowModel().rows.findIndex((r) => r.id === over.id)
-            setData((items) => arrayMove(items, oldIndex, newIndex))
+            setData((items) => reorderMissions(items, Number(active.id), Number(over.id)))
           }
         }}
       >
