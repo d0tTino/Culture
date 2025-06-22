@@ -1,17 +1,14 @@
 import { render, screen } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 
 vi.mock('./App.css', () => ({}))
+vi.mock('flexlayout-react/style/light.css', () => ({}))
 
-describe('AgentDataOverview routing', () => {
-  it('loads Agent Data Overview page when navigating', () => {
-    window.history.pushState({}, '', '/agent-data')
-    render(
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>,
-    )
-    expect(screen.getByRole('heading', { name: /agent data overview/i })).toBeInTheDocument()
+describe('AgentDataOverview widget', () => {
+  it('renders Agent Data Overview component', () => {
+    render(<App />)
+    expect(
+      screen.getByRole('heading', { name: /agent data overview/i }),
+    ).toBeInTheDocument()
   })
 })
