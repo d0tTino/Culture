@@ -1,0 +1,8 @@
+{
+  "metrics": [
+    { "label": "Messages Sent", "value": 230 },
+    { "label": "Messages Received", "value": 215 },
+    { "label": "Tasks Completed", "value": 16 }
+  ],
+  "sparkline": [5, 8, 6, 9, 7, 10, 8, 11, 12, 9, 10]
+}
