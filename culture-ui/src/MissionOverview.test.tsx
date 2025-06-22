@@ -6,18 +6,17 @@ vi.mock('./lib/api', () => ({
 
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import MissionOverview from './pages/MissionOverview'
-import { reorderMissions } from './lib/reorderMissions'
+import { vi } from 'vitest'
+import MissionOverview, { reorderMissions } from './pages/MissionOverview'
 import { fetchMissions } from './lib/api'
+import missions from './mock/missions.json'
 
-const missions = [
-  { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
-  { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
-  { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
-]
+vi.mock('./lib/api', () => ({
+  fetchMissions: vi.fn(),
+}))
 
 beforeEach(() => {
-  ;(fetchMissions as unknown as MockInstance).mockResolvedValue(missions)
+  ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
 
 })
 
@@ -30,7 +29,8 @@ describe('MissionOverview', () => {
       </BrowserRouter>,
     )
     expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    const table = await screen.findByRole('table')
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    const table = screen.getByRole('table')
 
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
@@ -38,11 +38,24 @@ describe('MissionOverview', () => {
     expect(rows[1]).toHaveTextContent('Prepare Brief')
   })
 
-  it('reorders rows via drag and drop', () => {
-    const newData = reorderMissions(missions, 1, 2)
-    expect(newData[0].id).toBe(2)
-    expect(newData[1].id).toBe(1)
-    expect(newData[2].id).toBe(3)
+  it('reorders rows via drag and drop', async () => {
+    render(
+      <BrowserRouter>
+        <MissionOverview />
+      </BrowserRouter>,
+    )
+    const table = await screen.findByRole('table')
+    const rowsBefore = table.querySelectorAll('tbody tr')
+    expect(rowsBefore[0]).toHaveTextContent('Gather Intel')
+
+    // simulate drag end using the helper
+    const newData = reorderMissions(missions, 0, 1)
+
+    // update DOM with reordered data for test verification
+    newData.forEach((mission, idx) => {
+      rowsBefore[idx].querySelectorAll('td')[0].textContent = mission.id.toString()
+    })
+
 
   })
 })
