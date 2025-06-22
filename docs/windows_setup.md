@@ -4,6 +4,11 @@ This guide walks through running the Culture.ai simulation on Windows using WSL2
 It covers enabling WSL2, installing Python 3.10, setting up Ollama, and running
 the vertical slice example.
 
+> **GPU Requirements**
+> To utilize GPU acceleration you must run the simulation inside WSL2 with the
+> [NVIDIA drivers for WSL](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)
+> installed. Without a supported GPU you can install the CPU-only PyTorch build.
+
 ## Enable WSL2
 
 1. Open **PowerShell** as Administrator and run:
@@ -30,9 +35,9 @@ Create a virtual environment for the project:
 
 ```bash
 python3.10 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Linux/macOS
 # Windows:
-# venv\Scripts\activate.bat (or .venv\Scripts\activate.bat)
+venv\Scripts\activate.bat  # or .venv\Scripts\activate.bat
 ```
 
 Alternatively, run the helper script to automatically create `.venv` and
@@ -102,6 +107,7 @@ This script mirrors `scripts/start_vllm.sh` and honors the `VLLM_MODEL`,
    pip install -r requirements.txt -r requirements-dev.txt
    ```
    The requirements file pins this PyTorch version, so ensure your system has CUDA 12.1 or a compatible driver installed.
+   Install the NVIDIA drivers for WSL2 so the GPU is accessible from your Linux environment.
    If your Windows setup lacks a supported CUDA driver, install the CPU-only build instead:
    ```bash
    pip install torch==2.3.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
