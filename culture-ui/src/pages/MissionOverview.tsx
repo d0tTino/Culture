@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import clsx from 'clsx'
+import type { ColumnDef, Row } from '@tanstack/react-table'
 import {
-  ColumnDef,
-  Row,
   flexRender,
   getCoreRowModel,
   useReactTable,
