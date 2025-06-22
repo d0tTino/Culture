@@ -4,9 +4,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^(archives/|scripts/archive/)
+        exclude: ^(archives/|scripts/archive/|src/ollama/)
       - id: ruff-format
-        exclude: ^(archives/|scripts/archive/)
+        exclude: ^(archives/|scripts/archive/|src/ollama/)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.10.0
     hooks:
@@ -19,7 +19,7 @@ repos:
           - pydantic
           - fastapi
           - pytest
-        exclude: '^(tests/|archives/|scripts/archive/)'
+        exclude: '^(tests/|archives/|scripts/archive/|dspy_ai/|src/dspy_ai/|src/ollama/)'
   # Optionally add more hooks below
   # - repo: https://github.com/pre-commit/pre-commit-hooks
   #   rev: v4.6.0

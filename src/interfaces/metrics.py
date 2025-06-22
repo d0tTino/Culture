@@ -1,5 +1,8 @@
 """Prometheus metrics for Culture simulation."""
 
+# Skip self argument annotation warnings in helper classes
+# ruff: noqa: ANN101
+
 try:
     from prometheus_client import Counter, Gauge, start_http_server
 except Exception:  # pragma: no cover - optional dependency

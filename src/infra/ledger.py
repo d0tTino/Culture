@@ -3,6 +3,9 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+# Skip self argument annotation warnings for class methods
+# ruff: noqa: ANN101
+
 
 class Ledger:
     """Simple SQLite-backed ledger tracking agent resources."""

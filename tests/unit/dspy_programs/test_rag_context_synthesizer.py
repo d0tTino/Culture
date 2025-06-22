@@ -5,16 +5,16 @@ Unit tests for the RAGContextSynthesizer class.
 import unittest
 from unittest.mock import MagicMock, patch
 
+import dspy
 import pytest
 from typing_extensions import Self
 
+from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
+
 pytest.importorskip("dspy")
-import dspy
 
 if not hasattr(dspy, "Predict"):
     pytest.skip("dspy Predict not available", allow_module_level=True)
-
-from src.agents.dspy_programs.rag_context_synthesizer import RAGContextSynthesizer
 
 
 @pytest.mark.unit

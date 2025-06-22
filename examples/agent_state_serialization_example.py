@@ -46,15 +46,14 @@ def main() -> None:
 
     if LLMClientConfig is not None:
         new_llm_config = LLMClientConfig(model_name="override-model", api_key="override-key")
-        deserialized_state = AgentState.from_dict(
-            serialized, llm_client_config_override=new_llm_config.model_dump()
-        )
+        deserialized_state = AgentState.from_dict(serialized)
+        deserialized_state.llm_client_config = new_llm_config
     else:
         deserialized_state = AgentState.from_dict(serialized)
 
     llm_model = (
         deserialized_state.get_llm_client().config.model_name
-        if LLMClientConfig and deserialized_state.get_llm_client()
+        if LLMClientConfig is not None and deserialized_state.get_llm_client()
         else "None"
     )
     print(f"Deserialized state: {deserialized_state.name}, LLM Model: {llm_model}")

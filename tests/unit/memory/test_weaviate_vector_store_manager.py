@@ -4,12 +4,14 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
+import weaviate.classes as wvc  # For types if needed
+
+from src.agents.memory.weaviate_vector_store_manager import (
+    WeaviateVectorStoreManager,
+)
 
 pytest.importorskip("weaviate")
 pytest.importorskip("weaviate.classes")
-import weaviate.classes as wvc  # For types if needed
-
-from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 
 
 @pytest.fixture(scope="function")

@@ -6,10 +6,10 @@ import unittest
 import pytest
 from typing_extensions import Self
 
-pytest.importorskip("chromadb")
-
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
+
+pytest.importorskip("chromadb")
 
 
 @pytest.mark.unit
