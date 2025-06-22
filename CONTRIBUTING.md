@@ -29,6 +29,9 @@ Welcome! We're excited that you're interested in contributing to Culture.ai. Thi
   - Use a descriptive title and summary.
   - Reference related issues (e.g., `Closes #123`).
   - Ensure all tests pass before requesting review.
+  - The **UI** workflow runs automatically for changes in `culture-ui`, executing
+    `pnpm --filter culture-ui lint` and `pnpm --filter culture-ui type-check`.
+    These steps must pass before your PR can merge.
   - At least one approval is required before merging.
 
 ## Testing Requirements
