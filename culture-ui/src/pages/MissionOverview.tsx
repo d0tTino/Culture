@@ -31,6 +31,13 @@ interface Mission {
   progress: number
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function reorderMissions(data: Mission[], activeId: number, overId: number) {
+  const oldIndex = data.findIndex((r) => r.id === activeId)
+  const newIndex = data.findIndex((r) => r.id === overId)
+  return arrayMove(data, oldIndex, newIndex)
+}
+
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: row.id,
@@ -102,9 +109,7 @@ export default function MissionOverview() {
         sensors={sensors}
         onDragEnd={({ active, over }) => {
           if (over && active.id !== over.id) {
-            const oldIndex = table.getRowModel().rows.findIndex((r) => r.id === active.id)
-            const newIndex = table.getRowModel().rows.findIndex((r) => r.id === over.id)
-            setData((items) => arrayMove(items, oldIndex, newIndex))
+            setData((items) => reorderMissions(items, Number(active.id), Number(over.id)))
           }
         }}
       >
