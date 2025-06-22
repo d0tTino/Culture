@@ -127,6 +127,7 @@ scripts/archive/
 
 # Node modules and built UI files
 culture-ui/node_modules/
+node_modules/
 culture-ui/dist/
 
 # Hypothesis test directory
