@@ -18,10 +18,12 @@ const missions = [
 
 beforeEach(() => {
   ;(fetchMissions as unknown as MockInstance).mockResolvedValue(missions)
+
 })
 
 describe('MissionOverview', () => {
   it('renders missions table', async () => {
+
     render(
       <BrowserRouter>
         <MissionOverview />
@@ -29,6 +31,7 @@ describe('MissionOverview', () => {
     )
     expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
     const table = await screen.findByRole('table')
+
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('Gather Intel')
@@ -40,5 +43,6 @@ describe('MissionOverview', () => {
     expect(newData[0].id).toBe(2)
     expect(newData[1].id).toBe(1)
     expect(newData[2].id).toBe(3)
+
   })
 })

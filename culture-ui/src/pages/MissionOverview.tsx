@@ -23,7 +23,6 @@ import {
 import { reorderMissions } from '../lib/reorderMissions'
 import { CSS } from '@dnd-kit/utilities'
 
-
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: row.id,
@@ -112,7 +111,14 @@ export default function MissionOverview() {
         sensors={sensors}
         onDragEnd={({ active, over }) => {
           if (over && active.id !== over.id) {
-            setData((items) => reorderMissions(items, Number(active.id), Number(over.id)))
+            setData((items) => {
+              const from = items.findIndex((m) => m.id === Number(active.id))
+              const to = items.findIndex((m) => m.id === Number(over.id))
+              if (from === -1 || to === -1) {
+                return items
+              }
+              return reorderMissions(items, from, to)
+            })
           }
         }}
       >
