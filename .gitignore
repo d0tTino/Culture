@@ -17,6 +17,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!/culture-ui/src/lib/
 lib64/
 parts/
 sdist/
