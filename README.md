@@ -136,7 +136,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 2. Create and activate a virtual environment (optional but recommended):
    ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate.bat (or .venv\Scripts\activate.bat)
+   source venv/bin/activate  # On Windows run `venv\Scripts\activate.bat` or `.venv\Scripts\activate.bat`
    ```
 
 3. Install all required dependencies (including development packages):
@@ -595,9 +595,10 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
 Running on Windows requires the WSL2 build of **Ollama** (version 0.1.34 or
 newer). Expose port `11434` to your host when launching Ollama so the Python
 services can reach it. Configure the connection with the `OLLAMA_API_BASE` and
-`OLLAMA_REQUEST_TIMEOUT` variables in your `.env` (see `.env.example`). GPU
-acceleration is only available when running Ollama through Docker or WSL2.
-For step-by-step instructions, see
+`OLLAMA_REQUEST_TIMEOUT` variables in your `.env` (see `.env.example`).
+GPU acceleration is only available when Ollama runs inside WSL2 or Docker.
+Install the NVIDIA drivers for WSL2 and run all Python commands from your WSL2
+shell. For step-by-step instructions, see
 [docs/windows_setup.md](docs/windows_setup.md).
 The provided `scripts\vertical_slice.bat` detects both `venv` and `.venv` virtual environments when activating the demo.
 
