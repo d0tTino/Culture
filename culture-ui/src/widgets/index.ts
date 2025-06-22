@@ -1,12 +1,3 @@
-export { registerWidget, getWidget } from './WidgetRegistry'
+export { default as TimelineWidget } from './TimelineWidget'
+export { default as BreakpointList } from './BreakpointList'
 
-import NetworkWeb from './NetworkWeb'
-import WorldMap from './WorldMap'
-import { registerWidget } from './WidgetRegistry'
-
-export function registerBuiltins() {
-  registerWidget('NetworkWeb', NetworkWeb)
-  registerWidget('WorldMap', WorldMap)
-}
-
-export { NetworkWeb, WorldMap }

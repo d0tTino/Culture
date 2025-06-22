@@ -68,6 +68,10 @@ message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
 # Queue for general simulation events streamed via SSE/WebSocket
 event_queue: asyncio.Queue["SimulationEvent | None"] = asyncio.Queue()
 
+# Simulation control state
+SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0}
+BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
+
 # Path to the initial missions data bundled with the front-end
 MISSIONS_PATH = (
     Path(__file__).resolve().parents[2] / "culture-ui" / "src" / "mock" / "missions.json"
@@ -151,3 +155,63 @@ async def websocket_events(websocket: WebSocket) -> None:
             await websocket.send_text(event.json())
     except WebSocketDisconnect:
         pass
+
+
+async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
+    """Process a control command and update simulation state."""
+    action = cmd.get("command")
+    if action == "pause":
+        SIM_STATE["paused"] = True
+    elif action == "resume":
+        SIM_STATE["paused"] = False
+    elif action == "set_speed":
+        try:
+            SIM_STATE["speed"] = float(cmd.get("speed", 1))
+        except (TypeError, ValueError):
+            pass
+    elif action == "set_breakpoints":
+        tags = cmd.get("tags")
+        if isinstance(tags, list):
+            BREAKPOINT_TAGS.clear()
+            BREAKPOINT_TAGS.update(str(t) for t in tags)
+    return {**SIM_STATE, "breakpoints": list(BREAKPOINT_TAGS)}
+
+
+@app.post("/control")
+async def control(command: dict[str, Any]) -> Response:
+    result = await handle_control_command(command)
+    return JSONResponse(result)
+
+
+@app.websocket("/ws/control")
+async def ws_control(websocket: WebSocket) -> None:
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                cmd = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"error": "invalid"}))
+                continue
+            result = await handle_control_command(cmd)
+            await websocket.send_text(json.dumps(result))
+    except WebSocketDisconnect:
+        pass
+
+
+async def emit_event(event: SimulationEvent) -> None:
+    """Emit a simulation event and check for breakpoints."""
+    await event_queue.put(event)
+    tags = set(event.data.get("tags", [])) if event.data else set()
+    if tags & BREAKPOINT_TAGS:
+        SIM_STATE["paused"] = True
+        await event_queue.put(
+            SimulationEvent(
+                event_type="breakpoint_hit",
+                data={
+                    "tags": list(tags & BREAKPOINT_TAGS),
+                    "step": event.data.get("step") if event.data else None,
+                },
+            )
+        )

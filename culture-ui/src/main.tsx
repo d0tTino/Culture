@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
-import { registerBuiltins } from './widgets'
+import { widgetRegistry } from './lib/widgetRegistry'
+import { TimelineWidget, BreakpointList } from './widgets'
 
-registerBuiltins()
+widgetRegistry.register('Timeline', TimelineWidget)
+widgetRegistry.register('Breakpoints', BreakpointList)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

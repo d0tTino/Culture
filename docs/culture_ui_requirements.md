@@ -34,3 +34,9 @@ export interface WidgetRegistry {
 ```
 
 Widgets are rendered based on the registry contents, enabling third‑party extensions without modifying core UI files.
+
+## Timeline and Breakpoints
+
+The dashboard includes a **Timeline** widget that visualizes simulation steps. Users can scrub through completed steps using a slider control.
+
+Events may carry tags such as `violence`, `nsfw`, or `sabotage`. When a tag matches one of the configured breakpoints the simulation automatically pauses.

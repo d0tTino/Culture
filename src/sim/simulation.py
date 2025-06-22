@@ -16,7 +16,7 @@ from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
 from src.infra.snapshot import save_snapshot
-from src.interfaces.dashboard_backend import SimulationEvent, event_queue
+from src.interfaces.dashboard_backend import SimulationEvent, emit_event, event_queue
 from src.shared.typing import SimulationMessage
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
@@ -436,7 +436,7 @@ class Simulation:
                     "du": current_agent_state.du,
                 }
             )
-            await event_queue.put(
+            await emit_event(
                 SimulationEvent(
                     event_type="agent_action",
                     data={
@@ -467,7 +467,7 @@ class Simulation:
                 }
                 save_snapshot(self.current_step, snapshot)
                 log_event({"type": "snapshot", **snapshot})
-                await event_queue.put(SimulationEvent(event_type="snapshot", data=snapshot))
+                await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
 
             # Advance to the next agent for the next turn
             self.current_agent_index = next_agent_index

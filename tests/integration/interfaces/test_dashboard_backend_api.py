@@ -50,6 +50,12 @@ async def test_stream_events_sse(monkeypatch: pytest.MonkeyPatch) -> None:
 
                 return dec
 
+            def post(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
             def websocket(self, *args: object, **kwargs: object):
                 def dec(fn):
                     return fn
@@ -106,6 +112,12 @@ async def test_websocket_events() -> None:
                 pass
 
             def get(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+            def post(self, *args: object, **kwargs: object):
                 def dec(fn):
                     return fn
 
