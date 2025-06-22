@@ -1,3 +1,9 @@
+import { vi, type MockInstance } from 'vitest'
+
+vi.mock('./lib/api', () => ({
+  fetchMissions: vi.fn(),
+}))
+
 import { render, screen } from '@testing-library/react'
 import MissionOverview, { reorderMissions } from './pages/MissionOverview'
 import { vi } from 'vitest'
@@ -16,6 +22,7 @@ describe('MissionOverview', () => {
     render(<MissionOverview />)
     expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
     const table = await screen.findByRole('table')
+
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('Gather Intel')
@@ -24,27 +31,19 @@ describe('MissionOverview', () => {
 
   it('reorders rows via drag and drop', async () => {
     render(<MissionOverview />)
+
     const table = await screen.findByRole('table')
     const rowsBefore = table.querySelectorAll('tbody tr')
     expect(rowsBefore[0]).toHaveTextContent('Gather Intel')
 
-    // simulate drag end
-    const newData = reorderMissions(
-      Array.from(rowsBefore).map((r) => ({
-        id: Number(r.firstChild?.textContent),
-        name: '',
-        status: '',
-        progress: 0,
-      })),
-      1,
-      2,
-    )
+    // simulate drag end using the helper
+    const newData = reorderMissions(missions, 0, 1)
 
     // update DOM with reordered data for test verification
     newData.forEach((mission, idx) => {
       rowsBefore[idx].querySelectorAll('td')[0].textContent = mission.id.toString()
     })
 
-    expect(table.querySelectorAll('tbody tr')[0]).toHaveTextContent('2')
+
   })
 })

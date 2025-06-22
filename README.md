@@ -253,6 +253,7 @@ pnpm --filter culture-ui dev
 ```
 
 See [culture-ui/README.md](culture-ui/README.md) for additional details.
+UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture_ui_requirements.md).
 
 ## Project Structure
 
