@@ -1,12 +1,20 @@
 import { render, screen } from '@testing-library/react'
+import { BrowserRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import App from './App'
 
 vi.mock('./App.css', () => ({}))
 
 describe('App', () => {
-  it('renders mission overview heading by default', () => {
-    render(<App />)
-    expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
+  it('renders home page', () => {
+    render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>,
+    )
+    expect(
+      screen.getByRole('heading', { name: /welcome to culture ui/i }),
+    ).toBeInTheDocument()
+
   })
 })
