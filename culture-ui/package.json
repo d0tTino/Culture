@@ -12,19 +12,19 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@shadcn/ui": "^0.0.4",
+    "@tanstack/react-table": "^8.19.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.519.0",
-    "react-router-dom": "^6.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tailwind-merge": "^3.3.1",
-    "@tanstack/react-table": "^8.19.4",
-    "@shadcn/ui": "^0.0.4",
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2"
-
+    "react-force-graph-2d": "^1.27.1",
+    "react-router-dom": "^6.23.0",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
