@@ -38,6 +38,14 @@ Check the UI source with ESLint:
 pnpm --filter culture-ui lint
 ```
 
+## Type check
+
+Verify the codebase with the TypeScript compiler:
+
+```bash
+pnpm --filter culture-ui type-check
+```
+
 ## Workspace integration
 
 `culture-ui` is defined in `pnpm-workspace.yaml`. Running `pnpm install` at the root installs both backend and UI dependencies. Use `--filter culture-ui` to run scripts only for the UI when needed.
