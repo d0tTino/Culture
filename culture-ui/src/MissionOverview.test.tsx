@@ -5,32 +5,23 @@ vi.mock('./lib/api', () => ({
 }))
 
 import { render, screen } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
-import { vi } from 'vitest'
 import MissionOverview, { reorderMissions } from './pages/MissionOverview'
-import { fetchMissions } from './lib/api'
-import missions from './mock/missions.json'
+import { vi } from 'vitest'
+
 
 vi.mock('./lib/api', () => ({
-  fetchMissions: vi.fn(),
+  fetchMissions: vi.fn().mockResolvedValue([
+    { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
+    { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
+    { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
+  ]),
 }))
-
-beforeEach(() => {
-  ;(fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
-
-})
 
 describe('MissionOverview', () => {
   it('renders missions table', async () => {
-
-    render(
-      <BrowserRouter>
-        <MissionOverview />
-      </BrowserRouter>,
-    )
+    render(<MissionOverview />)
     expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    expect(screen.getByRole('table')).toBeInTheDocument()
-    const table = screen.getByRole('table')
+    const table = await screen.findByRole('table')
 
     const rows = table.querySelectorAll('tbody tr')
     expect(rows).toHaveLength(3)
@@ -39,11 +30,8 @@ describe('MissionOverview', () => {
   })
 
   it('reorders rows via drag and drop', async () => {
-    render(
-      <BrowserRouter>
-        <MissionOverview />
-      </BrowserRouter>,
-    )
+    render(<MissionOverview />)
+
     const table = await screen.findByRole('table')
     const rowsBefore = table.querySelectorAll('tbody tr')
     expect(rowsBefore[0]).toHaveTextContent('Gather Intel')
