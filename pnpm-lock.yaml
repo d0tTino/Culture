@@ -6,6 +6,8 @@ settings:
 
 importers:
 
+  .: {}
+
   culture-ui:
     dependencies:
       '@dnd-kit/core':
@@ -41,7 +43,6 @@ importers:
       react-router-dom:
         specifier: ^6.23.0
         version: 6.30.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
@@ -1821,7 +1822,6 @@ packages:
     engines: {node: '>=14.0.0'}
     peerDependencies:
       react: '>=16.8'
-
 
   react@19.1.0:
     resolution: {integrity: sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==}
@@ -3769,7 +3769,6 @@ snapshots:
     dependencies:
       '@remix-run/router': 1.23.0
       react: 19.1.0
-
 
   react@19.1.0: {}
 
