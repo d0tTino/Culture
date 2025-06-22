@@ -15,21 +15,13 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { reorderMissions } from '../lib/reorderMissions'
 import { CSS } from '@dnd-kit/utilities'
-
-export function reorderMissions(
-  missions: Mission[],
-  from: number,
-  to: number,
-) {
-  return arrayMove(missions, from, to)
-}
 
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
