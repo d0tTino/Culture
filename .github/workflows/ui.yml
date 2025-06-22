@@ -67,11 +67,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run type check
-        run: pnpm --filter culture-ui type-check
-
       - name: Run lint
         run: pnpm --filter culture-ui lint
+
+      - name: Run type check
+        run: pnpm --filter culture-ui type-check
 
       - name: Run tests
         run: pnpm --filter culture-ui test

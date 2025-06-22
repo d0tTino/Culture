@@ -21,3 +21,4 @@ class Registry implements WidgetRegistry {
 }
 
 export const widgetRegistry = new Registry()
+

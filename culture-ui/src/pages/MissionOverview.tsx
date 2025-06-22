@@ -15,20 +15,24 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { reorderMissions } from '../lib/reorderMissions'
 import { CSS } from '@dnd-kit/utilities'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function reorderMissions(
-  missions: Mission[],
-  from: number,
-  to: number,
+  data: Mission[],
+  activeId: number,
+  overId: number,
 ) {
-  return arrayMove(missions, from, to)
+  const oldIndex = data.findIndex((r) => r.id === activeId)
+  const newIndex = data.findIndex((r) => r.id === overId)
+  return arrayMove(data, oldIndex, newIndex)
+
 }
 
 function DraggableRow({ row }: { row: Row<Mission> }) {
