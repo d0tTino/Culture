@@ -35,7 +35,7 @@ from .agent_controller import AgentController
 from .agent_graph_types import AgentActionOutput, AgentTurnState  # RESTORE THIS IMPORT
 
 # Import AgentState and AgentActionIntent first (no circular dependency)
-from .agent_state import AgentActionIntent, AgentState
+from .agent_state import _PYDANTIC_V2, AgentActionIntent, AgentState
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:
@@ -437,7 +437,10 @@ class Agent:
                 )
 
         # Convert the state to dictionary for compatibility with the existing graph
-        state_dict = cast(BaseModel, self._state).dict()
+        if _PYDANTIC_V2:
+            state_dict = cast(BaseModel, self._state).model_dump()
+        else:
+            state_dict = cast(BaseModel, self._state).dict()
 
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
@@ -457,8 +460,10 @@ class Agent:
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
-            "current_state": cast(BaseModel, self._state).dict(
-                exclude_none=True
+            "current_state": (
+                cast(BaseModel, self._state).model_dump(exclude_none=True)
+                if _PYDANTIC_V2
+                else cast(BaseModel, self._state).dict(exclude_none=True)
             ),  # Current full state
             "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
