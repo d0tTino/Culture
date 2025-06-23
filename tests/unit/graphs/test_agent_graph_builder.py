@@ -4,9 +4,9 @@ import pytest
 
 pytest.importorskip("langgraph")
 
-from langgraph.graph.graph import END, START, Graph  # noqa: E402
+from langgraph.graph.graph import END, START, Graph
 
-from src.agents.graphs.agent_graph_builder import build_graph  # noqa: E402
+from src.agents.graphs.agent_graph_builder import build_graph
 
 
 @pytest.mark.unit

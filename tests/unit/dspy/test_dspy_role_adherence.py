@@ -9,9 +9,10 @@ if os.environ.get("ENABLE_DSPY_TESTS") != "1":
     pytest.skip("DSPy tests disabled", allow_module_level=True)
 
 import dspy
-import ollama
 import pytest
 from typing_extensions import Self
+
+import ollama
 
 pytest.importorskip("dspy")
 pytest.importorskip("ollama")
@@ -188,9 +189,9 @@ def test_role_prefix_adherence() -> None:
         )
 
     # Using assertion instead of return value
-    assert (
-        success_count == total_tests
-    ), f"Only {success_count}/{total_tests} role adherence tests passed"
+    assert success_count == total_tests, (
+        f"Only {success_count}/{total_tests} role adherence tests passed"
+    )
 
 
 if __name__ == "__main__":

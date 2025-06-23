@@ -168,6 +168,8 @@ class AgentStateData(BaseModel):
     collective_du: float = 0.0
     current_role: str = Field(default_factory=_get_default_role)
     steps_in_current_role: int = 0
+    role_embedding: list[float] = Field(default_factory=list)
+    reputation: dict[str, float] = Field(default_factory=dict)
     conversation_history: deque[str] = Field(
         default_factory=deque
     )  # Added for process_perceived_messages

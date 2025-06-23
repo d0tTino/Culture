@@ -64,6 +64,8 @@ The `AgentState` class (`src/agents/core/agent_state.py`) is a central data stru
 
 - Maintains an agent's identity and role information
 - Tracks relationships with other agents
+- Stores a role embedding for similarity calculations
+- Maintains reputation scores learned from gossip
 - Records mood and sentiment values
 - Manages resources (Influence Points, Data Units)
 - Tracks project affiliations
@@ -75,6 +77,8 @@ agent_id: str  # Unique identifier
 current_role: str  # The agent's current role
 mood_state: Dict[str, float]  # Tracks emotional state
 relationships: Dict[str, float]  # Stores relationship scores with other agents
+role_embedding: List[float]  # Vector representation of the agent's role
+reputation: Dict[str, float]  # Reputation scores received via gossip
 influence_points: int  # IP resource count
 data_units: int  # DU resource count
 ```
@@ -95,6 +99,8 @@ The `Roles` system (`src/agents/core/roles.py`) defines:
 - Available agent roles (Innovator, Analyzer, Facilitator)
 - Role-specific behaviors and tendencies
 - Methods for changing roles and tracking role history
+- Each agent stores an embedding vector derived from its current role
+- Reputation gossip influences role similarity calculations
 
 ### Interactions
 
@@ -303,6 +309,7 @@ This node:
 - Triggers memory consolidation when needed
 - Manages relationships and resources
 - Handles role change requests
+- Propagates reputation gossip that alters role similarity
 
 #### Memory Management Nodes
 
