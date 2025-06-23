@@ -92,9 +92,8 @@ class Simulation:
             logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = {}
+        # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -112,6 +111,7 @@ class Simulation:
                 "Memory will not be persisted."
             )
         self._last_memory_prune_step = 0
+        self._last_trace_hash = ""
 
         # --- Store Discord bot ---
         self.discord_bot = discord_bot
@@ -129,9 +129,8 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = []
+        # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -251,25 +250,25 @@ class Simulation:
             self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
             self.pending_messages_for_next_round = []
 
-        messages_for_this_agent_turn: list[SimulationMessage] = list(
-            self.messages_to_perceive_this_round
-        )
-        perception_data = {
-            "other_agents_state": self.get_other_agents_public_state(agent_id),
-            "perceived_messages": [
-                msg
-                for msg in messages_for_this_agent_turn
-                if not msg.get("recipient_id") or msg.get("recipient_id") == agent_id
-            ],
-            "knowledge_board_content": self.knowledge_board.get_recent_entries_for_prompt(
-                max_entries=config.MAX_KB_ENTRIES_FOR_PERCEPTION
-            ),
-            "scenario_description": self.scenario,
-            "available_projects": self.projects,
-            "simulation": self,
-            "collective_ip": self.collective_ip,
-            "collective_du": self.collective_du,
-        }
+            # Increment current_step for this agent's turn. current_step becomes 1-indexed.
+            self.current_step += 1
+
+            agent_to_run_index = self.current_agent_index
+            agent = self.agents[agent_to_run_index]
+            agent_id = agent.agent_id
+            current_agent_state = agent.state
+
+            # At the start of a new round (first agent), clear messages_to_perceive_this_round
+            # and populate it from what was pending for the next round.
+            if agent_to_run_index == 0:
+                self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
+                self.pending_messages_for_next_round = []
+                # Clear pending for the new round accumulation
+                logger.debug(
+                    f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
+                    f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
+                )
+
 
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
@@ -307,17 +306,45 @@ class Simulation:
             current_agent_state.messages_sent_count += 1
             current_agent_state.last_message_step = self.current_step
 
-        self.pending_messages_for_next_round.extend(this_agent_turn_generated_messages)
-        self.messages_to_perceive_this_round.extend(this_agent_turn_generated_messages)
+            # --- Process Agent Output ---
+            this_agent_turn_generated_messages = []  # Local list for this agent's output this turn
+
+            message_content = agent_output.get("message_content")
+            message_recipient_id = agent_output.get("message_recipient_id")
+            action_intent_str = agent_output.get("action_intent", "idle")
+            trace_hash = agent_output.get("trace_hash")
+            self._last_trace_hash = trace_hash
+
 
         self.agents[agent_index] = agent
         self.agents[agent_index].update_state(current_agent_state)
 
-        next_agent_index = (agent_index + 1) % len(self.agents)
-        try:
-            has_role_change = any(
-                mem.get("type") == "role_change" and mem.get("step") == self.current_step
-                for mem in current_agent_state.short_term_memory
+                msg_data = cast(
+                    SimulationMessage,
+                    {
+                        "step": self.current_step,
+                        "sender_id": agent_id,
+                        "recipient_id": message_recipient_id,
+                        "content": message_content,
+                        "action_intent": action_intent_str,
+                        "sentiment_score": None,
+                    },
+                )
+                this_agent_turn_generated_messages.append(msg_data)
+                current_agent_state.messages_sent_count += 1
+                current_agent_state.last_message_step = self.current_step
+
+            # Add messages generated by this agent to:
+            # 1. pending_messages_for_next_round (for the *next* full round of all agents)
+            # 2. messages_to_perceive_this_round (so subsequent agents in *this current* round can see them)
+            self.pending_messages_for_next_round.extend(this_agent_turn_generated_messages)
+            self.messages_to_perceive_this_round.extend(this_agent_turn_generated_messages)
+
+            logger.debug(
+                f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
+                f"pending_messages_for_next_round now has {len(self.pending_messages_for_next_round)} messages. "
+                f"messages_to_perceive_this_round now has {len(self.messages_to_perceive_this_round)} messages."
+
             )
             if has_role_change:
                 next_agent_index = agent_index
@@ -358,31 +385,50 @@ class Simulation:
                     "action_intent": action_intent_str,
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
-                },
+                    "trace_hash": trace_hash,
+                }
+            )
+            await emit_event(
+                SimulationEvent(
+                    event_type="agent_action",
+                    data={
+                        "agent_id": agent_id,
+                        "step": self.current_step,
+                        "action_intent": action_intent_str,
+                        "ip": current_agent_state.ip,
+                        "du": current_agent_state.du,
+                    },
+                )
+
             )
         )
 
-        if self.current_step % 100 == 0:
-            snapshot = {
-                "step": self.current_step,
-                "collective_ip": self.collective_ip,
-                "collective_du": self.collective_du,
-                "knowledge_board": self.knowledge_board.to_dict(),
-                "agents": [
-                    {
-                        "agent_id": ag.agent_id,
-                        "ip": ag.state.ip,
-                        "du": ag.state.du,
-                        "mood": ag.state.mood_level,
-                    }
-                    for ag in self.agents
-                ],
-            }
-            save_snapshot(self.current_step, snapshot)
-            log_event({"type": "snapshot", **snapshot})
-            await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
+            if self.current_step % 100 == 0:
+                snapshot = {
+                    "step": self.current_step,
+                    "collective_ip": self.collective_ip,
+                    "collective_du": self.collective_du,
+                    "knowledge_board": self.knowledge_board.to_dict(),
+                    "agents": [
+                        {
+                            "agent_id": ag.agent_id,
+                            "ip": ag.state.ip,
+                            "du": ag.state.du,
+                            "mood": ag.state.mood_level,
+                        }
+                        for ag in self.agents
+                    ],
+                    "trace_hash": self._last_trace_hash,
+                }
+                save_snapshot(self.current_step, snapshot)
+                log_event({"type": "snapshot", **snapshot})
+                await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
 
-        self.total_turns_executed += 1
+            # Advance to the next agent for the next turn
+            self.current_agent_index = next_agent_index
+            self.total_turns_executed += 1
+            turn_counter_this_run_step += 1
+
 
         if (
             self.vector_store_manager
