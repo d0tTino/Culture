@@ -89,9 +89,8 @@ class Simulation:
             logger.info("Simulation initialized with Knowledge Board.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = {}
+        # Structure: {project_id: {name, creator_id, members}}
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -109,6 +108,7 @@ class Simulation:
                 "Memory will not be persisted."
             )
         self._last_memory_prune_step = 0
+        self._last_trace_hash = ""
 
         # --- Store Discord bot ---
         self.discord_bot = discord_bot
@@ -126,9 +126,8 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = []
+        # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -260,7 +259,8 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []
+                # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -328,6 +328,8 @@ class Simulation:
             message_content = agent_output.get("message_content")
             message_recipient_id = agent_output.get("message_recipient_id")
             action_intent_str = agent_output.get("action_intent", "idle")
+            trace_hash = agent_output.get("trace_hash")
+            self._last_trace_hash = trace_hash
 
             if message_content:
                 message_type = (
@@ -359,9 +361,7 @@ class Simulation:
             # 1. pending_messages_for_next_round (for the *next* full round of all agents)
             # 2. messages_to_perceive_this_round (so subsequent agents in *this current* round can see them)
             self.pending_messages_for_next_round.extend(this_agent_turn_generated_messages)
-            self.messages_to_perceive_this_round.extend(
-                this_agent_turn_generated_messages
-            )  # ADDED
+            self.messages_to_perceive_this_round.extend(this_agent_turn_generated_messages)
 
             logger.debug(
                 f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
@@ -434,6 +434,7 @@ class Simulation:
                     "action_intent": action_intent_str,
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
+                    "trace_hash": trace_hash,
                 }
             )
             await emit_event(
@@ -464,6 +465,7 @@ class Simulation:
                         }
                         for ag in self.agents
                     ],
+                    "trace_hash": self._last_trace_hash,
                 }
                 save_snapshot(self.current_step, snapshot)
                 log_event({"type": "snapshot", **snapshot})

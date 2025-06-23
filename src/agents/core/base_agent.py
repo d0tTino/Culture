@@ -497,6 +497,10 @@ class Agent:
             "collective_ip": getattr(self._state, "collective_ip", None),
             "collective_du": getattr(self._state, "collective_du", None),
         }
+        from src.agents.graphs.basic_agent_graph import compute_trace_hash
+
+        trace_hash = compute_trace_hash(initial_turn_state)
+        initial_turn_state["trace_hash"] = trace_hash
 
         if self.graph is None:
             logger.error(f"Agent {self.agent_id} has no graph assigned.")
@@ -619,6 +623,7 @@ class Agent:
                     "message_content": message_content,
                     "message_recipient_id": message_recipient_id,
                     "action_intent": action_intent,
+                    "trace_hash": trace_hash,
                 }
                 logger.debug(f"Agent {self.agent_id} run_turn returning: {turn_output}")
 

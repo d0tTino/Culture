@@ -56,9 +56,9 @@ def test_log_and_fetch_events(monkeypatch):
     monkeypatch.setattr(event_log, "_producer", None, raising=False)
 
     events_in = [
-        {"step": 1, "msg": "first"},
-        {"step": 2, "msg": "second"},
-        {"step": 3, "msg": "third"},
+        {"step": 1, "msg": "first", "trace_hash": "aaa"},
+        {"step": 2, "msg": "second", "trace_hash": "bbb"},
+        {"step": 3, "msg": "third", "trace_hash": "ccc"},
     ]
 
     for ev in events_in:
@@ -67,6 +67,8 @@ def test_log_and_fetch_events(monkeypatch):
     events_out = event_log.fetch_events(after_step=0)
     assert [json.loads(m) for m in messages] == events_in
     assert events_out == events_in
+    assert all("trace_hash" in ev for ev in events_out)
 
     after_first = event_log.fetch_events(after_step=1)
     assert after_first == events_in[1:]
+    assert all("trace_hash" in ev for ev in after_first)
