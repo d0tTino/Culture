@@ -3,6 +3,7 @@
 Defines the base class for all agents in the Culture simulation.
 """
 
+import asyncio
 import copy
 import logging
 import uuid
@@ -25,7 +26,31 @@ from src.infra import config
 from src.infra.async_dspy_manager import AsyncDSPyManager
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
-from src.interfaces.dashboard_backend import AgentMessage, message_sse_queue
+
+if TYPE_CHECKING:
+    from src.interfaces.dashboard_backend import AgentMessage as DashboardAgentMessage
+    from src.interfaces.dashboard_backend import message_sse_queue
+else:  # pragma: no cover - optional runtime dependency
+    try:
+        from src.interfaces.dashboard_backend import (
+            AgentMessage as DashboardAgentMessage,
+        )
+        from src.interfaces.dashboard_backend import (
+            message_sse_queue,
+        )
+    except Exception:
+
+        class DashboardAgentMessage(BaseModel):  # minimal stub for tests
+            agent_id: str
+            content: str
+            step: int
+            recipient_id: str | None = None
+            action_intent: str | None = None
+            timestamp: float | None = None
+            extra: dict[str, Any] | None = None
+
+        message_sse_queue: asyncio.Queue[DashboardAgentMessage] = asyncio.Queue()
+
 from src.shared.memory_store import MemoryStore
 from src.shared.typing import SimulationMessage
 
@@ -52,6 +77,8 @@ if TYPE_CHECKING:
 from src.agents.dspy_programs.action_intent_selector import get_optimized_action_selector
 from src.agents.dspy_programs.relationship_updater import get_relationship_updater
 from src.agents.dspy_programs.role_thought_generator import get_role_thought_generator
+
+AgentMessage = DashboardAgentMessage
 
 logger = logging.getLogger(__name__)
 
