@@ -21,6 +21,19 @@ def have_module(name: str) -> bool:
 def main(argv: list[str]) -> int:
     has_xdist = have_module("xdist")
     has_asyncio = have_module("pytest_asyncio")
+    if not have_module("fastapi"):
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                str(ROOT / "requirements.txt"),
+                "-r",
+                str(ROOT / "requirements-dev.txt"),
+            ]
+        )
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)
