@@ -269,6 +269,24 @@ class Simulation:
             agent_id = agent.agent_id
             current_agent_state = agent.state
 
+            if not current_agent_state.is_alive:
+                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                continue
+
+            current_agent_state.age += 1
+            max_age = int(config.get_config("MAX_AGENT_AGE"))
+            if current_agent_state.age >= max_age:
+                current_agent_state.is_alive = False
+                current_agent_state.inheritance = current_agent_state.ip + current_agent_state.du
+                current_agent_state.ip = 0.0
+                current_agent_state.du = 0.0
+                if self.knowledge_board:
+                    self.knowledge_board.add_entry(
+                        f"Agent {agent_id} retired", agent_id, self.current_step
+                    )
+                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                continue
+
             # At the start of a new round (first agent), clear messages_to_perceive_this_round
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
@@ -276,8 +294,7 @@ class Simulation:
                 self.pending_messages_for_next_round = (
                     []
                 )  # Clear pending for the new round accumulation
-
-                logger.debug(
+    logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
                 )
@@ -841,6 +858,19 @@ class Simulation:
             dict: Dictionary mapping project IDs to project details
         """
         return self.projects.copy()
+
+    async def propose_law(self: Self, proposer_id: str, text: str) -> bool:
+        """Allow an agent to propose a law and trigger a vote."""
+        from src.governance import propose_law as _propose
+
+        proposer = next((a for a in self.agents if a.agent_id == proposer_id), None)
+        if proposer is None:
+            return False
+
+        approved = await _propose(proposer, text, self.agents)
+        if approved and self.knowledge_board:
+            self.knowledge_board.add_entry(f"Law approved: {text}", proposer_id, self.current_step)
+        return approved
 
     # --- Optional helper methods for future use ---
     # def get_environment_view(self, agent: 'Agent'):

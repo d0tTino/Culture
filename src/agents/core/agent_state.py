@@ -168,6 +168,9 @@ class AgentStateData(BaseModel):
     messages_sent_count: int = 0
     messages_received_count: int = 0
     actions_taken_count: int = 0
+    age: int = 0
+    is_alive: bool = True
+    inheritance: float = 0.0
     # Memory consolidation tracking
     last_level_2_consolidation_step: int = 0
     collective_ip: float = 0.0
