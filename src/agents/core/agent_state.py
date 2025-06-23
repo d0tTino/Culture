@@ -86,6 +86,9 @@ class AgentActionIntent(str, Enum):
     LEAVE_PROJECT = "leave_project"
     REQUEST_ROLE_CHANGE = "request_role_change"
     SEND_DIRECT_MESSAGE = "send_direct_message"
+    MOVE = "move"
+    GATHER = "gather"
+    BUILD = "build"
 
 
 DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
@@ -98,6 +101,9 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
     AgentActionIntent.JOIN_PROJECT,
     AgentActionIntent.LEAVE_PROJECT,
     AgentActionIntent.SEND_DIRECT_MESSAGE,
+    AgentActionIntent.MOVE,
+    AgentActionIntent.GATHER,
+    AgentActionIntent.BUILD,
 ]
 
 
