@@ -107,6 +107,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MAX_IP_PER_TICK": 10.0,
     "MAX_DU_PER_TICK": 10.0,
     "SNAPSHOT_COMPRESS": False,
+    "MAX_AGENT_AGE": 10,
 }
 
 # Global config dictionary
@@ -170,6 +171,7 @@ INT_CONFIG_KEYS = [
     "MAX_KB_ENTRIES",
     "MEMORY_STORE_TTL_SECONDS",
     "MEMORY_STORE_PRUNE_INTERVAL_STEPS",
+    "MAX_AGENT_AGE",
 ]
 BOOL_CONFIG_KEYS = [
     "MEMORY_PRUNING_ENABLED",
