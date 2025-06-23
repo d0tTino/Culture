@@ -4,9 +4,11 @@ Defines the base class for all agents in the Culture simulation.
 """
 
 import copy
+import hashlib
 import logging
 import uuid
 from collections.abc import Awaitable
+from math import sqrt
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pydantic import BaseModel
@@ -56,6 +58,16 @@ from src.agents.dspy_programs.role_thought_generator import get_role_thought_gen
 logger = logging.getLogger(__name__)
 
 
+def compute_embedding(text: str, dim: int = 8) -> list[float]:
+    """Return a deterministic embedding vector for ``text``."""
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    segment_len = len(digest) // dim
+    return [
+        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
+        for i in range(dim)
+    ]
+
+
 class Agent:
     """
     Represents a basic agent in the simulation environment.
@@ -101,11 +113,15 @@ class Agent:
         # Get necessary values from initial_state or use defaults
         name = name or initial_state.get("name", f"Agent-{self.agent_id[:8]}")
         role = initial_state.get("current_role", "Default Contributor")
+        role_embedding = initial_state.get("role_embedding")
+        if role_embedding is None:
+            role_embedding = compute_embedding(role)
         steps_in_role = initial_state.get("steps_in_current_role", 0)
         mood = initial_state.get("mood", "neutral")
         agent_goal = initial_state.get(
             "agent_goal", "Contribute to the simulation as effectively as possible."
         )
+        reputation = initial_state.get("reputation", {})
 
         # LLM Client Initialization - MOVED EARLIER
         self.llm_client = get_ollama_client()
@@ -167,9 +183,11 @@ class Agent:
         agent_state_kwargs["agent_id"] = self.agent_id
         agent_state_kwargs["name"] = name  # name is derived above
         agent_state_kwargs["role"] = role  # role is derived above
+        agent_state_kwargs["role_embedding"] = role_embedding
         agent_state_kwargs["steps_in_current_role"] = steps_in_role  # derived above
         agent_state_kwargs["mood"] = mood  # derived above
         agent_state_kwargs["agent_goal"] = agent_goal  # derived above
+        agent_state_kwargs["reputation"] = reputation
         agent_state_kwargs["llm_client"] = self.llm_client  # NOW self.llm_client is initialized
 
         # Handle 'goals' separately if it was a single string in initial_state (already handled when deriving 'goals' var)
@@ -672,6 +690,25 @@ class Agent:
             f"Agent(agent_id='{self.agent_id}', role='{self._state.current_role}', "
             f"ip={self._state.ip}, du={self._state.du})"
         )
+
+    def receive_gossip(self: Self, gossip: dict[str, float]) -> None:
+        """Update reputation scores based on gossip from other agents."""
+        for agent_id, rep in gossip.items():
+            current = self._state.reputation.get(agent_id, 0.0)
+            self._state.reputation[agent_id] = (current + rep) / 2
+
+    def role_similarity(self: Self, other_agent: "Agent") -> float:
+        """Return similarity between this agent's role and another's."""
+        emb1 = self._state.role_embedding
+        emb2 = other_agent.state.role_embedding
+        if not emb1 or not emb2:
+            return 0.0
+        dot = sum(a * b for a, b in zip(emb1, emb2))
+        norm1 = sqrt(sum(a * a for a in emb1))
+        norm2 = sqrt(sum(b * b for b in emb2))
+        base_sim = dot / (norm1 * norm2) if norm1 and norm2 else 0.0
+        reputation_boost = self._state.reputation.get(other_agent.agent_id, 0.0)
+        return base_sim * (1 + reputation_boost)
 
     # --- Async DSPy Methods ---
     async def async_generate_role_prefixed_thought(
