@@ -19,14 +19,20 @@ from .graph_nodes import (
 from .interaction_handlers import (
     handle_ask_clarification_node,
     handle_continue_collaboration_node,
-    handle_create_project_node,  # noqa: F401 - imported for future use
+    handle_create_project_node,  # - imported for future use
     handle_deep_analysis_node,
     handle_idle_node,
-    handle_join_project_node,  # noqa: F401 - imported for future use
-    handle_leave_project_node,  # noqa: F401 - imported for future use
+    handle_join_project_node,  # - imported for future use
+    handle_leave_project_node,  # - imported for future use
     handle_propose_idea_node,
-    handle_send_direct_message_node,  # noqa: F401 - imported for future use
+    handle_send_direct_message_node,  # - imported for future use
 )
+
+
+def route_action_intent(state: AgentTurnState) -> str:
+    output = state.get("structured_output")
+    intent = getattr(output, "action_intent", "idle") if output else "idle"
+    return intent
 
 
 def build_graph() -> Any:
@@ -36,11 +42,17 @@ def build_graph() -> Any:
     graph_builder.add_node("retrieve_and_summarize_memories", retrieve_and_summarize_memories_node)
     graph_builder.add_node("generate_thought_and_message", generate_thought_and_message_node)
 
+    graph_builder.add_node("route_action_intent", route_action_intent)
+
     graph_builder.add_node("handle_propose_idea", handle_propose_idea_node)
     graph_builder.add_node("handle_ask_clarification", handle_ask_clarification_node)
     graph_builder.add_node("handle_continue_collaboration", handle_continue_collaboration_node)
     graph_builder.add_node("handle_idle", handle_idle_node)
     graph_builder.add_node("handle_deep_analysis", handle_deep_analysis_node)
+    graph_builder.add_node("handle_create_project", handle_create_project_node)
+    graph_builder.add_node("handle_join_project", handle_join_project_node)
+    graph_builder.add_node("handle_leave_project", handle_leave_project_node)
+    graph_builder.add_node("handle_send_direct_message", handle_send_direct_message_node)
 
     graph_builder.add_node("finalize_message_agent", finalize_message_agent_node)
 
@@ -48,7 +60,36 @@ def build_graph() -> Any:
     graph_builder.add_edge("analyze_perception_sentiment", "prepare_relationship_prompt")
     graph_builder.add_edge("prepare_relationship_prompt", "retrieve_and_summarize_memories")
     graph_builder.add_edge("retrieve_and_summarize_memories", "generate_thought_and_message")
-    graph_builder.add_edge("generate_thought_and_message", "handle_idle")
-    graph_builder.add_edge("handle_idle", "finalize_message_agent")
+    graph_builder.add_edge("generate_thought_and_message", "route_action_intent")
+
+    graph_builder.add_conditional_edges(
+        "route_action_intent",
+        route_action_intent,
+        {
+            "propose_idea": "handle_propose_idea",
+            "ask_clarification": "handle_ask_clarification",
+            "continue_collaboration": "handle_continue_collaboration",
+            "idle": "handle_idle",
+            "perform_deep_analysis": "handle_deep_analysis",
+            "create_project": "handle_create_project",
+            "join_project": "handle_join_project",
+            "leave_project": "handle_leave_project",
+            "send_direct_message": "handle_send_direct_message",
+        },
+    )
+
+    for node in [
+        "handle_propose_idea",
+        "handle_ask_clarification",
+        "handle_continue_collaboration",
+        "handle_idle",
+        "handle_deep_analysis",
+        "handle_create_project",
+        "handle_join_project",
+        "handle_leave_project",
+        "handle_send_direct_message",
+    ]:
+        graph_builder.add_edge(node, "finalize_message_agent")
+
     graph_builder.add_edge("finalize_message_agent", END)
     return graph_builder

@@ -26,6 +26,12 @@ else:  # pragma: no cover - optional runtime dependency
 
                 return dec
 
+            def post(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+                def dec(fn: Any) -> Any:
+                    return fn
+
+                return dec
+
             def websocket(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
@@ -177,27 +183,35 @@ async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
     return {**SIM_STATE, "breakpoints": list(BREAKPOINT_TAGS)}
 
 
-@app.post("/control")
-async def control(command: dict[str, Any]) -> Response:
-    result = await handle_control_command(command)
-    return JSONResponse(result)
+try:
+
+    @app.post("/control")
+    async def control(command: dict[str, Any]) -> Response:
+        result = await handle_control_command(command)
+        return JSONResponse(result)
+except AttributeError:  # pragma: no cover - stub app may lack decorators
+    pass
 
 
-@app.websocket("/ws/control")
-async def ws_control(websocket: WebSocket) -> None:
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            try:
-                cmd = json.loads(data)
-            except json.JSONDecodeError:
-                await websocket.send_text(json.dumps({"error": "invalid"}))
-                continue
-            result = await handle_control_command(cmd)
-            await websocket.send_text(json.dumps(result))
-    except WebSocketDisconnect:
-        pass
+try:
+
+    @app.websocket("/ws/control")
+    async def ws_control(websocket: WebSocket) -> None:
+        await websocket.accept()
+        try:
+            while True:
+                data = await websocket.receive_text()
+                try:
+                    cmd = json.loads(data)
+                except json.JSONDecodeError:
+                    await websocket.send_text(json.dumps({"error": "invalid"}))
+                    continue
+                result = await handle_control_command(cmd)
+                await websocket.send_text(json.dumps(result))
+        except WebSocketDisconnect:
+            pass
+except AttributeError:  # pragma: no cover - stub app may lack decorators
+    pass
 
 
 async def emit_event(event: SimulationEvent) -> None:
