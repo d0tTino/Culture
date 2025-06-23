@@ -5,6 +5,7 @@ Defines common types used in the agent's LangGraph state.
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Extra, Field
+from typing_extensions import NotRequired
 
 from src.shared.typing import SimulationMessage
 
@@ -137,3 +138,4 @@ class AgentTurnState(TypedDict):
     agent_instance: "Agent"  # Forward reference to Agent
     collective_ip: float | None  # Total IP across all agents in the simulation
     collective_du: float | None  # Total DU across all agents in the simulation
+    trace_hash: NotRequired[str]

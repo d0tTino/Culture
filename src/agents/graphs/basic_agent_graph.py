@@ -3,10 +3,11 @@
 Defines the basic LangGraph structure for an agent's turn.
 """
 
+import hashlib
+import json
 import logging
 import random
 import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_controller import AgentController
@@ -33,7 +34,20 @@ VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 # Module logger
 logger = logging.getLogger(__name__)
 
-# At the top of the file, after other DSPy imports
+
+def compute_trace_hash(state: AgentTurnState) -> str:
+    """Return a deterministic hash for a LangGraph invocation."""
+    relevant = {
+        "agent_id": state.get("agent_id"),
+        "simulation_step": state.get("simulation_step"),
+    }
+    agent_state = state.get("state")
+    if isinstance(agent_state, AgentState):
+        relevant["current_role"] = getattr(agent_state, "current_role", None)
+    payload = json.dumps(relevant, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 try:
     from pathlib import Path
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,13 @@ except ImportError:  # pragma: no cover - optional dependency
     zstd = None
 
 from .config import SNAPSHOT_COMPRESS
+
+
+def compute_trace_hash(data: dict[str, Any]) -> str:
+    """Return a stable hash for ``data`` used to verify deterministic replays."""
+
+    payload = json.dumps(data, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def save_snapshot(

@@ -73,3 +73,30 @@ async def test_snapshot_contains_knowledge_board(
 
     assert "knowledge_board" in snapshot
     assert snapshot["knowledge_board"]["entries"]
+    assert "trace_hash" in snapshot
+
+    from src.infra.snapshot import compute_trace_hash
+
+    expected_hash = compute_trace_hash({k: v for k, v in snapshot.items() if k != "trace_hash"})
+    assert snapshot["trace_hash"] == expected_hash
+
+    agent2 = DummyAgent()
+    sim2 = Simulation(agents=[agent2])
+
+    def _save2(step: int, data: dict, directory: Path = tmp_path / "run2") -> None:
+        from src.infra.snapshot import save_snapshot as real_save
+
+        (tmp_path / "run2").mkdir(exist_ok=True)
+        real_save(step, data, tmp_path / "run2")
+
+    monkeypatch.setattr("src.sim.simulation.save_snapshot", _save2)
+
+    for _ in range(100):
+        await sim2.run_step()
+
+    snap_file2 = tmp_path / "run2" / "snapshot_100.json"
+    with snap_file2.open() as f2:
+        snapshot2 = json.load(f2)
+
+    assert snapshot2["trace_hash"] == snapshot["trace_hash"]
+    assert snapshot2["knowledge_board"] == snapshot["knowledge_board"]
