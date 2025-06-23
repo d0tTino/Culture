@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
 from src.shared.typing import SimulationMessage
 
@@ -46,12 +47,16 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
     manager = state.get("vector_store_manager")
     agent = state.get("agent_instance")
+    semantic_manager: SemanticMemoryManager | None = state.get("semantic_manager")
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
     memories = await manager.aretrieve_relevant_memories(  # type: ignore[attr-defined]
         state["agent_id"], query="", k=5
     )
     memories_content = [m.get("content", "") for m in memories]
+    if semantic_manager:
+        semantic = semantic_manager.get_recent_summaries(state["agent_id"], limit=2)
+        memories_content.extend(semantic)
     summary_result = await agent.async_generate_l1_summary(  # type: ignore[attr-defined]
         state.get("current_role", ""), "\n".join(memories_content), ""
     )
