@@ -20,6 +20,7 @@ from src.interfaces.dashboard_backend import SimulationEvent, emit_event, event_
 from src.shared.typing import SimulationMessage
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.world_map import ResourceToken, StructureType, WorldMap
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
@@ -87,6 +88,12 @@ class Simulation:
         else:
             self.knowledge_board = KnowledgeBoard()
             logger.info("Simulation initialized with Knowledge Board.")
+
+        # Initialize world map and place agents
+        self.world_map = WorldMap()
+        for idx, ag in enumerate(self.agents):
+            self.world_map.add_agent(ag.agent_id, x=idx, y=0)
+        logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
         self.projects: dict[
@@ -328,6 +335,7 @@ class Simulation:
             message_content = agent_output.get("message_content")
             message_recipient_id = agent_output.get("message_recipient_id")
             action_intent_str = agent_output.get("action_intent", "idle")
+            map_action = agent_output.get("map_action")
 
             if message_content:
                 message_type = (
@@ -362,6 +370,49 @@ class Simulation:
             self.messages_to_perceive_this_round.extend(
                 this_agent_turn_generated_messages
             )  # ADDED
+
+            if isinstance(map_action, dict):
+                action_type = map_action.get("action")
+                if action_type == "move":
+                    dx = int(map_action.get("dx", 0))
+                    dy = int(map_action.get("dy", 0))
+                    pos = self.world_map.move(agent_id, dx, dy)
+                    action_details = {"position": pos}
+                elif action_type == "gather":
+                    res = map_action.get("resource")
+                    success = False
+                    if isinstance(res, str):
+                        success = self.world_map.gather(agent_id, ResourceToken(res))
+                    action_details = {"resource": res, "success": success}
+                elif action_type == "build":
+                    struct = map_action.get("structure")
+                    success = False
+                    if isinstance(struct, str):
+                        success = self.world_map.build(agent_id, StructureType(struct))
+                    action_details = {"structure": struct, "success": success}
+                else:
+                    action_details = {}
+
+                log_event(
+                    {
+                        "type": "map_action",
+                        "agent_id": agent_id,
+                        "step": self.current_step,
+                        "action": action_type,
+                        **action_details,
+                    }
+                )
+                await emit_event(
+                    SimulationEvent(
+                        event_type="map_action",
+                        data={
+                            "agent_id": agent_id,
+                            "step": self.current_step,
+                            "action": action_type,
+                            **action_details,
+                        },
+                    )
+                )
 
             logger.debug(
                 f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
@@ -455,6 +506,7 @@ class Simulation:
                     "collective_ip": self.collective_ip,
                     "collective_du": self.collective_du,
                     "knowledge_board": self.knowledge_board.to_dict(),
+                    "world_map": self.world_map.to_dict(),
                     "agents": [
                         {
                             "agent_id": ag.agent_id,
