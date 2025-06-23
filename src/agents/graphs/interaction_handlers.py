@@ -140,6 +140,7 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
             except Exception:  # pragma: no cover - optional
                 logger.debug("Ledger logging failed", exc_info=True)
 
+
     return dict(state)
 
 
@@ -158,6 +159,7 @@ def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
         if simulation.leave_project(project_id, agent_state.agent_id):
             agent_state.current_project_id = None
             agent_state.projects.pop(project_id, None)
+
 
     return dict(state)
 

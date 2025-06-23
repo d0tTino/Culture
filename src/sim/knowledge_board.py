@@ -19,16 +19,16 @@ T = TypeVar("T")
 
 class LoggingList(list[T], Generic[T]):
     def clear(self: Self) -> None:
-        logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): clear() called")
+        logger.debug(f"LOGGING_LIST_DEBUG ({id(self)}): clear() called")
         super().clear()
 
     def __delitem__(self: Self, key: SupportsIndex | slice) -> None:
         if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
-            logger.info(f"LOGGING_LIST_DEBUG ({id(self)}): __delitem__[:] called (del self[:])")
+            logger.debug(f"LOGGING_LIST_DEBUG ({id(self)}): __delitem__[:] called (del self[:])")
         super().__delitem__(key)
 
     def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
-        logger.info(
+        logger.debug(
             f"LOGGING_LIST_DEBUG: Initializing new LoggingList instance ({id(self)}) from args: {args}"
         )
         super().__init__(*args, **kwargs)

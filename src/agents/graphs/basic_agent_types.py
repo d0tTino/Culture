@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Extra, Field
+from typing_extensions import NotRequired
 
 from src.agents.core.agent_state import AgentState
 
@@ -118,3 +119,4 @@ class AgentTurnState(TypedDict):
     state: AgentState
     collective_ip: float | None
     collective_du: float | None
+    trace_hash: NotRequired[str]

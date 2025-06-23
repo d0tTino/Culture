@@ -522,6 +522,11 @@ Culture.ai uses pytest with marker-based test selection and parallelization for 
 - **Full suite** (`pytest -m "slow or dspy_program or integration" -v -n auto`): Runs all slow, DSPy, and integration tests in parallel
 - ChromaDB test DBs are stored in RAM (tmpfs) on Linux for speed; see `docs/testing.md` for details
 
+`pytest` reads settings from `pytest.ini`. If you run tests with `-c /dev/null` or
+without the required plugins installed, you may see "unknown mark" warnings.
+Use `scripts/run_tests.py` to automatically adjust options based on the
+available plugins, or invoke `pytest -c pytest.ini` directly.
+
 See [docs/testing.md](docs/testing.md) for full instructions, marker definitions, and troubleshooting.
 
 ## Quickstart for Developers
