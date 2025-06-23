@@ -74,6 +74,7 @@ from .config import (
     OLLAMA_REQUEST_TIMEOUT,
     get_config,
 )
+from .ledger import ledger
 
 if TYPE_CHECKING:
     from litellm.exceptions import APIError
@@ -107,7 +108,21 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
         result = func(*args, **kwargs)
         if state is not None:
             try:
-                state.du -= float(get_config("DU_COST_PER_ACTION"))
+                base_price = float(get_config("GAS_PRICE_PER_CALL"))
+                token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
+                tokens = 1
+                if isinstance(result, dict):
+                    usage = result.get("usage")
+                    if isinstance(usage, dict):
+                        tokens = int(usage.get("prompt_tokens", 0)) + int(
+                            usage.get("completion_tokens", 0)
+                        )
+                cost = base_price + token_price * tokens
+                state.du -= cost
+                try:
+                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                except Exception:  # pragma: no cover - optional
+                    logger.debug("Ledger logging failed", exc_info=True)
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result

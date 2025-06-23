@@ -20,7 +20,8 @@ class Ledger:
             CREATE TABLE IF NOT EXISTS agent_balances (
                 agent_id TEXT PRIMARY KEY,
                 ip REAL DEFAULT 0,
-                du REAL DEFAULT 0
+                du REAL DEFAULT 0,
+                staked_du REAL DEFAULT 0
             )
             """
         )
@@ -59,6 +60,56 @@ class Ledger:
         )
         self.conn.commit()
 
+    def stake_du(self, agent_id: str, amount: float) -> None:
+        """Stake DU for ``agent_id`` and record the transaction."""
+        if amount <= 0:
+            return
+        self.log_change(agent_id, 0.0, -amount, "stake")
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO agent_balances(agent_id, staked_du)
+            VALUES(?, ?)
+            ON CONFLICT(agent_id) DO UPDATE SET
+                staked_du = staked_du + excluded.staked_du
+            """,
+            (agent_id, float(amount)),
+        )
+        self.conn.commit()
+
+    def unstake_du(self, agent_id: str, amount: float) -> None:
+        """Unstake DU for ``agent_id`` and record the transaction."""
+        if amount <= 0:
+            return
+        self.log_change(agent_id, 0.0, amount, "unstake")
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE agent_balances SET staked_du = MAX(staked_du - ?, 0) WHERE agent_id=?",
+            (float(amount), agent_id),
+        )
+        self.conn.commit()
+
+    def get_staked_du(self, agent_id: str) -> float:
+        """Return the amount of staked DU for ``agent_id``."""
+        cur = self.conn.execute(
+            "SELECT staked_du FROM agent_balances WHERE agent_id=?",
+            (agent_id,),
+        )
+        row = cur.fetchone()
+        return float(row[0]) if row else 0.0
+
+    def get_du_burn_rate(self, agent_id: str, window: int = 10) -> float:
+        """Return the average DU spent over the last ``window`` transactions."""
+        cur = self.conn.execute(
+            "SELECT delta_du FROM transactions WHERE agent_id=? ORDER BY id DESC LIMIT ?",
+            (agent_id, int(window)),
+        )
+        rows = cur.fetchall()
+        spent = [-float(r[0]) for r in rows if r[0] < 0]
+        if not spent:
+            return 0.0
+        return sum(spent) / len(spent)
+
     def get_balance(self, agent_id: str) -> tuple[float, float]:
         """Return the current balance for ``agent_id``."""
         cur = self.conn.execute("SELECT ip, du FROM agent_balances WHERE agent_id=?", (agent_id,))
@@ -70,4 +121,7 @@ class Ledger:
 
 ledger = Ledger()
 
-__all__ = ["Ledger", "ledger"]
+__all__ = [
+    "Ledger",
+    "ledger",
+]

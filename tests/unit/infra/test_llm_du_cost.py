@@ -26,5 +26,5 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
     result = module.generate_text("hi", agent_state=state)
 
     assert result == "hi"
-    expected = start_du - get_config("DU_COST_PER_ACTION")
+    expected = start_du - (get_config("GAS_PRICE_PER_CALL") + get_config("GAS_PRICE_PER_TOKEN"))
     assert state.du == pytest.approx(expected)

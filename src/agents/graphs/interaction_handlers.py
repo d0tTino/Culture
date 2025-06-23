@@ -71,14 +71,96 @@ def handle_ask_clarification_node(state: AgentTurnState) -> dict[str, Any]:
 
 
 def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
+    agent_state = state["state"]
+    structured_output = state.get("structured_output")
+    perception = state.get("environment_perception", {})
+    simulation = perception.get("simulation")
+
+    if structured_output and simulation is not None and structured_output.project_name_to_create:
+        project_name = structured_output.project_name_to_create
+        project_description = structured_output.project_description_for_creation
+
+        start_ip = agent_state.ip
+        start_du = agent_state.du
+
+        project_id = simulation.create_project(
+            project_name, agent_state.agent_id, project_description
+        )
+
+        if project_id:
+            agent_state.current_project_id = project_id
+            agent_state.projects[project_id] = simulation.projects[project_id]
+            agent_state.ip -= config.IP_COST_CREATE_PROJECT
+            agent_state.du -= config.DU_COST_CREATE_PROJECT
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    agent_state.agent_id,
+                    agent_state.ip - start_ip,
+                    agent_state.du - start_du,
+                    "create_project",
+                )
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger logging failed", exc_info=True)
+
     return dict(state)
 
 
 def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
+    agent_state = state["state"]
+    structured_output = state.get("structured_output")
+    perception = state.get("environment_perception", {})
+    simulation = perception.get("simulation")
+
+    if (
+        structured_output
+        and simulation is not None
+        and structured_output.project_id_to_join_or_leave
+    ):
+        project_id = structured_output.project_id_to_join_or_leave
+        start_ip = agent_state.ip
+        start_du = agent_state.du
+
+        if simulation.join_project(project_id, agent_state.agent_id):
+            project = simulation.projects.get(project_id, {})
+            agent_state.current_project_id = project_id
+            agent_state.projects[project_id] = project
+            agent_state.ip -= config.IP_COST_JOIN_PROJECT
+            agent_state.du -= config.DU_COST_JOIN_PROJECT
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    agent_state.agent_id,
+                    agent_state.ip - start_ip,
+                    agent_state.du - start_du,
+                    "join_project",
+                )
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger logging failed", exc_info=True)
+
+
     return dict(state)
 
 
 def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
+    agent_state = state["state"]
+    structured_output = state.get("structured_output")
+    perception = state.get("environment_perception", {})
+    simulation = perception.get("simulation")
+
+    if (
+        structured_output
+        and simulation is not None
+        and structured_output.project_id_to_join_or_leave
+    ):
+        project_id = structured_output.project_id_to_join_or_leave
+        if simulation.leave_project(project_id, agent_state.agent_id):
+            agent_state.current_project_id = None
+            agent_state.projects.pop(project_id, None)
+
+
     return dict(state)
 
 

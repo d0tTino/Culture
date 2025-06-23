@@ -3,7 +3,7 @@
 
 import asyncio
 import sys
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import uvicorn
 from fastapi import FastAPI

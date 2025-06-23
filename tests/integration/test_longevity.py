@@ -154,9 +154,9 @@ class TestLongevity:
                 await self.simulation.run_step()
 
                 # Basic check after each step
-                assert (
-                    self.simulation.last_completed_agent_index is not None
-                ), "last_completed_agent_index should be set"
+                assert self.simulation.last_completed_agent_index is not None, (
+                    "last_completed_agent_index should be set"
+                )
                 current_agent_after_step = self.simulation.agents[
                     self.simulation.last_completed_agent_index
                 ]  # Agent whose turn just ended
@@ -181,9 +181,9 @@ class TestLongevity:
                 )
 
         logger.info(f"Longevity Test: Completed {num_turns_to_run} turns.")
-        assert (
-            self.simulation.total_turns_executed >= num_turns_to_run
-        ), f"Simulation should execute at least {num_turns_to_run} turns. Got {self.simulation.total_turns_executed}"
+        assert self.simulation.total_turns_executed >= num_turns_to_run, (
+            f"Simulation should execute at least {num_turns_to_run} turns. Got {self.simulation.total_turns_executed}"
+        )
 
         logger.info("--- Longevity Test: Final checks ---")
         self._assert_agent_states_valid(self.agents, test_id="final_check")
@@ -225,16 +225,17 @@ class TestLongevity:
                 -1.0 <= agent.state.mood_value <= 1.0
             ), f"Agent {agent.agent_id} mood_value out of range: {agent.state.mood_value} ({test_id})"
 
+
             for (
                 target_id,
                 relationship_score,
             ) in agent.state.relationships.items():  # Corrected variable name
-                assert relationship_score is not None and not math.isnan(
-                    relationship_score
-                ), f"Agent {agent.agent_id} relationship to {target_id} is NaN ({test_id})"
-                assert (
-                    -1.0 <= relationship_score <= 1.0
-                ), f"Agent {agent.agent_id} relationship to {target_id} out of range: {relationship_score} ({test_id})"
+                assert relationship_score is not None and not math.isnan(relationship_score), (
+                    f"Agent {agent.agent_id} relationship to {target_id} is NaN ({test_id})"
+                )
+                assert -1.0 <= relationship_score <= 1.0, (
+                    f"Agent {agent.agent_id} relationship to {target_id} out of range: {relationship_score} ({test_id})"
+                )
 
     def _assert_knowledge_board_sane(self, kb: KnowledgeBoard, num_agents: int, num_turns: int):
         max_expected_entries = (
@@ -263,9 +264,9 @@ class TestLongevity:
                 entries = kb.get_entries(query=None, limit=max_expected_entries * 2)
                 num_entries = len(entries)
 
-            assert (
-                num_entries <= max_expected_entries
-            ), f"Knowledge board has {num_entries} entries, exceeding max expected {max_expected_entries}"
+            assert num_entries <= max_expected_entries, (
+                f"Knowledge board has {num_entries} entries, exceeding max expected {max_expected_entries}"
+            )
             logger.info(
                 f"Knowledge board sanity check: {num_entries} entries (max expected {max_expected_entries})."
             )

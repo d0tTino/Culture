@@ -86,6 +86,9 @@ class AgentActionIntent(str, Enum):
     LEAVE_PROJECT = "leave_project"
     REQUEST_ROLE_CHANGE = "request_role_change"
     SEND_DIRECT_MESSAGE = "send_direct_message"
+    MOVE = "move"
+    GATHER = "gather"
+    BUILD = "build"
 
 
 DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
@@ -98,6 +101,9 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
     AgentActionIntent.JOIN_PROJECT,
     AgentActionIntent.LEAVE_PROJECT,
     AgentActionIntent.SEND_DIRECT_MESSAGE,
+    AgentActionIntent.MOVE,
+    AgentActionIntent.GATHER,
+    AgentActionIntent.BUILD,
 ]
 
 
@@ -171,6 +177,8 @@ class AgentStateData(BaseModel):
     collective_du: float = 0.0
     current_role: str = Field(default_factory=_get_default_role)
     steps_in_current_role: int = 0
+    role_embedding: list[float] = Field(default_factory=list)
+    reputation: dict[str, float] = Field(default_factory=dict)
     conversation_history: deque[str] = Field(
         default_factory=deque
     )  # Added for process_perceived_messages
