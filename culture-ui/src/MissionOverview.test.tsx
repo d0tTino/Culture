@@ -7,6 +7,7 @@ vi.mock('./lib/api', () => ({
   fetchMissions: vi.fn().mockImplementation(() => Promise.resolve(missions)),
 }))
 
+
 missions = [
   { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
   { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
@@ -26,5 +27,6 @@ describe('MissionOverview', () => {
     expect(reordered[0].id).toBe(2)
     expect(reordered[1].id).toBe(1)
   })
+
 })
 

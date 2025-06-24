@@ -3,7 +3,7 @@ import { useState } from 'react'
 const DEFAULT_TAGS = ['violence', 'nsfw', 'sabotage']
 
 export default function BreakpointList() {
-  const [tags, setTags] = useState<string[]>(DEFAULT_TAGS)
+  const [tags] = useState<string[]>(DEFAULT_TAGS)
 
   return (
     <div className="p-2" data-testid="breakpoints">
