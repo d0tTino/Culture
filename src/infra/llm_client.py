@@ -160,6 +160,7 @@ class LLMClient:
         self.config = config
         self._client = get_ollama_client()
 
+    @monitor_llm_call(model_param="model", context="ollama_chat")
     def chat(
         self,
         model: str,
