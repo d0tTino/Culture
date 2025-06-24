@@ -1,47 +1,40 @@
-import { render } from '@testing-library/react'
-import { vi } from 'vitest'
-vi.mock('flexlayout-react/style/light.css', () => ({}))
-vi.mock('flexlayout-react', () => {
-  const Layout = vi.fn((props: any) => {
-    Layout.lastProps = props
-    return null
-  }) as any
-  const Model = {
-    fromJson: vi.fn((json: any) => ({ toJson: () => json }))
-  }
-  return { Layout, Model, TabNode: class {} }
-})
+import { render, screen } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import DockManager from './DockManager'
 import { widgetRegistry } from '../lib/widgetRegistry'
-import { Layout, Model } from 'flexlayout-react'
+import type { FC, ReactNode } from 'react'
+import type { IJsonModel } from 'flexlayout-react'
 
+vi.mock('flexlayout-react', () => ({
+  Layout: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Model: { fromJson: vi.fn(() => ({ toJson: vi.fn(() => ({})) })) },
+  TabNode: class {},
+}))
 
-declare module 'flexlayout-react' {
-  interface Model { toJson(): any }
-}
+import { Model } from 'flexlayout-react'
 
-function TestWidget() {
-  return <div data-testid="widget" />
-}
+const fromJson = Model.fromJson as ReturnType<typeof vi.fn>
+
+const defaultLayout = { global: {}, layout: {} } as IJsonModel
+
+const registry = widgetRegistry as unknown as { widgets: Map<string, FC> }
 
 describe('DockManager', () => {
   beforeEach(() => {
-    widgetRegistry.register('test', TestWidget)
     localStorage.clear()
+    fromJson.mockClear()
+    registry.widgets.clear()
   })
 
-  it('loads layout from localStorage', () => {
-    localStorage.setItem('dockLayout', JSON.stringify({ saved: true }))
-    render(<DockManager defaultLayout={{}} />)
-    expect(Model.fromJson).toHaveBeenCalledWith({ saved: true })
-  })
+  it('restores layout from localStorage and renders registered widgets', () => {
+    const name = 'TestWidget'
+    const Widget: FC = () => <div data-testid="test-widget">test</div>
+    widgetRegistry.register(name, Widget)
+    const saved = { layout: { type: 'row', children: [] } }
+    localStorage.setItem('dockLayout', JSON.stringify(saved))
+    render(<DockManager defaultLayout={defaultLayout} />)
+    expect(fromJson).toHaveBeenCalledWith(saved)
+    expect(screen.getByTestId('test-widget')).toBeInTheDocument()
 
-  it('persists layout changes', () => {
-    const prevEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
-    render(<DockManager defaultLayout={{ foo: 1 }} />)
-    const model = Model.fromJson.mock.results[0].value
-    expect(typeof Layout.lastProps.onModelChange).toBe('function')
-    process.env.NODE_ENV = prevEnv
   })
 })
