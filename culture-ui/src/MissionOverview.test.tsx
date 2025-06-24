@@ -3,6 +3,8 @@ import MissionOverview from './pages/MissionOverview'
 import { reorderMissions } from './lib/reorderMissions'
 import missions from './mock/missions.json'
 
+;(api.fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
+
 describe('MissionOverview', () => {
   it('renders missions table', () => {
     render(<MissionOverview />)
