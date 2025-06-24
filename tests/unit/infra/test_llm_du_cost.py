@@ -6,6 +6,7 @@ import pytest
 from src.agents.core.agent_state import AgentState
 from src.infra import llm_client as llm_client_mod
 from src.infra.config import get_config
+from tests.utils.mock_llm import MockLLM
 
 
 @pytest.mark.unit
@@ -28,3 +29,30 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == "hi"
     expected = start_du - (get_config("GAS_PRICE_PER_CALL") + get_config("GAS_PRICE_PER_TOKEN"))
     assert state.du == pytest.approx(expected)
+
+
+@pytest.mark.unit
+def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    module = importlib.reload(llm_client_mod)
+    orig_generate_text = module.generate_text
+    state = AgentState(agent_id="A", name="Agent")
+    start_du = state.du
+
+    from src.infra.ledger import Ledger
+
+    test_ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr(module, "ledger", test_ledger)
+
+    with MockLLM({"default": "hi"}):
+        result = orig_generate_text("hi", agent_state=state)
+
+    assert result == "hi"
+    expected = start_du - (
+        get_config("GAS_PRICE_PER_CALL") + get_config("GAS_PRICE_PER_TOKEN")
+    )
+    assert state.du == pytest.approx(expected)
+    row = test_ledger.conn.execute(
+        "SELECT delta_du, reason FROM transactions WHERE agent_id=?",
+        (state.agent_id,),
+    ).fetchone()
+    assert row is not None and row[0] < 0 and row[1] == "llm_gas"

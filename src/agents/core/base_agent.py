@@ -34,9 +34,7 @@ if TYPE_CHECKING:
     from src.interfaces.dashboard_backend import message_sse_queue
 else:  # pragma: no cover - optional runtime dependency
     try:
-        from src.interfaces.dashboard_backend import (
-            AgentMessage as DashboardAgentMessage,
-        )
+        from src.interfaces.dashboard_backend import AgentMessage as DashboardAgentMessage
         from src.interfaces.dashboard_backend import (
             message_sse_queue,
         )
@@ -744,7 +742,7 @@ class Agent:
 
     # --- Async DSPy Methods ---
     async def async_generate_role_prefixed_thought(
-        self: Self, agent_role: str, current_situation: str
+        self: Self, agent_role: str | None, current_situation: str
     ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously generate a role-prefixed thought using a DSPy program.
@@ -752,26 +750,29 @@ class Agent:
         returns a failsafe output and logs the issue.
         Must be awaited.
         """
-        from src.agents.dspy_programs.role_thought_generator import generate_role_prefixed_thought
+        from src.agents.dspy_programs.role_thought_generator import (
+            generate_role_prefixed_thought,
+        )
         from src.agents.dspy_programs.role_thought_generator import (
             get_failsafe_output as role_thought_failsafe,
         )
 
+        role_prompt = agent_role or self._state.role_prompt
         future = await self.async_dspy_manager.submit(
             cast(Callable[..., object], generate_role_prefixed_thought),
-            agent_role=agent_role,
+            agent_role=role_prompt,
             current_situation=current_situation,
         )
         result = await self.async_dspy_manager.get_result(
             future,
-            default_value=role_thought_failsafe(agent_role, current_situation),
+            default_value=role_thought_failsafe(role_prompt, current_situation),
             dspy_callable=cast(Callable[..., object], generate_role_prefixed_thought),
         )
         return result
 
     async def async_select_action_intent(
         self: Self,
-        agent_role: str,
+        agent_role: str | None,
         current_situation: str,
         agent_goal: str,
         available_actions: str,
@@ -786,15 +787,16 @@ class Agent:
 
         selector = action_intent_selector.get_optimized_action_selector()
         selector_callable = cast(Callable[..., object], selector)
+        role_prompt = agent_role or self._state.role_prompt
         future = await self.async_dspy_manager.submit(
             selector_callable,
-            agent_role=agent_role,
+            agent_role=role_prompt,
             current_situation=current_situation,
             agent_goal=agent_goal,
             available_actions=available_actions,
         )
         default_value = action_intent_selector.get_failsafe_output(
-            agent_role, current_situation, agent_goal, available_actions
+            role_prompt, current_situation, agent_goal, available_actions
         )
         result = await self.async_dspy_manager.get_result(
             future,
@@ -805,7 +807,7 @@ class Agent:
 
     async def async_generate_l1_summary(
         self: Self,
-        agent_role: str,
+        agent_role: str | None,
         recent_events: str,
         current_mood: str | None = None,
     ) -> object:  # DSPy async output is dynamic
@@ -819,13 +821,14 @@ class Agent:
 
         l1_gen = L1SummaryGenerator()
         l1_callable = cast(Callable[..., object], l1_gen.generate_summary)
+        role_prompt = agent_role or self._state.role_prompt
         future = await self.async_dspy_manager.submit(
-            l1_callable, agent_role, recent_events, current_mood
+            l1_callable, role_prompt, recent_events, current_mood
         )
         result = await self.async_dspy_manager.get_result(
             future,
             default_value=L1SummaryGenerator.get_failsafe_output(
-                agent_role, recent_events, current_mood
+                role_prompt, recent_events, current_mood
             ),
             dspy_callable=l1_callable,
         )
@@ -833,7 +836,7 @@ class Agent:
 
     async def async_generate_l2_summary(
         self: Self,
-        agent_role: str,
+        agent_role: str | None,
         l1_summaries_context: str,
         overall_mood_trend: str | None = None,
         agent_goals: str | None = None,
@@ -848,9 +851,10 @@ class Agent:
 
         l2_gen = L2SummaryGenerator()
         l2_callable = cast(Callable[..., object], l2_gen.generate_summary)
+        role_prompt = agent_role or self._state.role_prompt
         future = await self.async_dspy_manager.submit(
             l2_callable,
-            agent_role,
+            role_prompt,
             l1_summaries_context,
             overall_mood_trend,
             agent_goals,
@@ -858,7 +862,10 @@ class Agent:
         result = await self.async_dspy_manager.get_result(
             future,
             default_value=L2SummaryGenerator.get_failsafe_output(
-                agent_role, l1_summaries_context, overall_mood_trend, agent_goals
+                role_prompt,
+                l1_summaries_context,
+                overall_mood_trend,
+                agent_goals,
             ),
             dspy_callable=l2_callable,
         )
@@ -881,19 +888,23 @@ class Agent:
         from src.agents.dspy_programs.relationship_updater import (
             get_failsafe_output as relationship_failsafe,
         )
-        from src.agents.dspy_programs.relationship_updater import get_relationship_updater
+        from src.agents.dspy_programs.relationship_updater import (
+            get_relationship_updater,
+        )
 
         updater = get_relationship_updater()
         # Ensure updater is callable, else fallback to failsafe
         if not callable(updater):
             updater = relationship_failsafe
         updater_callable = cast(Callable[..., object], updater)
+        persona1 = agent1_persona or self._state.role_prompt
+        persona2 = agent2_persona or self._state.role_prompt
         future = await self.async_dspy_manager.submit(
             updater_callable,
             current_relationship_score,
             interaction_summary,
-            agent1_persona,
-            agent2_persona,
+            persona1,
+            persona2,
             interaction_sentiment,
         )
         result = await self.async_dspy_manager.get_result(
