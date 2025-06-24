@@ -5,6 +5,11 @@ import EventSourcePolyfill from 'eventsource'
 import path from 'node:path'
 import { createServer, type AddressInfo } from 'node:net'
 import { useEventSource } from './useEventSource'
+import {
+  MockEventSource,
+  MockWebSocket,
+  resetMockSources,
+} from './testUtils'
 
 async function getPort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -17,50 +22,6 @@ async function getPort(): Promise<number> {
   })
 }
 
-class MockEventSource {
-  static instances: MockEventSource[] = []
-  url: string
-  onmessage: ((ev: MessageEvent) => void) | null = null
-  onerror: (() => void) | null = null
-  closed = false
-
-  constructor(url: string) {
-    this.url = url
-    MockEventSource.instances.push(this)
-  }
-
-  emitMessage(data: string) {
-    this.onmessage?.({ data } as MessageEvent)
-  }
-
-  emitError() {
-    this.onerror?.()
-  }
-
-  close() {
-    this.closed = true
-  }
-}
-
-class MockWebSocket {
-  static instances: MockWebSocket[] = []
-  url: string
-  onmessage: ((ev: MessageEvent) => void) | null = null
-  closed = false
-
-  constructor(url: string) {
-    this.url = url
-    MockWebSocket.instances.push(this)
-  }
-
-  sendMessage(data: string) {
-    this.onmessage?.({ data } as MessageEvent)
-  }
-
-  close() {
-    this.closed = true
-  }
-}
 
 function TestComponent() {
   const event = useEventSource()
@@ -68,20 +29,7 @@ function TestComponent() {
 }
 
 afterEach(() => {
-  MockEventSource.instances = []
-  MockWebSocket.instances = []
-  ;(
-    globalThis as unknown as {
-      EventSource: unknown
-      WebSocket: unknown
-    }
-  ).EventSource = undefined
-  ;(
-    globalThis as unknown as {
-      EventSource: unknown
-      WebSocket: unknown
-    }
-  ).WebSocket = undefined
+  resetMockSources()
 })
 
 describe('useEventSource', () => {

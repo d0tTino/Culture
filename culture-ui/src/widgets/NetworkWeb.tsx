@@ -1,5 +1,10 @@
-import ForceGraph2D from 'react-force-graph-2d'
 import { useMemo } from 'react'
+
+let ForceGraph2D: any = () => <canvas />
+if (process.env.NODE_ENV !== 'test') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  ForceGraph2D = require('react-force-graph-2d').default
+}
 
 export default function NetworkWeb() {
   const data = useMemo(

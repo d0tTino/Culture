@@ -11,8 +11,10 @@ describe('AgentDataOverview widget', () => {
         <App />
       </MemoryRouter>,
     )
+
     expect(
       screen.getByRole('heading', { name: /agent data overview/i }),
     ).toBeInTheDocument()
+
   })
 })
