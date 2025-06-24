@@ -2,10 +2,37 @@ from __future__ import annotations
 
 import argparse
 import os
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import uvicorn
+from fastapi import Request
 
-from src.interfaces.dashboard_backend import app
+from src.interfaces.dashboard_backend import (
+    EventSourceResponse,
+    SimulationEvent,
+    app,
+    event_queue,
+)
+
+
+async def generate_events(
+    request: Request,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Yield simulation events from the shared queue."""
+    while True:
+        if await request.is_disconnected():
+            break
+        event: SimulationEvent | None = await event_queue.get()
+        if event is None:
+            break
+        yield {"event": "simulation_event", "data": event.json()}
+
+
+@app.get("/stream/events")
+async def stream_events(request: Request) -> EventSourceResponse:
+    """Return an SSE stream of simulation events."""
+    return EventSourceResponse(generate_events(request))
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

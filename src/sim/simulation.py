@@ -103,6 +103,7 @@ class Simulation:
             str, dict[str, Any]
         ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
+
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -141,6 +142,7 @@ class Simulation:
         self.messages_to_perceive_this_round: list[
             SimulationMessage
         ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+
 
         self.track_collective_metrics: bool = True
 
@@ -305,6 +307,7 @@ class Simulation:
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
                 )
 
+
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
 
@@ -403,6 +406,7 @@ class Simulation:
                         **action_details,
                     },
                 )
+
             )
 
         logger.debug(
@@ -442,6 +446,7 @@ class Simulation:
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
                     "trace_hash": trace_hash,
+
                 },
             )
         )
@@ -473,6 +478,7 @@ class Simulation:
         self.current_agent_index = next_agent_index
         self.total_turns_executed += 1
         turn_counter_this_run_step += 1
+
 
         if (
             self.vector_store_manager
@@ -840,6 +846,10 @@ class Simulation:
         if approved and self.knowledge_board:
             self.knowledge_board.add_entry(f"Law approved: {text}", proposer_id, self.current_step)
         return approved
+
+    async def forward_proposal(self: Self, proposer_id: str, text: str) -> bool:
+        """Forward a proposal to :func:`propose_law`."""
+        return await self.propose_law(proposer_id, text)
 
     # --- Optional helper methods for future use ---
     # def get_environment_view(self, agent: 'Agent'):

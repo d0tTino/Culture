@@ -67,6 +67,7 @@ async def test_stream_events_sse(monkeypatch: pytest.MonkeyPatch) -> None:
         fastapi_mod.Response = object
         fastapi_mod.WebSocket = _WS
         fastapi_mod.WebSocketDisconnect = Exception
+    from src import http_app
     from src.interfaces import dashboard_backend as db
 
     captured: list[dict[str, str]] = []
@@ -75,11 +76,11 @@ async def test_stream_events_sse(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self, gen: object) -> None:
             self.gen = gen
 
-    monkeypatch.setattr(db, "EventSourceResponse", CaptureESR)
+    monkeypatch.setattr(http_app, "EventSourceResponse", CaptureESR)
 
     await db.event_queue.put(db.SimulationEvent(event_type="tick", data={"step": 1}))
     await db.event_queue.put(None)
-    resp = await db.stream_events(DummyRequest())
+    resp = await http_app.stream_events(DummyRequest())
     event = await resp.gen.__anext__()
     captured.append(event)
     assert json.loads(captured[0]["data"])["data"]["step"] == 1

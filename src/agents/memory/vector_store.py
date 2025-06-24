@@ -205,7 +205,7 @@ class ChromaVectorStoreManager(MemoryStore):
             self.collection.add(
                 ids=ids,
                 embeddings=cast(list[Sequence[float]], embeddings),
-                metadatas=cast(list[ChromaMeta], metadatas),
+                metadatas=metadatas,
                 documents=documents,
             )
         except (

@@ -92,4 +92,4 @@ def build_graph() -> Any:
         graph_builder.add_edge(node, "finalize_message_agent")
 
     graph_builder.add_edge("finalize_message_agent", END)
-    return graph_builder
+    return graph_builder.compile()

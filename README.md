@@ -148,6 +148,10 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
+   On Windows the project is designed to run inside WSL2. Follow the
+   step-by-step guide in [docs/windows_setup.md](docs/windows_setup.md) to enable
+   GPU support, install Ollama, and activate the virtual environment.
+
 5. Pull the required models:
    ```bash
    ollama pull mistral:latest
@@ -226,6 +230,23 @@ Start the optional HTTP dashboard backend (for streaming events via SSE):
 
 ```bash
 python -m src.http_app
+```
+
+You can then consume events using any SSE-capable client. Here's a minimal
+example using `httpx`:
+
+```python
+import asyncio
+import httpx
+
+async def main() -> None:
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream("GET", "http://localhost:8000/stream/events") as resp:
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    print(line.removeprefix("data: "))
+
+asyncio.run(main())
 ```
 
 ### Configuring a Simulation Scenario
