@@ -12,7 +12,7 @@ vi.mock('../lib/useEventSource', () => ({
 
 describe('TimelineWidget', () => {
   it('renders slider control', () => {
-    ;(globalThis as any).EventSource = MockEventSource
+    ;(globalThis as { EventSource: typeof MockEventSource }).EventSource = MockEventSource
     render(<TimelineWidget />)
     expect(screen.getByRole('slider')).toBeInTheDocument()
   })
