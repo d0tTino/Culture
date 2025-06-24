@@ -4,37 +4,42 @@ from src.sim.event_kernel import EventKernel
 
 pytestmark = pytest.mark.unit
 
-
-@pytest.mark.asyncio
-async def test_events_dispatched_in_step_order() -> None:
-    kernel = EventKernel()
-    results: list[int] = []
-
-    async def cb(step: int) -> None:
-        results.append(step)
-
-    await kernel.schedule_at(5, lambda: cb(5))
-    await kernel.schedule_at(1, lambda: cb(1))
-    await kernel.schedule_at(3, lambda: cb(3))
-
-    await kernel.dispatch(10)
-    assert results == [1, 3, 5]
+def _make_cb(order: list[int], n: int):
+    async def _cb() -> None:
+        order.append(n)
+    return _cb
 
 
 @pytest.mark.asyncio
-async def test_optimistic_concurrency_skips_past_events() -> None:
+async def test_schedule_order_fifo() -> None:
     kernel = EventKernel()
-    results: list[int] = []
+    order: list[int] = []
 
-    async def cb(step: int) -> None:
-        results.append(step)
+    kernel.schedule_nowait(_make_cb(order, 1))
+    await kernel.schedule(_make_cb(order, 2))
+    await kernel.schedule(_make_cb(order, 3))
 
-    await kernel.schedule_at(1, lambda: cb(1))
-    await kernel.dispatch(1)
+    executed = await kernel.dispatch(10)
 
-    # schedule an event in the past
-    await kernel.schedule_at(0, lambda: cb(0))
-    await kernel.schedule_at(2, lambda: cb(2))
-    await kernel.dispatch(10)
+    assert executed == 3
+    assert order == [1, 2, 3]
+    assert kernel.empty()
 
-    assert results == [1, 2]
+
+@pytest.mark.asyncio
+async def test_dispatch_limit() -> None:
+    kernel = EventKernel()
+    order: list[int] = []
+
+    for i in range(3):
+        kernel.schedule_nowait(_make_cb(order, i))
+
+    executed = await kernel.dispatch(2)
+    assert executed == 2
+    assert order == [0, 1]
+    assert not kernel.empty()
+
+    executed += await kernel.dispatch(2)
+    assert executed == 3
+    assert order == [0, 1, 2]
+    assert kernel.empty()
