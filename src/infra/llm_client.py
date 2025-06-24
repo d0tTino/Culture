@@ -138,7 +138,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):
@@ -328,8 +329,6 @@ def generate_text(
         )
 
     response, error = _retry_with_backoff(call)
-    # Cast for static type checkers; _retry_with_backoff returns T | None
-    response = cast(LLMChatResponse | None, response)
 
     if error:
         logger.error(f"Failed to generate text after retries: {error}")
@@ -489,8 +488,6 @@ def analyze_sentiment(
         )
 
     response, error = _retry_with_backoff(call)
-    # Cast for static type checkers; _retry_with_backoff returns T | None
-    response = cast(LLMChatResponse | None, response)
     if error:
         logger.error(f"Failed to analyze sentiment after retries: {error}")
         return None
