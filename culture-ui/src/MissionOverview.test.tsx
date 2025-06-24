@@ -1,9 +1,19 @@
-import { render, screen } from '@testing-library/react'
-import MissionOverview from './pages/MissionOverview'
-import { reorderMissions } from './lib/reorderMissions'
-import missions from './mock/missions.json'
+import { vi } from 'vitest'
 
-;(api.fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
+const missions = [
+
+  { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
+  { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
+  { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
+]
+
+
+vi.mock('./lib/api', () => ({
+  fetchMissions: vi.fn().mockImplementation(() => Promise.resolve(missions)),
+}))
+
+import { render, screen } from '@testing-library/react'
+import MissionOverview, { reorderMissions } from './pages/MissionOverview'
 
 describe('MissionOverview', () => {
   it('renders missions table', () => {

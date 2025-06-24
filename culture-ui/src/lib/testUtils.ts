@@ -39,11 +39,8 @@ export class MockWebSocket {
 export function resetMockSources() {
   MockEventSource.instances = []
   MockWebSocket.instances = []
-  type GlobalWithSources = typeof globalThis & {
-    EventSource?: unknown
-    WebSocket?: unknown
-  }
-  ;(globalThis as GlobalWithSources).EventSource = undefined
-  ;(globalThis as GlobalWithSources).WebSocket = undefined
+  ;(globalThis as typeof globalThis & { EventSource?: unknown }).EventSource = undefined
+  ;(globalThis as typeof globalThis & { WebSocket?: unknown }).WebSocket = undefined
+
 }
 

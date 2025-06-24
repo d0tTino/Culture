@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { act, render, screen } from '@testing-library/react'
 import KpiCard from './KpiCard'
 import { MockEventSource, MockWebSocket, resetMockSources } from '../lib/testUtils'
