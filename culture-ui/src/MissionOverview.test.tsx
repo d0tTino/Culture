@@ -1,4 +1,4 @@
-import { vi, type MockInstance } from 'vitest'
+import { vi } from 'vitest'
 
 vi.mock('./lib/api', () => ({
   fetchMissions: vi.fn(),
@@ -16,6 +16,12 @@ vi.mock('./lib/api', () => ({
     { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
   ]),
 }))
+
+const missions = [
+  { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
+  { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
+  { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
+]
 
 describe('MissionOverview', () => {
   it('renders missions table', async () => {

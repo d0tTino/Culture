@@ -1,16 +1,12 @@
 # Culture UI Widget System
 
-Widgets are React components that can be docked using the `DockManager`.
-New widgets must be registered during application startup so the layout can
-load them by identifier.
+Widgets are React components registered in a simple registry. The default UI presents them on pages navigated via a sidebar and `react-router-dom` routes. Applications may optionally use the `DockManager` to provide a draggable layout.
 
-```
+```ts
 import { registerWidget } from '@/lib/widgetRegistry'
 import MyWidget from './MyWidget'
 
 registerWidget('myWidget', MyWidget)
 ```
 
-The `DockManager` persists the current layout to `localStorage` under the key
-`dockLayout`. When the application loads, it restores this layout or falls back
-to the provided default layout.
+When the optional `DockManager` is enabled it persists the current layout to `localStorage` under the key `dockLayout` and restores this layout on the next load.
