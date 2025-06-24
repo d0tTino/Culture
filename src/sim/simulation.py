@@ -103,7 +103,6 @@ class Simulation:
             str, dict[str, Any]
         ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
-
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -142,7 +141,6 @@ class Simulation:
         self.messages_to_perceive_this_round: list[
             SimulationMessage
         ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
-
 
         self.track_collective_metrics: bool = True
 
@@ -307,7 +305,6 @@ class Simulation:
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
                 )
 
-
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
 
@@ -372,18 +369,71 @@ class Simulation:
                 dy = int(map_action.get("dy", 0))
                 pos = self.world_map.move(agent_id, dx, dy)
                 action_details = {"position": pos}
+                start_ip = current_agent_state.ip
+                start_du = current_agent_state.du
+                current_agent_state.ip -= config.MAP_MOVE_IP_COST
+                current_agent_state.du -= config.MAP_MOVE_DU_COST
+                current_agent_state.ip += config.MAP_MOVE_IP_REWARD
+                current_agent_state.du += config.MAP_MOVE_DU_REWARD
+                try:
+                    from src.infra.ledger import ledger
+
+                    ledger.log_change(
+                        agent_id,
+                        current_agent_state.ip - start_ip,
+                        current_agent_state.du - start_du,
+                        "move",
+                    )
+                except Exception:  # pragma: no cover - optional
+                    logger.debug("Ledger logging failed", exc_info=True)
             elif action_type == "gather":
                 res = map_action.get("resource")
                 success = False
                 if isinstance(res, str):
                     success = self.world_map.gather(agent_id, ResourceToken(res))
                 action_details = {"resource": res, "success": success}
+                if success:
+                    start_ip = current_agent_state.ip
+                    start_du = current_agent_state.du
+                    current_agent_state.ip -= config.MAP_GATHER_IP_COST
+                    current_agent_state.du -= config.MAP_GATHER_DU_COST
+                    current_agent_state.ip += config.MAP_GATHER_IP_REWARD
+                    current_agent_state.du += config.MAP_GATHER_DU_REWARD
+                    try:
+                        from src.infra.ledger import ledger
+
+                        ledger.log_change(
+                            agent_id,
+                            current_agent_state.ip - start_ip,
+                            current_agent_state.du - start_du,
+                            "gather",
+                        )
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
             elif action_type == "build":
                 struct = map_action.get("structure")
                 success = False
                 if isinstance(struct, str):
                     success = self.world_map.build(agent_id, StructureType(struct))
                 action_details = {"structure": struct, "success": success}
+                if success:
+                    start_ip = current_agent_state.ip
+                    start_du = current_agent_state.du
+                    current_agent_state.ip -= config.MAP_BUILD_IP_COST
+                    current_agent_state.du -= config.MAP_BUILD_DU_COST
+                    current_agent_state.ip += config.MAP_BUILD_IP_REWARD
+                    current_agent_state.du += config.MAP_BUILD_DU_REWARD
+                    try:
+                        from src.infra.ledger import ledger
+
+                        ledger.log_change(
+                            agent_id,
+                            current_agent_state.ip - start_ip,
+                            current_agent_state.du - start_du,
+                            "build",
+                        )
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
             else:
                 action_details = {}
 
@@ -406,8 +456,9 @@ class Simulation:
                         **action_details,
                     },
                 )
-
             )
+
+            self.agents[agent_index].update_state(current_agent_state)
 
         logger.debug(
             f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
@@ -446,7 +497,6 @@ class Simulation:
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
                     "trace_hash": trace_hash,
-
                 },
             )
         )
@@ -478,7 +528,6 @@ class Simulation:
         self.current_agent_index = next_agent_index
         self.total_turns_executed += 1
         turn_counter_this_run_step += 1
-
 
         if (
             self.vector_store_manager
