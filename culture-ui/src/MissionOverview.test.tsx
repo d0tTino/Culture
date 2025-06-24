@@ -1,23 +1,15 @@
 import { render, screen } from '@testing-library/react'
-import { vi } from 'vitest'
-import MissionOverview, { reorderMissions } from './pages/MissionOverview'
-import * as api from './lib/api'
-
-vi.mock('./lib/api')
-
-const missions = [
-  { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
-  { id: 2, name: 'Prepare Brief', status: 'Pending', progress: 0 },
-  { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
-]
+import MissionOverview from './pages/MissionOverview'
+import { reorderMissions } from './lib/reorderMissions'
+import missions from './mock/missions.json'
 
 ;(api.fetchMissions as unknown as vi.Mock).mockResolvedValue(missions)
 
 describe('MissionOverview', () => {
-  it('renders missions table', async () => {
+  it('renders missions table', () => {
     render(<MissionOverview />)
-    expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    expect(await screen.findByText('Gather Intel')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
+    expect(screen.getByText('Gather Intel')).toBeInTheDocument()
     expect(screen.getByText('Prepare Brief')).toBeInTheDocument()
   })
 
