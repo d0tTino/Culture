@@ -8,4 +8,4 @@ exclude =
     *.egg-info,
     data/
 # Add E203 to ignores if Black handles it and Flake8 complains, but start without.
-# ignore = E203 
+# ignore = E203
