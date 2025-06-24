@@ -7,7 +7,9 @@ the vertical slice example.
 > **GPU Requirements**
 > To utilize GPU acceleration you must run the simulation inside WSL2 with the
 > [NVIDIA drivers for WSL](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)
-> installed. Without a supported GPU you can install the CPU-only PyTorch build.
+> installed. After enabling WSL2 run `wsl --update` from an elevated PowerShell
+> prompt to install the latest kernel and GPU support, then reboot when prompted.
+> Without a supported GPU you can install the CPU-only PyTorch build.
 
 ## Enable WSL2
 
@@ -20,6 +22,13 @@ the vertical slice example.
    ```powershell
    wsl --set-default-version 2
    ```
+3. Update WSL and install GPU support:
+   ```powershell
+   wsl --update
+   ```
+   Restart Windows when prompted to enable the latest kernel and GPU features.
+   After reboot, run `wsl --shutdown` to apply the update and restart your
+   distribution. You can verify GPU access inside WSL with `nvidia-smi`.
 
 ## Install Python 3.10
 
@@ -37,7 +46,13 @@ Create a virtual environment for the project:
 python3.10 -m venv venv
 source venv/bin/activate  # Linux/macOS
 # Windows:
-venv\Scripts\activate.bat  # or .venv\Scripts\activate.bat
+.\venv\Scripts\activate.bat  # or .venv\Scripts\activate.bat
+```
+Activate the environment whenever you open a new terminal before running any
+Python commands:
+
+```cmd
+.\venv\Scripts\activate.bat
 ```
 
 Alternatively, run the helper script to automatically create `.venv` and

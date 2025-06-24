@@ -148,6 +148,10 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
+   On Windows the project is designed to run inside WSL2. Follow the
+   step-by-step guide in [docs/windows_setup.md](docs/windows_setup.md) to enable
+   GPU support, install Ollama, and activate the virtual environment.
+
 5. Pull the required models:
    ```bash
    ollama pull mistral:latest
