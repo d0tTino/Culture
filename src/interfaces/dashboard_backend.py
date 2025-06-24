@@ -42,11 +42,9 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class Response:  # pragma: no cover - minimal stub
-            def __init__(self, body: bytes | str | None = None) -> None:
-                if isinstance(body, str):
-                    self.body = body.encode("utf-8")
-                else:
-                    self.body = body
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
 
         class WebSocket:  # pragma: no cover - minimal stub
             pass
@@ -54,24 +52,9 @@ else:  # pragma: no cover - optional runtime dependency
         class WebSocketDisconnect(Exception):
             pass
 
-        class JSONResponse(Response):  # pragma: no cover - minimal stub
-            def __init__(self, data: Any) -> None:
-                super().__init__(json.dumps(data).encode("utf-8"))
-
-    else:  # Import succeeded but test suite may stub JSONResponse
-        if JSONResponse is Response:
-
-            class Response:  # pragma: no cover - minimal stub
-                def __init__(self, body: bytes | str | None = None) -> None:
-                    if isinstance(body, str):
-                        self.body = body.encode("utf-8")
-                    else:
-                        self.body = body
-
-            class JSONResponse(Response):  # pragma: no cover - minimal stub
-                def __init__(self, data: Any) -> None:
-                    super().__init__(json.dumps(data).encode("utf-8"))
-
+        class JSONResponse:  # pragma: no cover - minimal stub
+            def __init__(self, content: object, *args: object, **kwargs: object) -> None:
+                self.body = json.dumps(content).encode("utf-8")
 
 from pydantic import BaseModel
 
