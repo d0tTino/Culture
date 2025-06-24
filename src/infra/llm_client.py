@@ -121,8 +121,13 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                 state.du -= cost
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                except Exception as log_err:  # pragma: no cover - optional
+                    logger.warning(
+                        "Ledger logging failed for %s (delta_du=%s)",
+                        state.agent_id,
+                        -cost,
+                        exc_info=log_err,
+                    )
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result
@@ -138,8 +143,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
