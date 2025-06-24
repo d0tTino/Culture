@@ -169,3 +169,30 @@ jobs:
             echo "Prompt leak detected" >&2
             exit 1
           fi
+
+  integration:
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.10"
+
+      - name: Run Integration Suite
+        shell: bash
+        run: |
+          pytest -m "integration" --disable-warnings -q | tee integration.log
+
+      - name: Upload integration logs
+        if: failure()
+        permissions:
+          actions: write
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration.log
+          path: integration.log

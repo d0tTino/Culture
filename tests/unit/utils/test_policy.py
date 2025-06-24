@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.infra import config
-from src.utils.policy import evaluate_with_opa
+from src.utils.policy import allow_message, evaluate_with_opa
 
 
 @pytest.mark.unit
@@ -28,3 +28,20 @@ async def test_evaluate_with_opa_allows(monkeypatch: pytest.MonkeyPatch) -> None
     allowed, new_content = await evaluate_with_opa("hello")
     assert allowed is True
     assert new_content == "hello"
+
+
+@pytest.mark.unit
+def test_allow_message_allows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPA_BLOCKLIST", "foo,bar")
+    assert allow_message("hello world") is True
+
+
+@pytest.mark.unit
+def test_allow_message_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPA_BLOCKLIST", "foo,bar")
+    assert allow_message("bar baz") is False
+
+
+@pytest.mark.unit
+def test_allow_message_none() -> None:
+    assert allow_message(None) is True
