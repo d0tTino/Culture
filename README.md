@@ -228,6 +228,23 @@ Start the optional HTTP dashboard backend (for streaming events via SSE):
 python -m src.http_app
 ```
 
+You can then consume events using any SSE-capable client. Here's a minimal
+example using `httpx`:
+
+```python
+import asyncio
+import httpx
+
+async def main() -> None:
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream("GET", "http://localhost:8000/stream/events") as resp:
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    print(line.removeprefix("data: "))
+
+asyncio.run(main())
+```
+
 ### Configuring a Simulation Scenario
 
 You can modify the `DEFAULT_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
