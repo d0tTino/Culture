@@ -136,18 +136,6 @@ async def get_missions() -> Response:
     return JSONResponse(missions)
 
 
-@app.get("/stream/events")
-async def stream_events(request: Request) -> EventSourceResponse:
-    async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
-        while True:
-            if await request.is_disconnected():
-                break
-            event: SimulationEvent | None = await event_queue.get()
-            if event is None:
-                break
-            yield {"event": "simulation_event", "data": event.json()}
-
-    return EventSourceResponse(event_generator())
 
 
 @app.websocket("/ws/events")
