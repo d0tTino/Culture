@@ -273,6 +273,9 @@ Launch the UI in development mode with:
 pnpm --filter culture-ui dev
 ```
 
+Prettier formatting is configured via `.prettierrc`. A Husky pre-commit hook
+runs `pnpm lint` and `pnpm type-check` automatically.
+
 See [culture-ui/README.md](culture-ui/README.md) for additional details.
 UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture_ui_requirements.md).
 
