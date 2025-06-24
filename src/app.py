@@ -128,6 +128,17 @@ def parse_args() -> argparse.Namespace:
             "Restore RNG and environment state from the checkpoint to reproduce agent decisions"
         ),
     )
+    parser.add_argument(
+        "--proposal",
+        type=str,
+        help="Submit a law proposal before running the simulation.",
+    )
+    parser.add_argument(
+        "--proposer-id",
+        type=str,
+        default="agent_1",
+        help="Agent ID submitting the proposal.",
+    )
     return parser.parse_args()
 
 
@@ -167,6 +178,9 @@ def main() -> None:
             restore_rng_state(meta["rng_state"])
         if meta.get("environment") is not None:
             restore_environment(meta["environment"])
+
+    if args.proposal:
+        asyncio.run(sim.forward_proposal(args.proposer_id, args.proposal))
 
     asyncio.run(sim.async_run(args.steps))
 

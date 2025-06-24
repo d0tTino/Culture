@@ -102,7 +102,6 @@ class Simulation:
         self.projects: dict[str, dict[str, Any]] = (
             {}
         )  # Structure: {project_id: {name, creator_id, members}}
-
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -141,7 +140,6 @@ class Simulation:
         self.messages_to_perceive_this_round: list[SimulationMessage] = (
             []
         )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
-
 
         self.track_collective_metrics: bool = True
 
@@ -261,44 +259,25 @@ class Simulation:
             self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
             self.pending_messages_for_next_round = []
 
-            # Increment current_step for this agent's turn. current_step becomes 1-indexed.
-            self.current_step += 1
-
-            agent_to_run_index = self.current_agent_index
-            agent = self.agents[agent_to_run_index]
-            agent_id = agent.agent_id
-            current_agent_state = agent.state
-
-            if not current_agent_state.is_alive:
-                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
-                continue
-
-            current_agent_state.age += 1
-            max_age = int(config.get_config("MAX_AGENT_AGE"))
-            if current_agent_state.age >= max_age:
-                current_agent_state.is_alive = False
-                current_agent_state.inheritance = current_agent_state.ip + current_agent_state.du
-                current_agent_state.ip = 0.0
-                current_agent_state.du = 0.0
-                if self.knowledge_board:
-                    self.knowledge_board.add_entry(
-                        f"Agent {agent_id} retired", agent_id, self.current_step
-                    )
-                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
-                continue
-
-            # At the start of a new round (first agent), clear messages_to_perceive_this_round
-            # and populate it from what was pending for the next round.
-            if agent_to_run_index == 0:
-                self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
-    logger.debug(
-                    f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
-                    f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
-                )
-
+        messages_for_this_agent_turn: list[SimulationMessage] = list(
+            self.messages_to_perceive_this_round
+        )
+        perception_data = {
+            "other_agents_state": self.get_other_agents_public_state(agent_id),
+            "perceived_messages": [
+                msg
+                for msg in messages_for_this_agent_turn
+                if not msg.get("recipient_id") or msg.get("recipient_id") == agent_id
+            ],
+            "knowledge_board_content": self.knowledge_board.get_recent_entries_for_prompt(
+                max_entries=config.MAX_KB_ENTRIES_FOR_PERCEPTION
+            ),
+            "scenario_description": self.scenario,
+            "available_projects": self.projects,
+            "simulation": self,
+            "collective_ip": self.collective_ip,
+            "collective_du": self.collective_du,
+        }
 
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
@@ -319,6 +298,7 @@ class Simulation:
         message_content = agent_output.get("message_content")
         message_recipient_id = agent_output.get("message_recipient_id")
         action_intent_str = agent_output.get("action_intent", "idle")
+        map_action = agent_output.get("map_action")
 
         if message_content:
             msg_data = cast(
@@ -336,88 +316,66 @@ class Simulation:
             current_agent_state.messages_sent_count += 1
             current_agent_state.last_message_step = self.current_step
 
-            # --- Process Agent Output ---
-            this_agent_turn_generated_messages = []  # Local list for this agent's output this turn
+        self.pending_messages_for_next_round.extend(this_agent_turn_generated_messages)
+        self.messages_to_perceive_this_round.extend(this_agent_turn_generated_messages)
 
-            message_content = agent_output.get("message_content")
-            message_recipient_id = agent_output.get("message_recipient_id")
-            action_intent_str = agent_output.get("action_intent", "idle")
-            map_action = agent_output.get("map_action")
+        if isinstance(map_action, dict):
+            action_type = map_action.get("action")
+            if action_type == "move":
+                dx = int(map_action.get("dx", 0))
+                dy = int(map_action.get("dy", 0))
+                pos = self.world_map.move(agent_id, dx, dy)
+                action_details = {"position": pos}
+            elif action_type == "gather":
+                res = map_action.get("resource")
+                success = False
+                if isinstance(res, str):
+                    success = self.world_map.gather(agent_id, ResourceToken(res))
+                action_details = {"resource": res, "success": success}
+            elif action_type == "build":
+                struct = map_action.get("structure")
+                success = False
+                if isinstance(struct, str):
+                    success = self.world_map.build(agent_id, StructureType(struct))
+                action_details = {"structure": struct, "success": success}
+            else:
+                action_details = {}
 
-
-
-        self.agents[agent_index] = agent
-        self.agents[agent_index].update_state(current_agent_state)
-
-                msg_data = cast(
-                    SimulationMessage,
-                    {
-                        "step": self.current_step,
-                        "sender_id": agent_id,
-                        "recipient_id": message_recipient_id,
-                        "content": message_content,
-                        "action_intent": action_intent_str,
-                        "sentiment_score": None,
-                    },
-                )
-                this_agent_turn_generated_messages.append(msg_data)
-                current_agent_state.messages_sent_count += 1
-                current_agent_state.last_message_step = self.current_step
-
-            # Add messages generated by this agent to:
-            # 1. pending_messages_for_next_round (for the *next* full round of all agents)
-            # 2. messages_to_perceive_this_round (so subsequent agents in *this current* round can see them)
-            self.pending_messages_for_next_round.extend(this_agent_turn_generated_messages)
-            self.messages_to_perceive_this_round.extend(this_agent_turn_generated_messages)
-
-            if isinstance(map_action, dict):
-                action_type = map_action.get("action")
-                if action_type == "move":
-                    dx = int(map_action.get("dx", 0))
-                    dy = int(map_action.get("dy", 0))
-                    pos = self.world_map.move(agent_id, dx, dy)
-                    action_details = {"position": pos}
-                elif action_type == "gather":
-                    res = map_action.get("resource")
-                    success = False
-                    if isinstance(res, str):
-                        success = self.world_map.gather(agent_id, ResourceToken(res))
-                    action_details = {"resource": res, "success": success}
-                elif action_type == "build":
-                    struct = map_action.get("structure")
-                    success = False
-                    if isinstance(struct, str):
-                        success = self.world_map.build(agent_id, StructureType(struct))
-                    action_details = {"structure": struct, "success": success}
-                else:
-                    action_details = {}
-
-                log_event(
-                    {
-                        "type": "map_action",
+            log_event(
+                {
+                    "type": "map_action",
+                    "agent_id": agent_id,
+                    "step": self.current_step,
+                    "action": action_type,
+                    **action_details,
+                }
+            )
+            await emit_event(
+                SimulationEvent(
+                    event_type="map_action",
+                    data={
                         "agent_id": agent_id,
                         "step": self.current_step,
                         "action": action_type,
                         **action_details,
-                    }
+                    },
                 )
-                await emit_event(
-                    SimulationEvent(
-                        event_type="map_action",
-                        data={
-                            "agent_id": agent_id,
-                            "step": self.current_step,
-                            "action": action_type,
-                            **action_details,
-                        },
-                    )
-                )
+            )
 
             logger.debug(
                 f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
                 f"pending_messages_for_next_round now has {len(self.pending_messages_for_next_round)} messages. "
                 f"messages_to_perceive_this_round now has {len(self.messages_to_perceive_this_round)} messages."
+            )
 
+        self.agents[agent_index] = agent
+        self.agents[agent_index].update_state(current_agent_state)
+
+        next_agent_index = (agent_index + 1) % len(self.agents)
+        try:
+            has_role_change = any(
+                mem.get("type") == "role_change" and mem.get("step") == self.current_step
+                for mem in current_agent_state.short_term_memory
             )
             if has_role_change:
                 next_agent_index = agent_index
@@ -458,52 +416,34 @@ class Simulation:
                     "action_intent": action_intent_str,
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
-                    "trace_hash": trace_hash,
-                }
-            )
-            await emit_event(
-                SimulationEvent(
-                    event_type="agent_action",
-                    data={
-                        "agent_id": agent_id,
-                        "step": self.current_step,
-                        "action_intent": action_intent_str,
-                        "ip": current_agent_state.ip,
-                        "du": current_agent_state.du,
-                    },
-                )
-
+                },
             )
         )
 
-            if self.current_step % 100 == 0:
-                snapshot = {
-                    "step": self.current_step,
-                    "collective_ip": self.collective_ip,
-                    "collective_du": self.collective_du,
-                    "knowledge_board": self.knowledge_board.to_dict(),
-                    "world_map": self.world_map.to_dict(),
-                    "agents": [
-                        {
-                            "agent_id": ag.agent_id,
-                            "ip": ag.state.ip,
-                            "du": ag.state.du,
-                            "mood": ag.state.mood_level,
-                        }
-                        for ag in self.agents
-                    ],
-                    "trace_hash": self._last_trace_hash,
-                }
-                snapshot["trace_hash"] = compute_trace_hash(snapshot)
-                save_snapshot(self.current_step, snapshot)
-                log_event({"type": "snapshot", **snapshot})
-                await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
+        if self.current_step % 100 == 0:
+            snapshot = {
+                "step": self.current_step,
+                "collective_ip": self.collective_ip,
+                "collective_du": self.collective_du,
+                "knowledge_board": self.knowledge_board.to_dict(),
+                "world_map": self.world_map.to_dict(),
+                "agents": [
+                    {
+                        "agent_id": ag.agent_id,
+                        "ip": ag.state.ip,
+                        "du": ag.state.du,
+                        "mood": ag.state.mood_level,
+                    }
+                    for ag in self.agents
+                ],
+                "trace_hash": self._last_trace_hash,
+            }
+            snapshot["trace_hash"] = compute_trace_hash(snapshot)
+            save_snapshot(self.current_step, snapshot)
+            log_event({"type": "snapshot", **snapshot})
+            await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
 
-            # Advance to the next agent for the next turn
-            self.current_agent_index = next_agent_index
-            self.total_turns_executed += 1
-            turn_counter_this_run_step += 1
-
+        self.total_turns_executed += 1
 
         if (
             self.vector_store_manager
@@ -871,6 +811,10 @@ class Simulation:
         if approved and self.knowledge_board:
             self.knowledge_board.add_entry(f"Law approved: {text}", proposer_id, self.current_step)
         return approved
+
+    async def forward_proposal(self: Self, proposer_id: str, text: str) -> bool:
+        """Forward a proposal to :func:`propose_law`."""
+        return await self.propose_law(proposer_id, text)
 
     # --- Optional helper methods for future use ---
     # def get_environment_view(self, agent: 'Agent'):
