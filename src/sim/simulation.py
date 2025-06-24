@@ -99,9 +99,11 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+
+
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -137,9 +139,10 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+
 
         self.track_collective_metrics: bool = True
 
@@ -255,29 +258,55 @@ class Simulation:
         agent_id = agent.agent_id
         current_agent_state = agent.state
 
+        perception_data: dict[str, Any] = {}
+        has_role_change = False
+        trace_hash = ""
+        turn_counter_this_run_step = 0
+        next_agent_index = (agent_index + 1) % len(self.agents)
+
         if agent_index == 0:
             self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
             self.pending_messages_for_next_round = []
 
-        messages_for_this_agent_turn: list[SimulationMessage] = list(
-            self.messages_to_perceive_this_round
-        )
-        perception_data = {
-            "other_agents_state": self.get_other_agents_public_state(agent_id),
-            "perceived_messages": [
-                msg
-                for msg in messages_for_this_agent_turn
-                if not msg.get("recipient_id") or msg.get("recipient_id") == agent_id
-            ],
-            "knowledge_board_content": self.knowledge_board.get_recent_entries_for_prompt(
-                max_entries=config.MAX_KB_ENTRIES_FOR_PERCEPTION
-            ),
-            "scenario_description": self.scenario,
-            "available_projects": self.projects,
-            "simulation": self,
-            "collective_ip": self.collective_ip,
-            "collective_du": self.collective_du,
-        }
+            # Increment current_step for this agent's turn. current_step becomes 1-indexed.
+            self.current_step += 1
+
+            agent_to_run_index = self.current_agent_index
+            agent = self.agents[agent_to_run_index]
+            agent_id = agent.agent_id
+            current_agent_state = agent.state
+
+            if not getattr(current_agent_state, "is_alive", True):
+                self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                return
+
+            if hasattr(current_agent_state, "age"):
+                current_agent_state.age += 1
+                max_age = int(config.get_config("MAX_AGENT_AGE"))
+                if current_agent_state.age >= max_age:
+                    current_agent_state.is_alive = False
+                    current_agent_state.inheritance = (
+                        current_agent_state.ip + current_agent_state.du
+                    )
+                    current_agent_state.ip = 0.0
+                    current_agent_state.du = 0.0
+                    if self.knowledge_board:
+                        self.knowledge_board.add_entry(
+                            f"Agent {agent_id} retired", agent_id, self.current_step
+                        )
+                    self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
+                    return
+
+            # At the start of a new round (first agent), clear messages_to_perceive_this_round
+            # and populate it from what was pending for the next round.
+            if agent_to_run_index == 0:
+                self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                logger.debug(
+                    f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
+                    f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
+                )
+
 
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
@@ -316,8 +345,25 @@ class Simulation:
             current_agent_state.messages_sent_count += 1
             current_agent_state.last_message_step = self.current_step
 
+        self.agents[agent_index] = agent
+        self.agents[agent_index].update_state(current_agent_state)
+
+        # Add messages generated by this agent to:
+        # 1. pending_messages_for_next_round (for the *next* full round of all agents)
+        # 2. messages_to_perceive_this_round (so subsequent agents in *this current* round can see them)
         self.pending_messages_for_next_round.extend(this_agent_turn_generated_messages)
         self.messages_to_perceive_this_round.extend(this_agent_turn_generated_messages)
+
+        if hasattr(current_agent_state, "short_term_memory"):
+            stm = current_agent_state.short_term_memory
+            if stm:
+                last_mem = stm[-1]
+                if (
+                    isinstance(last_mem, dict)
+                    and last_mem.get("type") == "role_change"
+                    and last_mem.get("step") == self.current_step
+                ):
+                    has_role_change = True
 
         if isinstance(map_action, dict):
             action_type = map_action.get("action")
@@ -360,33 +406,16 @@ class Simulation:
                         **action_details,
                     },
                 )
+
             )
 
-            logger.debug(
-                f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
-                f"pending_messages_for_next_round now has {len(self.pending_messages_for_next_round)} messages. "
-                f"messages_to_perceive_this_round now has {len(self.messages_to_perceive_this_round)} messages."
-            )
-
-        self.agents[agent_index] = agent
-        self.agents[agent_index].update_state(current_agent_state)
-
-        next_agent_index = (agent_index + 1) % len(self.agents)
-        try:
-            has_role_change = any(
-                mem.get("type") == "role_change" and mem.get("step") == self.current_step
-                for mem in current_agent_state.short_term_memory
-            )
-            if has_role_change:
-                next_agent_index = agent_index
-        except (AttributeError, TypeError) as exc:
-            logger.error(
-                "Error determining next agent after role change for %s at step %s: %s",
-                agent_id,
-                self.current_step,
-                exc,
-            )
-            next_agent_index = (agent_index + 1) % len(self.agents)
+        logger.debug(
+            f"SIM_DEBUG: After Agent {agent_id}'s turn in Global Turn {self.current_step}: "
+            f"pending_messages_for_next_round now has {len(self.pending_messages_for_next_round)} messages. "
+            f"messages_to_perceive_this_round now has {len(self.messages_to_perceive_this_round)} messages."
+        )
+        if has_role_change:
+            next_agent_index = agent_index
 
         self.current_agent_index = next_agent_index
         self.last_completed_agent_index = agent_index
@@ -416,6 +445,8 @@ class Simulation:
                     "action_intent": action_intent_str,
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
+                    "trace_hash": trace_hash,
+
                 },
             )
         )
@@ -443,7 +474,11 @@ class Simulation:
             log_event({"type": "snapshot", **snapshot})
             await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
 
+        # Advance to the next agent for the next turn
+        self.current_agent_index = next_agent_index
         self.total_turns_executed += 1
+        turn_counter_this_run_step += 1
+
 
         if (
             self.vector_store_manager
