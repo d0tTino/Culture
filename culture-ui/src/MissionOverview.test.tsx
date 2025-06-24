@@ -7,6 +7,7 @@ const missions = [
   { id: 3, name: 'Execute Plan', status: 'Complete', progress: 100 },
 ]
 
+
 vi.mock('./lib/api', () => ({
   fetchMissions: vi.fn().mockImplementation(() => Promise.resolve(missions)),
 }))
@@ -15,10 +16,10 @@ import { render, screen } from '@testing-library/react'
 import MissionOverview, { reorderMissions } from './pages/MissionOverview'
 
 describe('MissionOverview', () => {
-  it('renders missions table', async () => {
+  it('renders missions table', () => {
     render(<MissionOverview />)
-    expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    expect(await screen.findByText('Gather Intel')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
+    expect(screen.getByText('Gather Intel')).toBeInTheDocument()
     expect(screen.getByText('Prepare Brief')).toBeInTheDocument()
   })
 
@@ -27,6 +28,4 @@ describe('MissionOverview', () => {
     expect(reordered[0].id).toBe(2)
     expect(reordered[1].id).toBe(1)
   })
-
 })
-

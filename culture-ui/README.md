@@ -46,6 +46,18 @@ Verify the codebase with the TypeScript compiler:
 pnpm --filter culture-ui type-check
 ```
 
+## Format
+
+Automatically format source files with Prettier:
+
+```bash
+pnpm --filter culture-ui format
+```
+
+## Git hooks
+
+Husky runs `pnpm lint` and `pnpm type-check` before each commit.
+
 ## Workspace integration
 
 `culture-ui` is defined in `pnpm-workspace.yaml`. Running `pnpm install` at the root installs both backend and UI dependencies. Use `--filter culture-ui` to run scripts only for the UI when needed.

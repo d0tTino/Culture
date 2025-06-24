@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import clsx from 'clsx'
 import type { ColumnDef, Row } from '@tanstack/react-table'
 import {
@@ -6,7 +6,8 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { fetchMissions, type Mission } from '../lib/api'
+import type { Mission } from '../lib/api'
+import missionsData from '../mock/missions.json'
 import {
   DndContext,
   KeyboardSensor,
@@ -22,7 +23,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-export { reorderMissions } from '../lib/reorderMissions'
+import { reorderMissions } from '../lib/reorderMissions'
 
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
@@ -52,16 +53,7 @@ function DraggableRow({ row }: { row: Row<Mission> }) {
 }
 
 export default function MissionOverview() {
-  const [data, setData] = useState<Mission[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    fetchMissions()
-      .then(setData)
-      .catch((err) => setError(err as Error))
-      .finally(() => setLoading(false))
-  }, [])
+  const [data, setData] = useState<Mission[]>(missionsData as Mission[])
 
   const columns: ColumnDef<Mission>[] = [
     {
@@ -96,14 +88,6 @@ export default function MissionOverview() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   )
-
-  if (loading) {
-    return <div className="p-4">Loading missions...</div>
-  }
-
-  if (error) {
-    return <div className="p-4 text-red-500">Error loading missions</div>
-  }
 
   return (
     <div className="p-4">
