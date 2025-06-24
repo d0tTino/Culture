@@ -40,6 +40,18 @@ class GraphKnowledgeBoard:
             )
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
 
+    # Enable use as a context manager
+    def __enter__(self: Self) -> Self:  # pragma: no cover - convenience
+        return self
+
+    def __exit__(
+        self: Self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any | None,
+    ) -> None:  # pragma: no cover - convenience
+        self.close()
+
     # --- Internal helpers -------------------------------------------------
     def _run(self: Self, query: str, **params: Any) -> list[Any]:
         with self.driver.session() as session:
