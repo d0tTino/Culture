@@ -11,6 +11,5 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { name: /welcome to culture ui/i }),
     ).toBeInTheDocument()
-
   })
 })
