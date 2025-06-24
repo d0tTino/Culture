@@ -19,8 +19,8 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable'
-import { reorderMissions } from '../lib/reorderMissions'
 import { CSS } from '@dnd-kit/utilities'
 
 // eslint-disable-next-line react-refresh/only-export-components

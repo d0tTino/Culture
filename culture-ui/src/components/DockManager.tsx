@@ -36,9 +36,10 @@ export default function DockManager({ defaultLayout }: DockManagerProps) {
   if (process.env.NODE_ENV === 'test') {
     return (
       <div>
-        {listWidgets().map(([key, Widget]) => (
-          <Widget key={key} />
-        ))}
+        {listWidgets().map((key) => {
+          const Widget = getWidget(key)
+          return Widget ? <Widget key={key} /> : null
+        })}
       </div>
     )
   }
