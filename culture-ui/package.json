@@ -24,7 +24,6 @@
     "lucide-react": "^0.519.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-force-graph-2d": "1.27.1",
     "react-router-dom": "^6.23.0",
     "recharts": "^2.8.0",
     "tailwind-merge": "^3.3.1"
