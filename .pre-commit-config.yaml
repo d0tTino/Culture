@@ -35,3 +35,8 @@ repos:
         entry: scripts/check_no_dspy_import.sh
         language: system
         types: [python]
+      - id: unit-tests
+        name: "Run unit test suite"
+        entry: python scripts/run_tests.py -m unit
+        language: system
+        pass_filenames: false

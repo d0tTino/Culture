@@ -21,7 +21,9 @@ def have_module(name: str) -> bool:
 def main(argv: list[str]) -> int:
     has_xdist = have_module("xdist")
     has_asyncio = have_module("pytest_asyncio")
-    if not have_module("fastapi"):
+    # Install dependencies if any are missing
+    required = ["fastapi", "sqlalchemy", "zstandard", "requests", "hypothesis"]
+    if not all(have_module(mod) for mod in required):
         subprocess.check_call(
             [
                 sys.executable,

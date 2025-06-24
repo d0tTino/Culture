@@ -42,7 +42,8 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class Response:  # pragma: no cover - minimal stub
-            pass
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
 
         class WebSocket:  # pragma: no cover - minimal stub
             pass
@@ -51,8 +52,8 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class JSONResponse:  # pragma: no cover - minimal stub
-            def __init__(self, *args: object, **kwargs: object) -> None:
-                pass
+            def __init__(self, content: object, *args: object, **kwargs: object) -> None:
+                self.body = json.dumps(content).encode("utf-8")
 
 
 from pydantic import BaseModel
@@ -134,8 +135,6 @@ async def get_missions() -> Response:
     with open(MISSIONS_PATH, encoding="utf-8") as f:
         missions = json.load(f)
     return JSONResponse(missions)
-
-
 
 
 @app.websocket("/ws/events")
