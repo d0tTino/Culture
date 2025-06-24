@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Any, cast
@@ -13,6 +14,16 @@ from src.agents.dspy_programs.intent_selector import IntentSelectorProgram
 from src.infra.config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_embedding(text: str, dim: int = 8) -> list[float]:
+    """Return a deterministic embedding vector for ``text``."""
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    segment_len = len(digest) // dim
+    return [
+        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
+        for i in range(dim)
+    ]
 
 
 class AgentController:
@@ -82,6 +93,17 @@ class AgentController:
             state.relationship_history.setdefault(other_agent_id, []).append(
                 (state.step_counter, new_score)
             )
+
+    def gossip_update(self: Self, other_embedding: list[float], interaction_score: float) -> None:
+        """Adjust role embedding based on interaction gossip."""
+        state = self._require_state()
+        if not state.role_embedding or not other_embedding:
+            return
+        lr = 0.1
+        new_embed: list[float] = []
+        for a, b in zip(state.role_embedding, other_embedding):
+            new_embed.append(a + lr * interaction_score * (b - a))
+        state.role_embedding = new_embed
 
     def change_role(self: Self, new_role: str, current_step: int) -> bool:
         state = self._require_state()
@@ -223,7 +245,14 @@ class AgentController:
                 sentiment_value = float(content.split()[0])
                 self.update_relationship(sender, sentiment_value, is_targeted=True)
             except (ValueError, IndexError):
+                sentiment_value = 0.0
                 self.update_relationship(sender, 0.0, is_targeted=True)
+
+            sender_emb = msg.get("sender_embedding")
+            if sender_emb is None and msg.get("sender_role"):
+                sender_emb = _compute_embedding(str(msg.get("sender_role")))
+            if sender_emb is not None:
+                self.gossip_update(sender_emb, float(sentiment_value))
 
     def reset_state(self: Self) -> None:
         """Reset mood and relationship histories while preserving known agents."""

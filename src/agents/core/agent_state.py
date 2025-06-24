@@ -6,7 +6,6 @@ from enum import Enum
 from typing import Any, Optional, cast
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
-
 from typing_extensions import Self
 
 try:  # Support pydantic >= 2 if installed
@@ -177,7 +176,9 @@ class AgentStateData(BaseModel):
     collective_du: float = 0.0
     current_role: str = Field(default_factory=_get_default_role)
     steps_in_current_role: int = 0
-    role_embedding: list[float] = Field(default_factory=list)
+    role_embedding: list[float] = Field(
+        default_factory=lambda: [random.uniform(-1.0, 1.0) for _ in range(8)]
+    )
     reputation: dict[str, float] = Field(default_factory=dict)
     conversation_history: deque[str] = Field(
         default_factory=deque
@@ -317,6 +318,13 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         return "Contribute to the simulation as effectively as possible."
 
     @property
+    def role_prompt(self) -> str:
+        """Return a prompt snippet derived from the embedding and reputation."""
+        avg_rep = sum(self.reputation.values()) / len(self.reputation) if self.reputation else 0.0
+        emb_str = " ".join(f"{v:.2f}" for v in self.role_embedding)
+        return f"Embedding: {emb_str}; reputation: {avg_rep:.2f}"
+
+    @property
     def ip_cost_per_message(self) -> float:
         return self._ip_cost_per_message
 
@@ -414,7 +422,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             if not model.get("role_history"):
                 model["role_history"] = [(model.get("step_counter", 0), model.get("current_role"))]
             if not model.get("mood_history"):
-                model["mood_history"] = [(model.get("step_counter", 0), model.get("mood_level", 0.0))]
+                model["mood_history"] = [
+                    (model.get("step_counter", 0), model.get("mood_level", 0.0))
+                ]
             return model
         else:
             if not model.role_history:
@@ -448,9 +458,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     "memory_store_manager",
                 },
             )
-        return base_model.dict(
-            exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
-        )
+        return base_model.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
