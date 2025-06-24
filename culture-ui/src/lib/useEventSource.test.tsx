@@ -71,6 +71,32 @@ describe('useEventSource', () => {
     expect(screen.getByTestId('value').textContent).toBe(JSON.stringify({ foo: 'bar' }))
   })
 
+  it('falls back to WebSocket when EventSource constructor throws', () => {
+    ;(
+      globalThis as unknown as {
+        EventSource: typeof EventSource
+        WebSocket: typeof MockWebSocket
+      }
+    ).EventSource = class {
+      constructor() {
+        throw new Error('fail')
+      }
+    } as unknown as typeof EventSource
+    ;(
+      globalThis as unknown as {
+        EventSource: typeof EventSource
+        WebSocket: typeof MockWebSocket
+      }
+    ).WebSocket = MockWebSocket
+
+    render(<TestComponent />)
+    const ws = MockWebSocket.instances[0]
+    act(() => {
+      ws.sendMessage('{"b":2}')
+    })
+    expect(screen.getByTestId('value').textContent).toBe(JSON.stringify({ b: 2 }))
+  })
+
   it('falls back to WebSocket on EventSource error', () => {
     ;(
       globalThis as unknown as {
