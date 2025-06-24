@@ -370,10 +370,12 @@ def build_graph() -> Any:
 
 
 def compile_agent_graph() -> Any:
-    """Compile and return the Basic Agent Graph executor."""
+    """Return the compiled Basic Agent Graph executor."""
     try:
-        graph_builder = build_graph()
-        executor = graph_builder.compile()
+        # ``build_graph`` already compiles and returns the executor, so avoid a
+        # second ``compile()`` call which caused AttributeErrors when ``build_graph``
+        # began returning a CompiledStateGraph instance.
+        executor = build_graph()
         logger.info(
             "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to executor."
         )

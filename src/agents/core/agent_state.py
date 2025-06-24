@@ -340,6 +340,11 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     def role_change_cooldown(self) -> int:
         return self._role_change_cooldown
 
+    @role_change_cooldown.setter
+    def role_change_cooldown(self, value: int) -> None:
+        """Set the cooldown period before another role change can occur."""
+        self._role_change_cooldown = int(value)
+
     def get_collective_metrics_summary(self) -> dict[str, Any]:
         """Returns a summary of metrics that might be aggregated across all agents."""
         return {

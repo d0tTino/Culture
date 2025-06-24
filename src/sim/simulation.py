@@ -12,6 +12,7 @@ from typing_extensions import Self
 
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
+from src.agents.core.agent_state import AgentActionIntent
 from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
@@ -344,6 +345,14 @@ class Simulation:
             this_agent_turn_generated_messages.append(msg_data)
             current_agent_state.messages_sent_count += 1
             current_agent_state.last_message_step = self.current_step
+
+            # If the message is a proposal to the Knowledge Board, record it
+            if (
+                self.knowledge_board
+                and action_intent_str == AgentActionIntent.PROPOSE_IDEA.value
+                and message_recipient_id is None
+            ):
+                self.knowledge_board.add_entry(message_content, agent_id, self.current_step)
 
         self.agents[agent_index] = agent
         self.agents[agent_index].update_state(current_agent_state)
