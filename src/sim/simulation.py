@@ -103,7 +103,6 @@ class Simulation:
             str, dict[str, Any]
         ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
-
         logger.info("Simulation initialized with project tracking system.")
 
         # --- NEW: Initialize Collective Metrics ---
@@ -142,7 +141,6 @@ class Simulation:
         self.messages_to_perceive_this_round: list[
             SimulationMessage
         ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
-
 
         self.track_collective_metrics: bool = True
 
@@ -258,6 +256,26 @@ class Simulation:
         agent_id = agent.agent_id
         current_agent_state = agent.state
 
+        if hasattr(current_agent_state, "age"):
+            current_agent_state.age += 1
+            max_age = int(config.get_config("MAX_AGENT_AGE"))
+            if current_agent_state.age >= max_age:
+                current_agent_state.is_alive = False
+                current_agent_state.inheritance = current_agent_state.ip + current_agent_state.du
+                current_agent_state.ip = 0.0
+                current_agent_state.du = 0.0
+                if self.knowledge_board:
+                    self.knowledge_board.add_entry(
+                        f"Agent {agent_id} retired", agent_id, self.current_step
+                    )
+                self.agents[agent_index].update_state(current_agent_state)
+                self.current_agent_index = (agent_index + 1) % len(self.agents)
+                return
+
+        if not getattr(current_agent_state, "is_alive", True):
+            self.current_agent_index = (agent_index + 1) % len(self.agents)
+            return
+
         perception_data: dict[str, Any] = {}
         has_role_change = False
         trace_hash = ""
@@ -280,23 +298,6 @@ class Simulation:
                 self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
                 return
 
-            if hasattr(current_agent_state, "age"):
-                current_agent_state.age += 1
-                max_age = int(config.get_config("MAX_AGENT_AGE"))
-                if current_agent_state.age >= max_age:
-                    current_agent_state.is_alive = False
-                    current_agent_state.inheritance = (
-                        current_agent_state.ip + current_agent_state.du
-                    )
-                    current_agent_state.ip = 0.0
-                    current_agent_state.du = 0.0
-                    if self.knowledge_board:
-                        self.knowledge_board.add_entry(
-                            f"Agent {agent_id} retired", agent_id, self.current_step
-                        )
-                    self.current_agent_index = (agent_to_run_index + 1) % len(self.agents)
-                    return
-
             # At the start of a new round (first agent), clear messages_to_perceive_this_round
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
@@ -306,7 +307,6 @@ class Simulation:
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
                 )
-
 
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
@@ -406,7 +406,6 @@ class Simulation:
                         **action_details,
                     },
                 )
-
             )
 
         logger.debug(
@@ -446,7 +445,6 @@ class Simulation:
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
                     "trace_hash": trace_hash,
-
                 },
             )
         )
@@ -478,7 +476,6 @@ class Simulation:
         self.current_agent_index = next_agent_index
         self.total_turns_executed += 1
         turn_counter_this_run_step += 1
-
 
         if (
             self.vector_store_manager
