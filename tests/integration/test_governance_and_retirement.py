@@ -29,6 +29,9 @@ class DummyAgent:
         self.agent_id = agent_id
         self.state = DummyState()
 
+    def get_id(self) -> str:
+        return self.agent_id
+
     async def run_turn(
         self,
         simulation_step: int,
@@ -55,12 +58,15 @@ async def test_law_proposal() -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_agent_retirement(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MAX_AGENT_AGE", "2")
     monkeypatch.setitem(config._CONFIG, "MAX_AGENT_AGE", 2)
     agent = DummyAgent("a1")
     sim = Simulation(agents=[agent])
 
     await sim.run_step()
     assert agent.state.is_alive
+    assert agent.state.age == 1
     await sim.run_step()
     assert not agent.state.is_alive
+    assert agent.state.age == 2
     assert agent.state.inheritance > 0

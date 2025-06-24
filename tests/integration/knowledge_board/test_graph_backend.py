@@ -83,6 +83,24 @@ def test_graph_board_add_and_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.integration
+def test_graph_board_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
+    config.load_config()
+    dummy_driver = DummyDriver()
+    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: dummy_driver)
+    board = GraphKnowledgeBoard()
+    board.clear_board()
+    board.add_entry("first", "A", 1)
+    board.add_entry("second", "B", 2)
+    entries = board.get_full_entries()
+    assert [e["content_full"] for e in entries] == ["first", "second"]
+    board_dict = board.to_dict()
+    assert len(board_dict["entries"]) == 2
+    assert board_dict["entries"][0]["step"] == 1
+    assert board_dict["entries"][1]["step"] == 2
+
+
+@pytest.mark.integration
 def test_simulation_closes_graph_board(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
     config.load_config()

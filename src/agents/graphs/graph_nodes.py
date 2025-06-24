@@ -57,8 +57,12 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     if semantic_manager:
         semantic = semantic_manager.get_recent_summaries(state["agent_id"], limit=2)
         memories_content.extend(semantic)
+    agent_state = state.get("state")
+    role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
     summary_result = await agent.async_generate_l1_summary(  # type: ignore[attr-defined]
-        state.get("current_role", ""), "\n".join(memories_content), ""
+        role_prompt,
+        "\n".join(memories_content),
+        "",
     )
     summary = getattr(summary_result, "summary", "")
     return {"rag_summary": summary, "memory_history_list": memories}
