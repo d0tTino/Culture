@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, type ComponentType } from 'react'
 
-let ForceGraph2D: any = () => <canvas />
+let ForceGraph2D: ComponentType<unknown> = () => <canvas />
 if (process.env.NODE_ENV !== 'test') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   ForceGraph2D = require('react-force-graph-2d').default
 }
 
