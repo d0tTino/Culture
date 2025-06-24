@@ -15,6 +15,10 @@ This guide explains how to configure basic monitoring for Culture.ai using Grafa
 
 The imported dashboard includes panels for CPU usage, Knowledge Board size, active agent count, and the LLM query rate (QPS).
 
+Additional Prometheus metrics include:
+
+- `llm_errors_total` – counts failed LLM calls captured by the monitoring decorator.
+
 ## 3. Running Grafana Locally
 
 If you want to run Grafana locally for quick testing, you can use Docker:

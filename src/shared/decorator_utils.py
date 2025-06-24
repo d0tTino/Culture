@@ -90,6 +90,8 @@ def monitor_llm_call(
                 end_time = time.perf_counter()
                 metrics_data["duration_ms"] = round((end_time - start_time) * 1000, 2)
                 metrics.LLM_CALLS_TOTAL.inc()
+                if not metrics_data.get("success", False):
+                    metrics.LLM_ERRORS_TOTAL.inc()
                 metrics.LLM_LATENCY_MS.set(metrics_data["duration_ms"])
                 llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
             return result

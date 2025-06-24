@@ -40,6 +40,7 @@ except Exception:  # pragma: no cover - optional dependency
 # Expose metrics for LLM calls and knowledge board state
 LLM_LATENCY_MS = Gauge("llm_latency_ms", "Latency of last LLM call in milliseconds")
 LLM_CALLS_TOTAL = Counter("llm_calls_total", "Total number of LLM calls")
+LLM_ERRORS_TOTAL = Counter("llm_errors_total", "Total number of failed LLM calls")
 KNOWLEDGE_BOARD_SIZE = Gauge(
     "knowledge_board_size", "Number of entries currently on the Knowledge Board"
 )
