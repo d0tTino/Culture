@@ -35,5 +35,6 @@ describe('DockManager', () => {
     render(<DockManager defaultLayout={defaultLayout} />)
     expect(fromJson).toHaveBeenCalledWith(saved)
     expect(screen.getByTestId('test-widget')).toBeInTheDocument()
+
   })
 })

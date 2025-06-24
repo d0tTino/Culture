@@ -2,6 +2,7 @@
 Pytest fixtures for use across test files.
 """
 
+import json
 import shutil
 import socket
 import sys
@@ -179,7 +180,8 @@ if "fastapi" not in sys.modules:
                 return True
 
         class Response:  # pragma: no cover - simple stub
-            pass
+            def __init__(self, content: object = "", *args: object, **kwargs: object) -> None:
+                self.body = json.dumps(content).encode("utf-8")
 
         from starlette.websockets import WebSocket, WebSocketDisconnect
 

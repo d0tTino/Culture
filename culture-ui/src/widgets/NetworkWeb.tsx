@@ -3,7 +3,9 @@ import { useMemo, type FC } from 'react'
 let ForceGraph2D: FC<Record<string, unknown>> = () => <canvas />
 if (process.env.NODE_ENV !== 'test') {
   // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+
   ForceGraph2D = require('react-force-graph-2d').default
+
 }
 
 export default function NetworkWeb() {

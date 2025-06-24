@@ -17,9 +17,10 @@ describe('MissionOverview', () => {
   })
 
   it('renders missions table', async () => {
+
     render(<MissionOverview />)
-    expect(await screen.findByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    expect(await screen.findByText('Gather Intel')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
+    expect(screen.getByText('Gather Intel')).toBeInTheDocument()
     expect(screen.getByText('Prepare Brief')).toBeInTheDocument()
   })
 
