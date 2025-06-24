@@ -23,17 +23,7 @@ import {
 import { reorderMissions } from '../lib/reorderMissions'
 import { CSS } from '@dnd-kit/utilities'
 
-// eslint-disable-next-line react-refresh/only-export-components
-export function reorderMissions(
-  data: Mission[],
-  activeId: number,
-  overId: number,
-) {
-  const oldIndex = data.findIndex((r) => r.id === activeId)
-  const newIndex = data.findIndex((r) => r.id === overId)
-  return arrayMove(data, oldIndex, newIndex)
-
-}
+export { reorderMissions } from '../lib/reorderMissions'
 
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
