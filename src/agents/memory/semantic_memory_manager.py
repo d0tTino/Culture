@@ -81,11 +81,11 @@ class SemanticMemoryManager:
             self.topic_centroids[agent_id] = np.zeros((len(groups), 1))
             return groups
 
-        groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        topic_groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
         centroids: list[np.ndarray] = []
         for mem, emb in zip(memories, embeddings):
             if not centroids:
-                groups[0].append(mem)
+                topic_groups[0].append(mem)
                 centroids.append(emb)
                 continue
             sims = (
@@ -93,18 +93,18 @@ class SemanticMemoryManager:
             )
             idx = int(np.argmax(sims))
             if sims[idx] < threshold and len(centroids) < num_topics:
-                groups[len(centroids)].append(mem)
+                topic_groups[len(centroids)].append(mem)
                 centroids.append(emb)
             else:
-                groups[idx].append(mem)
+                topic_groups[idx].append(mem)
                 c = centroids[idx]
-                centroids[idx] = (c * (len(groups[idx]) - 1) + emb) / len(groups[idx])
+                centroids[idx] = (c * (len(topic_groups[idx]) - 1) + emb) / len(topic_groups[idx])
 
-        self.topic_groups[agent_id] = groups
+        self.topic_groups[agent_id] = topic_groups
         self.topic_centroids[agent_id] = (
             np.stack(centroids) if centroids else np.empty((0, embeddings.shape[1]))
         )
-        return groups
+        return topic_groups
 
     def retrieve_context(
         self: Self, agent_id: str, query: str, k: int = 5

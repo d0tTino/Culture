@@ -97,10 +97,10 @@ def load_snapshot(
             )
         with file_path.open("rb") as f:
             payload = zstd.ZstdDecompressor().decompress(f.read()).decode("utf-8")
-        data = json.loads(payload)
+        data = cast(dict[str, Any], json.loads(payload))
     else:
         with file_path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+            data = cast(dict[str, Any], json.load(f))
 
     expected = data.get("trace_hash")
     if expected is not None:
