@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 try:
     import zstandard as zstd
@@ -57,3 +57,18 @@ def save_snapshot(
         file_path = path / f"snapshot_{step}.json"
         with file_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+
+
+def load_snapshot(path: str | Path) -> dict[str, Any]:
+    """Load snapshot JSON or JSON.zst and return the data."""
+    file_path = Path(path)
+    if file_path.suffix == ".zst":
+        if zstd is None:
+            raise RuntimeError(
+                "Loading compressed snapshots requires the optional 'zstandard' package."
+            )
+        with file_path.open("rb") as f:
+            decompressed = zstd.ZstdDecompressor().decompress(f.read())
+        return cast(dict[str, Any], json.loads(decompressed.decode("utf-8")))
+    with file_path.open("r", encoding="utf-8") as f:
+        return cast(dict[str, Any], json.load(f))
