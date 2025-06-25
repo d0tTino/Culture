@@ -193,6 +193,26 @@ class Simulation:
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
+    def spawn_agent(self: Self, agent: "Agent", *, inheritance: float = 0.0) -> None:
+        """Add a new agent to the simulation."""
+        agent.state.ip += inheritance
+        self.agents.append(agent)
+        self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
+        self._update_collective_metrics()
+
+    def retire_agent(self: Self, agent: "Agent") -> None:
+        """Retire an agent and compute inheritance."""
+        state = agent.state
+        state.is_alive = False
+        state.inheritance = state.ip + state.du
+        state.ip = 0.0
+        state.du = 0.0
+        if self.knowledge_board:
+            self.knowledge_board.add_entry(
+                f"Agent {agent.agent_id} retired", agent.agent_id, self.current_step
+            )
+        agent.update_state(state)
+
     def get_other_agents_public_state(self: Self, current_agent_id: str) -> list[dict[str, Any]]:
         """
         Returns a list of public state information for all agents other than the current one.
@@ -261,15 +281,7 @@ class Simulation:
             current_agent_state.age += 1
             max_age = int(config.get_config("MAX_AGENT_AGE"))
             if current_agent_state.age >= max_age:
-                current_agent_state.is_alive = False
-                current_agent_state.inheritance = current_agent_state.ip + current_agent_state.du
-                current_agent_state.ip = 0.0
-                current_agent_state.du = 0.0
-                if self.knowledge_board:
-                    self.knowledge_board.add_entry(
-                        f"Agent {agent_id} retired", agent_id, self.current_step
-                    )
-                self.agents[agent_index].update_state(current_agent_state)
+                self.retire_agent(agent)
                 self.current_agent_index = (agent_index + 1) % len(self.agents)
                 return
 
@@ -303,7 +315,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."

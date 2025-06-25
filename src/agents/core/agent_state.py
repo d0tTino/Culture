@@ -170,6 +170,8 @@ class AgentStateData(BaseModel):
     age: int = 0
     is_alive: bool = True
     inheritance: float = 0.0
+    genes: dict[str, float] = Field(default_factory=dict)
+    parent_id: Optional[str] = None
     # Memory consolidation tracking
     last_level_2_consolidation_step: int = 0
     collective_ip: float = 0.0
