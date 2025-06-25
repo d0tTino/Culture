@@ -4,9 +4,11 @@ from src.sim.event_kernel import EventKernel
 
 pytestmark = pytest.mark.unit
 
+
 def _make_cb(order: list[int], n: int):
     async def _cb() -> None:
         order.append(n)
+
     return _cb
 
 

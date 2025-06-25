@@ -87,7 +87,9 @@ def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
     return events
 
 
-def stream_events(after_step: int = 0, timeout: float = 1.0) -> Generator[dict[str, Any], None, None]:
+def stream_events(
+    after_step: int = 0, timeout: float = 1.0
+) -> Generator[dict[str, Any], None, None]:
     """Yield events from Redpanda until ``timeout`` seconds of inactivity."""
     if os.getenv("ENABLE_REDPANDA", "0") != "1":
         if False:

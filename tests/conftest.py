@@ -318,4 +318,3 @@ def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
 def ensure_required_env() -> None:
     os.environ.setdefault("REDPANDA_BROKER", "localhost:9092")
     os.environ.setdefault("OPA_URL", "http://opa")
-

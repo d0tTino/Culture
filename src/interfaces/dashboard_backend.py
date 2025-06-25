@@ -45,7 +45,6 @@ else:  # pragma: no cover - optional runtime dependency
             def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
-
         class WebSocket:  # pragma: no cover - minimal stub
             pass
 
@@ -55,6 +54,7 @@ else:  # pragma: no cover - optional runtime dependency
         class JSONResponse:  # pragma: no cover - minimal stub
             def __init__(self, content: object, *args: object, **kwargs: object) -> None:
                 self.body = json.dumps(content).encode("utf-8")
+
 
 from pydantic import BaseModel
 
@@ -176,6 +176,7 @@ try:
     async def control(command: dict[str, Any]) -> Response:
         result = await handle_control_command(command)
         return JSONResponse(result)
+
 except AttributeError:  # pragma: no cover - stub app may lack decorators
     pass
 
@@ -197,6 +198,7 @@ try:
                 await websocket.send_text(json.dumps(result))
         except WebSocketDisconnect:
             pass
+
 except AttributeError:  # pragma: no cover - stub app may lack decorators
     pass
 
