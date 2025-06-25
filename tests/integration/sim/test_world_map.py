@@ -102,3 +102,4 @@ async def test_snapshot_contains_world_map(tmp_path: str, monkeypatch: pytest.Mo
 
     assert "world_map" in snapshot
     assert snapshot["world_map"]["agents"][agent.agent_id] == [9, 0]
+    assert "vector" in snapshot["world_map"]

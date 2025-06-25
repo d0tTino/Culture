@@ -11,6 +11,8 @@ from typing_extensions import Self
 from src.infra import config
 from src.interfaces import metrics
 
+from .version_vector import VersionVector
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ class KnowledgeBoard:
             self.entries = LoggingList(entries)
         else:
             self.entries = LoggingList()
+        self.vector = VersionVector()
         logger.info(
             f"KnowledgeBoard initialized. Instance ID: {id(self)}. Entries list ID: {id(self.entries)} type: {type(self.entries)}"
         )
@@ -94,7 +97,7 @@ class KnowledgeBoard:
 
     def to_dict(self: Self) -> dict[str, Any]:
         """Serialize the knowledge board to a dictionary."""
-        return {"entries": self.get_full_entries()}
+        return {"entries": self.get_full_entries(), "vector": self.vector.to_dict()}
 
     def get_recent_entries_for_prompt(self: Self, max_entries: int = 5) -> list[str]:
         """
@@ -138,7 +141,13 @@ class KnowledgeBoard:
 
         return formatted_entries
 
-    def add_entry(self: Self, entry: str, agent_id: str, step: int) -> bool:
+    def add_entry(
+        self: Self,
+        entry: str,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
         """
         Adds an entry to the knowledge board.
 
@@ -151,7 +160,9 @@ class KnowledgeBoard:
             bool: True if the entry was successfully added, False otherwise.
         """
         try:
-            entry_id = str(uuid.uuid4())  # Unique ID for this board entry
+            entry_id = str(
+                uuid.uuid5(uuid.NAMESPACE_OID, f"{agent_id}:{step}:{entry}")
+            )  # Deterministic ID for testing
             formatted_content = (
                 f"Step {step} (Agent: {agent_id}): {entry}"  # Keep this for display
             )
@@ -164,6 +175,10 @@ class KnowledgeBoard:
                 "content_display": formatted_content,  # Store formatted entry for display
             }
             self.entries.append(new_entry_dict)  # Append first
+            if vector is not None:
+                self.vector.merge(VersionVector(vector))
+            else:
+                self.vector.increment(agent_id)
 
             # Enforce maximum board size
             max_entries = int(config.MAX_KB_ENTRIES)
@@ -196,9 +211,15 @@ class KnowledgeBoard:
             logger.error(f"Failed to add entry to knowledge board: {e}")
             return False
 
-    def add_law_proposal(self: Self, proposal: str, agent_id: str, step: int) -> bool:
+    def add_law_proposal(
+        self: Self,
+        proposal: str,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
         """Record a law proposal on the board."""
-        return self.add_entry(f"Law proposed: {proposal}", agent_id, step)
+        return self.add_entry(f"Law proposed: {proposal}", agent_id, step, vector)
 
     def clear_board(self: Self) -> None:
         """Clears all entries from the Knowledge Board."""
@@ -206,6 +227,7 @@ class KnowledgeBoard:
             f"KNOWLEDGE_BOARD_DEBUG: Clearing board. Instance ID: {id(self)}. Old entries list ID: {id(self.entries)}"
         )
         self.entries = LoggingList()  # Assign new LoggingList
+        self.vector = VersionVector()
         logger.info(
             f"KNOWLEDGE_BOARD_DEBUG: Board cleared. Instance ID: {id(self)}. New entries list ID: {id(self.entries)}"
         )

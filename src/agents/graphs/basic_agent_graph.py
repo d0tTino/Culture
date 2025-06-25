@@ -395,8 +395,7 @@ def build_graph() -> Any:
 def compile_agent_graph() -> Any:
     """Return the compiled Basic Agent Graph executor."""
     try:
-        graph = build_graph()
-        executor = graph.compile() if hasattr(graph, "compile") else graph
+        executor = build_graph()
 
         logger.info(
             "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to executor."

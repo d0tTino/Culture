@@ -5,6 +5,8 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Callable, Self
 
+from .version_vector import VersionVector
+
 
 @dataclass(order=True)
 class Event:
@@ -15,6 +17,7 @@ class Event:
     tokens: int = field(compare=False)
     agent_id: str | None = field(compare=False)
     callback: Callable[[], Awaitable[None]] = field(compare=False)
+    vector: VersionVector = field(default_factory=VersionVector, compare=False)
 
 
 class EventKernel:
@@ -25,6 +28,7 @@ class EventKernel:
         self._counter = 0
         self.current_step = 0
         self._budgets: dict[str, int] = {}
+        self.vector = VersionVector()
 
     def set_budget(self: Self, agent_id: str, tokens: int) -> None:
         """Set the token budget for an agent."""
@@ -40,9 +44,16 @@ class EventKernel:
         *,
         agent_id: str | None = None,
         tokens: int = 1,
+        vector: VersionVector | None = None,
     ) -> None:
         """Schedule ``callback`` to run at ``current_step``."""
-        await self.schedule_at(self.current_step, callback, agent_id=agent_id, tokens=tokens)
+        await self.schedule_at(
+            self.current_step,
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
 
     def schedule_nowait(
         self: Self,
@@ -50,9 +61,16 @@ class EventKernel:
         *,
         agent_id: str | None = None,
         tokens: int = 1,
+        vector: VersionVector | None = None,
     ) -> None:
         """Synchronously schedule ``callback`` at ``current_step``."""
-        self.schedule_at_nowait(self.current_step, callback, agent_id=agent_id, tokens=tokens)
+        self.schedule_at_nowait(
+            self.current_step,
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
 
     async def schedule_at(
         self: Self,
@@ -61,9 +79,16 @@ class EventKernel:
         *,
         agent_id: str | None = None,
         tokens: int = 1,
+        vector: VersionVector | None = None,
     ) -> None:
         """Schedule ``callback`` to run at a specific ``step``."""
-        self.schedule_at_nowait(step, callback, agent_id=agent_id, tokens=tokens)
+        self.schedule_at_nowait(
+            step,
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
 
     def schedule_at_nowait(
         self: Self,
@@ -72,8 +97,12 @@ class EventKernel:
         *,
         agent_id: str | None = None,
         tokens: int = 1,
+        vector: VersionVector | None = None,
     ) -> None:
-        heapq.heappush(self._queue, Event(step, self._counter, tokens, agent_id, callback))
+        heapq.heappush(
+            self._queue,
+            Event(step, self._counter, tokens, agent_id, callback, vector or VersionVector()),
+        )
         self._counter += 1
 
     async def dispatch(self: Self, limit: int) -> int:
@@ -95,11 +124,13 @@ class EventKernel:
                             event.tokens,
                             event.agent_id,
                             event.callback,
+                            event.vector,
                         ),
                     )
                     self._counter += 1
                     continue
                 self._budgets[event.agent_id] = budget - event.tokens
+            self.vector.merge(event.vector)
             await event.callback()
             executed += 1
         return executed

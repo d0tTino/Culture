@@ -5,6 +5,8 @@ from enum import Enum
 from heapq import heappop, heappush
 from typing import Any
 
+from .version_vector import VersionVector
+
 
 class ResourceToken(str, Enum):
     """Tokens representing resources that agents can collect."""
@@ -29,6 +31,7 @@ class WorldMap:
         self.buildings: dict[tuple[int, int], str] = {}
         self.agent_resources: dict[str, dict[str, int]] = {}
         self.obstacles: set[tuple[int, int]] = set()
+        self.vector = VersionVector()
 
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
@@ -52,7 +55,14 @@ class WorldMap:
         cell = self.resources.setdefault((x, y), {})
         cell[resource.value] = cell.get(resource.value, 0) + amount
 
-    def move(self, agent_id: str, dx: int, dy: int) -> tuple[int, int]:
+    def move(
+        self,
+        agent_id: str,
+        dx: int,
+        dy: int,
+        *,
+        vector: dict[str, int] | None = None,
+    ) -> tuple[int, int]:
         """Move ``agent_id`` by ``dx`` and ``dy`` within map bounds."""
 
         x, y = self.agent_positions.get(agent_id, (0, 0))
@@ -61,9 +71,20 @@ class WorldMap:
         if not self.passable(new_x, new_y):
             return x, y
         self.agent_positions[agent_id] = (new_x, new_y)
+        if vector is not None:
+            self.vector.merge(VersionVector(vector))
+        else:
+            self.vector.increment(agent_id)
         return new_x, new_y
 
-    def move_to(self, agent_id: str, dest_x: int, dest_y: int) -> tuple[int, int]:
+    def move_to(
+        self,
+        agent_id: str,
+        dest_x: int,
+        dest_y: int,
+        *,
+        vector: dict[str, int] | None = None,
+    ) -> tuple[int, int]:
         """Move ``agent_id`` one step toward ``dest_x``, ``dest_y`` using A*."""
 
         start = self.agent_positions.get(agent_id, (0, 0))
@@ -73,6 +94,10 @@ class WorldMap:
         nxt = path[1]
         if self.passable(*nxt):
             self.agent_positions[agent_id] = nxt
+            if vector is not None:
+                self.vector.merge(VersionVector(vector))
+            else:
+                self.vector.increment(agent_id)
             return nxt
         return start
 
@@ -122,7 +147,13 @@ class WorldMap:
         path.reverse()
         return path
 
-    def gather(self, agent_id: str, resource: ResourceToken) -> bool:
+    def gather(
+        self,
+        agent_id: str,
+        resource: ResourceToken,
+        *,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
         """Collect ``resource`` from the agent's current position."""
 
         pos = self.agent_positions.get(agent_id)
@@ -143,9 +174,19 @@ class WorldMap:
             ledger.add_tokens(agent_id, res_key, 1)
         except Exception:  # pragma: no cover - optional
             pass
+        if vector is not None:
+            self.vector.merge(VersionVector(vector))
+        else:
+            self.vector.increment(agent_id)
         return True
 
-    def build(self, agent_id: str, structure: StructureType) -> bool:
+    def build(
+        self,
+        agent_id: str,
+        structure: StructureType,
+        *,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
         """Construct a ``structure`` at the agent's current location."""
 
         pos = self.agent_positions.get(agent_id)
@@ -165,6 +206,10 @@ class WorldMap:
             ledger.remove_tokens(agent_id, ResourceToken.WOOD.value, 1)
         except Exception:  # pragma: no cover - optional
             pass
+        if vector is not None:
+            self.vector.merge(VersionVector(vector))
+        else:
+            self.vector.increment(agent_id)
         return True
 
     def to_dict(self) -> dict[str, Any]:
@@ -176,4 +221,5 @@ class WorldMap:
             "buildings": self.buildings,
             "agent_resources": self.agent_resources,
             "obstacles": list(self.obstacles),
+            "vector": self.vector.to_dict(),
         }
