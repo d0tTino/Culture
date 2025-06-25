@@ -175,9 +175,7 @@ def _embedding_similarity(vec1: list[float], vec2: list[float]) -> float:
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     resolved_role, _ = ROLE_EMBEDDINGS.best_role(requested_role)
     if resolved_role is None:
-        logger.warning(
-            f"Agent {agent_state.agent_id} requested invalid role: {requested_role}"
-        )
+        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
         return False
     requested_role = resolved_role
     current_role = _get_current_role(agent_state)
@@ -389,7 +387,6 @@ def build_graph() -> Any:
 def compile_agent_graph() -> Any:
     """Return the compiled Basic Agent Graph executor."""
     try:
-
         executor = build_graph()
 
         logger.info(

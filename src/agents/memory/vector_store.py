@@ -1336,11 +1336,7 @@ class ChromaVectorStoreManager(MemoryStore):
             include_usage_stats=False,
         )
 
-        raw_memories = [
-            m
-            for m in raw_memories
-            if start_step <= int(m.get("step", 0)) <= end_step
-        ]
+        raw_memories = [m for m in raw_memories if start_step <= int(m.get("step", 0)) <= end_step]
 
         if not raw_memories:
             return
@@ -1373,9 +1369,7 @@ class ChromaVectorStoreManager(MemoryStore):
     ) -> None:
         """Asynchronous wrapper for :meth:`consolidate_daily_memories`."""
 
-        await asyncio.to_thread(
-            self.consolidate_daily_memories, agent_id, start_step, end_step
-        )
+        await asyncio.to_thread(self.consolidate_daily_memories, agent_id, start_step, end_step)
 
     def get_embedding(self: Self, text: str) -> list[float]:
         """

@@ -38,7 +38,6 @@ def test_build_graph_structure() -> None:
         ("prepare_relationship_prompt", "retrieve_and_summarize_memories"),
         ("retrieve_and_summarize_memories", "generate_thought_and_message"),
         ("generate_thought_and_message", "route_action_intent"),
-
         ("handle_idle", "finalize_message_agent"),
         ("finalize_message_agent", END),
     }
