@@ -15,12 +15,7 @@ from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_graph_types import AgentTurnState
 from src.agents.core.agent_state import AgentState
 from src.agents.core.mood_utils import get_descriptive_mood
-from src.agents.core.roles import (
-    ROLE_ANALYZER,
-    ROLE_EMBEDDINGS,
-    ROLE_FACILITATOR,
-    ROLE_INNOVATOR,
-)
+from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
 
 # Import L1SummaryGenerator for DSPy-based L1 summary generation
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
@@ -34,8 +29,6 @@ from .interaction_handlers import (  # noqa: F401 - imported for re-export
     handle_leave_project_node,
     handle_send_direct_message_node,
 )
-
-VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
 
 # Module logger
 logger = logging.getLogger(__name__)
@@ -153,9 +146,6 @@ DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE = config.DU_BONUS_FOR_CONSTRUCTIVE_REFERENCE
 DU_COST_DEEP_ANALYSIS = config.DU_COST_DEEP_ANALYSIS
 DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFICATION
 
-# List of valid roles
-VALID_ROLES = [ROLE_FACILITATOR, ROLE_INNOVATOR, ROLE_ANALYZER]
-
 # --- Node Functions ---
 
 
@@ -183,13 +173,17 @@ def _embedding_similarity(vec1: list[float], vec2: list[float]) -> float:
 
 
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
-    if requested_role not in VALID_ROLES:
-        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
+    resolved_role, _ = ROLE_EMBEDDINGS.best_role(requested_role)
+    if resolved_role is None:
+        logger.warning(
+            f"Agent {agent_state.agent_id} requested invalid role: {requested_role}"
+        )
         return False
+    requested_role = resolved_role
     current_role = _get_current_role(agent_state)
     if requested_role == current_role:
         return False
-    requested_emb = ROLE_EMBEDDINGS.get(requested_role)
+    requested_emb = ROLE_EMBEDDINGS.role_vectors.get(requested_role)
     similarity = (
         _embedding_similarity(agent_state.role_embedding, requested_emb) if requested_emb else 0.0
     )

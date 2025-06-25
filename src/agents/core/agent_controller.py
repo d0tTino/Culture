@@ -97,13 +97,7 @@ class AgentController:
     def gossip_update(self: Self, other_embedding: list[float], interaction_score: float) -> None:
         """Adjust role embedding based on interaction gossip."""
         state = self._require_state()
-        if not state.role_embedding or not other_embedding:
-            return
-        lr = 0.1
-        new_embed: list[float] = []
-        for a, b in zip(state.role_embedding, other_embedding):
-            new_embed.append(a + lr * interaction_score * (b - a))
-        state.role_embedding = new_embed
+        state.apply_gossip(other_embedding, interaction_score)
 
     def change_role(self: Self, new_role: str, current_step: int) -> bool:
         state = self._require_state()
