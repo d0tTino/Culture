@@ -39,6 +39,16 @@ class Ledger:
             )
             """
         )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_tokens (
+                agent_id TEXT,
+                token TEXT,
+                amount INTEGER DEFAULT 0,
+                PRIMARY KEY(agent_id, token)
+            )
+            """
+        )
         self.conn.commit()
         self._hooks: list[Callable[[str, float, float, str], None]] = []
         self.register_hook(self._db_hook)
@@ -140,6 +150,43 @@ class Ledger:
         if row:
             return float(row[0]), float(row[1])
         return 0.0, 0.0
+
+    def add_tokens(self, agent_id: str, token: str, amount: int) -> None:
+        if amount <= 0:
+            return
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO agent_tokens(agent_id, token, amount)
+            VALUES(?, ?, ?)
+            ON CONFLICT(agent_id, token) DO UPDATE SET
+                amount = amount + excluded.amount
+            """,
+            (agent_id, token, int(amount)),
+        )
+        self.conn.commit()
+
+    def remove_tokens(self, agent_id: str, token: str, amount: int) -> None:
+        if amount <= 0:
+            return
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            UPDATE agent_tokens
+            SET amount = MAX(amount - ?, 0)
+            WHERE agent_id=? AND token=?
+            """,
+            (int(amount), agent_id, token),
+        )
+        self.conn.commit()
+
+    def get_tokens(self, agent_id: str, token: str) -> int:
+        cur = self.conn.execute(
+            "SELECT amount FROM agent_tokens WHERE agent_id=? AND token=?",
+            (agent_id, token),
+        )
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
 
 
 ledger = Ledger()

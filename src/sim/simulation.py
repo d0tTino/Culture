@@ -309,7 +309,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -383,9 +385,14 @@ class Simulation:
         if isinstance(map_action, dict):
             action_type = map_action.get("action")
             if action_type == "move":
-                dx = int(map_action.get("dx", 0))
-                dy = int(map_action.get("dy", 0))
-                pos = self.world_map.move(agent_id, dx, dy)
+                if "x" in map_action and "y" in map_action:
+                    tx = int(map_action.get("x", 0))
+                    ty = int(map_action.get("y", 0))
+                    pos = self.world_map.move_to(agent_id, tx, ty)
+                else:
+                    dx = int(map_action.get("dx", 0))
+                    dy = int(map_action.get("dy", 0))
+                    pos = self.world_map.move(agent_id, dx, dy)
                 action_details = {"position": pos}
                 start_ip = current_agent_state.ip
                 start_du = current_agent_state.du

@@ -130,3 +130,28 @@ def test_build_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert ip == pytest.approx(config.MAP_BUILD_IP_REWARD - config.MAP_BUILD_IP_COST)
     assert du == pytest.approx(config.MAP_BUILD_DU_REWARD - config.MAP_BUILD_DU_COST)
     assert sim.world_map.buildings[(0, 0)] == StructureType.HUT.value
+
+
+def test_pathfinding_large_map() -> None:
+    m = WorldMap(width=20, height=20)
+    m.add_agent("A")
+    # create a wall of obstacles except for a gap
+    for y in range(10):
+        if y != 5:
+            m.add_obstacle(5, y)
+    # move towards the other side of the wall
+    for _ in range(20):
+        m.move_to("A", 10, 0)
+    x, y = m.agent_positions["A"]
+    assert (x, y) == (10, 0)
+
+
+def test_gather_after_pathfinding() -> None:
+    m = WorldMap(width=15, height=15)
+    m.add_agent("A")
+    m.add_resource(10, 10, ResourceToken.WOOD, 1)
+    for _ in range(20):
+        m.move_to("A", 10, 10)
+    assert m.agent_positions["A"] == (10, 10)
+    assert m.gather("A", ResourceToken.WOOD)
+    assert m.agent_resources["A"].get("wood", 0) == 1
