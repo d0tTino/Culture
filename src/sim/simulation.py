@@ -23,6 +23,7 @@ from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.version_vector import VersionVector
 from src.sim.world_map import ResourceToken, StructureType, WorldMap
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
@@ -75,6 +76,7 @@ class Simulation:
         self.resource_manager = ResourceManager(config.MAX_IP_PER_TICK, config.MAX_DU_PER_TICK)
         self.simulation_complete = False
         self.event_kernel = EventKernel()
+        self.vector = VersionVector()
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
@@ -217,7 +219,10 @@ class Simulation:
         state.du = 0.0
         if self.knowledge_board:
             self.knowledge_board.add_entry(
-                f"Agent {agent.agent_id} retired", agent.agent_id, self.current_step
+                f"Agent {agent.agent_id} retired",
+                agent.agent_id,
+                self.current_step,
+                self.vector.to_dict(),
             )
         agent.update_state(state)
 
@@ -283,6 +288,7 @@ class Simulation:
         self.current_step += 1
         agent = self.agents[agent_index]
         agent_id = agent.agent_id
+        self.vector.increment(agent_id)
         current_agent_state = agent.state
 
         if hasattr(current_agent_state, "age"):
@@ -371,7 +377,12 @@ class Simulation:
                 and action_intent_str == AgentActionIntent.PROPOSE_IDEA.value
                 and message_recipient_id is None
             ):
-                self.knowledge_board.add_entry(message_content, agent_id, self.current_step)
+                self.knowledge_board.add_entry(
+                    message_content,
+                    agent_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
 
         self.agents[agent_index] = agent
         self.agents[agent_index].update_state(current_agent_state)
@@ -399,11 +410,11 @@ class Simulation:
                 if "x" in map_action and "y" in map_action:
                     tx = int(map_action.get("x", 0))
                     ty = int(map_action.get("y", 0))
-                    pos = self.world_map.move_to(agent_id, tx, ty)
+                    pos = self.world_map.move_to(agent_id, tx, ty, vector=self.vector.to_dict())
                 else:
                     dx = int(map_action.get("dx", 0))
                     dy = int(map_action.get("dy", 0))
-                    pos = self.world_map.move(agent_id, dx, dy)
+                    pos = self.world_map.move(agent_id, dx, dy, vector=self.vector.to_dict())
                 action_details = {"position": pos}
                 start_ip = current_agent_state.ip
                 if config.MAP_MOVE_DU_COST > 0:
@@ -435,7 +446,11 @@ class Simulation:
                 res = map_action.get("resource")
                 success = False
                 if isinstance(res, str):
-                    success = self.world_map.gather(agent_id, ResourceToken(res))
+                    success = self.world_map.gather(
+                        agent_id,
+                        ResourceToken(res),
+                        vector=self.vector.to_dict(),
+                    )
                 action_details = {"resource": res, "success": success}
                 if success:
                     start_ip = current_agent_state.ip
@@ -468,7 +483,11 @@ class Simulation:
                 struct = map_action.get("structure")
                 success = False
                 if isinstance(struct, str):
-                    success = self.world_map.build(agent_id, StructureType(struct))
+                    success = self.world_map.build(
+                        agent_id,
+                        StructureType(struct),
+                        vector=self.vector.to_dict(),
+                    )
                 action_details = {"structure": struct, "success": success}
                 if success:
                     start_ip = current_agent_state.ip
@@ -540,6 +559,16 @@ class Simulation:
                 "du": current_agent_state.du,
             }
         )
+        if event is None:
+            event = {
+                "type": "agent_action",
+                "agent_id": agent_id,
+                "step": self.current_step,
+                "action_intent": action_intent_str,
+                "ip": current_agent_state.ip,
+                "du": current_agent_state.du,
+            }
+            event["trace_hash"] = compute_trace_hash(event)
         trace_hash = event["trace_hash"]
         await emit_event(SimulationEvent(event_type="agent_action", data=event))
 
@@ -561,7 +590,14 @@ class Simulation:
                 ],
                 "trace_hash": self._last_trace_hash,
             }
-            snapshot["trace_hash"] = compute_trace_hash(snapshot)
+            snapshot_no_vector = {
+                **{k: v for k, v in snapshot.items() if k != "trace_hash"},
+                "knowledge_board": {
+                    k: v for k, v in snapshot["knowledge_board"].items() if k != "vector"
+                },
+                "world_map": {k: v for k, v in snapshot["world_map"].items() if k != "vector"},
+            }
+            snapshot["trace_hash"] = compute_trace_hash(snapshot_no_vector)
             self._last_trace_hash = snapshot["trace_hash"]
             save_snapshot(self.current_step, snapshot)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
@@ -598,12 +634,14 @@ class Simulation:
                     )
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.error("Failed nightly consolidation: %s", exc)
-            self._last_consolidation_step = self.current_step
+        self._last_consolidation_step = self.current_step
 
+        self.vector.increment(self.agents[next_agent_index].get_id())
         await self.event_kernel.schedule_at(
             self.current_step,
             self._create_agent_event(next_agent_index),
             agent_id=self.agents[next_agent_index].get_id(),
+            vector=self.vector,
         )
 
     def _create_agent_event(self: Self, agent_index: int) -> Callable[[], Awaitable[None]]:
@@ -616,13 +654,16 @@ class Simulation:
             return 0
 
         if self.event_kernel.empty():
+            self.vector.increment(self.agents[self.current_agent_index].get_id())
             self.event_kernel.schedule_at_nowait(
                 self.current_step,
                 self._create_agent_event(self.current_agent_index),
                 agent_id=self.agents[self.current_agent_index].get_id(),
+                vector=self.vector,
             )
 
         executed = await self.event_kernel.dispatch(max_turns)
+        self.vector = self.event_kernel.vector
         return executed
 
     async def async_run(self: Self, num_steps: int) -> None:
@@ -808,7 +849,12 @@ class Simulation:
             )
             if project_description:
                 project_info += f"\nDescription: {project_description}"
-            self.knowledge_board.add_entry(project_info, creator_agent_id, self.current_step)
+            self.knowledge_board.add_entry(
+                project_info,
+                creator_agent_id,
+                self.current_step,
+                self.vector.to_dict(),
+            )
 
         # Send Discord notification if bot is available
         if self.discord_bot:
@@ -884,7 +930,12 @@ class Simulation:
         # Record the event in the Knowledge Board
         if self.knowledge_board:
             join_info = f"Agent {agent_id} joined Project: {project['name']} (ID: {project_id})"
-            self.knowledge_board.add_entry(join_info, agent_id, self.current_step)
+            self.knowledge_board.add_entry(
+                join_info,
+                agent_id,
+                self.current_step,
+                self.vector.to_dict(),
+            )
 
         # Send Discord notification if bot is available
         if self.discord_bot:
@@ -943,7 +994,12 @@ class Simulation:
         # Record the event in the Knowledge Board
         if self.knowledge_board:
             leave_info = f"Agent {agent_id} left Project: {project['name']} (ID: {project_id})"
-            self.knowledge_board.add_entry(leave_info, agent_id, self.current_step)
+            self.knowledge_board.add_entry(
+                leave_info,
+                agent_id,
+                self.current_step,
+                self.vector.to_dict(),
+            )
 
         # Send Discord notification if bot is available
         if self.discord_bot:
@@ -978,25 +1034,22 @@ class Simulation:
             return False
 
         if self.knowledge_board:
-            self.knowledge_board.add_law_proposal(text, proposer_id, self.current_step)
+            self.knowledge_board.add_law_proposal(
+                text,
+                proposer_id,
+                self.current_step,
+                self.vector.to_dict(),
+            )
 
         approved = await _propose(proposer, text, self.agents)
-        if approved:
-            if self.knowledge_board:
-                self.knowledge_board.add_entry(
-                    f"Law approved: {text}", proposer_id, self.current_step
-                )
-            try:
-                from src.infra.ledger import ledger
+        if approved and self.knowledge_board:
+            self.knowledge_board.add_entry(
+                f"Law approved: {text}",
+                proposer_id,
+                self.current_step,
+                self.vector.to_dict(),
+            )
 
-                ledger.log_change(
-                    proposer_id,
-                    config.LAW_PASS_IP_REWARD,
-                    config.LAW_PASS_DU_REWARD,
-                    "law_passed",
-                )
-            except Exception:  # pragma: no cover - optional
-                logger.debug("Ledger logging failed", exc_info=True)
         return approved
 
     async def forward_proposal(self: Self, proposer_id: str, text: str) -> bool:

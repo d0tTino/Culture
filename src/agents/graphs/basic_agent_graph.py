@@ -389,9 +389,7 @@ def build_graph() -> Any:
 def compile_agent_graph() -> Any:
     """Return the compiled Basic Agent Graph executor."""
     try:
-        # ``build_graph`` already returns a compiled executor when available, so
-        # avoid calling ``compile`` a second time. Some tests expect the raw
-        # graph object when ``build_graph`` is patched to return a stub.
+
         executor = build_graph()
 
         logger.info(

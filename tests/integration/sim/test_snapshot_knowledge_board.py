@@ -73,11 +73,17 @@ async def test_snapshot_contains_knowledge_board(
 
     assert "knowledge_board" in snapshot
     assert snapshot["knowledge_board"]["entries"]
+    assert "vector" in snapshot["knowledge_board"]
     assert "trace_hash" in snapshot
 
     from src.infra.snapshot import compute_trace_hash
 
-    expected_hash = compute_trace_hash({k: v for k, v in snapshot.items() if k != "trace_hash"})
+    snapshot_no_vector = {
+        **{k: v for k, v in snapshot.items() if k != "trace_hash"},
+        "knowledge_board": {k: v for k, v in snapshot["knowledge_board"].items() if k != "vector"},
+        "world_map": {k: v for k, v in snapshot["world_map"].items() if k != "vector"},
+    }
+    expected_hash = compute_trace_hash(snapshot_no_vector)
     assert snapshot["trace_hash"] == expected_hash
 
     agent2 = DummyAgent()
