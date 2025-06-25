@@ -8,13 +8,19 @@ import json
 import logging
 import random
 import sys
+from math import sqrt
 from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_graph_types import AgentTurnState
 from src.agents.core.agent_state import AgentState
 from src.agents.core.mood_utils import get_descriptive_mood
-from src.agents.core.roles import ROLE_ANALYZER, ROLE_FACILITATOR, ROLE_INNOVATOR
+from src.agents.core.roles import (
+    ROLE_ANALYZER,
+    ROLE_EMBEDDINGS,
+    ROLE_FACILITATOR,
+    ROLE_INNOVATOR,
+)
 
 # Import L1SummaryGenerator for DSPy-based L1 summary generation
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
@@ -166,12 +172,28 @@ def _set_current_role(agent_state: AgentState, role: str) -> None:
         setattr(agent_state, "role", role)
 
 
+def _embedding_similarity(vec1: list[float], vec2: list[float]) -> float:
+    """Return cosine similarity between two vectors."""
+    if not vec1 or not vec2:
+        return 0.0
+    dot = sum(a * b for a, b in zip(vec1, vec2))
+    norm1 = sqrt(sum(a * a for a in vec1))
+    norm2 = sqrt(sum(b * b for b in vec2))
+    return dot / (norm1 * norm2) if norm1 and norm2 else 0.0
+
+
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     if requested_role not in VALID_ROLES:
         logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
         return False
     current_role = _get_current_role(agent_state)
     if requested_role == current_role:
+        return False
+    requested_emb = ROLE_EMBEDDINGS.get(requested_role)
+    similarity = (
+        _embedding_similarity(agent_state.role_embedding, requested_emb) if requested_emb else 0.0
+    )
+    if similarity < 0.7:
         return False
     if agent_state.steps_in_current_role < agent_state.role_change_cooldown:
         return False
@@ -194,6 +216,7 @@ def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
     _set_current_role(agent_state, requested_role)
     agent_state.steps_in_current_role = 0
     agent_state.role_history.append((int(agent_state.last_action_step or 0), requested_role))
+    agent_state.role_reputation[requested_role] = similarity
     logger.info(f"Agent {agent_state.agent_id} changed role from {old_role} to {requested_role}.")
     return True
 
@@ -380,6 +403,7 @@ def compile_agent_graph() -> Any:
             executor = graph.compile()
         else:
             executor = graph
+
         logger.info(
             "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to executor."
         )

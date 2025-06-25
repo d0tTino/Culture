@@ -23,3 +23,18 @@ ROLE_DESCRIPTIONS = {
     ROLE_INNOVATOR: "Propose creative technical solutions, and explore unconventional approaches to the scenario.",  # Long role description; breaking would harm context
     ROLE_ANALYZER: "Critique proposals, identify potential flaws, assess feasibility, and ensure solutions are robust and well-considered.",  # Long role description; breaking would harm context
 }
+
+
+def _compute_embedding(text: str, dim: int = 8) -> list[float]:
+    """Return a deterministic embedding vector for ``text``."""
+    import hashlib
+
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    segment_len = len(digest) // dim
+    return [
+        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
+        for i in range(dim)
+    ]
+
+
+ROLE_EMBEDDINGS = {role: _compute_embedding(role) for role in INITIAL_ROLES}

@@ -170,6 +170,8 @@ class AgentStateData(BaseModel):
     age: int = 0
     is_alive: bool = True
     inheritance: float = 0.0
+    genes: dict[str, float] = Field(default_factory=dict)
+    parent_id: Optional[str] = None
     # Memory consolidation tracking
     last_level_2_consolidation_step: int = 0
     collective_ip: float = 0.0
@@ -180,6 +182,7 @@ class AgentStateData(BaseModel):
         default_factory=lambda: [random.uniform(-1.0, 1.0) for _ in range(8)]
     )
     reputation: dict[str, float] = Field(default_factory=dict)
+    role_reputation: dict[str, float] = Field(default_factory=dict)
     conversation_history: deque[str] = Field(
         default_factory=deque
     )  # Added for process_perceived_messages
@@ -321,8 +324,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     def role_prompt(self) -> str:
         """Return a prompt snippet derived from the embedding and reputation."""
         avg_rep = sum(self.reputation.values()) / len(self.reputation) if self.reputation else 0.0
+        role_rep = self.role_reputation.get(self.current_role, 0.0)
         emb_str = " ".join(f"{v:.2f}" for v in self.role_embedding)
-        return f"Embedding: {emb_str}; reputation: {avg_rep:.2f}"
+        return f"Embedding: {emb_str}; reputation: {avg_rep:.2f}; role_rep: {role_rep:.2f}"
 
     @property
     def ip_cost_per_message(self) -> float:
@@ -430,12 +434,16 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 model["mood_history"] = [
                     (model.get("step_counter", 0), model.get("mood_level", 0.0))
                 ]
+            if not model.get("role_reputation"):
+                model["role_reputation"] = {}
             return model
         else:
             if not model.role_history:
                 model.role_history = [(model.step_counter, model.current_role)]
             if not model.mood_history:
                 model.mood_history = [(model.step_counter, model.mood_level)]
+            if not model.role_reputation:
+                model.role_reputation = {}
             return model
 
     def get_llm_client(self) -> Any:
@@ -478,4 +486,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             obj.role_history = [(obj.step_counter, obj.current_role)]
         if not obj.mood_history:
             obj.mood_history = [(obj.step_counter, obj.mood_level)]
+        if not obj.role_reputation:
+            obj.role_reputation = {}
         return obj

@@ -196,6 +196,10 @@ class KnowledgeBoard:
             logger.error(f"Failed to add entry to knowledge board: {e}")
             return False
 
+    def add_law_proposal(self: Self, proposal: str, agent_id: str, step: int) -> bool:
+        """Record a law proposal on the board."""
+        return self.add_entry(f"Law proposed: {proposal}", agent_id, step)
+
     def clear_board(self: Self) -> None:
         """Clears all entries from the Knowledge Board."""
         logger.info(

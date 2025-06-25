@@ -63,3 +63,4 @@ def test_stake_unstake_noop_and_zero_burn_rate(tmp_path: Path) -> None:
     assert du == pytest.approx(5.0)
 
     assert ledger.get_du_burn_rate("a") == 0.0
+
