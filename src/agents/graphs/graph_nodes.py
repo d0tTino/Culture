@@ -68,6 +68,24 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     return {"rag_summary": summary, "memory_history_list": memories}
 
 
+async def retrieve_semantic_context_node(state: AgentTurnState) -> dict[str, Any]:
+    """Retrieve semantically grouped context for the agent."""
+    semantic_manager: SemanticMemoryManager | None = state.get("semantic_manager")
+    if not semantic_manager:
+        return {"semantic_context": ""}
+    query = state.get("rag_summary", "")
+    import asyncio
+
+    memories = await asyncio.to_thread(
+        semantic_manager.retrieve_context,
+        state["agent_id"],
+        query,
+        5,
+    )
+    context = "\n".join(m.get("content", "") for m in memories)
+    return {"semantic_context": context}
+
+
 async def generate_thought_and_message_node(
     state: AgentTurnState,
 ) -> dict[str, AgentActionOutput | None]:

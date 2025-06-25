@@ -15,6 +15,7 @@ from .graph_nodes import (
     generate_thought_and_message_node,
     prepare_relationship_prompt_node,
     retrieve_and_summarize_memories_node,
+    retrieve_semantic_context_node,
 )
 from .interaction_handlers import (
     handle_ask_clarification_node,
@@ -40,6 +41,7 @@ def build_graph() -> Any:
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
     graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
     graph_builder.add_node("retrieve_and_summarize_memories", retrieve_and_summarize_memories_node)
+    graph_builder.add_node("retrieve_semantic_context", retrieve_semantic_context_node)
     graph_builder.add_node("generate_thought_and_message", generate_thought_and_message_node)
 
     graph_builder.add_node("route_action_intent", route_action_intent)
@@ -59,7 +61,8 @@ def build_graph() -> Any:
     graph_builder.set_entry_point("analyze_perception_sentiment")
     graph_builder.add_edge("analyze_perception_sentiment", "prepare_relationship_prompt")
     graph_builder.add_edge("prepare_relationship_prompt", "retrieve_and_summarize_memories")
-    graph_builder.add_edge("retrieve_and_summarize_memories", "generate_thought_and_message")
+    graph_builder.add_edge("retrieve_and_summarize_memories", "retrieve_semantic_context")
+    graph_builder.add_edge("retrieve_semantic_context", "generate_thought_and_message")
     graph_builder.add_edge("generate_thought_and_message", "route_action_intent")
 
     graph_builder.add_conditional_edges(
