@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.agents.core import roles
+from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
 from src.agents.graphs import basic_agent_graph as bag
 
 
@@ -19,7 +20,7 @@ def test_role_change_allowed_by_similarity() -> None:
         last_action_step=0,
         short_term_memory=[],
         du=0.0,
-        role_embedding=roles.ROLE_EMBEDDINGS[roles.ROLE_INNOVATOR],
+        role_embedding=ROLE_EMBEDDINGS.role_vectors[roles.ROLE_INNOVATOR],
         role_reputation={},
     )
     assert bag.process_role_change(state, roles.ROLE_ANALYZER)
