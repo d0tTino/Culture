@@ -57,3 +57,56 @@ def save_snapshot(
         file_path = path / f"snapshot_{step}.json"
         with file_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+
+
+def load_snapshot(
+    step: int,
+    directory: str | Path = "snapshots",
+    compress: bool | None = None,
+) -> dict[str, Any]:
+    """Load ``directory/snapshot_{step}.json`` or ``.json.zst`` and verify hash.
+
+    Raises
+    ------
+    ValueError
+        If the recomputed trace hash does not match the stored value.
+    """
+
+    compress = SNAPSHOT_COMPRESS if compress is None else compress
+
+    path = Path(directory)
+    json_file = path / f"snapshot_{step}.json"
+    zst_file = path / f"snapshot_{step}.json.zst"
+    file_path = zst_file if compress else json_file
+
+    if not file_path.exists():
+        # Fallback to the other compression option if explicit choice not found
+        if compress and json_file.exists():
+            file_path = json_file
+            compress = False
+        elif not compress and zst_file.exists():
+            file_path = zst_file
+            compress = True
+        else:
+            raise FileNotFoundError(file_path)
+
+    if compress:
+        if zstd is None:
+            raise RuntimeError(
+                "Compression requires the optional 'zstandard' package. Install via 'pip install zstandard'."
+            )
+        with file_path.open("rb") as f:
+            payload = zstd.ZstdDecompressor().decompress(f.read()).decode("utf-8")
+        data = json.loads(payload)
+    else:
+        with file_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+    expected = data.get("trace_hash")
+    if expected is not None:
+        actual = compute_trace_hash({k: v for k, v in data.items() if k != "trace_hash"})
+        if actual != expected:
+            raise ValueError(
+                f"Trace hash mismatch for snapshot {step}: expected {expected}, computed {actual}"
+            )
+    return data

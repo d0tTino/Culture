@@ -17,7 +17,7 @@ from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
-from src.infra.snapshot import compute_trace_hash, save_snapshot
+from src.infra.snapshot import compute_trace_hash, load_snapshot, save_snapshot
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event, event_queue
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
@@ -101,9 +101,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -141,9 +141,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -322,9 +322,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -484,9 +482,7 @@ class Simulation:
                     **action_details,
                 }
             )
-            await emit_event(
-                SimulationEvent(event_type="map_action", data=map_event)
-            )
+            await emit_event(SimulationEvent(event_type="map_action", data=map_event))
 
             self.agents[agent_index].update_state(current_agent_state)
 
@@ -518,9 +514,7 @@ class Simulation:
             }
         )
         trace_hash = event["trace_hash"]
-        await emit_event(
-            SimulationEvent(event_type="agent_action", data=event)
-        )
+        await emit_event(SimulationEvent(event_type="agent_action", data=event))
 
         if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
             snapshot = {
@@ -544,9 +538,7 @@ class Simulation:
             self._last_trace_hash = snapshot["trace_hash"]
             save_snapshot(self.current_step, snapshot)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
-            await emit_event(
-                SimulationEvent(event_type="snapshot", data=snapshot_event)
-            )
+            await emit_event(SimulationEvent(event_type="snapshot", data=snapshot_event))
 
         # Advance to the next agent for the next turn
         self.current_agent_index = next_agent_index
@@ -635,6 +627,14 @@ class Simulation:
 
     def apply_event(self: Self, event: dict[str, Any]) -> None:
         """Apply an event from the Redpanda log to the simulation."""
+        expected_hash = event.get("trace_hash")
+        if expected_hash is not None:
+            actual_hash = compute_trace_hash({k: v for k, v in event.items() if k != "trace_hash"})
+            if actual_hash != expected_hash:
+                raise ValueError(
+                    f"Trace hash mismatch for event at step {event.get('step')}:"
+                    f" expected {expected_hash}, computed {actual_hash}"
+                )
         if event.get("type") == "agent_action":
             aid = event.get("agent_id")
             for agent in self.agents:
@@ -653,6 +653,16 @@ class Simulation:
                 from src.infra.checkpoint import restore_environment
 
                 restore_environment(env)
+        elif event.get("type") == "snapshot":
+            step = event.get("step")
+            if isinstance(step, int):
+                snapshot = load_snapshot(step)
+                if snapshot.get("trace_hash") != expected_hash:
+                    raise ValueError(
+                        f"Snapshot hash mismatch at step {step}:"
+                        f" event {expected_hash} != file {snapshot.get('trace_hash')}"
+                    )
+                self._last_trace_hash = snapshot.get("trace_hash", "")
 
     async def run_turns_concurrent(self: Self, agents: list["Agent"]) -> list[dict[str, Any]]:
         """Run a batch of agent turns concurrently.
