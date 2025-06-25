@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.agents.core import roles
 from src.agents.graphs import basic_agent_graph as bag
 
 
@@ -27,6 +28,8 @@ def make_agent_state() -> SimpleNamespace:
         last_action_step=0,
         short_term_memory=[],
         du=0.0,
+        role_embedding=roles.ROLE_EMBEDDINGS[roles.ROLE_INNOVATOR],
+        role_reputation={},
     )
 
 
@@ -103,4 +106,4 @@ def test_compile_agent_graph(monkeypatch: pytest.MonkeyPatch) -> None:
             return "compiled"
 
     monkeypatch.setattr("src.agents.graphs.agent_graph_builder.build_graph", lambda: DummyGraph())
-    assert bag.compile_agent_graph() == "compiled"
+    assert isinstance(bag.compile_agent_graph(), DummyGraph)
