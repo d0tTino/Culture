@@ -45,3 +45,20 @@ def test_staking_and_burn_rate(tmp_path: Path) -> None:
         ledger.log_change("a", 0.0, -1.0, "spend")
     rate = ledger.get_du_burn_rate("a", window=3)
     assert rate == pytest.approx(1.0)
+
+
+def test_negative_balance_clamped(tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    ledger.log_change("a", 5.0, 3.0, "init")
+    ledger.log_change("a", -10.0, -2.0, "spend")
+    ip, du = ledger.get_balance("a")
+    assert ip == pytest.approx(0.0)
+    assert du == pytest.approx(1.0)
+
+
+def test_negative_start_balance(tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    ledger.log_change("a", -2.0, -1.0, "negative start")
+    ip, du = ledger.get_balance("a")
+    assert ip == pytest.approx(0.0)
+    assert du == pytest.approx(0.0)
