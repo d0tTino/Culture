@@ -1313,6 +1313,70 @@ class ChromaVectorStoreManager(MemoryStore):
 
         return len(ids_to_delete)
 
+    # ------------------------------------------------------------------
+    # Nightly consolidation
+    # ------------------------------------------------------------------
+    def consolidate_daily_memories(
+        self: Self,
+        agent_id: str,
+        start_step: int,
+        end_step: int,
+    ) -> None:
+        """Consolidate raw memories for an agent between ``start_step`` and ``end_step``.
+
+        This groups memories by their ``event_type`` and stores a single
+        ``consolidated_summary`` entry for each group. Original raw memories in
+        the range are deleted to keep the store compact.
+        """
+
+        raw_memories = self.retrieve_filtered_memories(
+            agent_id,
+            filters={"memory_type": "raw"},
+            limit=None,
+            include_usage_stats=False,
+        )
+
+        raw_memories = [
+            m
+            for m in raw_memories
+            if start_step <= int(m.get("step", 0)) <= end_step
+        ]
+
+        if not raw_memories:
+            return
+
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for mem in raw_memories:
+            etype = str(mem.get("event_type", "misc"))
+            grouped.setdefault(etype, []).append(mem)
+
+        for etype, group in grouped.items():
+            summary = "\n".join(m["content"] for m in group if "content" in m)
+            self.add_memory(
+                agent_id,
+                end_step,
+                etype,
+                summary,
+                memory_type="consolidated_summary",
+                metadata={"simulation_step_timestamp": datetime.utcnow().isoformat()},
+            )
+
+        ids_to_delete = [m["memory_id"] for m in raw_memories if "memory_id" in m]
+        if ids_to_delete:
+            self.delete_memories_by_ids(ids_to_delete)
+
+    async def aconsolidate_daily_memories(
+        self: Self,
+        agent_id: str,
+        start_step: int,
+        end_step: int,
+    ) -> None:
+        """Asynchronous wrapper for :meth:`consolidate_daily_memories`."""
+
+        await asyncio.to_thread(
+            self.consolidate_daily_memories, agent_id, start_step, end_step
+        )
+
     def get_embedding(self: Self, text: str) -> list[float]:
         """
         Get the embedding for a piece of text using the embedding function.
