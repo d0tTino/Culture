@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
 # Skip self argument annotation warnings for class methods
@@ -38,11 +40,14 @@ class Ledger:
             """
         )
         self.conn.commit()
+        self._hooks: list[Callable[[str, float, float, str], None]] = []
+        self.register_hook(self._db_hook)
 
-    def log_change(
-        self, agent_id: str, delta_ip: float = 0.0, delta_du: float = 0.0, reason: str = ""
-    ) -> None:
-        """Record a transaction and update balances."""
+    def register_hook(self, hook: Callable[[str, float, float, str], None]) -> None:
+        """Register a hook called for every ``log_change`` invocation."""
+        self._hooks.append(hook)
+
+    def _db_hook(self, agent_id: str, delta_ip: float, delta_du: float, reason: str) -> None:
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO transactions(agent_id, delta_ip, delta_du, reason) VALUES (?,?,?,?)",
@@ -59,6 +64,18 @@ class Ledger:
             (agent_id, float(delta_ip), float(delta_du)),
         )
         self.conn.commit()
+
+    def log_change(
+        self, agent_id: str, delta_ip: float = 0.0, delta_du: float = 0.0, reason: str = ""
+    ) -> None:
+        """Record a transaction and invoke registered hooks."""
+        for hook in self._hooks:
+            try:
+                hook(agent_id, float(delta_ip), float(delta_du), reason)
+            except Exception as e:  # pragma: no cover - defensive
+                logging.getLogger(__name__).warning(
+                    "Ledger hook failed for %s: %s", agent_id, e, exc_info=True
+                )
 
     def stake_du(self, agent_id: str, amount: float) -> None:
         """Stake DU for ``agent_id`` and record the transaction."""
