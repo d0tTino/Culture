@@ -963,8 +963,22 @@ class Simulation:
             self.knowledge_board.add_law_proposal(text, proposer_id, self.current_step)
 
         approved = await _propose(proposer, text, self.agents)
-        if approved and self.knowledge_board:
-            self.knowledge_board.add_entry(f"Law approved: {text}", proposer_id, self.current_step)
+        if approved:
+            if self.knowledge_board:
+                self.knowledge_board.add_entry(
+                    f"Law approved: {text}", proposer_id, self.current_step
+                )
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    proposer_id,
+                    config.LAW_PASS_IP_REWARD,
+                    config.LAW_PASS_DU_REWARD,
+                    "law_passed",
+                )
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger logging failed", exc_info=True)
         return approved
 
     async def forward_proposal(self: Self, proposer_id: str, text: str) -> bool:
