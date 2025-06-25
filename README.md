@@ -661,6 +661,12 @@ default. Adjust the log level or path as needed by customizing this function.
 For deterministic event logging and replay, install Redpanda as described in
 [docs/redpanda_setup.md](docs/redpanda_setup.md). Set `ENABLE_REDPANDA` and
 `REDPANDA_BROKER` in your `.env` to activate this feature.
+You can install Redpanda quickly with:
+```bash
+curl -1s https://raw.githubusercontent.com/redpanda-data/redpanda/master/install.sh | bash
+docker compose -f docker-compose.redpanda.yml up -d
+```
+Events are written to the `culture-events` topic and can be consumed using the `rpk` CLI.
 
 ### Prometheus Metrics
 The simulation exposes Prometheus metrics on port 8000 when `src.interfaces.metrics` is imported.
