@@ -121,6 +121,7 @@ class Simulation:
                 "Memory will not be persisted."
             )
         self._last_memory_prune_step = 0
+        self._last_consolidation_step = 0
         self._last_trace_hash = ""
 
         # --- Store Discord bot ---
@@ -551,6 +552,23 @@ class Simulation:
             except (ChromaDBException, ValidationError, OSError) as exc:
                 logger.error("Failed to prune memory store: %s", exc)
             self._last_memory_prune_step = self.current_step
+
+        if (
+            self.vector_store_manager
+            and self.current_step % len(self.agents) == 0
+            and self.current_step > self._last_consolidation_step
+        ):
+            start_step = self.current_step - len(self.agents) + 1
+            for ag in self.agents:
+                try:
+                    await self.vector_store_manager.aconsolidate_daily_memories(
+                        ag.agent_id,
+                        start_step,
+                        self.current_step,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.error("Failed nightly consolidation: %s", exc)
+            self._last_consolidation_step = self.current_step
 
         await self.event_kernel.schedule_at(
             self.current_step, self._create_agent_event(next_agent_index)
