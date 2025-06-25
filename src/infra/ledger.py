@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
+from collections.abc import Callable
+
 from pathlib import Path
 
 # Skip self argument annotation warnings for class methods
-# ruff: noqa: ANN101
 
 
 class Ledger:
@@ -37,12 +39,25 @@ class Ledger:
             )
             """
         )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_tokens (
+                agent_id TEXT,
+                token TEXT,
+                amount INTEGER DEFAULT 0,
+                PRIMARY KEY(agent_id, token)
+            )
+            """
+        )
         self.conn.commit()
+        self._hooks: list[Callable[[str, float, float, str], None]] = []
+        self.register_hook(self._db_hook)
 
-    def log_change(
-        self, agent_id: str, delta_ip: float = 0.0, delta_du: float = 0.0, reason: str = ""
-    ) -> None:
-        """Record a transaction and update balances."""
+    def register_hook(self, hook: Callable[[str, float, float, str], None]) -> None:
+        """Register a hook called for every ``log_change`` invocation."""
+        self._hooks.append(hook)
+
+    def _db_hook(self, agent_id: str, delta_ip: float, delta_du: float, reason: str) -> None:
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO transactions(agent_id, delta_ip, delta_du, reason) VALUES (?,?,?,?)",
@@ -51,14 +66,32 @@ class Ledger:
         cur.execute(
             """
             INSERT INTO agent_balances(agent_id, ip, du)
-            VALUES(?, ?, ?)
+            VALUES(?, MAX(?, 0), MAX(?, 0))
             ON CONFLICT(agent_id) DO UPDATE SET
-                ip = ip + excluded.ip,
-                du = du + excluded.du
+                ip = MAX(ip + ?, 0),
+                du = MAX(du + ?, 0)
             """,
-            (agent_id, float(delta_ip), float(delta_du)),
+            (
+                agent_id,
+                float(delta_ip),
+                float(delta_du),
+                float(delta_ip),
+                float(delta_du),
+            ),
         )
         self.conn.commit()
+
+    def log_change(
+        self, agent_id: str, delta_ip: float = 0.0, delta_du: float = 0.0, reason: str = ""
+    ) -> None:
+        """Record a transaction and invoke registered hooks."""
+        for hook in self._hooks:
+            try:
+                hook(agent_id, float(delta_ip), float(delta_du), reason)
+            except Exception as e:  # pragma: no cover - defensive
+                logging.getLogger(__name__).warning(
+                    "Ledger hook failed for %s: %s", agent_id, e, exc_info=True
+                )
 
     def stake_du(self, agent_id: str, amount: float) -> None:
         """Stake DU for ``agent_id`` and record the transaction."""
@@ -117,6 +150,43 @@ class Ledger:
         if row:
             return float(row[0]), float(row[1])
         return 0.0, 0.0
+
+    def add_tokens(self, agent_id: str, token: str, amount: int) -> None:
+        if amount <= 0:
+            return
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO agent_tokens(agent_id, token, amount)
+            VALUES(?, ?, ?)
+            ON CONFLICT(agent_id, token) DO UPDATE SET
+                amount = amount + excluded.amount
+            """,
+            (agent_id, token, int(amount)),
+        )
+        self.conn.commit()
+
+    def remove_tokens(self, agent_id: str, token: str, amount: int) -> None:
+        if amount <= 0:
+            return
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            UPDATE agent_tokens
+            SET amount = MAX(amount - ?, 0)
+            WHERE agent_id=? AND token=?
+            """,
+            (int(amount), agent_id, token),
+        )
+        self.conn.commit()
+
+    def get_tokens(self, agent_id: str, token: str) -> int:
+        cur = self.conn.execute(
+            "SELECT amount FROM agent_tokens WHERE agent_id=? AND token=?",
+            (agent_id, token),
+        )
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
 
 
 ledger = Ledger()

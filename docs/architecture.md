@@ -102,6 +102,12 @@ The `Roles` system (`src/agents/core/roles.py`) defines:
 - Each agent stores an embedding vector derived from its current role
 - Reputation gossip influences role similarity calculations
 
+Culture.ai also supports a **free-form role** mechanism. In addition to the
+predefined roles above, agents may be assigned any descriptive role string at
+runtime. These ad-hoc roles are persisted in `role_history` and converted into
+embeddings for similarity checks. Free-form roles enable emergent personas and
+dynamic roleplay beyond the initial Innovator/Analyzer/Facilitator triad.
+
 ### Interactions
 
 The Agent Core components interact with:

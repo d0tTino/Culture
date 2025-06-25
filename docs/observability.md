@@ -66,3 +66,26 @@ Culture.ai can optionally send outgoing messages through an [Open Policy Agent](
 
 If `allow` is `false`, the message will be blocked. If `content` is returned, it will replace the original text before sending.
 
+## 7. Redpanda Event Log
+
+Culture.ai can stream all simulation events to a Redpanda broker for later replay and analysis.
+Follow [docs/redpanda_setup.md](redpanda_setup.md) to install Redpanda locally and start it with Docker Compose.
+Set the following variables in your `.env`:
+
+```env
+ENABLE_REDPANDA=1
+REDPANDA_BROKER=localhost:9092
+```
+
+Events will be written to the `culture-events` topic. You can inspect them with the `rpk` CLI or any Kafka-compatible consumer.
+
+## 8. Metrics Reference
+
+Prometheus metrics exported by the simulation include:
+
+- `active_agent_count` – number of agents currently active
+- `llm_calls_total` – total LLM invocations
+- `llm_latency_ms` – latency of the last LLM call
+- `llm_errors_total` – failed LLM calls
+- `knowledge_board_size` – total Knowledge Board entries
+

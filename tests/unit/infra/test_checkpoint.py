@@ -4,12 +4,14 @@ import random
 import pytest
 
 from src.app import create_simulation
+from src.infra import config
 from src.infra.checkpoint import (
     load_checkpoint,
     restore_environment,
     restore_rng_state,
     save_checkpoint,
 )
+from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 
 pytestmark = pytest.mark.unit
 
@@ -92,3 +94,22 @@ def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch
     assert loaded.collective_ip == pytest.approx(12.34)
     assert loaded.collective_du == pytest.approx(56.78)
     assert loaded.knowledge_board.get_full_entries() == sim.knowledge_board.get_full_entries()
+
+
+def test_checkpoint_loads_graph_board(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
+    from tests.integration.knowledge_board.test_graph_backend import DummyDriver
+
+    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: DummyDriver())
+    config.load_config()
+    sim = create_simulation(num_agents=1, steps=1, scenario="test")
+    sim.knowledge_board.add_entry("hello", sim.agents[0].agent_id, step=0)
+
+    chk = tmp_path / "sim.pkl"
+    save_checkpoint(sim, chk)
+
+    loaded, _ = load_checkpoint(chk)
+
+    assert isinstance(loaded.knowledge_board, GraphKnowledgeBoard)
+    assert loaded.knowledge_board.get_state() == ["Step 0 (Agent: agent_1): hello"]
