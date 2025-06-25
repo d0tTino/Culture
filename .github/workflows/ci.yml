@@ -99,6 +99,11 @@ jobs:
         shell: bash
         run: pytest -m "integration" --disable-warnings -q
 
+      - name: Run Stress Tests
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: pytest -m "stress" --disable-warnings -q
+
       - name: Run Windows Path/Discord Integration
         if: matrix.os == 'windows-latest'
         shell: bash
