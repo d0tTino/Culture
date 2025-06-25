@@ -123,6 +123,14 @@ L2 MUS-based pruning:
 
 - `MAX_PROJECT_MEMBERS` - Maximum number of members in a project
 
+### Observability Settings
+
+- `ENABLE_OTEL` - Set to `1` to enable OpenTelemetry log export
+- `OTEL_EXPORTER_ENDPOINT` - Override the OTLP exporter URL
+- `ENABLE_REDPANDA` - Set to `1` to enable Redpanda event logging
+- `REDPANDA_BROKER` - Address of the Redpanda broker
+- `SNAPSHOT_COMPRESS` - Set to `1` to compress simulation snapshots with zstd
+
 ## Configuration Access in Code
 
 To access configuration values in your code, import the config module:

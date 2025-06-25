@@ -52,6 +52,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **DSPy Integration:** Advanced prompt optimization using DSPy with local Ollama models.
 * **LLM Performance Monitoring:** Comprehensive monitoring of LLM call performance metrics.
 * **Memory Pruning System:** Sophisticated pruning to maintain optimal performance while preserving critical information.
+* **AsyncDSPyManager:** Concurrency layer allowing parallel DSPy calls without blocking the event loop.
 
 ## Key Features
 
@@ -68,6 +69,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **Scenario Framework**: Support for focused, goal-oriented simulation scenarios
 * **Discord Integration**: Enhanced message formatting for Discord with embeds for different event types
 * **Resource Management**: Agents manage Influence Points (IP) and Data Units (DU) as resources for actions
+* **AsyncDSPyManager**: Asynchronous DSPy execution for concurrent LLM calls
 * **Role System**: Dynamic role system allowing agents to serve as Innovator, Analyzer, or Facilitator
 * **Relationship Dynamics**: Non-linear relationship system affecting agent interactions and decision-making
 * **DSPy Integration**: Advanced prompt optimization using DSPy with local Ollama models
@@ -75,7 +77,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 ### Planned (Medium & Long Term)
 * **Advanced Memory Management:**
-    * Further refinements to memory consolidation and pruning strategies.
+    * Continued tuning of MUS-based pruning and hierarchical summaries.
 * **LLM & Agent Enhancements:**
     * Improved LLM Directive Following & Reliability.
     * Evolving Personalities & Dynamic Trait Systems.
@@ -121,6 +123,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 - Python 3.10+
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
+- Runtime dependencies now include `numpy>=2`
 - Additional development and testing dependencies in `requirements-dev.txt` (required for the full test suite)
 - `pydantic` is required for both runtime and development
 
@@ -619,8 +622,10 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
      );
      ```
    - `ENABLE_OTEL=1` to activate OpenTelemetry log export
+   - `OTEL_EXPORTER_ENDPOINT` to override the OTLP log endpoint
    - `ENABLE_REDPANDA=1` to log events to Redpanda
    - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
+   - `SNAPSHOT_COMPRESS=1` to compress simulation snapshots
 
    - See `.env.example`, `docs/testing.md`, `docs/redpanda_setup.md`,
      and `docs/opa_setup.md` for details.
