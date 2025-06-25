@@ -21,6 +21,7 @@ def test_build_graph_structure() -> None:
         "analyze_perception_sentiment",
         "prepare_relationship_prompt",
         "retrieve_and_summarize_memories",
+        "retrieve_semantic_context",
         "generate_thought_and_message",
         "route_action_intent",
         "handle_propose_idea",
