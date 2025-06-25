@@ -63,9 +63,11 @@ class SemanticMemoryManager:
         texts = [m["content"] for m in memories]
         embeddings = np.array(self.vector_store.embedding_function(texts), dtype=float)
 
+        groups: dict[int, list[dict[str, Any]]]
+
         # Fallback to keyword grouping if embeddings contain no information
         if embeddings.size == 0 or np.allclose(embeddings, 0.0):
-            groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
+            groups = defaultdict(list)
             keywords = ["cat", "dog"]
             for mem in memories:
                 text = mem["content"].lower()
@@ -82,6 +84,7 @@ class SemanticMemoryManager:
             return groups
 
         topic_groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
+
         centroids: list[np.ndarray] = []
         for mem, emb in zip(memories, embeddings):
             if not centroids:

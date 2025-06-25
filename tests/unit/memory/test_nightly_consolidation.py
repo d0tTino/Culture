@@ -76,4 +76,3 @@ def test_consolidation_improves_retrieval_speed(tmp_path, monkeypatch) -> None:
     after = manager.retrieval_times[-1]
 
     assert after < before
-

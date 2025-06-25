@@ -189,9 +189,9 @@ def test_role_prefix_adherence() -> None:
         )
 
     # Using assertion instead of return value
-    assert success_count == total_tests, (
-        f"Only {success_count}/{total_tests} role adherence tests passed"
-    )
+    assert (
+        success_count == total_tests
+    ), f"Only {success_count}/{total_tests} role adherence tests passed"
 
 
 if __name__ == "__main__":

@@ -47,9 +47,7 @@ def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path) -
         result = orig_generate_text("hi", agent_state=state)
 
     assert result == "hi"
-    expected = start_du - (
-        get_config("GAS_PRICE_PER_CALL") + get_config("GAS_PRICE_PER_TOKEN")
-    )
+    expected = start_du - (get_config("GAS_PRICE_PER_CALL") + get_config("GAS_PRICE_PER_TOKEN"))
     assert state.du == pytest.approx(expected)
     row = test_ledger.conn.execute(
         "SELECT delta_du, reason FROM transactions WHERE agent_id=?",

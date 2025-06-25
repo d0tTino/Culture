@@ -11,7 +11,7 @@ def _compute_embedding(text: str, dim: int = 8) -> list[float]:
     digest = hashlib.sha256(text.encode()).hexdigest()
     segment_len = len(digest) // dim
     return [
-        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16 ** segment_len)
+        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
         for i in range(dim)
     ]
 
@@ -64,9 +64,7 @@ class RoleEmbeddingManager:
         if current is None:
             self.role_vectors[role] = list(other_vector)
         else:
-            self.role_vectors[role] = [
-                a + lr * (b - a) for a, b in zip(current, other_vector)
-            ]
+            self.role_vectors[role] = [a + lr * (b - a) for a, b in zip(current, other_vector)]
 
     def update_reputation(self, role: str, value: float) -> None:
         cur = self.reputation.get(role, 0.0)

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import typing
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 try:
     import zstandard as zstd
@@ -101,6 +102,7 @@ def load_snapshot(
     else:
         with file_path.open("r", encoding="utf-8") as f:
             data = cast(dict[str, Any], json.load(f))
+
 
     expected = data.get("trace_hash")
     if expected is not None:
