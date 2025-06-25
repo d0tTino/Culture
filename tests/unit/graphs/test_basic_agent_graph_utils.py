@@ -4,7 +4,9 @@ from types import SimpleNamespace
 import pytest
 
 from src.agents.core import roles
+from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
 from src.agents.graphs import basic_agent_graph as bag
+from src.infra import ledger as ledger_mod
 
 
 class DummyController:
@@ -28,23 +30,59 @@ def make_agent_state() -> SimpleNamespace:
         last_action_step=0,
         short_term_memory=[],
         du=0.0,
-        role_embedding=roles.ROLE_EMBEDDINGS[roles.ROLE_INNOVATOR],
+        role_embedding=ROLE_EMBEDDINGS.role_vectors[roles.ROLE_INNOVATOR],
         role_reputation={},
     )
+
+
+class DummyLedger:
+    def log_change(self, *args: object, **kwargs: object) -> None:
+        pass
 
 
 @pytest.mark.unit
 def test_process_role_change_success(monkeypatch: pytest.MonkeyPatch) -> None:
     state = make_agent_state()
+    monkeypatch.setattr(ledger_mod, "ledger", DummyLedger())
     assert bag.process_role_change(state, "Analyzer") is True
     assert state.current_role == "Analyzer"
     assert state.ip == 8.0
 
 
 @pytest.mark.unit
+def test_process_role_change_invalid_role() -> None:
+    state = make_agent_state()
+    ledger_mod.ledger = DummyLedger()
+    original = ROLE_EMBEDDINGS.best_role
+
+    def fake_best_role(role: str, threshold: float = 0.7) -> tuple[str | None, float]:
+        return None, 0.0
+
+    ROLE_EMBEDDINGS.best_role = fake_best_role
+    try:
+        assert not bag.process_role_change(state, "UnknownRole")
+    finally:
+        ROLE_EMBEDDINGS.best_role = original
+    assert state.current_role == "Innovator"
+
+
+@pytest.mark.unit
+def test_process_role_change_similarity_threshold() -> None:
+    state = make_agent_state()
+    ledger_mod.ledger = DummyLedger()
+    state.role_embedding = [0.0] * 8
+    assert not bag.process_role_change(state, "Analyzer")
+    state.role_embedding = ROLE_EMBEDDINGS.role_vectors[roles.ROLE_ANALYZER]
+    state.steps_in_current_role = 5
+    state.ip = 10.0
+    assert bag.process_role_change(state, "Analyzer")
+
+
+@pytest.mark.unit
 def test_update_state_node_role_change(monkeypatch: pytest.MonkeyPatch) -> None:
     state = make_agent_state()
     controller = DummyController(state)
+    monkeypatch.setattr(ledger_mod, "ledger", DummyLedger())
     monkeypatch.setattr(bag, "AgentController", lambda s: controller)
     monkeypatch.setattr(random, "random", lambda: 0.9)
 
@@ -106,4 +144,4 @@ def test_compile_agent_graph(monkeypatch: pytest.MonkeyPatch) -> None:
             return "compiled"
 
     monkeypatch.setattr("src.agents.graphs.agent_graph_builder.build_graph", lambda: DummyGraph())
-    assert isinstance(bag.compile_agent_graph(), DummyGraph)
+    assert bag.compile_agent_graph() == "compiled"

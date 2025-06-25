@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import sqlite3
 from collections.abc import Callable
-
 from pathlib import Path
 
 # Skip self argument annotation warnings for class methods
@@ -46,6 +45,27 @@ class Ledger:
                 token TEXT,
                 amount INTEGER DEFAULT 0,
                 PRIMARY KEY(agent_id, token)
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auctions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item TEXT,
+                status TEXT DEFAULT 'open',
+                winner_id TEXT
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bids (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                auction_id INTEGER,
+                agent_id TEXT,
+                amount REAL,
+                FOREIGN KEY(auction_id) REFERENCES auctions(id) ON DELETE CASCADE
             )
             """
         )
@@ -187,6 +207,65 @@ class Ledger:
         )
         row = cur.fetchone()
         return int(row[0]) if row else 0
+
+    # -------------------------------------------------------------
+    # Auction management
+    # -------------------------------------------------------------
+
+    def open_auction(self, item: str) -> int:
+        """Create a new auction and return its ID."""
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO auctions(item) VALUES(?)", (item,))
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def place_bid(self, auction_id: int, agent_id: str, amount: float) -> None:
+        """Place a bid by staking DU."""
+        if amount <= 0:
+            return
+        self.stake_du(agent_id, amount)
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO bids(auction_id, agent_id, amount) VALUES(?,?,?)",
+            (auction_id, agent_id, float(amount)),
+        )
+        self.conn.commit()
+
+    def resolve_auction(self, auction_id: int) -> tuple[str | None, float]:
+        """Resolve an auction, returning the winning agent and amount."""
+        cur = self.conn.cursor()
+        bids = cur.execute(
+            "SELECT id, agent_id, amount FROM bids WHERE auction_id=?",
+            (auction_id,),
+        ).fetchall()
+        if not bids:
+            cur.execute(
+                "UPDATE auctions SET status='resolved' WHERE id=?",
+                (auction_id,),
+            )
+            self.conn.commit()
+            return None, 0.0
+
+        bids.sort(key=lambda r: (-float(r[2]), r[0]))
+        winner_row = bids[0]
+        winner_id = str(winner_row[1])
+        winning_amount = float(winner_row[2])
+
+        for _, agent, amt in bids:
+            if agent == winner_id:
+                cur.execute(
+                    "UPDATE agent_balances SET staked_du = MAX(staked_du - ?, 0) WHERE agent_id=?",
+                    (float(amt), agent),
+                )
+            else:
+                self.unstake_du(str(agent), float(amt))
+
+        cur.execute(
+            "UPDATE auctions SET status='resolved', winner_id=? WHERE id=?",
+            (winner_id, auction_id),
+        )
+        self.conn.commit()
+        return winner_id, winning_amount
 
 
 ledger = Ledger()

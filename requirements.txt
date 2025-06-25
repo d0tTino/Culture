@@ -16,6 +16,8 @@ langgraph==0.2.0
 requests==2.32.3
 sqlite-web
 
+numpy>=2
+
 sqlalchemy==2.0.41
 asyncpg==0.30.0
 

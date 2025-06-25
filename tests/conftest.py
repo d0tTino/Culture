@@ -3,6 +3,7 @@ Pytest fixtures for use across test files.
 """
 
 import json
+import os
 import shutil
 import socket
 import sys
@@ -311,3 +312,10 @@ def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
     langgraph_mod.graph = graph_mod
     sys.modules["langgraph"] = langgraph_mod
     sys.modules["langgraph.graph"] = graph_mod
+
+
+@pytest.fixture(autouse=True, scope="session")
+def ensure_required_env() -> None:
+    os.environ.setdefault("REDPANDA_BROKER", "localhost:9092")
+    os.environ.setdefault("OPA_URL", "http://opa")
+
