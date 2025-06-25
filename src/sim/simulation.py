@@ -101,9 +101,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -141,9 +141,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -322,9 +322,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -408,9 +406,18 @@ class Simulation:
                     pos = self.world_map.move(agent_id, dx, dy)
                 action_details = {"position": pos}
                 start_ip = current_agent_state.ip
+                if config.MAP_MOVE_DU_COST > 0:
+                    try:
+                        from src.infra.ledger import ledger
+
+                        aid = ledger.open_auction("move")
+                        ledger.place_bid(aid, agent_id, config.MAP_MOVE_DU_COST)
+                        ledger.resolve_auction(aid)
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger auction failed", exc_info=True)
+                    current_agent_state.du -= config.MAP_MOVE_DU_COST
                 start_du = current_agent_state.du
                 current_agent_state.ip -= config.MAP_MOVE_IP_COST
-                current_agent_state.du -= config.MAP_MOVE_DU_COST
                 current_agent_state.ip += config.MAP_MOVE_IP_REWARD
                 current_agent_state.du += config.MAP_MOVE_DU_REWARD
                 try:
@@ -432,9 +439,18 @@ class Simulation:
                 action_details = {"resource": res, "success": success}
                 if success:
                     start_ip = current_agent_state.ip
+                    if config.MAP_GATHER_DU_COST > 0:
+                        try:
+                            from src.infra.ledger import ledger
+
+                            aid = ledger.open_auction("gather")
+                            ledger.place_bid(aid, agent_id, config.MAP_GATHER_DU_COST)
+                            ledger.resolve_auction(aid)
+                        except Exception:  # pragma: no cover - optional
+                            logger.debug("Ledger auction failed", exc_info=True)
+                        current_agent_state.du -= config.MAP_GATHER_DU_COST
                     start_du = current_agent_state.du
                     current_agent_state.ip -= config.MAP_GATHER_IP_COST
-                    current_agent_state.du -= config.MAP_GATHER_DU_COST
                     current_agent_state.ip += config.MAP_GATHER_IP_REWARD
                     current_agent_state.du += config.MAP_GATHER_DU_REWARD
                     try:
@@ -456,9 +472,18 @@ class Simulation:
                 action_details = {"structure": struct, "success": success}
                 if success:
                     start_ip = current_agent_state.ip
+                    if config.MAP_BUILD_DU_COST > 0:
+                        try:
+                            from src.infra.ledger import ledger
+
+                            aid = ledger.open_auction("build")
+                            ledger.place_bid(aid, agent_id, config.MAP_BUILD_DU_COST)
+                            ledger.resolve_auction(aid)
+                        except Exception:  # pragma: no cover - optional
+                            logger.debug("Ledger auction failed", exc_info=True)
+                        current_agent_state.du -= config.MAP_BUILD_DU_COST
                     start_du = current_agent_state.du
                     current_agent_state.ip -= config.MAP_BUILD_IP_COST
-                    current_agent_state.du -= config.MAP_BUILD_DU_COST
                     current_agent_state.ip += config.MAP_BUILD_IP_REWARD
                     current_agent_state.du += config.MAP_BUILD_DU_REWARD
                     try:
@@ -484,9 +509,7 @@ class Simulation:
                     **action_details,
                 }
             )
-            await emit_event(
-                SimulationEvent(event_type="map_action", data=map_event)
-            )
+            await emit_event(SimulationEvent(event_type="map_action", data=map_event))
 
             self.agents[agent_index].update_state(current_agent_state)
 
@@ -518,9 +541,7 @@ class Simulation:
             }
         )
         trace_hash = event["trace_hash"]
-        await emit_event(
-            SimulationEvent(event_type="agent_action", data=event)
-        )
+        await emit_event(SimulationEvent(event_type="agent_action", data=event))
 
         if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
             snapshot = {
@@ -544,9 +565,7 @@ class Simulation:
             self._last_trace_hash = snapshot["trace_hash"]
             save_snapshot(self.current_step, snapshot)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
-            await emit_event(
-                SimulationEvent(event_type="snapshot", data=snapshot_event)
-            )
+            await emit_event(SimulationEvent(event_type="snapshot", data=snapshot_event))
 
         # Advance to the next agent for the next turn
         self.current_agent_index = next_agent_index
