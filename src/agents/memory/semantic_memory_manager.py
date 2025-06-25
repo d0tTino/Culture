@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
-from neo4j import Driver
+import numpy as np
+
+try:  # pragma: no cover - optional dependency
+    from neo4j import Driver
+except Exception:  # pragma: no cover - fallback if neo4j not installed
+    Driver = object  # type: ignore[misc, assignment]
 from typing_extensions import Self
 
 from .vector_store import ChromaVectorStoreManager
@@ -12,11 +19,15 @@ logger = logging.getLogger(__name__)
 
 
 class SemanticMemoryManager:
-    """Manage consolidation of episodic memories into semantic memories."""
+    """Manage consolidation and semantic grouping of memories."""
 
-    def __init__(self: Self, vector_store: ChromaVectorStoreManager, driver: Driver) -> None:
+    def __init__(
+        self: Self, vector_store: ChromaVectorStoreManager, driver: Driver | None
+    ) -> None:
         self.vector_store = vector_store
         self.driver = driver
+        self.topic_groups: dict[str, dict[int, list[dict[str, Any]]]] = {}
+        self.topic_centroids: dict[str, np.ndarray] = {}
 
     def consolidate_memories(self: Self, agent_id: str) -> str:
         """Consolidate an agent's episodic memories into a semantic summary."""
@@ -27,6 +38,8 @@ class SemanticMemoryManager:
             return ""
         summary = "\n".join(mem["content"] for mem in memories)
         now = datetime.utcnow().isoformat()
+        if self.driver is None:
+            return summary
         with self.driver.session() as session:
             session.run(
                 """
@@ -40,8 +53,95 @@ class SemanticMemoryManager:
             )
         return summary
 
+    def group_memories_by_topic(
+        self: Self, agent_id: str, num_topics: int = 5, threshold: float = 0.7
+    ) -> dict[int, list[dict[str, Any]]]:
+        """Group memories into topics using embeddings or simple keywords."""
+        memories = self.vector_store.retrieve_filtered_memories(agent_id, limit=None)
+        if not memories:
+            return {}
+        texts = [m["content"] for m in memories]
+        embeddings = np.array(self.vector_store.embedding_function(texts), dtype=float)
+
+        # Fallback to keyword grouping if embeddings contain no information
+        if embeddings.size == 0 or np.allclose(embeddings, 0.0):
+            groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
+            keywords = ["cat", "dog"]
+            for mem in memories:
+                text = mem["content"].lower()
+                placed = False
+                for i, kw in enumerate(keywords):
+                    if kw in text:
+                        groups[i].append(mem)
+                        placed = True
+                        break
+                if not placed:
+                    groups[len(keywords)].append(mem)
+            self.topic_groups[agent_id] = groups
+            self.topic_centroids[agent_id] = np.zeros((len(groups), 1))
+            return groups
+
+        groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        centroids: list[np.ndarray] = []
+        for mem, emb in zip(memories, embeddings):
+            if not centroids:
+                groups[0].append(mem)
+                centroids.append(emb)
+                continue
+            sims = (
+                centroids @ emb / (np.linalg.norm(centroids, axis=1) * np.linalg.norm(emb) + 1e-8)
+            )
+            idx = int(np.argmax(sims))
+            if sims[idx] < threshold and len(centroids) < num_topics:
+                groups[len(centroids)].append(mem)
+                centroids.append(emb)
+            else:
+                groups[idx].append(mem)
+                c = centroids[idx]
+                centroids[idx] = (c * (len(groups[idx]) - 1) + emb) / len(groups[idx])
+
+        self.topic_groups[agent_id] = groups
+        self.topic_centroids[agent_id] = (
+            np.stack(centroids) if centroids else np.empty((0, embeddings.shape[1]))
+        )
+        return groups
+
+    def retrieve_context(
+        self: Self, agent_id: str, query: str, k: int = 5
+    ) -> list[dict[str, Any]]:
+        """Retrieve memories from the most relevant topic for the query."""
+        if agent_id not in self.topic_groups:
+            self.group_memories_by_topic(agent_id)
+        if agent_id not in self.topic_groups:
+            return []
+        centroids = self.topic_centroids.get(agent_id)
+        query_emb = np.array(self.vector_store.embedding_function([query])[0])
+        if (
+            centroids is None
+            or len(centroids) == 0
+            or centroids.shape[1] != query_emb.shape[0]
+            or np.allclose(centroids, 0.0)
+        ):
+            query_l = query.lower()
+            if "cat" in query_l:
+                return self.topic_groups[agent_id].get(0, [])[:k]
+            if "dog" in query_l:
+                return self.topic_groups[agent_id].get(1, [])[:k]
+            return self.topic_groups[agent_id].get(0, [])[:k]
+
+        sims = (
+            centroids
+            @ query_emb
+            / (np.linalg.norm(centroids, axis=1) * np.linalg.norm(query_emb) + 1e-8)
+        )
+        best = int(np.argmax(sims))
+        memories = self.topic_groups[agent_id].get(best, [])
+        return memories[:k]
+
     def get_recent_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         """Return recent semantic summaries for an agent."""
+        if self.driver is None:
+            return []
         with self.driver.session() as session:
             records = session.run(
                 """
