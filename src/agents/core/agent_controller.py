@@ -261,3 +261,9 @@ class AgentController:
         state.relationship_history.clear()
         state.mood_history = [(0, 0.0)]
         state.relationship_history = {name: [(0, 0.0)] for name in old_keys}
+
+    async def vote_on_policy(self: Self, proposal: str) -> bool:
+        """Vote on a policy proposal using the governance evaluation helper."""
+        from src.governance import evaluate_policy
+
+        return await evaluate_policy(proposal)
