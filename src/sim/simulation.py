@@ -101,9 +101,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -140,9 +140,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -921,6 +921,9 @@ class Simulation:
         proposer = next((a for a in self.agents if a.agent_id == proposer_id), None)
         if proposer is None:
             return False
+
+        if self.knowledge_board:
+            self.knowledge_board.add_law_proposal(text, proposer_id, self.current_step)
 
         approved = await _propose(proposer, text, self.agents)
         if approved and self.knowledge_board:
