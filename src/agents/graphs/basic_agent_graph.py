@@ -380,6 +380,7 @@ def compile_agent_graph() -> Any:
             executor = graph.compile()
         else:
             executor = graph
+
         logger.info(
             "AGENT_GRAPH_COMPILATION_SUCCESS: Basic Agent Graph compiled and assigned to executor."
         )

@@ -122,6 +122,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "GAS_PRICE_PER_CALL": 1.0,
     "GAS_PRICE_PER_TOKEN": 0.0,
     "SNAPSHOT_COMPRESS": False,
+    "SNAPSHOT_INTERVAL_STEPS": 100,
     "MAX_AGENT_AGE": 10,
     "AGENT_TOKEN_BUDGET": 10000,
 }
@@ -203,6 +204,7 @@ INT_CONFIG_KEYS = [
     "MEMORY_STORE_PRUNE_INTERVAL_STEPS",
     "MAX_AGENT_AGE",
     "AGENT_TOKEN_BUDGET",
+
 ]
 BOOL_CONFIG_KEYS = [
     "MEMORY_PRUNING_ENABLED",
@@ -212,10 +214,20 @@ BOOL_CONFIG_KEYS = [
     "SNAPSHOT_COMPRESS",
 ]
 
+# Keys that must be defined for a complete runtime configuration.
+# ``REDPANDA_BROKER`` enables event logging through Redpanda, while
+# ``OPA_URL`` points to the Open Policy Agent service used to filter
+# outgoing messages.
+REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL"]
 
-def load_config() -> dict[str, object]:
-    """
-    Load configuration from environment variables.
+
+def load_config(*, validate_required: bool = True) -> dict[str, object]:
+    """Load configuration from environment variables.
+
+    Args:
+        validate_required: When ``True`` (default), ensure all
+            :data:`REQUIRED_CONFIG_KEYS` are present. If any are missing,
+            a ``RuntimeError`` is raised.
 
     Returns:
         dict[str, object]: The loaded configuration dictionary.
@@ -234,6 +246,7 @@ def load_config() -> dict[str, object]:
         | set(FLOAT_CONFIG_KEYS)
         | set(INT_CONFIG_KEYS)
         | set(BOOL_CONFIG_KEYS)
+        | set(REQUIRED_CONFIG_KEYS)
     )
 
     for key in all_potential_keys:
@@ -292,6 +305,10 @@ def load_config() -> dict[str, object]:
     # Log minimal information to avoid leaking sensitive values
     logger.info("Configuration loaded")
     _refresh_module_vars()
+    if validate_required:
+        missing = [k for k in REQUIRED_CONFIG_KEYS if not _CONFIG.get(k)]
+        if missing:
+            raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     # Fail fast if critical config is missing
     if not _CONFIG.get("OLLAMA_API_BASE"):
         logger.critical("OLLAMA_API_BASE is missing from configuration. Exiting.")
@@ -345,8 +362,8 @@ def get_config(key: Optional[str] = None) -> Any:
     return _CONFIG.get(key, DEFAULT_CONFIG.get(key))
 
 
-# Initialize the configuration on module import
-load_config()
+# Initialize the configuration on module import without strict validation.
+load_config(validate_required=False)
 _refresh_module_vars()
 
 OLLAMA_API_BASE = get_config("OLLAMA_API_BASE")
@@ -541,6 +558,7 @@ MAX_DU_PER_TICK = get_config("MAX_DU_PER_TICK")
 GAS_PRICE_PER_CALL = get_config("GAS_PRICE_PER_CALL")
 GAS_PRICE_PER_TOKEN = get_config("GAS_PRICE_PER_TOKEN")
 SNAPSHOT_COMPRESS = bool(get_config("SNAPSHOT_COMPRESS"))
+SNAPSHOT_INTERVAL_STEPS = get_config("SNAPSHOT_INTERVAL_STEPS")
 
 
 # --- Helper Functions ---

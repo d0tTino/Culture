@@ -286,7 +286,6 @@ class Simulation:
 
         perception_data: dict[str, Any] = {}
         has_role_change = False
-        trace_hash = ""
         turn_counter_this_run_step = 0
         next_agent_index = (agent_index + 1) % len(self.agents)
 
@@ -456,7 +455,7 @@ class Simulation:
             else:
                 action_details = {}
 
-            log_event(
+            map_event = log_event(
                 {
                     "type": "map_action",
                     "agent_id": agent_id,
@@ -466,15 +465,7 @@ class Simulation:
                 }
             )
             await emit_event(
-                SimulationEvent(
-                    event_type="map_action",
-                    data={
-                        "agent_id": agent_id,
-                        "step": self.current_step,
-                        "action": action_type,
-                        **action_details,
-                    },
-                )
+                SimulationEvent(event_type="map_action", data=map_event)
             )
 
             self.agents[agent_index].update_state(current_agent_state)
@@ -496,7 +487,7 @@ class Simulation:
         logger.info(f"  - IP: {current_agent_state.ip:.1f} (from {ip_start})")
         logger.info(f"  - DU: {current_agent_state.du:.1f} (from {du_start})")
 
-        log_event(
+        event = log_event(
             {
                 "type": "agent_action",
                 "agent_id": agent_id,
@@ -506,21 +497,12 @@ class Simulation:
                 "du": current_agent_state.du,
             }
         )
+        trace_hash = event["trace_hash"]
         await emit_event(
-            SimulationEvent(
-                event_type="agent_action",
-                data={
-                    "agent_id": agent_id,
-                    "step": self.current_step,
-                    "action_intent": action_intent_str,
-                    "ip": current_agent_state.ip,
-                    "du": current_agent_state.du,
-                    "trace_hash": trace_hash,
-                },
-            )
+            SimulationEvent(event_type="agent_action", data=event)
         )
 
-        if self.current_step % 100 == 0:
+        if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
             snapshot = {
                 "step": self.current_step,
                 "collective_ip": self.collective_ip,
@@ -539,9 +521,12 @@ class Simulation:
                 "trace_hash": self._last_trace_hash,
             }
             snapshot["trace_hash"] = compute_trace_hash(snapshot)
+            self._last_trace_hash = snapshot["trace_hash"]
             save_snapshot(self.current_step, snapshot)
-            log_event({"type": "snapshot", **snapshot})
-            await emit_event(SimulationEvent(event_type="snapshot", data=snapshot))
+            snapshot_event = log_event({"type": "snapshot", **snapshot})
+            await emit_event(
+                SimulationEvent(event_type="snapshot", data=snapshot_event)
+            )
 
         # Advance to the next agent for the next turn
         self.current_agent_index = next_agent_index

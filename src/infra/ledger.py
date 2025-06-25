@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import sqlite3
+
+# from Path is not typed for self methods
 from pathlib import Path
 
 # Skip self argument annotation warnings for class methods
-# ruff: noqa: ANN101
 
 
 class Ledger:
@@ -51,12 +52,18 @@ class Ledger:
         cur.execute(
             """
             INSERT INTO agent_balances(agent_id, ip, du)
-            VALUES(?, ?, ?)
+            VALUES(?, MAX(?, 0), MAX(?, 0))
             ON CONFLICT(agent_id) DO UPDATE SET
-                ip = ip + excluded.ip,
-                du = du + excluded.du
+                ip = MAX(ip + ?, 0),
+                du = MAX(du + ?, 0)
             """,
-            (agent_id, float(delta_ip), float(delta_du)),
+            (
+                agent_id,
+                float(delta_ip),
+                float(delta_du),
+                float(delta_ip),
+                float(delta_du),
+            ),
         )
         self.conn.commit()
 
