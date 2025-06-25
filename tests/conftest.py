@@ -3,6 +3,7 @@ Pytest fixtures for use across test files.
 """
 
 import json
+import os
 import shutil
 import socket
 import sys
@@ -313,8 +314,8 @@ def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
     sys.modules["langgraph.graph"] = graph_mod
 
 
-@pytest.fixture(autouse=True)
-def set_required_env(monkeypatch: MonkeyPatch) -> None:
-    """Ensure mandatory configuration keys are set for tests."""
-    monkeypatch.setenv("REDPANDA_BROKER", "localhost:9092")
-    monkeypatch.setenv("OPA_URL", "http://localhost")
+@pytest.fixture(autouse=True, scope="session")
+def ensure_required_env() -> None:
+    os.environ.setdefault("REDPANDA_BROKER", "localhost:9092")
+    os.environ.setdefault("OPA_URL", "http://opa")
+

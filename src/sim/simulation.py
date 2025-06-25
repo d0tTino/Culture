@@ -17,7 +17,7 @@ from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
-from src.infra.snapshot import compute_trace_hash, save_snapshot
+from src.infra.snapshot import compute_trace_hash, load_snapshot, save_snapshot
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event, event_queue
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
@@ -654,6 +654,14 @@ class Simulation:
 
     def apply_event(self: Self, event: dict[str, Any]) -> None:
         """Apply an event from the Redpanda log to the simulation."""
+        expected_hash = event.get("trace_hash")
+        if expected_hash is not None:
+            actual_hash = compute_trace_hash({k: v for k, v in event.items() if k != "trace_hash"})
+            if actual_hash != expected_hash:
+                raise ValueError(
+                    f"Trace hash mismatch for event at step {event.get('step')}:"
+                    f" expected {expected_hash}, computed {actual_hash}"
+                )
         if event.get("type") == "agent_action":
             aid = event.get("agent_id")
             for agent in self.agents:
@@ -672,6 +680,16 @@ class Simulation:
                 from src.infra.checkpoint import restore_environment
 
                 restore_environment(env)
+        elif event.get("type") == "snapshot":
+            step = event.get("step")
+            if isinstance(step, int):
+                snapshot = load_snapshot(step)
+                if snapshot.get("trace_hash") != expected_hash:
+                    raise ValueError(
+                        f"Snapshot hash mismatch at step {step}:"
+                        f" event {expected_hash} != file {snapshot.get('trace_hash')}"
+                    )
+                self._last_trace_hash = snapshot.get("trace_hash", "")
 
     async def run_turns_concurrent(self: Self, agents: list["Agent"]) -> list[dict[str, Any]]:
         """Run a batch of agent turns concurrently.
