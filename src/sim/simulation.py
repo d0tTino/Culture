@@ -406,9 +406,18 @@ class Simulation:
                     pos = self.world_map.move(agent_id, dx, dy)
                 action_details = {"position": pos}
                 start_ip = current_agent_state.ip
+                if config.MAP_MOVE_DU_COST > 0:
+                    try:
+                        from src.infra.ledger import ledger
+
+                        aid = ledger.open_auction("move")
+                        ledger.place_bid(aid, agent_id, config.MAP_MOVE_DU_COST)
+                        ledger.resolve_auction(aid)
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger auction failed", exc_info=True)
+                    current_agent_state.du -= config.MAP_MOVE_DU_COST
                 start_du = current_agent_state.du
                 current_agent_state.ip -= config.MAP_MOVE_IP_COST
-                current_agent_state.du -= config.MAP_MOVE_DU_COST
                 current_agent_state.ip += config.MAP_MOVE_IP_REWARD
                 current_agent_state.du += config.MAP_MOVE_DU_REWARD
                 try:
@@ -430,9 +439,18 @@ class Simulation:
                 action_details = {"resource": res, "success": success}
                 if success:
                     start_ip = current_agent_state.ip
+                    if config.MAP_GATHER_DU_COST > 0:
+                        try:
+                            from src.infra.ledger import ledger
+
+                            aid = ledger.open_auction("gather")
+                            ledger.place_bid(aid, agent_id, config.MAP_GATHER_DU_COST)
+                            ledger.resolve_auction(aid)
+                        except Exception:  # pragma: no cover - optional
+                            logger.debug("Ledger auction failed", exc_info=True)
+                        current_agent_state.du -= config.MAP_GATHER_DU_COST
                     start_du = current_agent_state.du
                     current_agent_state.ip -= config.MAP_GATHER_IP_COST
-                    current_agent_state.du -= config.MAP_GATHER_DU_COST
                     current_agent_state.ip += config.MAP_GATHER_IP_REWARD
                     current_agent_state.du += config.MAP_GATHER_DU_REWARD
                     try:
@@ -454,9 +472,18 @@ class Simulation:
                 action_details = {"structure": struct, "success": success}
                 if success:
                     start_ip = current_agent_state.ip
+                    if config.MAP_BUILD_DU_COST > 0:
+                        try:
+                            from src.infra.ledger import ledger
+
+                            aid = ledger.open_auction("build")
+                            ledger.place_bid(aid, agent_id, config.MAP_BUILD_DU_COST)
+                            ledger.resolve_auction(aid)
+                        except Exception:  # pragma: no cover - optional
+                            logger.debug("Ledger auction failed", exc_info=True)
+                        current_agent_state.du -= config.MAP_BUILD_DU_COST
                     start_du = current_agent_state.du
                     current_agent_state.ip -= config.MAP_BUILD_IP_COST
-                    current_agent_state.du -= config.MAP_BUILD_DU_COST
                     current_agent_state.ip += config.MAP_BUILD_IP_REWARD
                     current_agent_state.du += config.MAP_BUILD_DU_REWARD
                     try:
@@ -954,8 +981,22 @@ class Simulation:
             self.knowledge_board.add_law_proposal(text, proposer_id, self.current_step)
 
         approved = await _propose(proposer, text, self.agents)
-        if approved and self.knowledge_board:
-            self.knowledge_board.add_entry(f"Law approved: {text}", proposer_id, self.current_step)
+        if approved:
+            if self.knowledge_board:
+                self.knowledge_board.add_entry(
+                    f"Law approved: {text}", proposer_id, self.current_step
+                )
+            try:
+                from src.infra.ledger import ledger
+
+                ledger.log_change(
+                    proposer_id,
+                    config.LAW_PASS_IP_REWARD,
+                    config.LAW_PASS_DU_REWARD,
+                    "law_passed",
+                )
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger logging failed", exc_info=True)
         return approved
 
     async def forward_proposal(self: Self, proposer_id: str, text: str) -> bool:

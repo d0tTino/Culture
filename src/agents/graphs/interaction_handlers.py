@@ -50,8 +50,17 @@ def handle_idle_node(state: AgentTurnState) -> dict[str, Any]:
 
 def handle_deep_analysis_node(state: AgentTurnState) -> dict[str, Any]:
     agent_state = state["state"]
+    if DU_COST_DEEP_ANALYSIS > 0:
+        try:
+            from src.infra.ledger import ledger
+
+            aid = ledger.open_auction("deep_analysis")
+            ledger.place_bid(aid, agent_state.agent_id, DU_COST_DEEP_ANALYSIS)
+            ledger.resolve_auction(aid)
+        except Exception:  # pragma: no cover - optional
+            logger.debug("Ledger auction failed", exc_info=True)
+        agent_state.du -= DU_COST_DEEP_ANALYSIS
     start_du = agent_state.du
-    agent_state.du -= DU_COST_DEEP_ANALYSIS
     try:
         from src.infra.ledger import ledger
 
@@ -81,6 +90,16 @@ def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
         project_description = structured_output.project_description_for_creation
 
         start_ip = agent_state.ip
+        if config.DU_COST_CREATE_PROJECT > 0:
+            try:
+                from src.infra.ledger import ledger
+
+                aid = ledger.open_auction("create_project")
+                ledger.place_bid(aid, agent_state.agent_id, config.DU_COST_CREATE_PROJECT)
+                ledger.resolve_auction(aid)
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger auction failed", exc_info=True)
+            agent_state.du -= config.DU_COST_CREATE_PROJECT
         start_du = agent_state.du
 
         project_id = simulation.create_project(
@@ -120,6 +139,16 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
     ):
         project_id = structured_output.project_id_to_join_or_leave
         start_ip = agent_state.ip
+        if config.DU_COST_JOIN_PROJECT > 0:
+            try:
+                from src.infra.ledger import ledger
+
+                aid = ledger.open_auction("join_project")
+                ledger.place_bid(aid, agent_state.agent_id, config.DU_COST_JOIN_PROJECT)
+                ledger.resolve_auction(aid)
+            except Exception:  # pragma: no cover - optional
+                logger.debug("Ledger auction failed", exc_info=True)
+            agent_state.du -= config.DU_COST_JOIN_PROJECT
         start_du = agent_state.du
 
         if simulation.join_project(project_id, agent_state.agent_id):
@@ -140,7 +169,6 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
             except Exception:  # pragma: no cover - optional
                 logger.debug("Ledger logging failed", exc_info=True)
 
-
     return dict(state)
 
 
@@ -159,7 +187,6 @@ def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
         if simulation.leave_project(project_id, agent_state.agent_id):
             agent_state.current_project_id = None
             agent_state.projects.pop(project_id, None)
-
 
     return dict(state)
 

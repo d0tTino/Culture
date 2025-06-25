@@ -183,6 +183,7 @@ class AgentStateData(BaseModel):
     )
     reputation: dict[str, float] = Field(default_factory=dict)
     role_reputation: dict[str, float] = Field(default_factory=dict)
+    learned_roles: dict[str, list[float]] = Field(default_factory=dict)
     conversation_history: deque[str] = Field(
         default_factory=deque
     )  # Added for process_perceived_messages
@@ -383,6 +384,22 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return 0.0
         return history[-1][1]
 
+    def apply_gossip(self, other_embedding: list[float], interaction_score: float) -> None:
+        """Update internal role data based on gossip."""
+        from .role_embeddings import ROLE_EMBEDDINGS
+
+        if not self.role_embedding or not other_embedding:
+            return
+        lr = 0.1
+        self.role_embedding = [
+            a + lr * interaction_score * (b - a) for a, b in zip(self.role_embedding, other_embedding)
+        ]
+        role_name, sim = ROLE_EMBEDDINGS.nearest_role_from_embedding(other_embedding)
+        if role_name:
+            cur = self.role_reputation.get(role_name, 0.0)
+            self.role_reputation[role_name] = (cur + sim * interaction_score) / 2
+            self.learned_roles[role_name] = other_embedding
+
     @field_validator("memory_store_manager", mode="before")
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
@@ -436,6 +453,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 ]
             if not model.get("role_reputation"):
                 model["role_reputation"] = {}
+            if not model.get("learned_roles"):
+                model["learned_roles"] = {}
             return model
         else:
             if not model.role_history:
@@ -444,6 +463,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 model.mood_history = [(model.step_counter, model.mood_level)]
             if not model.role_reputation:
                 model.role_reputation = {}
+            if not model.learned_roles:
+                model.learned_roles = {}
             return model
 
     def get_llm_client(self) -> Any:
@@ -488,4 +509,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             obj.mood_history = [(obj.step_counter, obj.mood_level)]
         if not obj.role_reputation:
             obj.role_reputation = {}
+        if not obj.learned_roles:
+            obj.learned_roles = {}
         return obj
