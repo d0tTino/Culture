@@ -144,4 +144,4 @@ def test_compile_agent_graph(monkeypatch: pytest.MonkeyPatch) -> None:
             return "compiled"
 
     monkeypatch.setattr("src.agents.graphs.agent_graph_builder.build_graph", lambda: DummyGraph())
-    assert isinstance(bag.compile_agent_graph(), DummyGraph)
+    assert bag.compile_agent_graph() == "compiled"
