@@ -18,7 +18,12 @@ from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
 from src.infra.snapshot import compute_trace_hash, load_snapshot, save_snapshot
-from src.interfaces.dashboard_backend import SimulationEvent, emit_event, event_queue
+from src.interfaces.dashboard_backend import (
+    SimulationEvent,
+    emit_event,
+    emit_map_action_event,
+    event_queue,
+)
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
@@ -103,9 +108,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -143,9 +148,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -328,9 +333,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -530,7 +533,22 @@ class Simulation:
                     **action_details,
                 }
             )
-            await emit_event(SimulationEvent(event_type="map_action", data=map_event))
+            await emit_map_action_event(
+                agent_id,
+                self.current_step,
+                action_type,
+                **action_details,
+            )
+            if self.discord_bot:
+                embed = self.discord_bot.create_map_action_embed(
+                    agent_id=agent_id,
+                    action=action_type,
+                    details=action_details,
+                    step=self.current_step,
+                )
+                _ = asyncio.create_task(
+                    self.discord_bot.send_simulation_update(embed=embed, agent_id=agent_id)
+                )
 
             self.agents[agent_index].update_state(current_agent_state)
 
