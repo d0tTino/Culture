@@ -8,6 +8,7 @@ except Exception:  # pragma: no cover - optional dependency
     END = "END"
     StateGraph: Any = Any  # type: ignore[no-redef]
 
+from .basic_agent_graph import _maybe_consolidate_memories
 from .basic_agent_types import AgentTurnState
 from .graph_nodes import (
     analyze_perception_sentiment_node,
@@ -17,7 +18,6 @@ from .graph_nodes import (
     retrieve_and_summarize_memories_node,
     retrieve_semantic_context_node,
 )
-from .basic_agent_graph import _maybe_consolidate_memories
 from .interaction_handlers import (
     handle_ask_clarification_node,
     handle_continue_collaboration_node,
