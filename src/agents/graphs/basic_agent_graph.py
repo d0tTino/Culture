@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_graph_types import AgentTurnState
 from src.agents.core.agent_state import AgentState
+from src.agents.core.embedding_utils import compute_embedding
 from src.agents.core.mood_utils import get_descriptive_mood
 from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
 from src.agents.core.roles import ensure_profile
@@ -177,9 +178,12 @@ def _embedding_similarity(vec1: list[float], vec2: list[float]) -> float:
 
 
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
-    resolved_role, _ = ROLE_EMBEDDINGS.best_role(requested_role)
+    req_emb = compute_embedding(requested_role)
+    resolved_role, _ = ROLE_EMBEDDINGS.nearest_role_from_embedding(req_emb)
     if resolved_role is None:
-        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
+        logger.warning(
+            f"Agent {agent_state.agent_id} requested invalid role: {requested_role}"
+        )
         return False
     requested_role = resolved_role
     current_role = _get_current_role(agent_state)
