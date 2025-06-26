@@ -63,6 +63,8 @@ def test_load_snapshot_hash_mismatch(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_snapshot_s3_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("boto3")
+    pytest.importorskip("moto")
     import boto3
     from moto import mock_aws
 
