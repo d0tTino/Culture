@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from configparser import ConfigParser
@@ -21,7 +22,7 @@ def have_module(name: str) -> bool:
 def main(argv: list[str]) -> int:
     has_xdist = have_module("xdist")
     has_asyncio = have_module("pytest_asyncio")
-    # Install dependencies if any are missing
+    # Install dependencies if any are missing unless skipped via env var
     required = [
         "fastapi",
         "sqlalchemy",
@@ -31,7 +32,7 @@ def main(argv: list[str]) -> int:
         "boto3",
         "moto",
     ]
-    if not all(have_module(mod) for mod in required):
+    if not os.environ.get("SKIP_DEP_INSTALL") and not all(have_module(mod) for mod in required):
         subprocess.check_call(
             [
                 sys.executable,
@@ -44,6 +45,8 @@ def main(argv: list[str]) -> int:
                 str(ROOT / "requirements-dev.txt"),
             ]
         )
+    elif os.environ.get("SKIP_DEP_INSTALL"):
+        print("Skipping dependency installation because SKIP_DEP_INSTALL is set")
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)
