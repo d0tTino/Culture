@@ -45,6 +45,10 @@ KNOWLEDGE_BOARD_SIZE = Gauge(
     "knowledge_board_size", "Number of entries currently on the Knowledge Board"
 )
 
+# Gas price metrics updated by ``Ledger.calculate_gas_price``
+GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
+GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
+
 # Start the metrics HTTP server when this module is imported
 try:
     start_http_server(8000)
@@ -60,3 +64,13 @@ def get_llm_latency() -> float:
 def get_kb_size() -> int:
     """Return the current Knowledge Board size."""
     return int(KNOWLEDGE_BOARD_SIZE._value.get())
+
+
+def get_gas_price_per_call() -> float:
+    """Return the latest gas price charged per LLM call."""
+    return float(GAS_PRICE_PER_CALL._value.get())
+
+
+def get_gas_price_per_token() -> float:
+    """Return the latest gas price charged per generated token."""
+    return float(GAS_PRICE_PER_TOKEN._value.get())

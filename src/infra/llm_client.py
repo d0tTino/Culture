@@ -71,7 +71,6 @@ from src.shared.decorator_utils import monitor_llm_call
 from .config import (
     OLLAMA_API_BASE,
     OLLAMA_REQUEST_TIMEOUT,
-    get_config,
 )
 from .ledger import ledger
 
@@ -107,8 +106,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
         result = func(*args, **kwargs)
         if state is not None:
             try:
-                base_price = float(get_config("GAS_PRICE_PER_CALL"))
-                token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
+                base_price, token_price = ledger.calculate_gas_price(state.agent_id)
                 tokens = 1
                 if isinstance(result, dict):
                     usage = result.get("usage")
@@ -136,6 +134,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             state.du,
                         )
                 else:
+
                     logger.warning(
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
