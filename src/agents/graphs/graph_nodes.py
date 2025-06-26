@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from src.agents.core.agent_controller import AgentController
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.infra.llm_client import analyze_sentiment, generate_structured_output
 from src.shared.typing import SimulationMessage
@@ -115,11 +116,30 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
             "updated_agent_state": state["state"],
             "memory_history_list": state.get("memory_history_list", []),
         }
+
+    agent_state = state["state"]
+    if output.requested_role_change:
+        from .basic_agent_graph import process_role_change
+
+        if process_role_change(agent_state, output.requested_role_change):
+            AgentController(agent_state).add_memory(
+                f"Changed role to {output.requested_role_change}",
+                {"step": state.get("simulation_step", 0), "type": "role_change"},
+            )
+        else:
+            AgentController(agent_state).add_memory(
+                "Failed role change attempt",
+                {
+                    "step": state.get("simulation_step", 0),
+                    "type": "resource_constraint",
+                },
+            )
+
     return {
         "message_content": output.message_content,
         "message_recipient_id": output.message_recipient_id,
         "action_intent": output.action_intent,
-        "updated_agent_state": state["state"],
+        "updated_agent_state": agent_state,
         "is_targeted": output.message_recipient_id is not None,
         "memory_history_list": state.get("memory_history_list", []),
     }
