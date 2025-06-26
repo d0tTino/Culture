@@ -115,7 +115,15 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                if state.du >= cost:
+                if state.du < cost:
+                    logger.debug(
+
+                        "Insufficient DU for agent %s: cost=%s, available=%s",
+                        state.agent_id,
+                        cost,
+                        state.du,
+                    )
+                else:
                     state.du -= cost
                     try:
                         ledger.log_change(
@@ -128,19 +136,10 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                         )
                     except Exception as log_err:  # pragma: no cover - optional
                         logger.warning(
-                            "Insufficient DU for agent %s: cost=%s, available=%s",
+                            "Failed to log DU deduction for agent %s: %s",
                             state.agent_id,
-                            cost,
-                            state.du,
+                            log_err,
                         )
-                else:
-
-                    logger.warning(
-                        "Insufficient DU for agent %s: cost=%s, available=%s",
-                        state.agent_id,
-                        cost,
-                        state.du,
-                    )
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result
@@ -156,7 +155,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):
