@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Allow runtime overrides in tests
 CONFIG_OVERRIDES: dict[str, Any] = {}
+
 REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL"]
 
 
@@ -55,7 +56,6 @@ RELATIONSHIP_LABELS = {
     (0.4, 0.7): "Positive",
     (0.7, 1.0): "Allied",
 }
-
 
 def get_relationship_label(score: float) -> str:
     """Return a descriptive relationship label for ``score``."""
