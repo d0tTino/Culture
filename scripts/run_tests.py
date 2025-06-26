@@ -32,18 +32,24 @@ def main(argv: list[str]) -> int:
         "moto",
     ]
     if not all(have_module(mod) for mod in required):
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-r",
-                str(ROOT / "requirements.txt"),
-                "-r",
-                str(ROOT / "requirements-dev.txt"),
-            ]
-        )
+        try:
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    str(ROOT / "requirements.txt"),
+                    "-r",
+                    str(ROOT / "requirements-dev.txt"),
+                ]
+            )
+        except subprocess.CalledProcessError as exc:  # pragma: no cover - network issues
+            print(
+                f"WARNING: dependency installation failed ({exc}). "
+                "Continuing with existing packages."
+            )
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)

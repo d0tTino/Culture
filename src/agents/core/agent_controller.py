@@ -9,10 +9,17 @@ from typing_extensions import Self
 
 from src.agents.core.agent_state import AgentState
 from src.agents.core.mood_utils import get_descriptive_mood
-from src.agents.core.roles import create_role_profile
 from src.agents.dspy_programs.intent_selector import IntentSelectorProgram
-from src.infra.config import get_config
 
+from .agent_actions import (
+    can_change_role as can_change_role_action,
+)
+from .agent_actions import (
+    change_role as change_role_action,
+)
+from .agent_actions import (
+    update_relationship as update_relationship_action,
+)
 from .embedding_utils import compute_embedding
 
 logger = logging.getLogger(__name__)
@@ -62,29 +69,7 @@ class AgentController:
         self: Self, other_agent_id: str, sentiment_score: float, is_targeted: bool = False
     ) -> None:
         state = self._require_state()
-        current_score = state.relationships.get(other_agent_id, 0.0)
-        sentiment_score = float(sentiment_score) if sentiment_score is not None else 0.0
-        effective = (
-            sentiment_score * state._targeted_message_multiplier
-            if is_targeted
-            else sentiment_score
-        )
-        if effective > 0:
-            lr = state._positive_relationship_learning_rate
-        elif effective < 0:
-            lr = state._negative_relationship_learning_rate
-        else:
-            lr = state._neutral_relationship_learning_rate
-        change = effective * lr
-        new_score = current_score + change
-        new_score = max(
-            state._min_relationship_score, min(state._max_relationship_score, new_score)
-        )
-        state.relationships[other_agent_id] = new_score
-        if abs(new_score - current_score) > 0.01:
-            state.relationship_history.setdefault(other_agent_id, []).append(
-                (state.step_counter, new_score)
-            )
+        update_relationship_action(state, other_agent_id, sentiment_score, is_targeted=is_targeted)
 
     def gossip_update(self: Self, other_embedding: list[float], interaction_score: float) -> None:
         """Adjust role embedding based on interaction gossip."""
@@ -93,78 +78,11 @@ class AgentController:
 
     def change_role(self: Self, new_role: str, current_step: int) -> bool:
         state = self._require_state()
-        if self.can_change_role(new_role, current_step):
-            start_ip = state.ip
-            state.ip -= state._role_change_ip_cost
-            logger.info(
-                "AGENT_STATE (%s): Role changed from %s to %s. IP cost: %.2f. New IP: %.2f",
-                state.agent_id,
-                state.current_role.name,
-                new_role,
-                state._role_change_ip_cost,
-                state.ip,
-            )
-            try:
-                from src.infra.ledger import ledger
-
-                ledger.log_change(
-                    state.agent_id,
-                    state.ip - start_ip,
-                    0.0,
-                    "role_change",
-                )
-            except Exception:  # pragma: no cover - ledger optional
-                logger.debug("Ledger logging failed", exc_info=True)
-            state.current_role = create_role_profile(new_role)
-            state.steps_in_current_role = 0
-            state.role_history.append((current_step, new_role))
-            return True
-        return False
+        return change_role_action(state, new_role, current_step)
 
     def can_change_role(self: Self, new_role: str, current_step: int) -> bool:
         state = self._require_state()
-        if new_role == state.current_role.name:
-            logger.debug(
-                "AGENT_STATE (%s): Role change to %s denied (already current role).",
-                state.agent_id,
-                new_role,
-            )
-            return False
-        if state.ip < state._role_change_ip_cost:
-            logger.debug(
-                "AGENT_STATE (%s): Role change to %s denied (insufficient IP: %.2f < %.2f).",
-                state.agent_id,
-                new_role,
-                state.ip,
-                state._role_change_ip_cost,
-            )
-            return False
-
-        last_change_step = -1
-        if len(state.role_history) > 1:
-            last_change_step = state.role_history[-1][0]
-        if (
-            current_step - last_change_step
-        ) < state._role_change_cooldown and last_change_step != -1:
-            logger.debug(
-                "AGENT_STATE (%s): Role change to %s denied (cooldown). current=%d last=%d cd=%d",
-                state.agent_id,
-                new_role,
-                current_step,
-                last_change_step,
-                state._role_change_cooldown,
-            )
-            return False
-
-        role_du_gen = get_config("ROLE_DU_GENERATION")
-        if isinstance(role_du_gen, dict) and new_role not in role_du_gen:
-            logger.warning(
-                "AGENT_STATE (%s): Attempted role change to unrecognized role '%s'.",
-                state.agent_id,
-                new_role,
-            )
-            return False
-        return True
+        return can_change_role_action(state, new_role, current_step)
 
     def update_collective_metrics(self: Self, collective_ip: float, collective_du: float) -> None:
         state = self._require_state()
