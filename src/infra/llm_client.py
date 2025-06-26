@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# ruff: noqa: ANN101
 import functools
 import json
 import logging
@@ -71,6 +72,7 @@ from src.shared.decorator_utils import monitor_llm_call
 from .config import (
     OLLAMA_API_BASE,
     OLLAMA_REQUEST_TIMEOUT,
+    get_config,
 )
 from .ledger import ledger
 
@@ -106,7 +108,11 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
         result = func(*args, **kwargs)
         if state is not None:
             try:
-                base_price, token_price = ledger.calculate_gas_price(state.agent_id)
+                try:
+                    base_price, token_price = ledger.calculate_gas_price(state.agent_id)
+                except AttributeError:
+                    base_price = float(get_config("GAS_PRICE_PER_CALL"))
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
                 tokens = 1
                 if isinstance(result, dict):
                     usage = result.get("usage")
@@ -151,6 +157,7 @@ class OllamaClientProtocol(Protocol):
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
     ) -> LLMChatResponse: ...
+
 
 
 class LLMClientConfig(BaseModel):

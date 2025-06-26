@@ -33,6 +33,7 @@ from src.agents.core.roles import (
     create_role_profile,
     ensure_profile,
 )
+from .embedding_utils import compute_embedding
 from src.infra.config import get_config  # Import get_config function
 from src.infra.llm_client import LLMClient, LLMClientConfig
 
@@ -42,14 +43,18 @@ logger = logging.getLogger(__name__)
 def field_validator(*args: Any, **kwargs: Any) -> Any:
     """Compatibility wrapper for Pydantic field validators."""
     if not _PYDANTIC_V2:
-        kwargs.pop("mode", None)
+        mode = kwargs.pop("mode", None)
+        if mode == "before":
+            kwargs["pre"] = True
     return _field_validator(*args, **kwargs)
 
 
 def model_validator(*args: Any, **kwargs: Any) -> Any:
     """Compatibility wrapper for Pydantic model validators."""
     if not _PYDANTIC_V2:
-        kwargs.pop("mode", None)
+        mode = kwargs.pop("mode", None)
+        if mode == "before":
+            kwargs["pre"] = True
     return _model_validator(*args, **kwargs)
 
 
@@ -83,6 +88,11 @@ def _get_default_role() -> str:
 def _get_default_role_profile() -> RoleProfile:
     name = _get_default_role()
     return create_role_profile(name)
+
+
+def _generate_default_genes() -> dict[str, float]:
+    """Return a set of random genes for a new agent."""
+    return {f"g{i}": random.random() for i in range(3)}
 
 
 class AgentActionIntent(str, Enum):
@@ -181,7 +191,7 @@ class AgentStateData(BaseModel):
     age: int = 0
     is_alive: bool = True
     inheritance: float = 0.0
-    genes: dict[str, float] = Field(default_factory=dict)
+    genes: dict[str, float] = Field(default_factory=_generate_default_genes)
     parent_id: Optional[str] = None
     # Memory consolidation tracking
     last_level_2_consolidation_step: int = 0
@@ -195,6 +205,8 @@ class AgentStateData(BaseModel):
     conversation_history: deque[str] = Field(
         default_factory=deque
     )  # Added for process_perceived_messages
+    role_embedding: list[float] = Field(default_factory=list)
+    reputation_score: float = 0.0
 
     # Configuration parameters (will be initialized from global config)
     _max_short_term_memory: int = PrivateAttr(
@@ -330,21 +342,13 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         return "Contribute to the simulation as effectively as possible."
 
     # ------------------------------------------------------------------
-    # Role embedding compatibility layer
+    # Role embedding utilities
     # ------------------------------------------------------------------
-    @property
-    def role_embedding(self) -> list[float]:
-        return self.current_role.embedding
-
-    @role_embedding.setter
-    def role_embedding(self, value: list[float]) -> None:
-        self.current_role.embedding = value
-
     @property
     def role_prompt(self) -> str:
         """Return a prompt snippet derived from the embedding and reputation."""
         avg_rep = sum(self.reputation.values()) / len(self.reputation) if self.reputation else 0.0
-        role_rep = self.current_role.reputation
+        role_rep = self.reputation_score
         emb_str = " ".join(f"{v:.2f}" for v in self.role_embedding)
         return f"Embedding: {emb_str}; reputation: {avg_rep:.2f}; role_rep: {role_rep:.2f}"
 
@@ -358,6 +362,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     @role.setter
     def role(self, value: str) -> None:
         self.current_role = create_role_profile(value)
+        self.role_embedding = list(self.current_role.embedding)
+        self.reputation_score = self.current_role.reputation
 
     @property
     def ip_cost_per_message(self) -> float:
@@ -421,16 +427,20 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.current_role.embedding or not other_embedding:
             return
         lr = 0.1
-        self.current_role.embedding = [
-            a + lr * interaction_score * (b - a) for a, b in zip(self.current_role.embedding, other_embedding)
+        self.role_embedding = [
+            a + lr * interaction_score * (b - a)
+            for a, b in zip(self.role_embedding, other_embedding)
         ]
+        self.current_role.embedding = list(self.role_embedding)
         role_name, sim = ROLE_EMBEDDINGS.nearest_role_from_embedding(other_embedding)
         if role_name:
             cur = self.role_reputation.get(role_name, 0.0)
             self.role_reputation[role_name] = (cur + sim * interaction_score) / 2
             self.learned_roles[role_name] = other_embedding
             if role_name == self.current_role.name:
-                self.current_role.reputation = self.role_reputation[role_name]
+                self.reputation_score = self.role_reputation[role_name]
+            ROLE_EMBEDDINGS.update_role_vector(role_name, other_embedding)
+            ROLE_EMBEDDINGS.update_reputation(role_name, sim * interaction_score)
 
     @field_validator("current_role", mode="before")
     @classmethod
@@ -494,6 +504,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 model["role_reputation"] = {}
             if not model.get("learned_roles"):
                 model["learned_roles"] = {}
+            if not model.get("role_embedding"):
+                cur = model.get("current_role")
+                if isinstance(cur, RoleProfile):
+                    model["role_embedding"] = list(cur.embedding)
+                else:
+                    model["role_embedding"] = compute_embedding(str(cur))
+            if not model.get("reputation_score"):
+                cur_role = model.get("current_role")
+                if isinstance(cur_role, RoleProfile):
+                    model["reputation_score"] = cur_role.reputation
+                else:
+                    model["reputation_score"] = 0.0
             return model
         else:
             if not model.role_history:
@@ -505,6 +527,10 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 model.role_reputation = {}
             if not model.learned_roles:
                 model.learned_roles = {}
+            if not model.role_embedding:
+                model.role_embedding = list(model.current_role.embedding)
+            if not model.reputation_score:
+                model.reputation_score = model.current_role.reputation
             return model
 
     def get_llm_client(self) -> Any:
@@ -517,6 +543,15 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()
+
+    def mutate_genes(self: Self, mutation_rate: float) -> None:
+        """Randomly mutate genes in-place."""
+        mutated: dict[str, float] = {}
+        for gene, value in self.genes.items():
+            if random.random() < mutation_rate:
+                value = min(max(value + random.uniform(-0.1, 0.1), 0.0), 1.0)
+            mutated[gene] = value
+        self.genes = mutated
 
     # ------------------------------------------------------------------
     # Serialization helpers for tests
@@ -554,4 +589,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             obj.role_reputation = {}
         if not obj.learned_roles:
             obj.learned_roles = {}
+        if not obj.role_embedding:
+            obj.role_embedding = list(obj.current_role.embedding)
+        if not obj.reputation_score:
+            obj.reputation_score = obj.current_role.reputation
         return obj

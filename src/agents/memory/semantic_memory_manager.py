@@ -37,20 +37,6 @@ class SemanticMemoryManager:
         if not memories:
             return ""
         summary = "\n".join(mem["content"] for mem in memories)
-        now = datetime.utcnow().isoformat()
-        if self.driver is None:
-            return summary
-        with self.driver.session() as session:
-            session.run(
-                """
-                MERGE (a:Agent {id: $agent_id})
-                CREATE (s:SemanticMemory {summary: $summary, created_at: $now})
-                CREATE (a)-[:HAS_SEMANTIC]->(s)
-                """,
-                agent_id=agent_id,
-                summary=summary,
-                now=now,
-            )
         return summary
 
     def group_memories_by_topic(
@@ -159,7 +145,22 @@ class SemanticMemoryManager:
             return [record["summary"] for record in records]
 
     async def run_nightly_job(self: Self, agent_id: str) -> None:
-        """Asynchronously consolidate memories, intended to run nightly."""
+        """Asynchronously consolidate memories and persist the summary."""
         import asyncio
 
-        await asyncio.to_thread(self.consolidate_memories, agent_id)
+        summary = await asyncio.to_thread(self.consolidate_memories, agent_id)
+        if self.driver is not None and summary:
+            now = datetime.utcnow().isoformat()
+            with self.driver.session() as session:
+                session.run(
+                    """
+                    MERGE (a:Agent {id: $agent_id})
+                    CREATE (s:SemanticMemory {summary: $summary, created_at: $now})
+                    CREATE (a)-[:HAS_SEMANTIC]->(s)
+                    """,
+                    agent_id=agent_id,
+                    summary=summary,
+                    now=now,
+                )
+
+        return None

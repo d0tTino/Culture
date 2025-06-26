@@ -82,7 +82,7 @@ def test_move_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     agent = ActionAgent({"action": "move", "dx": 1, "dy": 0})
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
 
-    asyncio.run(sim.run_step())
+    asyncio.run(sim.run_step(max_turns=2))
 
     ip, du = ledger.get_balance(agent.agent_id)
     assert ip == pytest.approx(config.MAP_MOVE_IP_REWARD - config.MAP_MOVE_IP_COST)
@@ -103,7 +103,7 @@ def test_gather_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
     sim.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
 
-    asyncio.run(sim.run_step())
+    asyncio.run(sim.run_step(max_turns=2))
 
     ip, du = ledger.get_balance(agent.agent_id)
     assert ip == pytest.approx(config.MAP_GATHER_IP_REWARD - config.MAP_GATHER_IP_COST)
@@ -124,7 +124,7 @@ def test_build_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
     sim.world_map.agent_resources[agent.agent_id] = {"wood": 1}
 
-    asyncio.run(sim.run_step())
+    asyncio.run(sim.run_step(max_turns=2))
 
     ip, du = ledger.get_balance(agent.agent_id)
     assert ip == pytest.approx(config.MAP_BUILD_IP_REWARD - config.MAP_BUILD_IP_COST)
