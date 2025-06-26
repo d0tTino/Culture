@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+import random
 import time
 from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
@@ -17,6 +18,7 @@ from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
+from src.infra.ledger import ledger
 from src.infra.logging_config import setup_logging
 from src.infra.snapshot import (
     compute_trace_hash,
@@ -218,9 +220,42 @@ class Simulation:
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
-    def spawn_agent(self: Self, agent: "Agent", *, inheritance: float = 0.0) -> None:
-        """Add a new agent to the simulation."""
+    def spawn_agent(
+        self: Self,
+        agent: "Agent",
+        *,
+        inheritance: float = 0.0,
+        parent: "Agent | None" = None,
+        mutation_rate: float | None = None,
+    ) -> None:
+        """Add a new agent to the simulation, inheriting genes with mutation."""
+        if mutation_rate is None:
+            mutation_rate = float(config.get_config("GENE_MUTATION_RATE"))
+
         agent.state.ip += inheritance
+
+        if parent is not None:
+            agent.state.parent_id = parent.agent_id
+            genes = parent.state.genes.copy()
+            for k, v in genes.items():
+                if random.random() < mutation_rate:
+                    genes[k] = min(max(v + random.uniform(-0.1, 0.1), 0.0), 1.0)
+            genes.update(agent.state.genes)
+            agent.state.genes = genes
+            try:
+                ledger.record_genealogy(parent.agent_id, agent.agent_id)
+            except Exception:
+                pass
+            if self.knowledge_board:
+                self.knowledge_board.add_entry(
+                    f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                    parent.agent_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
+        else:
+            agent.state.mutate_genes(mutation_rate)
+
         self.agents.append(agent)
         self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
         self._update_collective_metrics()
@@ -340,9 +375,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."

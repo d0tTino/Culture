@@ -90,6 +90,11 @@ def _get_default_role_profile() -> RoleProfile:
     return create_role_profile(name)
 
 
+def _generate_default_genes() -> dict[str, float]:
+    """Return a set of random genes for a new agent."""
+    return {f"g{i}": random.random() for i in range(3)}
+
+
 class AgentActionIntent(str, Enum):
     IDLE = "idle"
     CONTINUE_COLLABORATION = "continue_collaboration"
@@ -186,7 +191,7 @@ class AgentStateData(BaseModel):
     age: int = 0
     is_alive: bool = True
     inheritance: float = 0.0
-    genes: dict[str, float] = Field(default_factory=dict)
+    genes: dict[str, float] = Field(default_factory=_generate_default_genes)
     parent_id: Optional[str] = None
     # Memory consolidation tracking
     last_level_2_consolidation_step: int = 0
@@ -538,6 +543,15 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()
+
+    def mutate_genes(self: Self, mutation_rate: float) -> None:
+        """Randomly mutate genes in-place."""
+        mutated: dict[str, float] = {}
+        for gene, value in self.genes.items():
+            if random.random() < mutation_rate:
+                value = min(max(value + random.uniform(-0.1, 0.1), 0.0), 1.0)
+            mutated[gene] = value
+        self.genes = mutated
 
     # ------------------------------------------------------------------
     # Serialization helpers for tests
