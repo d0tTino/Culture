@@ -317,9 +317,6 @@ class Simulation:
             self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
             self.pending_messages_for_next_round = []
 
-            # Increment current_step for this agent's turn. current_step becomes 1-indexed.
-            self.current_step += 1
-
             agent_to_run_index = self.current_agent_index
             agent = self.agents[agent_to_run_index]
             agent_id = agent.agent_id
