@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Any, cast
@@ -13,17 +12,9 @@ from src.agents.core.mood_utils import get_descriptive_mood
 from src.agents.dspy_programs.intent_selector import IntentSelectorProgram
 from src.infra.config import get_config
 
+from .embedding_utils import compute_embedding
+
 logger = logging.getLogger(__name__)
-
-
-def _compute_embedding(text: str, dim: int = 8) -> list[float]:
-    """Return a deterministic embedding vector for ``text``."""
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    segment_len = len(digest) // dim
-    return [
-        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
-        for i in range(dim)
-    ]
 
 
 class AgentController:
@@ -244,7 +235,7 @@ class AgentController:
 
             sender_emb = msg.get("sender_embedding")
             if sender_emb is None and msg.get("sender_role"):
-                sender_emb = _compute_embedding(str(msg.get("sender_role")))
+                sender_emb = compute_embedding(str(msg.get("sender_role")))
             if sender_emb is not None:
                 self.gossip_update(sender_emb, float(sentiment_value))
 

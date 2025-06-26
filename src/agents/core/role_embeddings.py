@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-import hashlib
+# Skip self argument annotation warnings for simple methods
+# ruff: noqa: ANN101
 import math
 
+from .embedding_utils import compute_embedding
 from .roles import INITIAL_ROLES
-
-
-def _compute_embedding(text: str, dim: int = 8) -> list[float]:
-    """Return a deterministic embedding vector for ``text``."""
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    segment_len = len(digest) // dim
-    return [
-        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
-        for i in range(dim)
-    ]
 
 
 class RoleEmbeddingManager:
@@ -21,7 +13,7 @@ class RoleEmbeddingManager:
 
     def __init__(self) -> None:
         self.role_vectors: dict[str, list[float]] = {
-            role: _compute_embedding(role) for role in INITIAL_ROLES
+            role: compute_embedding(role) for role in INITIAL_ROLES
         }
         self.reputation: dict[str, float] = {role: 0.0 for role in INITIAL_ROLES}
 
@@ -33,7 +25,7 @@ class RoleEmbeddingManager:
         return dot / (norm1 * norm2) if norm1 and norm2 else 0.0
 
     def best_role(self, query: str, threshold: float = 0.7) -> tuple[str | None, float]:
-        q_emb = _compute_embedding(query)
+        q_emb = compute_embedding(query)
         best_role = None
         best_sim = -1.0
         for role, vec in self.role_vectors.items():
