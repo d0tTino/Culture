@@ -130,29 +130,11 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                         logger.debug("Ledger logging failed", exc_info=True)
                 else:
                     logger.warning(
-
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
                         cost,
                         state.du,
                     )
-                else:
-                    state.du -= cost
-                    try:
-                        ledger.log_change(
-                            state.agent_id,
-                            0.0,
-                            -cost,
-                            "llm_gas",
-                            gas_price_per_call=base_price,
-                            gas_price_per_token=token_price,
-                        )
-                    except Exception as log_err:  # pragma: no cover - optional
-                        logger.warning(
-                            "Failed to log DU deduction for agent %s: %s",
-                            state.agent_id,
-                            log_err,
-                        )
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result
@@ -168,8 +150,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -182,13 +163,13 @@ class LLMClientConfig(BaseModel):
 class LLMClient:
     """Lightweight wrapper around the Ollama client."""
 
-    def __init__(self, config: LLMClientConfig) -> None:
+    def __init__(self: LLMClient, config: LLMClientConfig) -> None:
         self.config = config
         self._client = get_ollama_client()
 
     @monitor_llm_call(model_param="model", context="ollama_chat")
     def chat(
-        self,
+        self: LLMClient,
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,

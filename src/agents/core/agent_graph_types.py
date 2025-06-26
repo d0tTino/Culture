@@ -11,12 +11,14 @@ from src.shared.typing import SimulationMessage
 
 # These imports are crucial for get_type_hints to resolve forward references
 # in AgentTurnState when StateGraph is initialized.
-# from .agent_state import AgentState # REMOVE
-# from .base_agent import Agent # REMOVE
+from .agent_state import AgentState
 
 if TYPE_CHECKING:
-    from .agent_state import AgentState
     from .base_agent import Agent
+else:  # pragma: no cover - runtime stub to satisfy get_type_hints
+
+    class Agent:  # type: ignore[too-few-type-args]
+        pass
 
 
 class AgentActionOutput(BaseModel):
