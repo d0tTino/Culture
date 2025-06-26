@@ -170,8 +170,7 @@ class Simulation:
             )
             # Prime the event scheduler with the first agent turn
             first_agent = self.agents[0]
-            self.event_kernel.schedule_at_nowait(
-                self.current_step,
+            self.event_kernel.schedule_nowait(
                 self._create_agent_event(0),
                 agent_id=first_agent.get_id(),
             )
@@ -523,20 +522,16 @@ class Simulation:
             else:
                 action_details = {}
 
-            map_event = log_event(
-                {
-                    "type": "map_action",
-                    "agent_id": agent_id,
-                    "step": self.current_step,
-                    "action": action_type,
-                    **action_details,
-                }
-            )
-            await emit_map_action_event(
-                agent_id,
-                self.current_step,
-                action_type,
+            map_event_data = {
+                "type": "map_action",
+                "agent_id": agent_id,
+                "step": self.current_step,
+                "action": action_type,
                 **action_details,
+            }
+            await self.event_kernel.schedule(
+                lambda data=map_event_data: self._emit_environment_event(data),
+                vector=self.vector,
             )
             if self.discord_bot:
                 embed = self.discord_bot.create_map_action_embed(
@@ -632,10 +627,10 @@ class Simulation:
             and self.current_step - self._last_memory_prune_step
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
-            try:
-                self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
-            except (ChromaDBException, ValidationError, OSError) as exc:
-                logger.error("Failed to prune memory store: %s", exc)
+            await self.event_kernel.schedule(
+                self._prune_memory_event,
+                vector=self.vector,
+            )
             self._last_memory_prune_step = self.current_step
 
         if (
@@ -644,20 +639,14 @@ class Simulation:
             and self.current_step > self._last_consolidation_step
         ):
             start_step = self.current_step - len(self.agents) + 1
-            for ag in self.agents:
-                try:
-                    await self.vector_store_manager.aconsolidate_daily_memories(
-                        ag.agent_id,
-                        start_step,
-                        self.current_step,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.error("Failed nightly consolidation: %s", exc)
+            await self.event_kernel.schedule(
+                lambda start=start_step: self._consolidate_memory_event(start),
+                vector=self.vector,
+            )
         self._last_consolidation_step = self.current_step
 
         self.vector.increment(self.agents[next_agent_index].get_id())
-        await self.event_kernel.schedule_at(
-            self.current_step,
+        await self.event_kernel.schedule(
             self._create_agent_event(next_agent_index),
             agent_id=self.agents[next_agent_index].get_id(),
             vector=self.vector,
@@ -665,6 +654,59 @@ class Simulation:
 
     def _create_agent_event(self: Self, agent_index: int) -> Callable[[], Awaitable[None]]:
         return lambda: self._run_agent_turn(agent_index)
+
+    async def _emit_environment_event(self: Self, event: dict[str, Any]) -> None:
+        event_with_hash = log_event(event)
+        if event_with_hash is None:
+            event_with_hash = {
+                **event,
+                "trace_hash": compute_trace_hash(event),
+            }
+        if event.get("type") == "map_action":
+            await emit_map_action_event(
+                event.get("agent_id", ""),
+                event.get("step", 0),
+                event.get("action", ""),
+                **{
+                    k: v
+                    for k, v in event.items()
+                    if k not in {"type", "agent_id", "step", "action", "trace_hash"}
+                },
+            )
+        else:
+            await emit_event(SimulationEvent(event_type=event["type"], data=event_with_hash))
+
+    async def _prune_memory_event(self: Self) -> None:
+        if not self.vector_store_manager:
+            return
+        try:
+            self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
+            event = {
+                "type": "memory_prune",
+                "step": self.current_step,
+            }
+            await self._emit_environment_event(event)
+        except (ChromaDBException, ValidationError, OSError) as exc:
+            logger.error("Failed to prune memory store: %s", exc)
+
+    async def _consolidate_memory_event(self: Self, start_step: int) -> None:
+        if not self.vector_store_manager:
+            return
+        for ag in self.agents:
+            try:
+                await self.vector_store_manager.aconsolidate_daily_memories(
+                    ag.agent_id,
+                    start_step,
+                    self.current_step,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed nightly consolidation: %s", exc)
+        event = {
+            "type": "memory_consolidation",
+            "step": self.current_step,
+            "start": start_step,
+        }
+        await self._emit_environment_event(event)
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
@@ -674,8 +716,7 @@ class Simulation:
 
         if self.event_kernel.empty():
             self.vector.increment(self.agents[self.current_agent_index].get_id())
-            self.event_kernel.schedule_at_nowait(
-                self.current_step,
+            self.event_kernel.schedule_nowait(
                 self._create_agent_event(self.current_agent_index),
                 agent_id=self.agents[self.current_agent_index].get_id(),
                 vector=self.vector,
@@ -693,17 +734,9 @@ class Simulation:
             num_steps (int): Number of steps to run.
         """
         logger.info(f"Starting simulation run for {num_steps} steps (async)")
-        total_steps_executed = 0
-        import asyncio
-
         start_time = time.time()
         try:
-            for step in range(num_steps):
-                await asyncio.sleep(0.1)  # Optional: Add a small delay between steps
-                steps = await self.run_step(
-                    1
-                )  # If run_step needs to be async, refactor it as well
-                total_steps_executed += steps
+            total_steps_executed = await self.run_step(num_steps)
         finally:
             elapsed_time = time.time() - start_time
             logger.info(

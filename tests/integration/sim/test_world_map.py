@@ -68,15 +68,18 @@ async def test_agent_move_updates_map_and_events() -> None:
     agent = MoveAgent()
     sim = Simulation(agents=cast(list[Agent], [agent]))
 
-    await sim.run_step()
+    await sim.run_step(max_turns=2)
 
     assert sim.world_map.agent_positions[agent.agent_id] == (1, 0)
 
-    evt = await asyncio.wait_for(event_queue.get(), 0.1)
-    assert isinstance(evt, SimulationEvent)
-    assert evt.event_type == "map_action"
-    assert evt.data is not None
-    assert evt.data["agent_id"] == agent.agent_id
+    first = await asyncio.wait_for(event_queue.get(), 0.1)
+    second = await asyncio.wait_for(event_queue.get(), 0.1)
+    assert isinstance(first, SimulationEvent)
+    assert isinstance(second, SimulationEvent)
+    assert first.event_type == "agent_action"
+    assert second.event_type == "map_action"
+    assert second.data is not None
+    assert second.data["agent_id"] == agent.agent_id
 
 
 @pytest.mark.asyncio
@@ -94,7 +97,7 @@ async def test_snapshot_contains_world_map(tmp_path: str, monkeypatch: pytest.Mo
     monkeypatch.setattr("src.sim.simulation.log_event", lambda event: None)
 
     for _ in range(100):
-        await sim.run_step()
+        await sim.run_step(max_turns=2)
 
     snap_file = f"{tmp_path}/snapshot_100.json"
     with open(snap_file) as f:
