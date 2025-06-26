@@ -883,21 +883,13 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
 
             # Assertion 5: Agent A's message to Agent C should be in pending_messages
             # (or messages_to_perceive_this_round if sim has advanced to next round perception phase already)
-            # For now, check pending_messages_for_next_round as current_step was just completed for Agent A
-            # The current_step would have been incremented by run_step to 4.
-            # Messages sent in step 3 (Agent A's turn) will be recorded with step=3.
-
-            # Correct step for Agent A's second message is self.simulation.current_step -1 (because current_step was already incremented)
-            # However, the mock is for its turn, so the message in pending should reflect the step it was *generated* in.
-            # When agent A (index 0) runs, simulation current_step is 3.
-            # After its turn, simulation.current_step becomes 4.
-            # Messages are logged with the step they occurred in.
-            # Agent A's turn was step 3 of the simulation (0-indexed overall steps).
+            # For now we inspect ``pending_messages_for_next_round`` since Agent A
+            # just completed its turn. ``run_step`` increments ``current_step`` to
+            # ``4`` at the start of this turn, so messages generated now should be
+            # recorded with step ``4``.
 
             agent_a_message_to_c_found = False
-            for (
-                msg
-            ) in (
+            for msg in (
                 self.simulation.pending_messages_for_next_round
             ):  # Check messages generated THIS turn
                 if (
