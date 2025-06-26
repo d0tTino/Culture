@@ -132,6 +132,22 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MAX_AGENT_AGE": 10,
     "AGENT_TOKEN_BUDGET": 10000,
     "GENE_MUTATION_RATE": 0.1,
+    # Token economics per action intent
+    "ACTION_TOKEN_EFFECTS": {
+        "idle": {"cost": 0, "reward": 0},
+        "continue_collaboration": {"cost": 0, "reward": 0},
+        "propose_idea": {"cost": 1, "reward": 0},
+        "ask_clarification": {"cost": 1, "reward": 0},
+        "perform_deep_analysis": {"cost": 2, "reward": 0},
+        "create_project": {"cost": 2, "reward": 1},
+        "join_project": {"cost": 1, "reward": 0},
+        "leave_project": {"cost": 0, "reward": 0},
+        "request_role_change": {"cost": 1, "reward": 0},
+        "send_direct_message": {"cost": 0, "reward": 0},
+        "move": {"cost": 1, "reward": 0},
+        "gather": {"cost": 0, "reward": 0},
+        "build": {"cost": 2, "reward": 1},
+    },
 }
 
 # Global config dictionary
@@ -578,6 +594,9 @@ SNAPSHOT_COMPRESS = bool(get_config("SNAPSHOT_COMPRESS"))
 S3_BUCKET = get_config("S3_BUCKET")
 S3_PREFIX = get_config("S3_PREFIX")
 SNAPSHOT_INTERVAL_STEPS = get_config("SNAPSHOT_INTERVAL_STEPS")
+
+# Token costs and rewards per action intent
+ACTION_TOKEN_EFFECTS = get_config("ACTION_TOKEN_EFFECTS")
 
 
 # --- Helper Functions ---
