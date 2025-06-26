@@ -5,7 +5,7 @@ This script removes all temporary ChromaDB directories created during tests.
 """
 
 import argparse
-import glob
+from pathlib import Path
 import shutil
 
 
@@ -17,15 +17,15 @@ def cleanup_temp_db(dry_run: bool = False) -> None:
         dry_run: If True, only print the directories that would be removed without removing them.
     """
     # Find all ChromaDB directories except the main persistent one
-    chroma_dirs = glob.glob("chroma_db_*")
+    chroma_dirs = list(Path.cwd().glob("chroma_db_*"))
 
     if not chroma_dirs:
         print("No temporary ChromaDB directories found.")
         return
 
     print(f"Found {len(chroma_dirs)} temporary ChromaDB directories:")
-    for dir_path in chroma_dirs:
-        print(f"  - {dir_path}")
+    for path in chroma_dirs:
+        print(f"  - {path}")
 
     if dry_run:
         print("\nDRY RUN: No directories were removed.")
@@ -42,13 +42,16 @@ def cleanup_temp_db(dry_run: bool = False) -> None:
     # Remove directories
     removed = 0
     failed = 0
-    for dir_path in chroma_dirs:
+    for path in chroma_dirs:
         try:
-            shutil.rmtree(dir_path)
-            print(f"✓ Removed: {dir_path}")
+            # Iterate contents to ensure proper permissions before deletion
+            for _ in path.iterdir():
+                pass
+            shutil.rmtree(path)
+            print(f"✓ Removed: {path}")
             removed += 1
         except Exception as e:
-            print(f"✗ Failed to remove {dir_path}: {e}")
+            print(f"✗ Failed to remove {path}: {e}")
             failed += 1
 
     print(f"\nCleanup completed: {removed} directories removed, {failed} failed.")
