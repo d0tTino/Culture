@@ -63,3 +63,21 @@ def test_stake_unstake_noop_and_zero_burn_rate(tmp_path: Path) -> None:
     assert du == pytest.approx(5.0)
 
     assert ledger.get_du_burn_rate("a") == 0.0
+
+
+def test_log_change_triggers_hooks(tmp_path: Path) -> None:
+    db = tmp_path / "ledger.sqlite"
+    ledger = Ledger(db)
+
+    calls: list[tuple[str, float, float, str, float, float]] = []
+
+    def hook(agent_id: str, dip: float, ddu: float, reason: str, gpc: float, gpt: float) -> None:
+        calls.append((agent_id, dip, ddu, reason, gpc, gpt))
+
+    ledger.register_hook(hook)
+    ledger.log_change("a1", 1.0, 2.0, "test")
+
+    assert calls == [("a1", 1.0, 2.0, "test", 0.0, 0.0)]
+    ip, du = ledger.get_balance("a1")
+    assert ip == pytest.approx(1.0)
+    assert du == pytest.approx(2.0)

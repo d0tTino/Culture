@@ -1031,21 +1031,21 @@ class Agent:
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
 
-        # Record final deltas to ledger
+        # Record final deltas to ledger. Log even when no economic change
+        # occurred so the action itself is traceable in the ledger.
         final_ip_change = state.ip - start_ip
         final_du_change = state.du - start_du
-        if final_ip_change or final_du_change:
-            try:
-                from src.infra.ledger import ledger
+        try:
+            from src.infra.ledger import ledger
 
-                ledger.log_change(
-                    self.agent_id,
-                    final_ip_change,
-                    final_du_change,
-                    f"action:{action_intent}",
-                )
-            except Exception:  # pragma: no cover - ledger errors should not block
-                logger.debug("Ledger logging failed", exc_info=True)
+            ledger.log_change(
+                self.agent_id,
+                final_ip_change,
+                final_du_change,
+                f"action:{action_intent}",
+            )
+        except Exception:  # pragma: no cover - ledger errors should not block
+            logger.debug("Ledger logging failed", exc_info=True)
 
     def perceive_messages(self: Self, messages: list[SimulationMessage]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""
