@@ -43,7 +43,7 @@ class EventKernel:
 
     def get_budget(self: Self, agent_id: str) -> int:
         """Return remaining token budget for ``agent_id``."""
-        return self._budgets.get(agent_id, 0)
+        return int(self._budgets.get(agent_id, 0))
 
     async def schedule(
         self: Self,
