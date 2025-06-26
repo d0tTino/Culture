@@ -53,6 +53,7 @@ class MemoryTrackingManager:
                 metadata = dict(metadatas[i])
                 if increment_count:
                     metadata["retrieval_count"] = int(metadata.get("retrieval_count", 0)) + 1
+                    metadata["usage_count"] = int(metadata.get("usage_count", 0)) + 1
                     if "first_retrieved_at" not in metadata:
                         metadata["first_retrieved_at"] = current_time
                     metadata["last_retrieved_at"] = current_time
