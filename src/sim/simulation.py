@@ -664,9 +664,9 @@ class Simulation:
                 vector=self.vector,
             )
 
-        executed = await self.event_kernel.dispatch(max_turns)
+        events = await self.event_kernel.dispatch(max_turns)
         self.vector = self.event_kernel.vector
-        return executed
+        return len(events)
 
     async def async_run(self: Self, num_steps: int) -> None:
         """
