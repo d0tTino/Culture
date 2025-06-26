@@ -3,6 +3,7 @@ import pytest
 try:
     from src.agents.core.agent_controller import AgentController
     from src.agents.core.agent_state import AgentState
+    from src.agents.core.roles import create_role_profile
 except IndentationError:
     pytest.skip("agent_state module is unparsable", allow_module_level=True)
 
@@ -47,11 +48,11 @@ def test_update_relationship_learning_rates_and_history() -> None:
 
 @pytest.mark.unit
 def test_change_role_cost_and_cooldown() -> None:
-    state = AgentState(agent_id="a1", name="A", current_role="Facilitator", ip=10.0)
+    state = AgentState(agent_id="a1", name="A", current_role=create_role_profile("Facilitator"), ip=10.0)
     controller = AgentController(state)
 
     assert controller.change_role("Innovator", current_step=1)
-    assert state.current_role == "Innovator"
+    assert state.current_role.name == "Innovator"
     assert state.ip == pytest.approx(5.0)
 
     assert not controller.change_role("Analyzer", current_step=2)

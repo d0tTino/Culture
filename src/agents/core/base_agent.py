@@ -29,6 +29,7 @@ from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 
 from .embedding_utils import compute_embedding
+from .roles import ensure_profile
 
 if TYPE_CHECKING:
     from src.interfaces.dashboard_backend import AgentMessage as DashboardAgentMessage
@@ -128,10 +129,19 @@ class Agent:
 
         # Get necessary values from initial_state or use defaults
         name = name or initial_state.get("name", f"Agent-{self.agent_id[:8]}")
-        role = initial_state.get("current_role", "Default Contributor")
+        role_value = initial_state.get("current_role", "Default Contributor")
+        role_name: str
         role_embedding = initial_state.get("role_embedding")
+        if isinstance(role_value, dict):
+            role_name = str(role_value.get("name", "Default Contributor"))
+            role_embedding = role_embedding or role_value.get("embedding")
+        elif hasattr(role_value, "name"):
+            role_name = str(getattr(role_value, "name"))
+            role_embedding = role_embedding or getattr(role_value, "embedding", None)
+        else:
+            role_name = str(role_value)
         if role_embedding is None:
-            role_embedding = compute_embedding(role)
+            role_embedding = compute_embedding(role_name)
         steps_in_role = initial_state.get("steps_in_current_role", 0)
         mood = initial_state.get("mood", "neutral")
         agent_goal = initial_state.get(
@@ -198,8 +208,9 @@ class Agent:
         # Add/override mandatory/always-set fields AFTER initial_state processing
         agent_state_kwargs["agent_id"] = self.agent_id
         agent_state_kwargs["name"] = name  # name is derived above
-        agent_state_kwargs["role"] = role  # role is derived above
-        agent_state_kwargs["role_embedding"] = role_embedding
+        agent_state_kwargs["current_role"] = ensure_profile(role_value)
+        if role_embedding is not None:
+            agent_state_kwargs["current_role"].embedding = role_embedding
         agent_state_kwargs["steps_in_current_role"] = steps_in_role  # derived above
         agent_state_kwargs["mood"] = mood  # derived above
         agent_state_kwargs["agent_goal"] = agent_goal  # derived above
@@ -517,7 +528,7 @@ class Agent:
             "knowledge_board_content": knowledge_board_content,  # Pass the knowledge board content
             "knowledge_board": knowledge_board,  # Pass the knowledge board instance
             "scenario_description": scenario_description,  # Pass the simulation scenario
-            "current_role": self._state.current_role,  # Pass the agent's current role
+            "current_role": self._state.current_role.name,  # Pass the agent's current role
             "influence_points": int(self._state.ip),  # Cast to int for TypedDict compliance
             "steps_in_current_role": self._state.steps_in_current_role,
             # Pass the agent's steps in current role
@@ -607,7 +618,7 @@ class Agent:
                         )
                     logger.debug(  # Keep this log for state update confirmation
                         f"RUN_TURN_POST_UPDATE :: Agent {self.agent_id}: self._state updated with new "
-                        f"AgentState object (Role: {self._state.current_role}, Mood: {self._state.mood_value})."
+                        f"AgentState object (Role: {self._state.current_role.name}, Mood: {self._state.mood_value})."
                     )
                 else:
                     logger.warning(
@@ -703,12 +714,14 @@ class Agent:
 
     def __str__(self: Self) -> str:
         """Returns a string representation of the agent."""
-        return f"Agent(id={self.agent_id}, role={self._state.current_role})"
+        role = self._state.current_role.name if hasattr(self._state.current_role, "name") else self._state.current_role
+        return f"Agent(id={self.agent_id}, role={role})"
 
     def __repr__(self: Self) -> str:
         """Returns a detailed string representation for debugging."""
+        role = self._state.current_role.name if hasattr(self._state.current_role, "name") else self._state.current_role
         return (
-            f"Agent(agent_id='{self.agent_id}', role='{self._state.current_role}', "
+            f"Agent(agent_id='{self.agent_id}', role='{role}', "
             f"ip={self._state.ip}, du={self._state.du})"
         )
 
@@ -994,13 +1007,13 @@ class Agent:
         role_bonus_factor = action_du_config.get("role_bonus_factor", 0.0)
 
         # Get the role-specific generation dictionary (e.g., {"base": 1.0, "bonus_factor": 0.2})
-        role_specific_generation_dict = config.ROLE_DU_GENERATION.get(state.current_role, {})
+        role_specific_generation_dict = config.ROLE_DU_GENERATION.get(state.current_role.name, {})
         # Extract the 'base' DU generation for the role, to be multiplied by the action's role_bonus_factor
         role_base_generation_for_action_bonus = role_specific_generation_dict.get("base", 0.0)
 
         # --- Start Debug Logging ---
         logger.debug(
-            f"DU Calc: action_intent='{action_intent}', agent_role='{state.current_role}'"
+            f"DU Calc: action_intent='{action_intent}', agent_role='{state.current_role.name}'"
         )
         logger.debug(f"DU Calc: action_du_config='{action_du_config}'")
         logger.debug(

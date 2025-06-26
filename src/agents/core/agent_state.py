@@ -27,6 +27,12 @@ except Exception:  # pragma: no cover - fallback to pydantic<2
     _PYDANTIC_V2 = False
 
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
+from src.agents.core.roles import (
+    ROLE_EMBEDDINGS,
+    RoleProfile,
+    create_role_profile,
+    ensure_profile,
+)
 from src.infra.config import get_config  # Import get_config function
 from src.infra.llm_client import LLMClient, LLMClientConfig
 
@@ -72,6 +78,11 @@ def _get_default_role() -> str:
         f"AGENT_STATE_DEBUG (in _get_default_role): Chosen role by random.choice: {chosen_role}"
     )
     return chosen_role
+
+
+def _get_default_role_profile() -> RoleProfile:
+    name = _get_default_role()
+    return create_role_profile(name)
 
 
 class AgentActionIntent(str, Enum):
@@ -176,11 +187,8 @@ class AgentStateData(BaseModel):
     last_level_2_consolidation_step: int = 0
     collective_ip: float = 0.0
     collective_du: float = 0.0
-    current_role: str = Field(default_factory=_get_default_role)
+    current_role: RoleProfile = Field(default_factory=_get_default_role_profile)
     steps_in_current_role: int = 0
-    role_embedding: list[float] = Field(
-        default_factory=lambda: [random.uniform(-1.0, 1.0) for _ in range(8)]
-    )
     reputation: dict[str, float] = Field(default_factory=dict)
     role_reputation: dict[str, float] = Field(default_factory=dict)
     learned_roles: dict[str, list[float]] = Field(default_factory=dict)
@@ -321,13 +329,35 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 return str(first_goal["description"])
         return "Contribute to the simulation as effectively as possible."
 
+    # ------------------------------------------------------------------
+    # Role embedding compatibility layer
+    # ------------------------------------------------------------------
+    @property
+    def role_embedding(self) -> list[float]:
+        return self.current_role.embedding
+
+    @role_embedding.setter
+    def role_embedding(self, value: list[float]) -> None:
+        self.current_role.embedding = value
+
     @property
     def role_prompt(self) -> str:
         """Return a prompt snippet derived from the embedding and reputation."""
         avg_rep = sum(self.reputation.values()) / len(self.reputation) if self.reputation else 0.0
-        role_rep = self.role_reputation.get(self.current_role, 0.0)
+        role_rep = self.current_role.reputation
         emb_str = " ".join(f"{v:.2f}" for v in self.role_embedding)
         return f"Embedding: {emb_str}; reputation: {avg_rep:.2f}; role_rep: {role_rep:.2f}"
+
+    # ------------------------------------------------------------------
+    # Compatibility properties
+    # ------------------------------------------------------------------
+    @property
+    def role(self) -> str:
+        return self.current_role.name
+
+    @role.setter
+    def role(self, value: str) -> None:
+        self.current_role = create_role_profile(value)
 
     @property
     def ip_cost_per_message(self) -> float:
@@ -356,7 +386,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             "agent_id": self.agent_id,
             "ip": self.ip,
             "du": self.du,
-            "role": self.current_role,
+            "role": self.current_role.name,
             # Add other relevant metrics here if needed for collective tracking
         }
 
@@ -388,17 +418,24 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         """Update internal role data based on gossip."""
         from .role_embeddings import ROLE_EMBEDDINGS
 
-        if not self.role_embedding or not other_embedding:
+        if not self.current_role.embedding or not other_embedding:
             return
         lr = 0.1
-        self.role_embedding = [
-            a + lr * interaction_score * (b - a) for a, b in zip(self.role_embedding, other_embedding)
+        self.current_role.embedding = [
+            a + lr * interaction_score * (b - a) for a, b in zip(self.current_role.embedding, other_embedding)
         ]
         role_name, sim = ROLE_EMBEDDINGS.nearest_role_from_embedding(other_embedding)
         if role_name:
             cur = self.role_reputation.get(role_name, 0.0)
             self.role_reputation[role_name] = (cur + sim * interaction_score) / 2
             self.learned_roles[role_name] = other_embedding
+            if role_name == self.current_role.name:
+                self.current_role.reputation = self.role_reputation[role_name]
+
+    @field_validator("current_role", mode="before")
+    @classmethod
+    def _ensure_role_profile(cls, value: Any) -> RoleProfile:
+        return ensure_profile(value)
 
     @field_validator("memory_store_manager", mode="before")
     @classmethod
@@ -446,7 +483,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
         if isinstance(model, dict):
             if not model.get("role_history"):
-                model["role_history"] = [(model.get("step_counter", 0), model.get("current_role"))]
+                cur = model.get("current_role")
+                role_name = cur.name if isinstance(cur, RoleProfile) else cur
+                model["role_history"] = [(model.get("step_counter", 0), role_name)]
             if not model.get("mood_history"):
                 model["mood_history"] = [
                     (model.get("step_counter", 0), model.get("mood_level", 0.0))
@@ -458,7 +497,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return model
         else:
             if not model.role_history:
-                model.role_history = [(model.step_counter, model.current_role)]
+                role_name = model.current_role.name if isinstance(model.current_role, RoleProfile) else model.current_role
+                model.role_history = [(model.step_counter, role_name)]
             if not model.mood_history:
                 model.mood_history = [(model.step_counter, model.mood_level)]
             if not model.role_reputation:
@@ -500,11 +540,14 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         clean_data = data.copy()
         if clean_data.get("memory_store_manager") is None:
             clean_data.pop("memory_store_manager", None)
+        cur = clean_data.get("current_role")
+        if isinstance(cur, str):
+            clean_data["current_role"] = create_role_profile(cur)
         obj = cls(**clean_data)
         if not obj.llm_client:
             obj.llm_client = get_default_llm_client()
         if not obj.role_history:
-            obj.role_history = [(obj.step_counter, obj.current_role)]
+            obj.role_history = [(obj.step_counter, obj.current_role.name)]
         if not obj.mood_history:
             obj.mood_history = [(obj.step_counter, obj.mood_level)]
         if not obj.role_reputation:

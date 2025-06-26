@@ -36,7 +36,7 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
     assert "random" in meta["rng_state"]
 
     assert random.random() == expected_next
-    assert loaded.agents[0].state.current_role == sim.agents[0].state.current_role
+    assert loaded.agents[0].state.current_role.name == sim.agents[0].state.current_role.name
 
 
 def test_deterministic_replay_multiple_runs(tmp_path, monkeypatch):
@@ -75,7 +75,7 @@ def test_numpy_rng_restore(tmp_path, monkeypatch):
 
     assert "numpy" in meta["rng_state"]
     assert np.random.random() == expected_next
-    assert loaded.agents[0].state.current_role == sim.agents[0].state.current_role
+    assert loaded.agents[0].state.current_role.name == sim.agents[0].state.current_role.name
 
 
 def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch):

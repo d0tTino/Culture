@@ -9,6 +9,7 @@ from typing_extensions import Self
 
 from src.agents.core.agent_state import AgentState
 from src.agents.core.mood_utils import get_descriptive_mood
+from src.agents.core.roles import create_role_profile
 from src.agents.dspy_programs.intent_selector import IntentSelectorProgram
 from src.infra.config import get_config
 
@@ -98,7 +99,7 @@ class AgentController:
             logger.info(
                 "AGENT_STATE (%s): Role changed from %s to %s. IP cost: %.2f. New IP: %.2f",
                 state.agent_id,
-                state.current_role,
+                state.current_role.name,
                 new_role,
                 state._role_change_ip_cost,
                 state.ip,
@@ -114,7 +115,7 @@ class AgentController:
                 )
             except Exception:  # pragma: no cover - ledger optional
                 logger.debug("Ledger logging failed", exc_info=True)
-            state.current_role = new_role
+            state.current_role = create_role_profile(new_role)
             state.steps_in_current_role = 0
             state.role_history.append((current_step, new_role))
             return True
@@ -122,7 +123,7 @@ class AgentController:
 
     def can_change_role(self: Self, new_role: str, current_step: int) -> bool:
         state = self._require_state()
-        if new_role == state.current_role:
+        if new_role == state.current_role.name:
             logger.debug(
                 "AGENT_STATE (%s): Role change to %s denied (already current role).",
                 state.agent_id,

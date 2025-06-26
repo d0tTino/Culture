@@ -5,6 +5,7 @@ import pytest
 
 from src.agents.core import roles
 from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
+from src.agents.core.roles import create_role_profile
 from src.agents.graphs import basic_agent_graph as bag
 from src.infra import ledger as ledger_mod
 
@@ -21,7 +22,7 @@ class DummyController:
 def make_agent_state() -> SimpleNamespace:
     return SimpleNamespace(
         agent_id="a",
-        current_role="Innovator",
+        current_role=create_role_profile("Innovator"),
         steps_in_current_role=5,
         role_change_cooldown=3,
         ip=10.0,
@@ -45,7 +46,7 @@ def test_process_role_change_success(monkeypatch: pytest.MonkeyPatch) -> None:
     state = make_agent_state()
     monkeypatch.setattr(ledger_mod, "ledger", DummyLedger())
     assert bag.process_role_change(state, "Analyzer") is True
-    assert state.current_role == "Analyzer"
+    assert state.current_role.name == "Analyzer"
     assert state.ip == 8.0
 
 
@@ -63,7 +64,7 @@ def test_process_role_change_invalid_role() -> None:
         assert not bag.process_role_change(state, "UnknownRole")
     finally:
         ROLE_EMBEDDINGS.best_role = original
-    assert state.current_role == "Innovator"
+    assert state.current_role.name == "Innovator"
 
 
 @pytest.mark.unit
@@ -97,7 +98,7 @@ def test_update_state_node_role_change(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     )
 
-    assert state.current_role == "Analyzer"
+    assert state.current_role.name == "Analyzer"
     assert controller.added[0][0].startswith("Changed role")
     assert output["data_units"] == int(state.du)
 
