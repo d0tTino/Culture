@@ -16,6 +16,7 @@ from src.agents.core.agent_graph_types import AgentTurnState
 from src.agents.core.agent_state import AgentState
 from src.agents.core.mood_utils import get_descriptive_mood
 from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
+from src.agents.core.roles import ensure_profile
 
 # Import L1SummaryGenerator for DSPy-based L1 summary generation
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
@@ -151,13 +152,16 @@ DU_COST_REQUEST_DETAILED_CLARIFICATION = config.DU_COST_REQUEST_DETAILED_CLARIFI
 
 def _get_current_role(agent_state: AgentState) -> str:
     if hasattr(agent_state, "current_role"):
-        return cast(str, getattr(agent_state, "current_role"))
+        cur = getattr(agent_state, "current_role")
+        if hasattr(cur, "name"):
+            return cast(str, cur.name)
+        return cast(str, cur)
     return cast(str, getattr(agent_state, "role"))
 
 
 def _set_current_role(agent_state: AgentState, role: str) -> None:
     if hasattr(agent_state, "current_role"):
-        agent_state.current_role = role
+        agent_state.current_role = ensure_profile(role)
     else:
         setattr(agent_state, "role", role)
 

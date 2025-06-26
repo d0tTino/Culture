@@ -1,6 +1,8 @@
-"""
-Defines roles that agents can assume in the simulation.
-"""
+"""Defines roles that agents can assume in the simulation."""
+
+from typing import Any
+
+from pydantic import BaseModel
 
 # Role constants - raw role names
 ROLE_FACILITATOR = "Facilitator"
@@ -38,3 +40,36 @@ def _compute_embedding(text: str, dim: int = 8) -> list[float]:
 
 
 ROLE_EMBEDDINGS = {role: _compute_embedding(role) for role in INITIAL_ROLES}
+
+
+class RoleProfile(BaseModel):
+    """Profile for a role with embedding and reputation."""
+
+    name: str
+    embedding: list[float]
+    reputation: float = 0.0
+
+
+def create_role_profile(role_name: str) -> RoleProfile:
+    """Return a ``RoleProfile`` for the given role name."""
+    return RoleProfile(name=role_name, embedding=ROLE_EMBEDDINGS.get(role_name, _compute_embedding(role_name)))
+
+
+def create_default_role_profiles() -> dict[str, RoleProfile]:
+    """Return ``RoleProfile`` instances for all ``INITIAL_ROLES``."""
+    return {name: create_role_profile(name) for name in INITIAL_ROLES}
+
+
+def ensure_profile(role: str | RoleProfile | dict[str, Any]) -> RoleProfile:
+    """Return a ``RoleProfile`` instance for ``role``."""
+    if isinstance(role, RoleProfile):
+        return role
+    if isinstance(role, dict):
+        name = str(role.get("name", ""))
+        embedding = role.get("embedding")
+        if embedding is None:
+            embedding = ROLE_EMBEDDINGS.get(name, _compute_embedding(name))
+        rep = float(role.get("reputation", 0.0))
+        return RoleProfile(name=name, embedding=embedding, reputation=rep)
+    return create_role_profile(str(role))
+
