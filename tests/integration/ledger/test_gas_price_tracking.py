@@ -45,4 +45,4 @@ def test_gas_price_logging(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     row = ledger.conn.execute(
         "SELECT gas_price_per_call, gas_price_per_token FROM transactions WHERE reason='llm_gas' ORDER BY id DESC LIMIT 1"
     ).fetchone()
-    assert row == (2.0, 0.5)
+    assert row == (2.2, 0.55)

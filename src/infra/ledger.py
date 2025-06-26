@@ -232,6 +232,37 @@ class Ledger:
         if per_token is not None:
             self.gas_price_per_token = float(per_token)
 
+    def calculate_gas_price(self, agent_id: str, window: int = 10) -> tuple[float, float]:
+        """Adjust gas prices based on recent DU burn rate."""
+        burn_rate = self.get_du_burn_rate(agent_id, window)
+        factor = 1.0 + burn_rate / 10.0
+        base_call = float(get_config("GAS_PRICE_PER_CALL"))
+        base_token = float(get_config("GAS_PRICE_PER_TOKEN"))
+        new_call = base_call * factor
+        new_token = base_token * factor
+        changed = (
+            abs(new_call - self.gas_price_per_call) > 1e-6
+            or abs(new_token - self.gas_price_per_token) > 1e-6
+        )
+        if changed:
+            self.set_gas_prices(new_call, new_token)
+            self.log_change(
+                agent_id,
+                0.0,
+                0.0,
+                "gas_price_update",
+                gas_price_per_call=new_call,
+                gas_price_per_token=new_token,
+            )
+            try:  # pragma: no cover - optional dependency
+                from src.interfaces import metrics
+
+                metrics.GAS_PRICE_PER_CALL.set(new_call)
+                metrics.GAS_PRICE_PER_TOKEN.set(new_token)
+            except Exception:
+                pass
+        return new_call, new_token
+
     def get_du_burn_rate(self, agent_id: str, window: int = 10) -> float:
         """Return the average DU spent over the last ``window`` transactions."""
         cur = self.conn.execute(

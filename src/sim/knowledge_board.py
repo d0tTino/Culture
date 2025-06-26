@@ -20,24 +20,27 @@ T = TypeVar("T")
 
 
 class LoggingList(list[T], Generic[T]):
-    def clear(self: Self) -> None:
-        logger.debug(f"LOGGING_LIST_DEBUG ({id(self)}): clear() called")
-        super().clear()
+    """List that emits a brief debug message when modified."""
 
-    def __delitem__(self: Self, key: SupportsIndex | slice) -> None:
-        if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
-            logger.debug(f"LOGGING_LIST_DEBUG ({id(self)}): __delitem__[:] called (del self[:])")
-        super().__delitem__(key)
+    def _log_change(self: Self) -> None:
+        logger.debug("LoggingList length now %d", len(self))
 
     def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
-        logger.debug(
-            f"LOGGING_LIST_DEBUG: Initializing new LoggingList instance ({id(self)}) from args: {args}"
-        )
         super().__init__(*args, **kwargs)
+        logger.debug("LoggingList initialized with %d entries", len(self))
+
+    def clear(self: Self) -> None:
+        super().clear()
+        self._log_change()
+
+    def __delitem__(self: Self, key: SupportsIndex | slice) -> None:
+        super().__delitem__(key)
+        self._log_change()
 
     # For MyPy, if we override methods that are checked for type hints:
     def append(self: Self, item: T) -> None:
         super().append(item)
+        self._log_change()
 
     # __setitem__ is not overridden to keep superclass type checking intact
 
