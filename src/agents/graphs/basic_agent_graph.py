@@ -371,6 +371,18 @@ def route_action_intent(state: AgentTurnState) -> str:
 
 
 def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
+    manager = state.get("semantic_manager")
+    step = int(state.get("simulation_step", 0))
+    interval = int(
+        config.get_config_value_with_override(
+            "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 24
+        )
+    )
+    if manager and interval > 0 and step % interval == 0:
+        try:
+            manager.consolidate_memories(state["agent_id"])
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Semantic consolidation failed: %s", exc, exc_info=True)
     return dict(state)
 
 

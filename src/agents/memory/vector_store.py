@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from typing_extensions import Self
 
 from src.shared.memory_store import MemoryStore
+from src.infra import config
 
 chromadb: Any = None
 try:  # pragma: no cover - optional dependency
@@ -290,20 +291,21 @@ class ChromaVectorStoreManager(MemoryStore):
         try:
             embedding = self.get_embedding(content)
             memory_id = f"{agent_id}_{step}_{event_type}_{uuid.uuid4()}"
-            metadata_dict = metadata or {}
-            metadata_dict.update(
-                {
-                    "agent_id": agent_id,
-                    "step": step,
-                    "event_type": event_type,
-                    "memory_type": memory_type or "raw",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "retrieval_count": 0,
-                    "last_retrieved_timestamp": "",
-                    "accumulated_relevance_score": 0.0,
-                    "retrieval_relevance_count": 0,
-                }
-            )
+            metadata_dict = dict(metadata or {})
+            defaults = {
+                "agent_id": agent_id,
+                "step": step,
+                "event_type": event_type,
+                "memory_type": memory_type or "raw",
+                "timestamp": datetime.utcnow().isoformat(),
+                "retrieval_count": 0,
+                "usage_count": 0,
+                "last_retrieved_timestamp": "",
+                "accumulated_relevance_score": 0.0,
+                "retrieval_relevance_count": 0,
+            }
+            for k, v in defaults.items():
+                metadata_dict.setdefault(k, v)
             try:
                 self.collection.add(
                     ids=[memory_id],
@@ -472,6 +474,7 @@ class ChromaVectorStoreManager(MemoryStore):
                             memory_data["relevance_score"] = relevance_scores[i]
                         if i < len(memory_ids):
                             memory_data["memory_id"] = memory_ids[i]
+                        memory_data["usage_count"] = memory_data.get("retrieval_count", 0)
                         formatted_results.append(memory_data)
 
                 # Record timing for benchmarking
@@ -560,6 +563,7 @@ class ChromaVectorStoreManager(MemoryStore):
                         memory_data = dict(metadatas[i])
                         memory_data["content"] = documents[i]
                         memory_data["memory_id"] = memory_id
+                        memory_data["usage_count"] = memory_data.get("retrieval_count", 0)
                         memories.append(memory_data)
                         memory_ids.append(memory_id)
 
@@ -847,6 +851,7 @@ class ChromaVectorStoreManager(MemoryStore):
                             memory_data["content"] = documents[i]
                         memory_data["relevance_score"] = relevance_score
                         memory_data["memory_id"] = memory_id
+                        memory_data["usage_count"] = memory_data.get("retrieval_count", 0)
                         filtered_memories.append(memory_data)
 
         # Update usage statistics for retrieved memories
@@ -1178,26 +1183,33 @@ class ChromaVectorStoreManager(MemoryStore):
         checked = 0
         for doc_id, metadata in zip(results["ids"], (results["metadatas"] or [])):
             timestamp_str = metadata.get("simulation_step_timestamp")
-            if not timestamp_str or not isinstance(timestamp_str, str):
+            if timestamp_str and isinstance(timestamp_str, str):
+                try:
+                    created_dt = datetime.fromisoformat(timestamp_str)
+                    age_days = (now - created_dt).days
+                except ValueError as e:
+                    logger.warning(
+                        f"Invalid simulation_step_timestamp for L1 summary {doc_id}: "
+                        f"{timestamp_str} ({e})",
+                        exc_info=True,
+                    )
+                    age_days = min_age_days
+            else:
                 logger.debug(
-                    f"L1 summary {doc_id} missing simulation_step_timestamp, skipping age check."
+                    f"L1 summary {doc_id} missing simulation_step_timestamp, assuming age 0."
                 )
-                continue
-            try:
-                created_dt = datetime.fromisoformat(timestamp_str)
-                age_days = (now - created_dt).days
-            except ValueError as e:
-                logger.warning(
-                    f"Invalid simulation_step_timestamp for L1 summary {doc_id}: "
-                    f"{timestamp_str} ({e})",
-                    exc_info=True,
-                )
-                continue
+                age_days = min_age_days
             if age_days < min_age_days:
                 continue
             mus = self._calculate_mus(dict(metadata))
             checked += 1
-            if mus < mus_threshold:
+            usage = int(metadata.get("retrieval_count", 0))
+            usage_thresh = int(
+                config.get_config_value_with_override(
+                    "MEMORY_PRUNING_USAGE_COUNT_THRESHOLD", 0
+                )
+            )
+            if mus < mus_threshold and usage < usage_thresh:
                 ids_to_prune.append(doc_id)
         logger.info(
             f"Checked {checked} L1 summaries for MUS pruning, identified "
@@ -1253,22 +1265,23 @@ class ChromaVectorStoreManager(MemoryStore):
         # Process each L2 summary
         for doc_id, metadata in zip(results["ids"], (results["metadatas"] or [])):
             timestamp_str = metadata.get("simulation_step_end_timestamp")
-            if not timestamp_str or not isinstance(timestamp_str, str):
+            if timestamp_str and isinstance(timestamp_str, str):
+                try:
+                    created_dt = datetime.fromisoformat(timestamp_str)
+                    age_days = (now - created_dt).days
+                except ValueError as e:
+                    logger.warning(
+                        f"Invalid simulation_step_end_timestamp for L2 summary {doc_id}: "
+                        f"{timestamp_str} ({e})",
+                        exc_info=True,
+                    )
+                    age_days = min_age_days
+            else:
                 logger.debug(
                     f"L2 summary {doc_id} missing simulation_step_end_timestamp, "
-                    f"skipping age check."
+                    f"assuming age 0."
                 )
-                continue
-            try:
-                created_dt = datetime.fromisoformat(timestamp_str)
-                age_days = (now - created_dt).days
-            except ValueError as e:
-                logger.warning(
-                    f"Invalid simulation_step_end_timestamp for L2 summary {doc_id}: "
-                    f"{timestamp_str} ({e})",
-                    exc_info=True,
-                )
-                continue
+                age_days = min_age_days
 
             # Skip summaries that are too young
             if age_days < min_age_days:
@@ -1277,8 +1290,13 @@ class ChromaVectorStoreManager(MemoryStore):
             # Calculate MUS and check against threshold
             mus = self._calculate_mus(dict(metadata))
             checked += 1
-
-            if mus < mus_threshold:
+            usage = int(metadata.get("retrieval_count", 0))
+            usage_thresh = int(
+                config.get_config_value_with_override(
+                    "MEMORY_PRUNING_USAGE_COUNT_THRESHOLD", 0
+                )
+            )
+            if mus < mus_threshold and usage < usage_thresh:
                 ids_to_prune.append(doc_id)
 
         logger.info(
