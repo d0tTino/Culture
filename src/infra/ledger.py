@@ -5,6 +5,8 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
+from .config import get_config
+
 # Skip self argument annotation warnings for class methods
 
 
@@ -34,6 +36,8 @@ class Ledger:
                 delta_ip REAL,
                 delta_du REAL,
                 reason TEXT,
+                gas_price_per_call REAL DEFAULT 0,
+                gas_price_per_token REAL DEFAULT 0,
                 ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -45,6 +49,16 @@ class Ledger:
                 token TEXT,
                 amount INTEGER DEFAULT 0,
                 PRIMARY KEY(agent_id, token)
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS action_stakes (
+                action_id TEXT,
+                agent_id TEXT,
+                amount REAL,
+                PRIMARY KEY(action_id, agent_id)
             )
             """
         )
@@ -70,18 +84,35 @@ class Ledger:
             """
         )
         self.conn.commit()
-        self._hooks: list[Callable[[str, float, float, str], None]] = []
+        self.gas_price_per_call = float(get_config("GAS_PRICE_PER_CALL"))
+        self.gas_price_per_token = float(get_config("GAS_PRICE_PER_TOKEN"))
+        self._hooks: list[Callable[[str, float, float, str, float, float], None]] = []
         self.register_hook(self._db_hook)
 
-    def register_hook(self, hook: Callable[[str, float, float, str], None]) -> None:
+    def register_hook(self, hook: Callable[[str, float, float, str, float, float], None]) -> None:
         """Register a hook called for every ``log_change`` invocation."""
         self._hooks.append(hook)
 
-    def _db_hook(self, agent_id: str, delta_ip: float, delta_du: float, reason: str) -> None:
+    def _db_hook(
+        self,
+        agent_id: str,
+        delta_ip: float,
+        delta_du: float,
+        reason: str,
+        gas_price_per_call: float,
+        gas_price_per_token: float,
+    ) -> None:
         cur = self.conn.cursor()
         cur.execute(
-            "INSERT INTO transactions(agent_id, delta_ip, delta_du, reason) VALUES (?,?,?,?)",
-            (agent_id, float(delta_ip), float(delta_du), reason),
+            "INSERT INTO transactions(agent_id, delta_ip, delta_du, reason, gas_price_per_call, gas_price_per_token) VALUES (?,?,?,?,?,?)",
+            (
+                agent_id,
+                float(delta_ip),
+                float(delta_du),
+                reason,
+                float(gas_price_per_call),
+                float(gas_price_per_token),
+            ),
         )
         cur.execute(
             """
@@ -102,12 +133,20 @@ class Ledger:
         self.conn.commit()
 
     def log_change(
-        self, agent_id: str, delta_ip: float = 0.0, delta_du: float = 0.0, reason: str = ""
+        self,
+        agent_id: str,
+        delta_ip: float = 0.0,
+        delta_du: float = 0.0,
+        reason: str = "",
+        gas_price_per_call: float | None = None,
+        gas_price_per_token: float | None = None,
     ) -> None:
         """Record a transaction and invoke registered hooks."""
+        gpc = float(gas_price_per_call or 0.0)
+        gpt = float(gas_price_per_token or 0.0)
         for hook in self._hooks:
             try:
-                hook(agent_id, float(delta_ip), float(delta_du), reason)
+                hook(agent_id, float(delta_ip), float(delta_du), reason, gpc, gpt)
             except Exception as e:  # pragma: no cover - defensive
                 logging.getLogger(__name__).warning(
                     "Ledger hook failed for %s: %s", agent_id, e, exc_info=True
@@ -150,6 +189,48 @@ class Ledger:
         )
         row = cur.fetchone()
         return float(row[0]) if row else 0.0
+
+    def stake_du_for_action(self, agent_id: str, action_id: str, amount: float) -> None:
+        """Stake DU for a specific action."""
+        if amount <= 0:
+            return
+        self.stake_du(agent_id, amount)
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO action_stakes(action_id, agent_id, amount)
+            VALUES(?, ?, ?)
+            ON CONFLICT(action_id, agent_id) DO UPDATE SET
+                amount = amount + excluded.amount
+            """,
+            (action_id, agent_id, float(amount)),
+        )
+        self.conn.commit()
+
+    def claim_action_refund(self, agent_id: str, action_id: str) -> None:
+        """Refund staked DU for an action back to the agent."""
+        cur = self.conn.cursor()
+        row = cur.execute(
+            "SELECT amount FROM action_stakes WHERE action_id=? AND agent_id=?",
+            (action_id, agent_id),
+        ).fetchone()
+        if row:
+            amt = float(row[0])
+            self.unstake_du(agent_id, amt)
+            cur.execute(
+                "DELETE FROM action_stakes WHERE action_id=? AND agent_id=?",
+                (action_id, agent_id),
+            )
+            self.conn.commit()
+
+    def set_gas_prices(
+        self, per_call: float | None = None, per_token: float | None = None
+    ) -> None:
+        """Update tracked gas price values."""
+        if per_call is not None:
+            self.gas_price_per_call = float(per_call)
+        if per_token is not None:
+            self.gas_price_per_token = float(per_token)
 
     def get_du_burn_rate(self, agent_id: str, window: int = 10) -> float:
         """Return the average DU spent over the last ``window`` transactions."""

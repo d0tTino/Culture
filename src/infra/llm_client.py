@@ -1,4 +1,3 @@
-# ruff: noqa: ANN401, ANN101, ANN102
 """Provides a client for interacting with the Ollama LLM service."""
 
 from __future__ import annotations
@@ -118,18 +117,18 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                if state.du - cost >= 0:
-                    state.du -= cost
-                    try:
-                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                    except Exception as log_err:  # pragma: no cover - optional
-                        logger.warning(
-                            "Ledger logging failed for %s (delta_du=%s)",
-                            state.agent_id,
-                            -cost,
-                            exc_info=log_err,
-                        )
-                else:
+                state.du -= cost
+                try:
+                    ledger.log_change(
+                        state.agent_id,
+                        0.0,
+                        -cost,
+                        "llm_gas",
+                        gas_price_per_call=base_price,
+                        gas_price_per_token=token_price,
+                    )
+                except Exception as log_err:  # pragma: no cover - optional
+
                     logger.warning(
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
