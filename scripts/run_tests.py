@@ -32,21 +32,26 @@ def main(argv: list[str]) -> int:
         "boto3",
         "moto",
     ]
-    if not os.environ.get("SKIP_DEP_INSTALL") and not all(have_module(mod) for mod in required):
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-r",
-                str(ROOT / "requirements.txt"),
-                "-r",
-                str(ROOT / "requirements-dev.txt"),
-            ]
-        )
-    elif os.environ.get("SKIP_DEP_INSTALL"):
-        print("Skipping dependency installation because SKIP_DEP_INSTALL is set")
+    if not all(have_module(mod) for mod in required):
+        try:
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    str(ROOT / "requirements.txt"),
+                    "-r",
+                    str(ROOT / "requirements-dev.txt"),
+                ]
+            )
+        except subprocess.CalledProcessError as exc:  # pragma: no cover - network issues
+            print(
+                f"WARNING: dependency installation failed ({exc}). "
+                "Continuing with existing packages."
+            )
+
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)

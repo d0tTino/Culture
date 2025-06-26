@@ -166,7 +166,6 @@ class Simulation:
             []
         )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
-
         self.track_collective_metrics: bool = True
 
         if not self.agents:
