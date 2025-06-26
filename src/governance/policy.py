@@ -8,6 +8,8 @@ import requests
 
 from src.infra import config
 
+from .law_board import law_board
+
 logger = logging.getLogger(__name__)
 
 _POLICY_CONTENT: str | None = None
@@ -26,7 +28,7 @@ async def evaluate_policy(action: str) -> bool:
     url = config.get_config("OPA_URL")
     if not url:
         return True
-    payload: dict[str, Any] = {"input": {"action": action}}
+    payload: dict[str, Any] = {"input": {"action": action, "laws": law_board.get_laws()}}
     if _POLICY_CONTENT is not None:
         payload["policy"] = _POLICY_CONTENT
     try:

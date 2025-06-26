@@ -22,8 +22,8 @@ from typing import Any, TypeVar, Union, cast
 from pydantic import ValidationError
 from typing_extensions import Self
 
-from src.shared.memory_store import MemoryStore
 from src.infra import config
+from src.shared.memory_store import MemoryStore
 
 chromadb: Any = None
 try:  # pragma: no cover - optional dependency
@@ -33,7 +33,7 @@ try:  # pragma: no cover - optional dependency
     )
 
     chromadb = chromadb_module
-except ImportError:  # pragma: no cover - fallback when chromadb missing
+except Exception:  # pragma: no cover - fallback when chromadb missing or faulty
     chromadb = None
 
     class _SentenceTransformerEmbeddingFunction:
@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover - fallback when chromadb missing
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException
-except ImportError:
+except Exception:
     ChromaDBException = Exception
 
 # Constants for memory usage tracking
@@ -1205,9 +1205,7 @@ class ChromaVectorStoreManager(MemoryStore):
             checked += 1
             usage = int(metadata.get("retrieval_count", 0))
             usage_thresh = int(
-                config.get_config_value_with_override(
-                    "MEMORY_PRUNING_USAGE_COUNT_THRESHOLD", 0
-                )
+                config.get_config_value_with_override("MEMORY_PRUNING_USAGE_COUNT_THRESHOLD", 0)
             )
             if mus < mus_threshold and usage < usage_thresh:
                 ids_to_prune.append(doc_id)
@@ -1292,9 +1290,7 @@ class ChromaVectorStoreManager(MemoryStore):
             checked += 1
             usage = int(metadata.get("retrieval_count", 0))
             usage_thresh = int(
-                config.get_config_value_with_override(
-                    "MEMORY_PRUNING_USAGE_COUNT_THRESHOLD", 0
-                )
+                config.get_config_value_with_override("MEMORY_PRUNING_USAGE_COUNT_THRESHOLD", 0)
             )
             if mus < mus_threshold and usage < usage_thresh:
                 ids_to_prune.append(doc_id)

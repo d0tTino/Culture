@@ -82,7 +82,7 @@ def test_move_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     agent = ActionAgent({"action": "move", "dx": 1, "dy": 0})
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
 
-    asyncio.run(sim.run_step())
+    asyncio.run(sim.run_step(max_turns=2))
 
     ip, du = ledger.get_balance(agent.agent_id)
     assert ip == pytest.approx(config.MAP_MOVE_IP_REWARD - config.MAP_MOVE_IP_COST)
@@ -103,7 +103,7 @@ def test_gather_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
     sim.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
 
-    asyncio.run(sim.run_step())
+    asyncio.run(sim.run_step(max_turns=2))
 
     ip, du = ledger.get_balance(agent.agent_id)
     assert ip == pytest.approx(config.MAP_GATHER_IP_REWARD - config.MAP_GATHER_IP_COST)
@@ -124,7 +124,7 @@ def test_build_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
     sim.world_map.agent_resources[agent.agent_id] = {"wood": 1}
 
-    asyncio.run(sim.run_step())
+    asyncio.run(sim.run_step(max_turns=2))
 
     ip, du = ledger.get_balance(agent.agent_id)
     assert ip == pytest.approx(config.MAP_BUILD_IP_REWARD - config.MAP_BUILD_IP_COST)
@@ -155,3 +155,49 @@ def test_gather_after_pathfinding() -> None:
     assert m.agent_positions["A"] == (10, 10)
     assert m.gather("A", ResourceToken.WOOD)
     assert m.agent_resources["A"].get("wood", 0) == 1
+
+
+def test_move_to_with_diagonal_obstacles() -> None:
+    m = WorldMap(width=6, height=6)
+    m.add_agent("A")
+    for i in range(1, 5):
+        m.add_obstacle(i, i)
+    for _ in range(15):
+        m.move_to("A", 5, 5)
+    assert m.agent_positions["A"] == (5, 5)
+
+
+def test_move_out_of_bounds() -> None:
+    m = WorldMap(width=3, height=3)
+    m.add_agent("A")
+    m.move("A", -1, -1)
+    assert m.agent_positions["A"] == (0, 0)
+    m.move("A", 10, 0)
+    assert m.agent_positions["A"] == (2, 0)
+    pos = m.move_to("A", 5, 5)
+    assert pos == (2, 0)
+    assert m.agent_positions["A"] == (2, 0)
+
+
+def test_resource_depletion() -> None:
+    m = WorldMap()
+    m.add_agent("A")
+    m.add_resource(0, 0, ResourceToken.WOOD, 1)
+    assert m.gather("A", ResourceToken.WOOD)
+    assert not m.gather("A", ResourceToken.WOOD)
+    assert m.agent_resources["A"].get("wood", 0) == 1
+    assert m.resources[(0, 0)].get("wood") is None
+
+
+def test_move_to_complex_obstacles() -> None:
+    m = WorldMap(width=10, height=10)
+    m.add_agent("A")
+    for i in range(1, 9):
+        if i != 3:
+            m.add_obstacle(i, 5)
+    for i in range(1, 9):
+        if i != 7:
+            m.add_obstacle(5, i)
+    for _ in range(25):
+        m.move_to("A", 9, 9)
+    assert m.agent_positions["A"] == (9, 9)

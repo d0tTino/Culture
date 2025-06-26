@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.infra import config
+
 try:
     from langgraph.graph import END, StateGraph
 except Exception:  # pragma: no cover - optional dependency
     END = "END"
     StateGraph: Any = Any  # type: ignore[no-redef]
 
+from .basic_agent_graph import _maybe_consolidate_memories
 from .basic_agent_types import AgentTurnState
 from .graph_nodes import (
     analyze_perception_sentiment_node,
@@ -17,7 +20,6 @@ from .graph_nodes import (
     retrieve_and_summarize_memories_node,
     retrieve_semantic_context_node,
 )
-from .basic_agent_graph import _maybe_consolidate_memories
 from .interaction_handlers import (
     handle_ask_clarification_node,
     handle_continue_collaboration_node,
@@ -58,7 +60,11 @@ def build_graph() -> Any:
     graph_builder.add_node("handle_send_direct_message", handle_send_direct_message_node)
 
     graph_builder.add_node("finalize_message_agent", finalize_message_agent_node)
-    graph_builder.add_node("maybe_consolidate_memories", _maybe_consolidate_memories)
+    consolidation_interval = config.get_config_value_with_override(
+        "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 0
+    )
+    if int(consolidation_interval) > 0:
+        graph_builder.add_node("maybe_consolidate_memories", _maybe_consolidate_memories)
 
     graph_builder.set_entry_point("analyze_perception_sentiment")
     graph_builder.add_edge("analyze_perception_sentiment", "prepare_relationship_prompt")
@@ -96,6 +102,11 @@ def build_graph() -> Any:
     ]:
         graph_builder.add_edge(node, "finalize_message_agent")
 
-    graph_builder.add_edge("finalize_message_agent", "maybe_consolidate_memories")
-    graph_builder.add_edge("maybe_consolidate_memories", END)
+    graph_builder.add_edge("finalize_message_agent", END)
+    consolidation_interval = config.get_config_value_with_override(
+        "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 0
+    )
+    if int(consolidation_interval) > 0:
+        graph_builder.add_edge("finalize_message_agent", "maybe_consolidate_memories")
+        graph_builder.add_edge("maybe_consolidate_memories", END)
     return graph_builder.compile()
