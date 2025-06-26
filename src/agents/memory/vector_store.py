@@ -33,7 +33,7 @@ try:  # pragma: no cover - optional dependency
     )
 
     chromadb = chromadb_module
-except ImportError:  # pragma: no cover - fallback when chromadb missing
+except Exception:  # pragma: no cover - fallback when chromadb missing or faulty
     chromadb = None
 
     class _SentenceTransformerEmbeddingFunction:
@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover - fallback when chromadb missing
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException
-except ImportError:
+except Exception:
     ChromaDBException = Exception
 
 # Constants for memory usage tracking
