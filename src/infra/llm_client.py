@@ -145,8 +145,6 @@ class OllamaClientProtocol(Protocol):
         options: dict[str, Any] | None = None,
     ) -> LLMChatResponse: ...
 
-
-
 class LLMClientConfig(BaseModel):
     """Simple configuration for ``LLMClient``."""
 
@@ -157,13 +155,13 @@ class LLMClientConfig(BaseModel):
 class LLMClient:
     """Lightweight wrapper around the Ollama client."""
 
-    def __init__(self, config: LLMClientConfig) -> None:
+    def __init__(self: LLMClient, config: LLMClientConfig) -> None:
         self.config = config
         self._client = get_ollama_client()
 
     @monitor_llm_call(model_param="model", context="ollama_chat")
     def chat(
-        self,
+        self: LLMClient,
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,

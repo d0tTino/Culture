@@ -442,11 +442,12 @@ To customize the simulation:
    The development requirements include tools such as `pytest-xdist`,
    `pytest-asyncio`, `requests`, and `numpy>=2` which are required for the full test suite.
    They also install **pip-tools**, which provides `pip-compile`.
-   Run `scripts/check_requirements.sh` after modifying dependencies to ensure
-   `requirements.txt` matches `requirements.in`.
-   You can also run `scripts/setup_test_env.sh` to automate these steps.
-   Optional packages like `chromadb`, `weaviate-client`, and `langgraph` are
-   included so tests won't be skipped unexpectedly.
+  Run `scripts/check_requirements.sh` after modifying dependencies to ensure
+  `requirements.txt` matches `requirements.in`.
+  You can also run `scripts/setup_test_env.sh` to automate these steps.
+  Optional packages like `chromadb`, `weaviate-client`, and `langgraph` are
+  included so tests won't be skipped unexpectedly. Use
+  `scripts/install_optional_deps.sh` to install them separately if needed.
 
 Run tests using the Python module format:
 
