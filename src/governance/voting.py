@@ -6,6 +6,8 @@ from collections.abc import Iterable
 from src.agents.core.base_agent import Agent
 from src.utils.policy import evaluate_with_opa
 
+from .law_board import law_board
+
 
 async def _vote(agent: Agent, proposal: str) -> bool:
     """Simple voting behavior: agent votes according to OPA evaluation."""
@@ -21,4 +23,7 @@ async def propose_law(proposer: Agent, text: str, agents: Iterable[Agent]) -> bo
 
     votes = await asyncio.gather(*[_vote(a, text) for a in agents])
     yes_votes = sum(1 for v in votes if v)
-    return yes_votes > len(votes) / 2
+    approved = yes_votes > len(votes) / 2
+    if approved:
+        law_board.add_law(text)
+    return approved

@@ -16,6 +16,7 @@ from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
+from src.governance import evaluate_policy
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.ledger import ledger
@@ -401,6 +402,13 @@ class Simulation:
         message_recipient_id = agent_output.get("message_recipient_id")
         action_intent_str = agent_output.get("action_intent", "idle")
         map_action = agent_output.get("map_action")
+
+        allowed = await evaluate_policy(action_intent_str)
+        if not allowed:
+            action_intent_str = AgentActionIntent.IDLE.value
+            message_content = None
+            message_recipient_id = None
+            map_action = None
 
         if message_content:
             msg_data = cast(
