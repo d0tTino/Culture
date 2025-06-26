@@ -91,4 +91,11 @@ mypy scripts --strict
 - `fix_test_imports.py`, `update_memory_imports.py`: Automated import path fixers.
 
 ## Onboarding
-- See `/docs/coding_standards.md` and `/docs/testing.md` for full onboarding and contribution guidelines. 
+- See `/docs/coding_standards.md` and `/docs/testing.md` for full onboarding and contribution guidelines.
+
+## Windows Usage
+Most scripts can be executed from a WSL2 shell on Windows. Activate your virtual
+environment with `venv\Scripts\activate.bat` (or `.venv\Scripts\activate.bat`)
+and run the `.bat` variants where provided. See
+[../docs/windows_setup.md](../docs/windows_setup.md) for detailed setup
+instructions.
