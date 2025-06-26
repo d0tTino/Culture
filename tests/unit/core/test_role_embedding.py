@@ -1,8 +1,20 @@
+from copy import deepcopy
+
 import pytest
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState
+from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
 from src.agents.core.roles import create_default_role_profiles
+
+
+@pytest.fixture(autouse=True)
+def _reset_role_embeddings() -> None:
+    orig_vectors = deepcopy(ROLE_EMBEDDINGS.role_vectors)
+    orig_rep = ROLE_EMBEDDINGS.reputation.copy()
+    yield
+    ROLE_EMBEDDINGS.role_vectors = orig_vectors
+    ROLE_EMBEDDINGS.reputation = orig_rep
 
 
 @pytest.mark.unit
@@ -49,4 +61,18 @@ def test_gossip_updates_reputation() -> None:
     controller = AgentController(state)
     other = [v + 0.5 for v in state.role_embedding]
     controller.gossip_update(other, 1.0)
-    assert state.current_role.reputation != 0.0
+    assert state.reputation_score != 0.0
+
+
+@pytest.mark.unit
+def test_global_gossip_updates_manager() -> None:
+    state = AgentState(agent_id="a", name="A")
+    controller = AgentController(state)
+    other = [v + 0.3 for v in state.role_embedding]
+    role, _ = ROLE_EMBEDDINGS.nearest_role_from_embedding(other)
+    assert role is not None
+    original_vec = deepcopy(ROLE_EMBEDDINGS.role_vectors[role])
+    original_rep = ROLE_EMBEDDINGS.reputation[role]
+    controller.gossip_update(other, 1.0)
+    assert ROLE_EMBEDDINGS.role_vectors[role] != original_vec
+    assert ROLE_EMBEDDINGS.reputation[role] != original_rep
