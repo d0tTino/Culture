@@ -128,11 +128,12 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                         gas_price_per_token=token_price,
                     )
                 except Exception as log_err:  # pragma: no cover - optional
+
                     logger.warning(
-                        "Ledger logging failed for %s (delta_du=%s)",
+                        "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
-                        -cost,
-                        exc_info=log_err,
+                        cost,
+                        state.du,
                     )
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")

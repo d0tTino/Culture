@@ -5,7 +5,6 @@ Defines the base class for all agents in the Culture simulation.
 
 import asyncio
 import copy
-import hashlib
 import logging
 import uuid
 from collections.abc import Awaitable
@@ -28,6 +27,8 @@ from src.infra import config
 from src.infra.async_dspy_manager import AsyncDSPyManager
 from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
+
+from .embedding_utils import compute_embedding
 
 if TYPE_CHECKING:
     from src.interfaces.dashboard_backend import AgentMessage as DashboardAgentMessage
@@ -81,16 +82,6 @@ from src.agents.dspy_programs.role_thought_generator import get_role_thought_gen
 AgentMessage = DashboardAgentMessage
 
 logger = logging.getLogger(__name__)
-
-
-def compute_embedding(text: str, dim: int = 8) -> list[float]:
-    """Return a deterministic embedding vector for ``text``."""
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    segment_len = len(digest) // dim
-    return [
-        int(digest[i * segment_len : (i + 1) * segment_len], 16) / (16**segment_len)
-        for i in range(dim)
-    ]
 
 
 class Agent:

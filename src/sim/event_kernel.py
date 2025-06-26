@@ -5,6 +5,8 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Callable, Self
 
+from src.infra.snapshot import compute_trace_hash
+
 from .version_vector import VersionVector
 
 
@@ -18,6 +20,7 @@ class Event:
     agent_id: str | None = field(compare=False)
     callback: Callable[[], Awaitable[None]] = field(compare=False)
     vector: VersionVector = field(default_factory=VersionVector, compare=False)
+    trace_hash: str = field(default="", compare=False)
 
 
 class EventKernel:
@@ -37,6 +40,10 @@ class EventKernel:
     def add_tokens(self: Self, agent_id: str, tokens: int) -> None:
         """Increase the token budget for an agent."""
         self._budgets[agent_id] = self._budgets.get(agent_id, 0) + tokens
+
+    def get_budget(self: Self, agent_id: str) -> int:
+        """Return remaining token budget for ``agent_id``."""
+        return self._budgets.get(agent_id, 0)
 
     async def schedule(
         self: Self,
@@ -99,40 +106,38 @@ class EventKernel:
         tokens: int = 1,
         vector: VersionVector | None = None,
     ) -> None:
+        if agent_id is not None:
+            budget = self._budgets.get(agent_id, 0)
+            if budget < tokens:
+                raise ValueError(f"Agent {agent_id} exceeded token budget")
+            self._budgets[agent_id] = budget - tokens
+
+        vv = vector or VersionVector()
+        event_data = {
+            "step": step,
+            "count": self._counter,
+            "tokens": tokens,
+            "agent_id": agent_id,
+            "vector": vv.to_dict(),
+        }
+        trace_hash = compute_trace_hash(event_data)
         heapq.heappush(
             self._queue,
-            Event(step, self._counter, tokens, agent_id, callback, vector or VersionVector()),
+            Event(step, self._counter, tokens, agent_id, callback, vv, trace_hash),
         )
         self._counter += 1
 
-    async def dispatch(self: Self, limit: int) -> int:
+    async def dispatch(self: Self, limit: int) -> list[Event]:
         """Dispatch up to ``limit`` queued events in sorted order."""
-        executed = 0
-        while executed < limit and self._queue:
+        executed: list[Event] = []
+        while len(executed) < limit and self._queue:
             event = heapq.heappop(self._queue)
             if event.step < self.current_step:
                 continue
             self.current_step = event.step
-            if event.agent_id is not None:
-                budget = self._budgets.get(event.agent_id, 0)
-                if budget < event.tokens:
-                    heapq.heappush(
-                        self._queue,
-                        Event(
-                            event.step + 1,
-                            self._counter,
-                            event.tokens,
-                            event.agent_id,
-                            event.callback,
-                            event.vector,
-                        ),
-                    )
-                    self._counter += 1
-                    continue
-                self._budgets[event.agent_id] = budget - event.tokens
             self.vector.merge(event.vector)
             await event.callback()
-            executed += 1
+            executed.append(event)
         return executed
 
     def empty(self: Self) -> bool:

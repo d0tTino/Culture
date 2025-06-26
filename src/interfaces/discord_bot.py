@@ -401,6 +401,47 @@ class SimulationDiscordBot:
         embed.add_field(name="Intent", value=action_intent, inline=True)
         return embed
 
+    def create_map_action_embed(
+        self: Self,
+        agent_id: str,
+        action: str,
+        details: dict[str, Any],
+        step: int,
+    ) -> Any:
+        """Creates an embed describing a world map action."""
+
+        color = discord.Color.blue()
+        if action == "move":
+            pos = details.get("position")
+            desc = f"Agent {agent_id[:8]} moved to {pos}"
+        elif action == "gather":
+            resource = details.get("resource")
+            success = details.get("success")
+            desc = (
+                f"Agent {agent_id[:8]} gathered {resource}"
+                if success
+                else f"Agent {agent_id[:8]} failed to gather {resource}"
+            )
+            color = discord.Color.green() if success else discord.Color.red()
+        elif action == "build":
+            structure = details.get("structure")
+            success = details.get("success")
+            desc = (
+                f"Agent {agent_id[:8]} built {structure}"
+                if success
+                else f"Agent {agent_id[:8]} failed to build {structure}"
+            )
+            color = discord.Color.dark_orange() if success else discord.Color.red()
+        else:
+            desc = f"Agent {agent_id[:8]} performed {action}"
+
+        embed = discord.Embed(
+            title=f"🗺️ Map Action (Step {step})",
+            description=desc,
+            color=color,
+        )
+        return embed
+
     async def run_bot(self: Self) -> None:
         """
         Start the Discord bot and connect to Discord.

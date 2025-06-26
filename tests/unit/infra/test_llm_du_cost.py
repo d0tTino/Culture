@@ -1,4 +1,5 @@
 import importlib
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,7 +33,7 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.unit
-def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module = importlib.reload(llm_client_mod)
     orig_generate_text = module.generate_text
     state = AgentState(agent_id="A", name="Agent")
@@ -54,3 +55,33 @@ def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path) -
         (state.agent_id,),
     ).fetchone()
     assert row is not None and row[0] < 0 and row[1] == "llm_gas"
+
+
+@pytest.mark.unit
+def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = importlib.reload(llm_client_mod)
+    state = AgentState(agent_id="A", name="Agent")
+    state.du = 0.5
+
+    fake_client = MagicMock()
+    fake_client.chat.return_value = {"message": {"content": "hi"}}
+    monkeypatch.setattr(module, "get_ollama_client", lambda: fake_client)
+    monkeypatch.setattr(
+        module,
+        "_retry_with_backoff",
+        lambda func, *a, **kw: (func(), None),
+    )
+
+    log_called = False
+
+    def fake_log(agent_id: str, delta_ip: float, delta_du: float, reason: str) -> None:
+        nonlocal log_called
+        log_called = True
+
+    monkeypatch.setattr(module.ledger, "log_change", fake_log)
+
+    result = module.generate_text("hi", agent_state=state)
+
+    assert result == "hi"
+    assert state.du == pytest.approx(0.5)
+    assert not log_called

@@ -218,3 +218,18 @@ async def emit_event(event: SimulationEvent) -> None:
                 },
             )
         )
+
+
+async def emit_map_action_event(
+    agent_id: str,
+    step: int,
+    action: str,
+    **details: Any,
+) -> None:
+    """Convenience helper to enqueue map actions."""
+    await emit_event(
+        SimulationEvent(
+            event_type="map_action",
+            data={"agent_id": agent_id, "step": step, "action": action, **details},
+        )
+    )
