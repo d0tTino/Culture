@@ -13,6 +13,7 @@ from typing_extensions import Self
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentActionIntent
+from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
@@ -39,6 +40,7 @@ from src.sim.world_map import ResourceToken, StructureType, WorldMap
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
     from src.agents.core.base_agent import Agent
+    from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
     from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.interfaces.discord_bot import SimulationDiscordBot
 
@@ -58,6 +60,7 @@ class Simulation:
         self: Self,
         agents: list["Agent"],
         vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
+        semantic_manager: Optional["SemanticMemoryManager"] = None,
         scenario: str = "",
         discord_bot: Optional["SimulationDiscordBot"] = None,
     ) -> None:
@@ -133,6 +136,9 @@ class Simulation:
                 "Simulation initialized without vector store manager. "
                 "Memory will not be persisted."
             )
+
+        self.semantic_manager = semantic_manager
+        self._last_semantic_job_step = 0
         self._last_memory_prune_step = 0
         self._last_consolidation_step = 0
         self._last_trace_hash = ""
@@ -650,6 +656,24 @@ class Simulation:
                 vector=self.vector,
             )
         self._last_consolidation_step = self.current_step
+
+        semantic_interval = int(
+            config.get_config_value_with_override(
+                "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS",
+                config.SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS,
+            )
+        )
+        if (
+            self.semantic_manager
+            and semantic_interval > 0
+            and self.current_step - self._last_semantic_job_step >= semantic_interval
+        ):
+            for ag in self.agents:
+                try:
+                    await self.semantic_manager.run_nightly_job(ag.agent_id)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.error("Failed semantic nightly job: %s", exc)
+            self._last_semantic_job_step = self.current_step
 
         self.vector.increment(self.agents[next_agent_index].get_id())
         await self.event_kernel.schedule(
