@@ -355,42 +355,10 @@ class Agent:
     def update_relationship(
         self: Self, other_agent_id: str, delta: float, is_targeted: bool = False
     ) -> None:
-        """
-        Updates the relationship score with another agent using a non-linear formula that considers
-        both the sentiment (delta) and the current relationship score.
+        """Delegate to :func:`agent_actions.update_relationship`."""
+        from .agent_actions import update_relationship as _update
 
-        Args:
-            other_agent_id (str): ID of the other agent
-            delta (float): Change in relationship score (positive or negative) based on sentiment
-            is_targeted (bool): Whether this update is from a targeted message (True)
-                or broadcast (False)
-        """
-        current_score = self._state.relationships.get(other_agent_id, 0.0)
-
-        # Apply targeted message multiplier directly to delta
-        if is_targeted:
-            delta = delta * self._state.targeted_message_multiplier
-
-        # Different learning rates for positive and negative updates
-        if delta > 0:
-            learning_rate = self._state.positive_relationship_learning_rate
-        else:
-            learning_rate = self._state.negative_relationship_learning_rate
-
-        # Calculate the change amount - non-linear formula that considers current relationship
-        # This creates diminishing returns as relationships approach extremes
-        change_amount = delta * learning_rate * (1.0 - abs(current_score))
-
-        # Apply the change
-        new_score = current_score + change_amount
-
-        # Clamp to valid range
-        new_score = max(
-            self._state.min_relationship_score, min(self._state.max_relationship_score, new_score)
-        )
-
-        # Update the relationship score in the state
-        self._state.relationships[other_agent_id] = new_score
+        _update(self._state, other_agent_id, delta, is_targeted=is_targeted)
 
     def update_mood(self: Self, sentiment_score: float) -> None:
         """

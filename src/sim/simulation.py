@@ -38,7 +38,7 @@ from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.version_vector import VersionVector
-from src.sim.world_map import ResourceToken, StructureType, WorldMap
+from src.sim.world_map import WorldMap
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
@@ -119,9 +119,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -162,10 +162,10 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
-        self._msg_lock = asyncio.Lock()
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+
 
         self.track_collective_metrics: bool = True
 
@@ -324,11 +324,12 @@ class Simulation:
         """
         if self.discord_bot:
             # Use asyncio.create_task to avoid blocking the simulation
-            _ = asyncio.create_task(
+            task = asyncio.create_task(
                 self.discord_bot.send_simulation_update(
                     content=message, embed=embed, agent_id=agent_id
                 )
             )
+            _ = task
 
     async def _run_agent_turn(self: Self, agent_index: int) -> None:
         """Execute a single agent turn and schedule the next."""
@@ -377,12 +378,11 @@ class Simulation:
             # At the start of a new round (first agent), clear messages_to_perceive_this_round
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
-                async with self._msg_lock:
-                    self.messages_to_perceive_this_round = list(
-                        self.pending_messages_for_next_round
-                    )
-                    self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
-                    debug_len = len(self.messages_to_perceive_this_round)
+                self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
+
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {debug_len} messages from pending_messages_for_next_round."
@@ -467,143 +467,15 @@ class Simulation:
                     has_role_change = True
 
         if isinstance(map_action, dict):
-            action_type = map_action.get("action")
-            if action_type == "move":
-                if "x" in map_action and "y" in map_action:
-                    tx = int(map_action.get("x", 0))
-                    ty = int(map_action.get("y", 0))
-                    pos = self.world_map.move_to(agent_id, tx, ty, vector=self.vector.to_dict())
-                else:
-                    dx = int(map_action.get("dx", 0))
-                    dy = int(map_action.get("dy", 0))
-                    pos = self.world_map.move(agent_id, dx, dy, vector=self.vector.to_dict())
-                action_details = {"position": pos}
-                start_ip = current_agent_state.ip
-                if config.MAP_MOVE_DU_COST > 0:
-                    try:
-                        from src.infra.ledger import ledger
+            from .world_map_actions import process_map_action
 
-                        aid = ledger.open_auction("move")
-                        ledger.place_bid(aid, agent_id, config.MAP_MOVE_DU_COST)
-                        ledger.resolve_auction(aid)
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger auction failed", exc_info=True)
-                    current_agent_state.du -= config.MAP_MOVE_DU_COST
-                start_du = current_agent_state.du
-                current_agent_state.ip -= config.MAP_MOVE_IP_COST
-                current_agent_state.ip += config.MAP_MOVE_IP_REWARD
-                current_agent_state.du += config.MAP_MOVE_DU_REWARD
-                try:
-                    from src.infra.ledger import ledger
-
-                    ledger.log_change(
-                        agent_id,
-                        current_agent_state.ip - start_ip,
-                        current_agent_state.du - start_du,
-                        "move",
-                    )
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
-            elif action_type == "gather":
-                res = map_action.get("resource")
-                success = False
-                if isinstance(res, str):
-                    success = self.world_map.gather(
-                        agent_id,
-                        ResourceToken(res),
-                        vector=self.vector.to_dict(),
-                    )
-                action_details = {"resource": res, "success": success}
-                if success:
-                    start_ip = current_agent_state.ip
-                    if config.MAP_GATHER_DU_COST > 0:
-                        try:
-                            from src.infra.ledger import ledger
-
-                            aid = ledger.open_auction("gather")
-                            ledger.place_bid(aid, agent_id, config.MAP_GATHER_DU_COST)
-                            ledger.resolve_auction(aid)
-                        except Exception:  # pragma: no cover - optional
-                            logger.debug("Ledger auction failed", exc_info=True)
-                        current_agent_state.du -= config.MAP_GATHER_DU_COST
-                    start_du = current_agent_state.du
-                    current_agent_state.ip -= config.MAP_GATHER_IP_COST
-                    current_agent_state.ip += config.MAP_GATHER_IP_REWARD
-                    current_agent_state.du += config.MAP_GATHER_DU_REWARD
-                    try:
-                        from src.infra.ledger import ledger
-
-                        ledger.log_change(
-                            agent_id,
-                            current_agent_state.ip - start_ip,
-                            current_agent_state.du - start_du,
-                            "gather",
-                        )
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger logging failed", exc_info=True)
-            elif action_type == "build":
-                struct = map_action.get("structure")
-                success = False
-                if isinstance(struct, str):
-                    success = self.world_map.build(
-                        agent_id,
-                        StructureType(struct),
-                        vector=self.vector.to_dict(),
-                    )
-                action_details = {"structure": struct, "success": success}
-                if success:
-                    start_ip = current_agent_state.ip
-                    if config.MAP_BUILD_DU_COST > 0:
-                        try:
-                            from src.infra.ledger import ledger
-
-                            aid = ledger.open_auction("build")
-                            ledger.place_bid(aid, agent_id, config.MAP_BUILD_DU_COST)
-                            ledger.resolve_auction(aid)
-                        except Exception:  # pragma: no cover - optional
-                            logger.debug("Ledger auction failed", exc_info=True)
-                        current_agent_state.du -= config.MAP_BUILD_DU_COST
-                    start_du = current_agent_state.du
-                    current_agent_state.ip -= config.MAP_BUILD_IP_COST
-                    current_agent_state.ip += config.MAP_BUILD_IP_REWARD
-                    current_agent_state.du += config.MAP_BUILD_DU_REWARD
-                    try:
-                        from src.infra.ledger import ledger
-
-                        ledger.log_change(
-                            agent_id,
-                            current_agent_state.ip - start_ip,
-                            current_agent_state.du - start_du,
-                            "build",
-                        )
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger logging failed", exc_info=True)
-            else:
-                action_details = {}
-
-            map_event_data = {
-                "type": "map_action",
-                "agent_id": agent_id,
-                "step": self.current_step,
-                "action": action_type,
-                **action_details,
-            }
-            await self.event_kernel.schedule(
-                lambda data=map_event_data: self._emit_environment_event(data),
-                vector=self.vector,
+            await process_map_action(
+                self,
+                agent_index,
+                agent_id,
+                current_agent_state,
+                map_action,
             )
-            if self.discord_bot:
-                embed = self.discord_bot.create_map_action_embed(
-                    agent_id=agent_id,
-                    action=action_type,
-                    details=action_details,
-                    step=self.current_step,
-                )
-                _ = asyncio.create_task(
-                    self.discord_bot.send_simulation_update(embed=embed, agent_id=agent_id)
-                )
-
-            self.agents[agent_index].update_state(current_agent_state)
 
         async with self._msg_lock:
             pending_len = len(self.pending_messages_for_next_round)
@@ -921,242 +793,24 @@ class Simulation:
         creator_agent_id: str,
         project_description: Optional[str] = None,
     ) -> Optional[str]:
-        """
-        Allows an agent to create a new project.
+        from .simulation_projects import create_project as _create_project
 
-        Args:
-            project_name (str): The name of the new project
-            creator_agent_id (str): The ID of the agent creating the project
-            project_description (str, optional): A description of the project's purpose
-
-        Returns:
-            Optional[str]: The ID of the newly created project, or None if creation failed
-        """
-        if not project_name or not creator_agent_id:
-            logger.warning("Cannot create project: missing name or creator ID")
-            return None
-
-        # Create a unique project ID
-        project_id = f"proj_{len(self.projects) + 1}_{int(time.time())}"
-
-        # Check if a project with this name already exists
-        for existing_id, existing_proj in self.projects.items():
-            if existing_proj.get("name") == project_name:
-                logger.warning(
-                    f"Cannot create project: a project named '{project_name}' already exists "
-                    f"(ID: {existing_id})"
-                )
-                return None
-
-        # Find the creator agent
-        creator_agent = None
-        for agent in self.agents:
-            if agent.agent_id == creator_agent_id:
-                creator_agent = agent
-                break
-
-        if not creator_agent:
-            logger.warning(f"Cannot create project: creator agent '{creator_agent_id}' not found")
-            return None
-
-        # Create the project
-        self.projects[project_id] = {
-            "id": project_id,
-            "name": project_name,
-            "description": project_description or f"Project created by {creator_agent_id}",
-            "creator_id": creator_agent_id,
-            "created_step": self.current_step,
-            "members": [creator_agent_id],  # Creator is automatically a member
-            "status": "active",
-        }
-
-        logger.info(
-            f"Project '{project_name}' (ID: {project_id}) created by Agent {creator_agent_id}"
-        )
-
-        # Add to Knowledge Board
-        if self.knowledge_board:
-            project_info = (
-                f"New Project Created: {project_name}\nID: {project_id}\n"
-                f"Creator: {creator_agent_id}"
-            )
-            if project_description:
-                project_info += f"\nDescription: {project_description}"
-            self.knowledge_board.add_entry(
-                project_info,
-                creator_agent_id,
-                self.current_step,
-                self.vector.to_dict(),
-            )
-
-        # Send Discord notification if bot is available
-        if self.discord_bot:
-            embed = self.discord_bot.create_project_embed(
-                action="create",
-                project_name=project_name,
-                project_id=project_id,
-                agent_id=creator_agent_id,
-                step=self.current_step,
-            )
-            _ = asyncio.create_task(
-                self.discord_bot.send_simulation_update(embed=embed, agent_id=creator_agent_id)
-            )
-
-        return project_id
+        return _create_project(self, project_name, creator_agent_id, project_description)
 
     def join_project(self: Self, project_id: str, agent_id: str) -> bool:
-        """
-        Adds an agent to an existing project as a member.
+        from .simulation_projects import join_project as _join_project
 
-        Args:
-            project_id (str): The ID of the project to join
-            agent_id (str): The ID of the agent joining the project
-
-        Returns:
-            bool: True if successfully joined, False otherwise
-        """
-
-        # Ensure the project exists
-        if project_id not in self.projects:
-            logger.warning(f"Cannot join project: project ID '{project_id}' does not exist")
-            return False
-
-        project = self.projects[project_id]
-
-        # Ensure the project is active
-        if project.get("status") != "active":
-            logger.warning(
-                f"Cannot join project: project '{project['name']}' is not active "
-                f"(status: {project.get('status')})"
-            )
-            return False
-
-        # Check if agent is already a member
-        if agent_id in project["members"]:
-            logger.info(f"Agent {agent_id} is already a member of project '{project['name']}'")
-            return True
-
-        # Check if the project has reached the maximum number of members
-        if len(project["members"]) >= config.MAX_PROJECT_MEMBERS:
-            logger.warning(
-                f"Cannot join project '{project['name']}': maximum member limit "
-                f"({config.MAX_PROJECT_MEMBERS}) reached"
-            )
-            return False
-
-        # Find the agent
-        agent_obj = None
-        for agent in self.agents:
-            if agent.agent_id == agent_id:
-                agent_obj = agent
-                break
-
-        if not agent_obj:
-            logger.warning(f"Cannot join project: agent '{agent_id}' not found")
-            return False
-
-        # Add the agent to the project
-        project["members"].append(agent_id)
-
-        logger.info(f"Agent {agent_id} joined project '{project['name']}' (ID: {project_id})")
-
-        # Record the event in the Knowledge Board
-        if self.knowledge_board:
-            join_info = f"Agent {agent_id} joined Project: {project['name']} (ID: {project_id})"
-            self.knowledge_board.add_entry(
-                join_info,
-                agent_id,
-                self.current_step,
-                self.vector.to_dict(),
-            )
-
-        # Send Discord notification if bot is available
-        if self.discord_bot:
-            embed = self.discord_bot.create_project_embed(
-                action="join",
-                project_name=project["name"],
-                project_id=project_id,
-                agent_id=agent_id,
-                step=self.current_step,
-            )
-            _ = asyncio.create_task(
-                self.discord_bot.send_simulation_update(embed=embed, agent_id=agent_id)
-            )
-
-        return True
+        return _join_project(self, project_id, agent_id)
 
     def leave_project(self: Self, project_id: str, agent_id: str) -> bool:
-        """
-        Removes an agent from a project they are currently a member of.
+        from .simulation_projects import leave_project as _leave_project
 
-        Args:
-            project_id (str): The ID of the project to leave
-            agent_id (str): The ID of the agent leaving the project
-
-        Returns:
-            bool: True if successfully left, False otherwise
-        """
-        # Ensure the project exists
-        if project_id not in self.projects:
-            logger.warning(f"Cannot leave project: project ID '{project_id}' does not exist")
-            return False
-
-        project = self.projects[project_id]
-
-        # Check if agent is a member
-        if agent_id not in project["members"]:
-            logger.warning(f"Agent {agent_id} is not a member of project '{project['name']}'")
-            return False
-
-        # Find the agent
-        agent_obj = None
-        for agent in self.agents:
-            if agent.agent_id == agent_id:
-                agent_obj = agent
-                break
-
-        if not agent_obj:
-            logger.warning(f"Cannot leave project: agent '{agent_id}' not found")
-            return False
-
-        # Remove the agent from the project
-        project["members"].remove(agent_id)
-
-        logger.info(f"Agent {agent_id} left project '{project['name']}' (ID: {project_id})")
-
-        # Record the event in the Knowledge Board
-        if self.knowledge_board:
-            leave_info = f"Agent {agent_id} left Project: {project['name']} (ID: {project_id})"
-            self.knowledge_board.add_entry(
-                leave_info,
-                agent_id,
-                self.current_step,
-                self.vector.to_dict(),
-            )
-
-        # Send Discord notification if bot is available
-        if self.discord_bot:
-            embed = self.discord_bot.create_project_embed(
-                action="leave",
-                project_name=project["name"],
-                project_id=project_id,
-                agent_id=agent_id,
-                step=self.current_step,
-            )
-            _ = asyncio.create_task(
-                self.discord_bot.send_simulation_update(embed=embed, agent_id=agent_id)
-            )
-
-        return True
+        return _leave_project(self, project_id, agent_id)
 
     def get_project_details(self: Self) -> dict[str, dict[str, Any]]:
-        """
-        Returns a dictionary containing details of all projects for agent perception.
+        from .simulation_projects import get_project_details as _get_project_details
 
-        Returns:
-            dict: Dictionary mapping project IDs to project details
-        """
-        return self.projects.copy()
+        return _get_project_details(self)
 
     async def propose_law(self: Self, proposer_id: str, text: str) -> bool:
         """Allow an agent to propose a law and trigger a vote."""
