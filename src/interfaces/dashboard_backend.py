@@ -76,7 +76,7 @@ message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
 event_queue: asyncio.Queue["SimulationEvent | None"] = asyncio.Queue()
 
 # Simulation control state
-SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0}
+SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}
 BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
 
 # Path to the initial missions data bundled with the front-end
@@ -135,6 +135,19 @@ async def get_missions() -> Response:
     with open(MISSIONS_PATH, encoding="utf-8") as f:
         missions = json.load(f)
     return JSONResponse(missions)
+
+
+@app.get("/api/agents/{agent_id}/semantic_summaries")
+async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
+    """Return recent semantic summaries for an agent."""
+    manager = SIM_STATE.get("semantic_manager")
+    summaries: list[str] = []
+    if manager is not None:
+        try:
+            summaries = manager.get_recent_summaries(agent_id, limit=limit)
+        except Exception:  # pragma: no cover - defensive
+            summaries = []
+    return JSONResponse({"summaries": summaries})
 
 
 @app.websocket("/ws/events")

@@ -130,6 +130,8 @@ L2 MUS-based pruning:
 - `ENABLE_REDPANDA` - Set to `1` to enable Redpanda event logging
 - `REDPANDA_BROKER` - Address of the Redpanda broker
 - `SNAPSHOT_COMPRESS` - Set to `1` to compress simulation snapshots with zstd
+- `S3_BUCKET` - Optional S3 bucket for snapshot storage
+- `S3_PREFIX` - Prefix within the S3 bucket for snapshot files
 
 ## Configuration Access in Code
 

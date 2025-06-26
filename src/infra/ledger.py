@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# ruff: noqa: ANN101
 import logging
 import sqlite3
 from collections.abc import Callable
@@ -15,7 +16,7 @@ class Ledger:
 
     def __init__(self, db_path: str | Path = "ledger.sqlite3") -> None:
         path = Path(db_path)
-        self.conn = sqlite3.connect(path.as_posix())
+        self.conn = sqlite3.connect(path.as_posix(), timeout=60.0, check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.execute(
@@ -80,6 +81,14 @@ class Ledger:
                 agent_id TEXT,
                 amount REAL,
                 FOREIGN KEY(auction_id) REFERENCES auctions(id) ON DELETE CASCADE
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS genealogy (
+                parent_id TEXT,
+                child_id TEXT PRIMARY KEY
             )
             """
         )
@@ -319,6 +328,15 @@ class Ledger:
         )
         row = cur.fetchone()
         return int(row[0]) if row else 0
+
+    def record_genealogy(self, parent_id: str, child_id: str) -> None:
+        """Record a parent/child relationship."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT OR REPLACE INTO genealogy(parent_id, child_id) VALUES(?, ?)",
+            (parent_id, child_id),
+        )
+        self.conn.commit()
 
     # -------------------------------------------------------------
     # Auction management

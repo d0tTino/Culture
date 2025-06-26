@@ -24,7 +24,7 @@ async def test_mass_event_dispatch_deterministic_replay() -> None:
         kernel.schedule_nowait(_make_cb(order, i), vector=vv)
 
     executed = await kernel.dispatch(event_count)
-    assert executed == event_count
+    assert len(executed) == event_count
     assert kernel.empty()
     assert order == list(range(event_count))
     vector_snapshot = kernel.vector.to_dict()
@@ -36,6 +36,6 @@ async def test_mass_event_dispatch_deterministic_replay() -> None:
         replay.schedule_nowait(_make_cb(order_replay, i), vector=vv)
 
     executed_replay = await replay.dispatch(event_count)
-    assert executed_replay == event_count
+    assert len(executed_replay) == event_count
     assert order_replay == order
     assert replay.vector.to_dict() == vector_snapshot
