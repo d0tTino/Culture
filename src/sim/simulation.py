@@ -17,7 +17,12 @@ from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
-from src.infra.snapshot import compute_trace_hash, load_snapshot, save_snapshot
+from src.infra.snapshot import (
+    compute_trace_hash,
+    load_snapshot,
+    save_snapshot,
+    upload_snapshot,
+)
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
@@ -108,9 +113,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -148,9 +153,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -619,6 +624,7 @@ class Simulation:
             snapshot["trace_hash"] = compute_trace_hash(snapshot_no_vector)
             self._last_trace_hash = snapshot["trace_hash"]
             save_snapshot(self.current_step, snapshot)
+            upload_snapshot(self.current_step)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
             await emit_event(SimulationEvent(event_type="snapshot", data=snapshot_event))
 
