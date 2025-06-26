@@ -14,6 +14,7 @@ from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.memory.vector_store import ChromaDBException
+from src.governance import evaluate_policy
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.logging_config import setup_logging
@@ -108,9 +109,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -148,9 +149,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -330,9 +331,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -358,6 +357,13 @@ class Simulation:
         message_recipient_id = agent_output.get("message_recipient_id")
         action_intent_str = agent_output.get("action_intent", "idle")
         map_action = agent_output.get("map_action")
+
+        allowed = await evaluate_policy(action_intent_str)
+        if not allowed:
+            action_intent_str = AgentActionIntent.IDLE.value
+            message_content = None
+            message_recipient_id = None
+            map_action = None
 
         if message_content:
             msg_data = cast(
