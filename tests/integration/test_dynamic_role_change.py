@@ -213,7 +213,6 @@ class TestDynamicRoleChange(unittest.IsolatedAsyncioTestCase):
         3. AgentC posts a counter-critique or opposing view to B's post, creating conflict on KB.
         4. AgentA observes the conflict, decides to change role to Facilitator, and attempts to mediate.
         """
-        pytest.xfail("Graph stub does not fully implement role change dynamics")
         logger.info("Starting test_agent_changes_role_to_facilitate...")
 
         # --- Step 1: AgentA (Innovator) proposes an idea ---

@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
@@ -59,6 +61,8 @@ def test_consolidation_and_retrieval(tmp_path) -> None:
 
     summary = manager.consolidate_memories("agent")
     assert "first" in summary and "second" in summary
+
+    asyncio.get_event_loop().run_until_complete(manager.run_nightly_job("agent"))
     assert driver.store[0]["agent"] == "agent"
 
     recent = manager.get_recent_summaries("agent", limit=1)

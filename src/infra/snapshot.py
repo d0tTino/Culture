@@ -12,7 +12,27 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     zstd = None
 
-from .config import SNAPSHOT_COMPRESS
+try:
+    import boto3
+except ImportError:  # pragma: no cover - optional dependency
+    boto3 = None
+
+from .config import SNAPSHOT_COMPRESS, get_config
+
+S3_BUCKET = cast(str | None, get_config("S3_BUCKET"))
+S3_PREFIX = cast(str | None, get_config("S3_PREFIX"))
+
+_s3_client: boto3.client | None = None
+
+
+def _get_s3_client() -> boto3.client:
+    """Return a boto3 S3 client if available."""
+    global _s3_client
+    if _s3_client is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required for S3 operations")
+        _s3_client = boto3.client("s3")
+    return _s3_client
 
 
 def compute_trace_hash(data: dict[str, Any]) -> str:
@@ -20,6 +40,33 @@ def compute_trace_hash(data: dict[str, Any]) -> str:
 
     payload = json.dumps(data, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _s3_key(step: int, compress: bool) -> str:
+    filename = f"snapshot_{step}.json.zst" if compress else f"snapshot_{step}.json"
+    if S3_PREFIX:
+        return f"{S3_PREFIX.rstrip('/')}/{filename}"
+    return filename
+
+
+def upload_snapshot(
+    step: int,
+    directory: str | Path = "snapshots",
+    compress: bool | None = None,
+) -> None:
+    """Upload a snapshot file to S3 if configured."""
+
+    if not S3_BUCKET or boto3 is None:
+        return
+
+    compress = SNAPSHOT_COMPRESS if compress is None else compress
+    path = Path(directory)
+    file_path = path / (f"snapshot_{step}.json.zst" if compress else f"snapshot_{step}.json")
+    if not file_path.exists():
+        return
+
+    client = _get_s3_client()
+    client.upload_file(str(file_path), S3_BUCKET, _s3_key(step, compress))
 
 
 def save_snapshot(
@@ -78,6 +125,13 @@ def load_snapshot(
     json_file = path / f"snapshot_{step}.json"
     zst_file = path / f"snapshot_{step}.json.zst"
     file_path = zst_file if compress else json_file
+
+    if not file_path.exists() and S3_BUCKET and boto3 is not None:
+        try:
+            client = _get_s3_client()
+            client.download_file(S3_BUCKET, _s3_key(step, compress), str(file_path))
+        except Exception:  # pragma: no cover - defensive
+            pass
 
     if not file_path.exists():
         # Fallback to the other compression option if explicit choice not found

@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+import random
 import time
 from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
@@ -13,11 +14,18 @@ from typing_extensions import Self
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentActionIntent
+from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
+from src.infra.ledger import ledger
 from src.infra.logging_config import setup_logging
-from src.infra.snapshot import compute_trace_hash, load_snapshot, save_snapshot
+from src.infra.snapshot import (
+    compute_trace_hash,
+    load_snapshot,
+    save_snapshot,
+    upload_snapshot,
+)
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
@@ -34,6 +42,7 @@ from src.sim.world_map import ResourceToken, StructureType, WorldMap
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
     from src.agents.core.base_agent import Agent
+    from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
     from src.agents.memory.vector_store import ChromaVectorStoreManager
     from src.interfaces.discord_bot import SimulationDiscordBot
 
@@ -53,6 +62,7 @@ class Simulation:
         self: Self,
         agents: list["Agent"],
         vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
+        semantic_manager: Optional["SemanticMemoryManager"] = None,
         scenario: str = "",
         discord_bot: Optional["SimulationDiscordBot"] = None,
     ) -> None:
@@ -108,9 +118,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -128,6 +138,9 @@ class Simulation:
                 "Simulation initialized without vector store manager. "
                 "Memory will not be persisted."
             )
+
+        self.semantic_manager = semantic_manager
+        self._last_semantic_job_step = 0
         self._last_memory_prune_step = 0
         self._last_consolidation_step = 0
         self._last_trace_hash = ""
@@ -148,9 +161,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -170,8 +183,7 @@ class Simulation:
             )
             # Prime the event scheduler with the first agent turn
             first_agent = self.agents[0]
-            self.event_kernel.schedule_at_nowait(
-                self.current_step,
+            self.event_kernel.schedule_nowait(
                 self._create_agent_event(0),
                 agent_id=first_agent.get_id(),
             )
@@ -208,9 +220,42 @@ class Simulation:
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
-    def spawn_agent(self: Self, agent: "Agent", *, inheritance: float = 0.0) -> None:
-        """Add a new agent to the simulation."""
+    def spawn_agent(
+        self: Self,
+        agent: "Agent",
+        *,
+        inheritance: float = 0.0,
+        parent: "Agent | None" = None,
+        mutation_rate: float | None = None,
+    ) -> None:
+        """Add a new agent to the simulation, inheriting genes with mutation."""
+        if mutation_rate is None:
+            mutation_rate = float(config.get_config("GENE_MUTATION_RATE"))
+
         agent.state.ip += inheritance
+
+        if parent is not None:
+            agent.state.parent_id = parent.agent_id
+            genes = parent.state.genes.copy()
+            for k, v in genes.items():
+                if random.random() < mutation_rate:
+                    genes[k] = min(max(v + random.uniform(-0.1, 0.1), 0.0), 1.0)
+            genes.update(agent.state.genes)
+            agent.state.genes = genes
+            try:
+                ledger.record_genealogy(parent.agent_id, agent.agent_id)
+            except Exception:
+                pass
+            if self.knowledge_board:
+                self.knowledge_board.add_entry(
+                    f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                    parent.agent_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
+        else:
+            agent.state.mutate_genes(mutation_rate)
+
         self.agents.append(agent)
         self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
         self._update_collective_metrics()
@@ -330,9 +375,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {len(self.messages_to_perceive_this_round)} messages from pending_messages_for_next_round."
@@ -523,20 +566,16 @@ class Simulation:
             else:
                 action_details = {}
 
-            map_event = log_event(
-                {
-                    "type": "map_action",
-                    "agent_id": agent_id,
-                    "step": self.current_step,
-                    "action": action_type,
-                    **action_details,
-                }
-            )
-            await emit_map_action_event(
-                agent_id,
-                self.current_step,
-                action_type,
+            map_event_data = {
+                "type": "map_action",
+                "agent_id": agent_id,
+                "step": self.current_step,
+                "action": action_type,
                 **action_details,
+            }
+            await self.event_kernel.schedule(
+                lambda data=map_event_data: self._emit_environment_event(data),
+                vector=self.vector,
             )
             if self.discord_bot:
                 embed = self.discord_bot.create_map_action_embed(
@@ -619,6 +658,7 @@ class Simulation:
             snapshot["trace_hash"] = compute_trace_hash(snapshot_no_vector)
             self._last_trace_hash = snapshot["trace_hash"]
             save_snapshot(self.current_step, snapshot)
+            upload_snapshot(self.current_step)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
             await emit_event(SimulationEvent(event_type="snapshot", data=snapshot_event))
 
@@ -632,10 +672,10 @@ class Simulation:
             and self.current_step - self._last_memory_prune_step
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
-            try:
-                self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
-            except (ChromaDBException, ValidationError, OSError) as exc:
-                logger.error("Failed to prune memory store: %s", exc)
+            await self.event_kernel.schedule(
+                self._prune_memory_event,
+                vector=self.vector,
+            )
             self._last_memory_prune_step = self.current_step
 
         if (
@@ -644,20 +684,32 @@ class Simulation:
             and self.current_step > self._last_consolidation_step
         ):
             start_step = self.current_step - len(self.agents) + 1
-            for ag in self.agents:
-                try:
-                    await self.vector_store_manager.aconsolidate_daily_memories(
-                        ag.agent_id,
-                        start_step,
-                        self.current_step,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.error("Failed nightly consolidation: %s", exc)
+            await self.event_kernel.schedule(
+                lambda start=start_step: self._consolidate_memory_event(start),
+                vector=self.vector,
+            )
         self._last_consolidation_step = self.current_step
 
+        semantic_interval = int(
+            config.get_config_value_with_override(
+                "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS",
+                config.SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS,
+            )
+        )
+        if (
+            self.semantic_manager
+            and semantic_interval > 0
+            and self.current_step - self._last_semantic_job_step >= semantic_interval
+        ):
+            for ag in self.agents:
+                try:
+                    await self.semantic_manager.run_nightly_job(ag.agent_id)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.error("Failed semantic nightly job: %s", exc)
+            self._last_semantic_job_step = self.current_step
+
         self.vector.increment(self.agents[next_agent_index].get_id())
-        await self.event_kernel.schedule_at(
-            self.current_step,
+        await self.event_kernel.schedule(
             self._create_agent_event(next_agent_index),
             agent_id=self.agents[next_agent_index].get_id(),
             vector=self.vector,
@@ -665,6 +717,59 @@ class Simulation:
 
     def _create_agent_event(self: Self, agent_index: int) -> Callable[[], Awaitable[None]]:
         return lambda: self._run_agent_turn(agent_index)
+
+    async def _emit_environment_event(self: Self, event: dict[str, Any]) -> None:
+        event_with_hash = log_event(event)
+        if event_with_hash is None:
+            event_with_hash = {
+                **event,
+                "trace_hash": compute_trace_hash(event),
+            }
+        if event.get("type") == "map_action":
+            await emit_map_action_event(
+                event.get("agent_id", ""),
+                event.get("step", 0),
+                event.get("action", ""),
+                **{
+                    k: v
+                    for k, v in event.items()
+                    if k not in {"type", "agent_id", "step", "action", "trace_hash"}
+                },
+            )
+        else:
+            await emit_event(SimulationEvent(event_type=event["type"], data=event_with_hash))
+
+    async def _prune_memory_event(self: Self) -> None:
+        if not self.vector_store_manager:
+            return
+        try:
+            self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
+            event = {
+                "type": "memory_prune",
+                "step": self.current_step,
+            }
+            await self._emit_environment_event(event)
+        except (ChromaDBException, ValidationError, OSError) as exc:
+            logger.error("Failed to prune memory store: %s", exc)
+
+    async def _consolidate_memory_event(self: Self, start_step: int) -> None:
+        if not self.vector_store_manager:
+            return
+        for ag in self.agents:
+            try:
+                await self.vector_store_manager.aconsolidate_daily_memories(
+                    ag.agent_id,
+                    start_step,
+                    self.current_step,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed nightly consolidation: %s", exc)
+        event = {
+            "type": "memory_consolidation",
+            "step": self.current_step,
+            "start": start_step,
+        }
+        await self._emit_environment_event(event)
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
@@ -674,8 +779,7 @@ class Simulation:
 
         if self.event_kernel.empty():
             self.vector.increment(self.agents[self.current_agent_index].get_id())
-            self.event_kernel.schedule_at_nowait(
-                self.current_step,
+            self.event_kernel.schedule_nowait(
                 self._create_agent_event(self.current_agent_index),
                 agent_id=self.agents[self.current_agent_index].get_id(),
                 vector=self.vector,
@@ -693,17 +797,9 @@ class Simulation:
             num_steps (int): Number of steps to run.
         """
         logger.info(f"Starting simulation run for {num_steps} steps (async)")
-        total_steps_executed = 0
-        import asyncio
-
         start_time = time.time()
         try:
-            for step in range(num_steps):
-                await asyncio.sleep(0.1)  # Optional: Add a small delay between steps
-                steps = await self.run_step(
-                    1
-                )  # If run_step needs to be async, refactor it as well
-                total_steps_executed += steps
+            total_steps_executed = await self.run_step(num_steps)
         finally:
             elapsed_time = time.time() - start_time
             logger.info(
