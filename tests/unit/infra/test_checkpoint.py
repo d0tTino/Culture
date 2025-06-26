@@ -97,11 +97,12 @@ def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch
 
 
 def test_checkpoint_loads_graph_board(tmp_path, monkeypatch):
+    neo4j = pytest.importorskip("neo4j")
     monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
     monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
     from tests.integration.knowledge_board.test_graph_backend import DummyDriver
 
-    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: DummyDriver())
+    monkeypatch.setattr(neo4j.GraphDatabase, "driver", lambda *a, **k: DummyDriver())
     config.load_config()
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
     sim.knowledge_board.add_entry("hello", sim.agents[0].agent_id, step=0)
