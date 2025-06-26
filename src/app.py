@@ -13,9 +13,9 @@ from src.infra.checkpoint import (
     restore_rng_state,
     save_checkpoint,
 )
-from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.infra.logging_config import setup_logging
+from src.infra.settings import settings
 from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
@@ -51,8 +51,8 @@ def create_simulation(
 
     discord_bot = None
     if use_discord and simulation_discord_bot_class:
-        bot_token_raw = str(get_config("DISCORD_BOT_TOKEN"))
-        channel_id = get_config("DISCORD_CHANNEL_ID")
+        bot_token_raw = str(settings.DISCORD_BOT_TOKEN)
+        channel_id = settings.DISCORD_CHANNEL_ID
         if bot_token_raw and channel_id:
             tokens = [tok.strip() for tok in bot_token_raw.split(",") if tok.strip()]
             bot = simulation_discord_bot_class(

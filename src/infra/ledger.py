@@ -6,7 +6,7 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
-from .config import get_config
+from .settings import settings
 
 # Skip self argument annotation warnings for class methods
 
@@ -93,8 +93,8 @@ class Ledger:
             """
         )
         self.conn.commit()
-        self.gas_price_per_call = float(get_config("GAS_PRICE_PER_CALL"))
-        self.gas_price_per_token = float(get_config("GAS_PRICE_PER_TOKEN"))
+        self.gas_price_per_call = float(settings.GAS_PRICE_PER_CALL)
+        self.gas_price_per_token = float(settings.GAS_PRICE_PER_TOKEN)
         self._hooks: list[Callable[[str, float, float, str, float, float], None]] = []
         self.register_hook(self._db_hook)
 
@@ -245,8 +245,8 @@ class Ledger:
         """Adjust gas prices based on recent DU burn rate."""
         burn_rate = self.get_du_burn_rate(agent_id, window)
         factor = 1.0 + burn_rate / 10.0
-        base_call = float(get_config("GAS_PRICE_PER_CALL"))
-        base_token = float(get_config("GAS_PRICE_PER_TOKEN"))
+        base_call = float(settings.GAS_PRICE_PER_CALL)
+        base_token = float(settings.GAS_PRICE_PER_TOKEN)
         new_call = base_call * factor
         new_token = base_token * factor
         changed = (
