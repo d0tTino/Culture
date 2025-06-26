@@ -24,6 +24,7 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
         "_retry_with_backoff",
         lambda func, *a, **kw: (func(), None),
     )
+    monkeypatch.setattr(module.ledger, "calculate_gas_price", lambda *_a, **_k: (1.0, 0.0))
 
     result = module.generate_text("hi", agent_state=state)
 
@@ -43,6 +44,7 @@ def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
     test_ledger = Ledger(tmp_path / "ledger.sqlite")
     monkeypatch.setattr(module, "ledger", test_ledger)
+    monkeypatch.setattr(module.ledger, "calculate_gas_price", lambda *_a, **_k: (1.0, 0.0))
 
     with MockLLM({"default": "hi"}):
         result = orig_generate_text("hi", agent_state=state)
