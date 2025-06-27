@@ -229,7 +229,7 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL"]
+REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
 
 
 def load_config(*, validate_required: bool = True) -> dict[str, object]:
@@ -317,7 +317,11 @@ def load_config(*, validate_required: bool = True) -> dict[str, object]:
     logger.info("Configuration loaded")
     _refresh_module_vars()
     if validate_required:
-        missing = [k for k in REQUIRED_CONFIG_KEYS if not _CONFIG.get(k)]
+        missing = [
+            k
+            for k in REQUIRED_CONFIG_KEYS
+            if _CONFIG.get(k) is None or str(_CONFIG.get(k)).strip() == ""
+        ]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     # Fail fast if critical config is missing
