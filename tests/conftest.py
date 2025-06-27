@@ -154,6 +154,7 @@ if "weaviate" not in sys.modules:
     sys.modules["weaviate"] = weaviate_mod
     sys.modules["weaviate.classes"] = classes_mod
 
+
 if "fastapi" not in sys.modules:
     try:  # pragma: no cover - optional dependency
         import fastapi  # noqa: F401

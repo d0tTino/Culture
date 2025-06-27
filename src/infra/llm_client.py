@@ -130,6 +130,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                     )
                 else:
                     state.du -= cost
+
                     try:
                         ledger.log_change(
                             state.agent_id,
@@ -141,6 +142,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                         )
                     except Exception as e:  # pragma: no cover - defensive
                         logger.debug(f"Failed to log DU deduction: {e}")
+
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result

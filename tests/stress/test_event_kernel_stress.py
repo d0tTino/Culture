@@ -1,3 +1,6 @@
+from collections.abc import Awaitable
+from typing import Any, Callable, ClassVar
+
 import pytest
 
 from src.sim.event_kernel import EventKernel
@@ -6,7 +9,7 @@ from src.sim.version_vector import VersionVector
 pytestmark = pytest.mark.stress
 
 
-def _make_cb(order: list[int], n: int):
+def _make_cb(order: list[int], n: int) -> Callable[[], Awaitable[None]]:
     async def _cb() -> None:
         order.append(n)
 
@@ -39,3 +42,49 @@ async def test_mass_event_dispatch_deterministic_replay() -> None:
     assert len(executed_replay) == event_count
     assert order_replay == order
     assert replay.vector.to_dict() == vector_snapshot
+
+
+class _DummyState:
+    ip: float = 0.0
+    du: float = 0.0
+    short_term_memory: ClassVar[list[Any]] = []
+    messages_sent_count: int = 0
+    last_message_step: int = 0
+
+    def update_collective_metrics(self, ip: float, du: float) -> None:
+        pass
+
+
+class _DummyAgent:
+    def __init__(self, agent_id: str) -> None:
+        self.agent_id = agent_id
+        self.state = _DummyState()
+
+    def get_id(self) -> str:
+        return self.agent_id
+
+    def update_state(self, state: _DummyState) -> None:
+        self.state = state
+
+    async def run_turn(
+        self,
+        simulation_step: int,
+        environment_perception: dict[str, Any] | None = None,
+        vector_store_manager: Any | None = None,
+        knowledge_board: Any | None = None,
+    ) -> dict[str, int]:
+        return {"step": simulation_step}
+
+
+@pytest.mark.asyncio
+async def test_run_turns_concurrent_no_race() -> None:
+    from src.sim.simulation import Simulation
+
+    agent_count = 1000
+    agents = [_DummyAgent(str(i)) for i in range(agent_count)]
+    sim = Simulation(agents=agents)
+
+    results = await sim.run_turns_concurrent(agents)
+
+    assert len(results) == agent_count
+    assert sim.current_step == agent_count
