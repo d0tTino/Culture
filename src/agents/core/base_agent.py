@@ -355,42 +355,10 @@ class Agent:
     def update_relationship(
         self: Self, other_agent_id: str, delta: float, is_targeted: bool = False
     ) -> None:
-        """
-        Updates the relationship score with another agent using a non-linear formula that considers
-        both the sentiment (delta) and the current relationship score.
+        """Delegate to :func:`agent_actions.update_relationship`."""
+        from .agent_actions import update_relationship as _update
 
-        Args:
-            other_agent_id (str): ID of the other agent
-            delta (float): Change in relationship score (positive or negative) based on sentiment
-            is_targeted (bool): Whether this update is from a targeted message (True)
-                or broadcast (False)
-        """
-        current_score = self._state.relationships.get(other_agent_id, 0.0)
-
-        # Apply targeted message multiplier directly to delta
-        if is_targeted:
-            delta = delta * self._state.targeted_message_multiplier
-
-        # Different learning rates for positive and negative updates
-        if delta > 0:
-            learning_rate = self._state.positive_relationship_learning_rate
-        else:
-            learning_rate = self._state.negative_relationship_learning_rate
-
-        # Calculate the change amount - non-linear formula that considers current relationship
-        # This creates diminishing returns as relationships approach extremes
-        change_amount = delta * learning_rate * (1.0 - abs(current_score))
-
-        # Apply the change
-        new_score = current_score + change_amount
-
-        # Clamp to valid range
-        new_score = max(
-            self._state.min_relationship_score, min(self._state.max_relationship_score, new_score)
-        )
-
-        # Update the relationship score in the state
-        self._state.relationships[other_agent_id] = new_score
+        _update(self._state, other_agent_id, delta, is_targeted=is_targeted)
 
     def update_mood(self: Self, sentiment_score: float) -> None:
         """
@@ -716,12 +684,20 @@ class Agent:
 
     def __str__(self: Self) -> str:
         """Returns a string representation of the agent."""
-        role = self._state.current_role.name if hasattr(self._state.current_role, "name") else self._state.current_role
+        role = (
+            self._state.current_role.name
+            if hasattr(self._state.current_role, "name")
+            else self._state.current_role
+        )
         return f"Agent(id={self.agent_id}, role={role})"
 
     def __repr__(self: Self) -> str:
         """Returns a detailed string representation for debugging."""
-        role = self._state.current_role.name if hasattr(self._state.current_role, "name") else self._state.current_role
+        role = (
+            self._state.current_role.name
+            if hasattr(self._state.current_role, "name")
+            else self._state.current_role
+        )
         return (
             f"Agent(agent_id='{self.agent_id}', role='{role}', "
             f"ip={self._state.ip}, du={self._state.du})"
@@ -1055,21 +1031,21 @@ class Agent:
         state.ip = max(0, state.ip)
         state.du = max(0, state.du)
 
-        # Record final deltas to ledger
+        # Record final deltas to ledger. Log even when no economic change
+        # occurred so the action itself is traceable in the ledger.
         final_ip_change = state.ip - start_ip
         final_du_change = state.du - start_du
-        if final_ip_change or final_du_change:
-            try:
-                from src.infra.ledger import ledger
+        try:
+            from src.infra.ledger import ledger
 
-                ledger.log_change(
-                    self.agent_id,
-                    final_ip_change,
-                    final_du_change,
-                    f"action:{action_intent}",
-                )
-            except Exception:  # pragma: no cover - ledger errors should not block
-                logger.debug("Ledger logging failed", exc_info=True)
+            ledger.log_change(
+                self.agent_id,
+                final_ip_change,
+                final_du_change,
+                f"action:{action_intent}",
+            )
+        except Exception:  # pragma: no cover - ledger errors should not block
+            logger.debug("Ledger logging failed", exc_info=True)
 
     def perceive_messages(self: Self, messages: list[SimulationMessage]) -> None:
         """Allows the agent to perceive messages from other agents or the environment."""
