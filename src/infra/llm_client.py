@@ -128,6 +128,19 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                         cost,
                         state.du,
                     )
+                else:
+                    state.du = max(state.du - cost, 0.0)
+                    try:
+                        ledger.log_change(
+                            state.agent_id,
+                            0.0,
+                            -cost,
+                            "llm_gas",
+                            base_price,
+                            token_price,
+                        )
+                    except Exception:
+                        logger.debug("Ledger logging failed", exc_info=True)
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result

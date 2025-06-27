@@ -118,12 +118,13 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
         }
 
     agent_state = state["state"]
-    if output.requested_role_change:
+    requested_change = getattr(output, "requested_role_change", None)
+    if requested_change:
         from .basic_agent_graph import process_role_change
 
-        if process_role_change(agent_state, output.requested_role_change):
+        if process_role_change(agent_state, requested_change):
             AgentController(agent_state).add_memory(
-                f"Changed role to {output.requested_role_change}",
+                f"Changed role to {requested_change}",
                 {"step": state.get("simulation_step", 0), "type": "role_change"},
             )
         else:

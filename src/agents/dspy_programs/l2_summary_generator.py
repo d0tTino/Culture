@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from src.infra import llm_client
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
@@ -144,17 +143,9 @@ class L2SummaryGenerator:
         try:
             if not self.l2_predictor or not dspy:
                 logger.warning(
-                    "DSPy not available for L2 summary generation - using direct LLM fallback"
+                    "DSPy not available for L2 summary generation - returning empty summary"
                 )
-                prompt = (
-                    "Summarize the following L1 summaries into a concise L2 overview.\n"
-                    f"Agent Role: {agent_role}\n"
-                    f"Agent Goals: {agent_goals or 'N/A'}\n"
-                    f"Mood Trend: {overall_mood_trend or 'N/A'}\n"
-                    f"L1 SUMMARIES:\n{l1_summaries_context}\n\nL2 SUMMARY:"
-                )
-                llm_result = llm_client.generate_text(prompt, temperature=0.3)
-                return llm_result or ""
+                return ""
 
             logger.debug(f"Generating L2 summary for agent in role: {agent_role}")
             logger.debug(f"L1 summaries context: {l1_summaries_context[:200]}...")
