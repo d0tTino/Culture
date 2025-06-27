@@ -61,10 +61,11 @@ def test_process_role_change_invalid_role() -> None:
     ledger_mod.ledger = DummyLedger()
     original = ROLE_EMBEDDINGS.nearest_role_from_embedding
 
-    def fake_nearest_role(emb: list[float], threshold: float = 0.7) -> tuple[str | None, float]:
+    def fake_nearest(_emb: list[float], threshold: float = 0.7) -> tuple[str | None, float]:
         return None, 0.0
 
-    ROLE_EMBEDDINGS.nearest_role_from_embedding = fake_nearest_role
+    ROLE_EMBEDDINGS.nearest_role_from_embedding = fake_nearest
+
     try:
         assert not bag.process_role_change(state, "UnknownRole")
     finally:

@@ -319,30 +319,4 @@ def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
 def ensure_required_env() -> None:
     os.environ.setdefault("REDPANDA_BROKER", "localhost:9092")
     os.environ.setdefault("OPA_URL", "http://opa")
-
-
-@pytest.fixture(autouse=True)
-def mock_external_requests(monkeypatch: MonkeyPatch) -> Generator[None, None, None]:
-    """Mock external HTTP requests using respx and httpx."""
-    import re
-
-    import httpx
-    import requests
-    import respx
-
-    ollama_base = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434").rstrip("/")
-    opa_url = os.environ.get("OPA_URL", "http://opa")
-
-    with respx.mock(assert_all_called=False) as router:
-        router.get(re.compile(re.escape(ollama_base) + "$")).mock(return_value=httpx.Response(200))
-        router.post(re.compile(re.escape(ollama_base) + "/api/generate$")).mock(
-            return_value=httpx.Response(200, json={"response": ""})
-        )
-        if opa_url:
-            router.post(re.compile(re.escape(opa_url))).mock(
-                return_value=httpx.Response(200, json={"result": {"allow": True}})
-            )
-
-        monkeypatch.setattr(requests, "post", lambda url, *a, **kw: httpx.post(url, *a, **kw))
-        monkeypatch.setattr(requests, "get", lambda url, *a, **kw: httpx.get(url, *a, **kw))
-        yield
+    os.environ.setdefault("MODEL_NAME", "mistral:latest")
