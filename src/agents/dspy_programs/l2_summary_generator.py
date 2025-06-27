@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from src.infra import llm_client
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
@@ -145,6 +144,7 @@ class L2SummaryGenerator:
             if not self.l2_predictor or not dspy:
                 logger.warning(
                     "DSPy not available for L2 summary generation - returning empty string"
+
                 )
                 return ""
 

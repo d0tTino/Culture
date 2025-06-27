@@ -154,6 +154,7 @@ if "weaviate" not in sys.modules:
     sys.modules["weaviate"] = weaviate_mod
     sys.modules["weaviate.classes"] = classes_mod
 
+
 if "fastapi" not in sys.modules:
     try:  # pragma: no cover - optional dependency
         import fastapi  # noqa: F401
@@ -318,3 +319,4 @@ def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
 def ensure_required_env() -> None:
     os.environ.setdefault("REDPANDA_BROKER", "localhost:9092")
     os.environ.setdefault("OPA_URL", "http://opa")
+    os.environ.setdefault("MODEL_NAME", "mistral:latest")
