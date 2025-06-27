@@ -40,23 +40,26 @@ else:
         dspy = None
 
 if dspy is not None:
-    # dspy lacks type hints, so LM resolves to "Any"
-    BaseLM = dspy.LM
+    # dspy lacks type hints, so define a trivial subclass
+    class _DSPyBaseLM(dspy.LM):
+        pass
+
+    BaseLM = _DSPyBaseLM
     DSPY_AVAILABLE = True
 else:
     logging.getLogger(__name__).warning("DSPy not available; using stub implementations")
 
-    class _BaseLM:
+    class _StubBaseLM:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
         def __call__(self, *args: Any, **kwargs: Any) -> list[str]:
             return ["DSPy unavailable"]
 
-    BaseLM = _BaseLM
-
     class Signature:
         pass
+
+    BaseLM = _StubBaseLM
 
     _CONFIGURED_LM: Callable[[str], str | list[str]] | None = None
 
@@ -149,7 +152,7 @@ __all__ = [
 ]
 
 
-class OllamaLM(BaseLM):  # type: ignore[misc, valid-type]
+class OllamaLM(BaseLM):
     """
     A DSPy-compatible language model implementation for Ollama.
 

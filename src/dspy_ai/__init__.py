@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-try:
-    import dspy as _dspy
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    # Fallback to the local stub implementation used in tests
-    from src.infra.dspy_ollama_integration import dspy as _dspy
+from typing import TYPE_CHECKING
 
-# Re-export everything from dspy
-from dspy import *  # noqa: F403
+if TYPE_CHECKING:
+    import dspy as _dspy
+else:
+    try:
+        import dspy as _dspy
+    except ModuleNotFoundError:  # pragma: no cover - optional dependency
+        from src.infra.dspy_ollama_integration import dspy as _dspy
 
 __all__ = [name for name in dir(_dspy) if not name.startswith("_")]
+globals().update({name: getattr(_dspy, name) for name in __all__})

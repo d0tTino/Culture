@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)  # ADDED Standard Python Logger
 
 
 # dspy lacks type hints, so Signature resolves to Any
-class RoleThoughtGenerator(dspy.Signature):  # type: ignore[no-any-unimported]
+class RoleThoughtGenerator(dspy.Signature):
     """
     Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or
     'As an [ROLE],' and reflects the agent's role and current situation.

@@ -29,8 +29,8 @@ except ImportError as e:
     raise
 
 
-# dspy lacks type hints, so Signature resolves to Any
-class ActionIntentSelection(dspy.Signature):  # type: ignore[no-any-unimported]
+# dspy lacks type hints, so stubs provide minimal types
+class ActionIntentSelection(dspy.Signature):
     """
     Given the agent's role, current situation, overarching goal, and available actions,
     select the most appropriate action intent and provide a brief justification.

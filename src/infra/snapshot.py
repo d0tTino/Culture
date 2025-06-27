@@ -5,19 +5,27 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
+from .config import SNAPSHOT_COMPRESS, get_config
+
+zstd: ModuleType | None
 try:
-    import zstandard as zstd
+    import zstandard as _zstd
+
+    zstd = _zstd
 except ImportError:  # pragma: no cover - optional dependency
     zstd = None
 
+boto3: ModuleType | None
 try:
-    import boto3
+    import boto3 as _boto3
+
+    boto3 = _boto3
 except ImportError:  # pragma: no cover - optional dependency
     boto3 = None
 
-from .config import SNAPSHOT_COMPRESS, get_config
 
 S3_BUCKET = cast(str | None, get_config("S3_BUCKET"))
 S3_PREFIX = cast(str | None, get_config("S3_PREFIX"))

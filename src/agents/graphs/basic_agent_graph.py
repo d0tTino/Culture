@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any, cast
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_graph_types import AgentTurnState
 from src.agents.core.agent_state import AgentState
-from src.agents.core.embedding_utils import compute_embedding
 from src.agents.core.mood_utils import get_descriptive_mood
 from src.agents.core.role_embeddings import ROLE_EMBEDDINGS
 from src.agents.core.roles import ensure_profile
@@ -178,12 +177,9 @@ def _embedding_similarity(vec1: list[float], vec2: list[float]) -> float:
 
 
 def process_role_change(agent_state: AgentState, requested_role: str) -> bool:
-    req_emb = compute_embedding(requested_role)
-    resolved_role, _ = ROLE_EMBEDDINGS.nearest_role_from_embedding(req_emb)
+    resolved_role, _ = ROLE_EMBEDDINGS.best_role(requested_role)
     if resolved_role is None:
-        logger.warning(
-            f"Agent {agent_state.agent_id} requested invalid role: {requested_role}"
-        )
+        logger.warning(f"Agent {agent_state.agent_id} requested invalid role: {requested_role}")
         return False
     requested_role = resolved_role
     current_role = _get_current_role(agent_state)
@@ -382,9 +378,7 @@ def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
     manager = state.get("semantic_manager")
     step = int(state.get("simulation_step", 0))
     interval = int(
-        config.get_config_value_with_override(
-            "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 24
-        )
+        config.get_config_value_with_override("SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 24)
     )
     if manager and interval > 0 and step % interval == 0:
         try:

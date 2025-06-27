@@ -105,6 +105,7 @@ class Simulation:
             logger.warning("Simulation initialized without a scenario description.")
 
         # --- NEW: Initialize Knowledge Board ---
+        self.knowledge_board: GraphKnowledgeBoard | KnowledgeBoard
         if config.KNOWLEDGE_BOARD_BACKEND == "graph":
             self.knowledge_board = GraphKnowledgeBoard()
             logger.info("Simulation initialized with Graph Knowledge Board.")
@@ -773,12 +774,16 @@ class Simulation:
         """Release resources held by the simulation."""
         if hasattr(self.knowledge_board, "close"):
             try:
-                self.knowledge_board.close()  # type: ignore[attr-defined]
+                close_fn = getattr(self.knowledge_board, "close")
+                if callable(close_fn):
+                    close_fn()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close knowledge board: %s", exc)
         if self.vector_store_manager and hasattr(self.vector_store_manager, "close"):
             try:
-                self.vector_store_manager.close()  # type: ignore[attr-defined]
+                close_fn = getattr(self.vector_store_manager, "close")
+                if callable(close_fn):
+                    close_fn()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close vector store manager: %s", exc)
         try:

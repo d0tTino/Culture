@@ -28,8 +28,8 @@ except ImportError as e:
     raise
 
 
-# dspy lacks type hints, so Signature resolves to Any
-class GenerateL1SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
+# dspy lacks type hints, so stubs provide minimal types
+class GenerateL1SummarySignature(dspy.Signature):
     """
     Generates a concise L1 summary from recent agent events, considering the agent's role,
     context, and optionally mood.

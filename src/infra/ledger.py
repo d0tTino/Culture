@@ -3,6 +3,7 @@ from __future__ import annotations
 # ruff: noqa: ANN101
 import logging
 import sqlite3
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -155,10 +156,27 @@ class Ledger:
         gpt = float(gas_price_per_token or 0.0)
         for hook in self._hooks:
             try:
-                hook(agent_id, float(delta_ip), float(delta_du), reason, gpc, gpt)
+                for _ in range(3):
+                    try:
+                        hook(
+                            agent_id,
+                            float(delta_ip),
+                            float(delta_du),
+                            reason,
+                            gpc,
+                            gpt,
+                        )
+                        break
+                    except sqlite3.OperationalError:
+                        time.sleep(0.05)
+                else:
+                    raise
             except Exception as e:  # pragma: no cover - defensive
                 logging.getLogger(__name__).warning(
-                    "Ledger hook failed for %s: %s", agent_id, e, exc_info=True
+                    "Ledger hook failed for %s: %s",
+                    agent_id,
+                    e,
+                    exc_info=True,
                 )
 
     def stake_du(self, agent_id: str, amount: float) -> None:

@@ -23,20 +23,23 @@ except ImportError:
     ollama = MagicMock()
 
 # Handle optional DSPy OllamaLocal dependency
-try:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
     from dspy_ai.predict.ollama import OllamaLocal
-except ImportError:
-    logging.getLogger(__name__).warning(
-        "dspy_ai.predict.ollama not available; using stub OllamaLocal"
-    )
+else:
+    try:
+        from dspy_ai.predict.ollama import OllamaLocal
+    except ImportError:
+        logging.getLogger(__name__).warning(
+            "dspy_ai.predict.ollama not available; using stub OllamaLocal"
+        )
 
-    class OllamaLocal:  # type: ignore[no-redef]
-        """
-        Stub for DSPy OllamaLocal when dspy_ai.predict.ollama is unavailable.
-        """
+        class OllamaLocal:
+            """Stub for DSPy OllamaLocal when the real package is unavailable."""
 
-        def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
-            pass
+            def __init__(self: Self, *args: Any, **kwargs: Any) -> None:
+                pass
 
         def __call__(self: Self, prompt: str, *args: Any, **kwargs: Any) -> list[str]:
             return [f"Stubbed OllamaLocal response to prompt: {prompt}"]

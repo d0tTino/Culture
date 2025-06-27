@@ -3,7 +3,9 @@ from __future__ import annotations
 import heapq
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Callable, Self
+from typing import Callable
+
+from typing_extensions import Self
 
 from src.infra.snapshot import compute_trace_hash
 

@@ -13,12 +13,11 @@ from src.shared.typing import SimulationMessage
 # in AgentTurnState when StateGraph is initialized.
 from .agent_state import AgentState
 
-
 if TYPE_CHECKING:
     from .base_agent import Agent
 else:  # pragma: no cover - runtime stub to satisfy get_type_hints
 
-    class Agent:  # type: ignore[too-few-type-args]
+    class Agent:
         pass
 
 

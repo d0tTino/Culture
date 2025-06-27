@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+# Skip self argument annotation warnings for protocol stubs
+# ruff: noqa: ANN101
 import logging
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
@@ -9,6 +11,19 @@ from src.infra.llm_client import analyze_sentiment, generate_structured_output
 from src.shared.typing import SimulationMessage
 
 from .basic_agent_types import AgentActionOutput, AgentTurnState
+
+
+class MemoryRetriever(Protocol):
+    async def aretrieve_relevant_memories(
+        self, agent_id: str, query: str, k: int
+    ) -> list[dict[str, Any]]: ...
+
+
+class SummaryAgent(Protocol):
+    async def async_generate_l1_summary(
+        self, role_prompt: str, memories: str, context: str
+    ) -> Any: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -46,21 +61,19 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 
 
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
-    manager = state.get("vector_store_manager")
-    agent = state.get("agent_instance")
-    semantic_manager: SemanticMemoryManager | None = state.get("semantic_manager")
+    manager = cast(MemoryRetriever | None, state.get("vector_store_manager"))
+    agent = cast(SummaryAgent | None, state.get("agent_instance"))
+    semantic_manager = cast(SemanticMemoryManager | None, state.get("semantic_manager"))
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
-    memories = await manager.aretrieve_relevant_memories(  # type: ignore[attr-defined]
-        state["agent_id"], query="", k=5
-    )
+    memories = await manager.aretrieve_relevant_memories(state["agent_id"], query="", k=5)
     memories_content = [m.get("content", "") for m in memories]
     if semantic_manager:
         semantic = semantic_manager.get_recent_summaries(state["agent_id"], limit=2)
         memories_content.extend(semantic)
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
-    summary_result = await agent.async_generate_l1_summary(  # type: ignore[attr-defined]
+    summary_result = await agent.async_generate_l1_summary(
         role_prompt,
         "\n".join(memories_content),
         "",
@@ -71,7 +84,7 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
 
 async def retrieve_semantic_context_node(state: AgentTurnState) -> dict[str, Any]:
     """Retrieve semantically grouped context for the agent."""
-    semantic_manager: SemanticMemoryManager | None = state.get("semantic_manager")
+    semantic_manager = cast(SemanticMemoryManager | None, state.get("semantic_manager"))
     if not semantic_manager:
         return {"semantic_context": ""}
     query = state.get("rag_summary", "")
@@ -118,13 +131,14 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
         }
 
     agent_state = state["state"]
-    requested_change = getattr(output, "requested_role_change", None)
-    if requested_change:
+    requested_role_change = getattr(output, "requested_role_change", None)
+    if requested_role_change:
         from .basic_agent_graph import process_role_change
 
-        if process_role_change(agent_state, requested_change):
+        if process_role_change(agent_state, requested_role_change):
             AgentController(agent_state).add_memory(
-                f"Changed role to {requested_change}",
+                f"Changed role to {requested_role_change}",
+
                 {"step": state.get("simulation_step", 0), "type": "role_change"},
             )
         else:

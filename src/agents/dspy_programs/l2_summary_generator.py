@@ -27,8 +27,8 @@ except ImportError as e:
     dspy = None
 
 
-# dspy lacks type hints, so Signature resolves to Any
-class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
+# dspy lacks type hints, so stubs provide minimal types
+class GenerateL2SummarySignature(dspy.Signature):
     """
     Generates a high-level L2 insight summary from a series of L1 summaries,
     considering agent role, mood trends, and goals.
@@ -143,7 +143,8 @@ class L2SummaryGenerator:
         try:
             if not self.l2_predictor or not dspy:
                 logger.warning(
-                    "DSPy not available for L2 summary generation - returning empty summary"
+                    "DSPy not available for L2 summary generation - returning empty string"
+
                 )
                 return ""
 

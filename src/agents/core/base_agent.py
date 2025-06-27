@@ -9,19 +9,22 @@ import logging
 import uuid
 from collections.abc import Awaitable
 from math import sqrt
+
+# LangGraph imports
+# from langgraph.graph import StateGraph, END # No longer needed here
+# Import node functions and router from basic_agent_graph
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pydantic import BaseModel
 from typing_extensions import Self
 
-# LangGraph imports
-# from langgraph.graph import StateGraph, END # No longer needed here
-# Import node functions and router from basic_agent_graph
-
-try:  # pragma: no cover - optional dependency
+if TYPE_CHECKING:
     from src.agents.memory.vector_store import ChromaVectorStoreManager
-except Exception:  # pragma: no cover - fallback when chromadb missing
-    ChromaVectorStoreManager = None  # type: ignore[misc, assignment]
+else:  # pragma: no cover - optional dependency
+    try:
+        from src.agents.memory.vector_store import ChromaVectorStoreManager
+    except Exception:
+        ChromaVectorStoreManager = None
 from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra import config
 from src.infra.async_dspy_manager import AsyncDSPyManager

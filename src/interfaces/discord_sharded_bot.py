@@ -13,8 +13,8 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
     from discord.ext import commands
 else:  # pragma: no cover - runtime import with fallback
     try:
-        import discord  # type: ignore
-        from discord.ext import commands  # type: ignore
+        import discord
+        from discord.ext import commands
     except Exception:  # pragma: no cover - optional dependency
         from unittest.mock import MagicMock
 

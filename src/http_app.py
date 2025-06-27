@@ -9,7 +9,7 @@ import uvicorn
 from fastapi import Request
 
 from src.interfaces.dashboard_backend import (
-    EventSourceResponse,
+    EventSourceResponse,  # type: ignore[attr-defined]
     SimulationEvent,
     app,
     event_queue,
