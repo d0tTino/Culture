@@ -92,6 +92,10 @@ jobs:
         run: pre-commit run --all-files
         # Ruff linting and Mypy type checks are executed within pre-commit
 
+      - name: Run mypy
+        shell: bash
+        run: mypy --config-file pyproject.toml
+
 
       - name: Run Tests & Coverage
         shell: bash

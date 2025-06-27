@@ -7,7 +7,7 @@ This helps suppress warnings from third-party dependencies that we can't fix dir
 
 import logging
 import warnings
-from typing import IO, Literal
+from typing import IO, Any, Literal, cast
 
 
 def configure_warning_filters(apply_filters: bool = True, log_suppressed: bool = False) -> None:
@@ -40,7 +40,7 @@ def configure_warning_filters(apply_filters: bool = True, log_suppressed: bool =
             logger = logging.getLogger(__name__)
             logger.warning("%s:%s: %s: %s", filename, lineno, category.__name__, message)
 
-        warnings.showwarning = log_warning  # type: ignore[assignment]
+        warnings.showwarning = cast(Any, log_warning)
     try:
         # Import the specific warning class from pydantic
         from pydantic.warnings import PydanticDeprecatedSince20

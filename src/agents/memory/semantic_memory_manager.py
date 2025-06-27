@@ -3,14 +3,17 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-try:  # pragma: no cover - optional dependency
+if TYPE_CHECKING:
     from neo4j import Driver
-except Exception:  # pragma: no cover - fallback if neo4j not installed
-    Driver = object  # type: ignore[misc, assignment]
+else:  # pragma: no cover - fallback if neo4j not installed
+    try:
+        from neo4j import Driver
+    except Exception:
+        Driver = object
 from typing_extensions import Self
 
 from .vector_store import ChromaVectorStoreManager

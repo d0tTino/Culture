@@ -36,14 +36,15 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - fallback when chromadb missing or faulty
     chromadb = None
 
-    class _SentenceTransformerEmbeddingFunction:
+    class _SentenceTransformerEmbeddingFunctionFallback:
         def __init__(
-            self: _SentenceTransformerEmbeddingFunction, *args: Any, **kwargs: Any
+            self: _SentenceTransformerEmbeddingFunctionFallback, *args: Any, **kwargs: Any
         ) -> None:
             raise ImportError("chromadb is required for SentenceTransformerEmbeddingFunction")
 
-    SentenceTransformerEmbeddingFunction: Any = _SentenceTransformerEmbeddingFunction  # type: ignore[no-redef]
-
+    SentenceTransformerEmbeddingFunction = cast(
+        Any, _SentenceTransformerEmbeddingFunctionFallback
+    )
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException

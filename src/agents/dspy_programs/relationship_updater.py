@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 # dspy lacks type hints, so Signature resolves to Any
-class RelationshipUpdaterSignature(dspy.Signature):  # type: ignore[no-any-unimported]
+class RelationshipUpdaterSignature(dspy.Signature):
     """
     Updates the relationship score between two agents based on their interaction, personas,
     and sentiment.

@@ -5,7 +5,7 @@ from typing import Any
 
 from typing_extensions import Self
 
-import dspy_ai as dspy  # type: ignore
+import dspy_ai as dspy
 
 
 class _StubLM(dspy.LM):

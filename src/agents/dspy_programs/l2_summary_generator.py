@@ -28,8 +28,8 @@ except ImportError as e:
     dspy = None
 
 
-# dspy lacks type hints, so Signature resolves to Any
-class GenerateL2SummarySignature(dspy.Signature):  # type: ignore[no-any-unimported]
+# dspy lacks type hints, so stubs provide minimal types
+class GenerateL2SummarySignature(dspy.Signature):
     """
     Generates a high-level L2 insight summary from a series of L1 summaries,
     considering agent role, mood trends, and goals.
@@ -144,17 +144,9 @@ class L2SummaryGenerator:
         try:
             if not self.l2_predictor or not dspy:
                 logger.warning(
-                    "DSPy not available for L2 summary generation - using direct LLM fallback"
+                    "DSPy not available for L2 summary generation - returning empty string"
                 )
-                prompt = (
-                    "Summarize the following L1 summaries into a concise L2 overview.\n"
-                    f"Agent Role: {agent_role}\n"
-                    f"Agent Goals: {agent_goals or 'N/A'}\n"
-                    f"Mood Trend: {overall_mood_trend or 'N/A'}\n"
-                    f"L1 SUMMARIES:\n{l1_summaries_context}\n\nL2 SUMMARY:"
-                )
-                llm_result = llm_client.generate_text(prompt, temperature=0.3)
-                return llm_result or ""
+                return ""
 
             logger.debug(f"Generating L2 summary for agent in role: {agent_role}")
             logger.debug(f"L1 summaries context: {l1_summaries_context[:200]}...")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_attributes import AgentAttributes
 from src.infra import config
@@ -12,11 +12,17 @@ from src.infra.config import (
 )
 from src.shared.memory_store import MemoryStore
 
-try:
+if TYPE_CHECKING:
     from .basic_agent_types import AgentTurnState
-except Exception:  # pragma: no cover - fallback for simplified tests
-    # During tests, AgentTurnState may be unavailable; use plain dict
-    AgentTurnState = dict  # type: ignore[misc, assignment]
+else:
+    try:
+        from .basic_agent_types import AgentTurnState
+    except Exception:  # pragma: no cover - fallback for simplified tests
+        from typing import TypedDict
+
+        class AgentTurnState(TypedDict, total=False):
+            state: Any
+
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +89,7 @@ def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
     agent_state = state["state"]
     structured_output = state.get("structured_output")
     perception = state.get("environment_perception", {})
-    simulation = perception.get("simulation")
+    simulation = cast(Any, perception.get("simulation"))
 
     if structured_output and simulation is not None and structured_output.project_name_to_create:
         project_name = structured_output.project_name_to_create
@@ -130,7 +136,7 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
     agent_state = state["state"]
     structured_output = state.get("structured_output")
     perception = state.get("environment_perception", {})
-    simulation = perception.get("simulation")
+    simulation = cast(Any, perception.get("simulation"))
 
     if (
         structured_output
@@ -176,7 +182,7 @@ def handle_leave_project_node(state: AgentTurnState) -> dict[str, Any]:
     agent_state = state["state"]
     structured_output = state.get("structured_output")
     perception = state.get("environment_perception", {})
-    simulation = perception.get("simulation")
+    simulation = cast(Any, perception.get("simulation"))
 
     if (
         structured_output

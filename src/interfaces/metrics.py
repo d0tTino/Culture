@@ -1,5 +1,7 @@
 """Prometheus metrics for Culture simulation."""
 
+from typing import Any, cast
+
 # Skip self argument annotation warnings in helper classes
 # ruff: noqa: ANN101
 
@@ -31,7 +33,8 @@ except Exception:  # pragma: no cover - optional dependency
         ) -> None:  # pragma: no cover - noop
             self._value._val = value
 
-    Counter = Gauge = _Dummy  # type: ignore[assignment]
+    Counter = cast(Any, _Dummy)
+    Gauge = cast(Any, _Dummy)
 
     def start_http_server(*args: object, **kwargs: object) -> None:  # pragma: no cover - noop
         return

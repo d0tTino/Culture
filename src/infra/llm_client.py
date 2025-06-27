@@ -55,18 +55,13 @@ else:
             pass
 
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
 if TYPE_CHECKING:
-    from pydantic.v1.fields import ModelField
-else:  # pragma: no cover - runtime import
-    try:  # Support pydantic >= 2 if installed
-        from pydantic.v1.fields import ModelField
-    except ImportError:  # pragma: no cover - fallback for pydantic<2
-        from pydantic.fields import ModelField  # type: ignore[attr-defined]  # noqa: F401
-
-
+    from src.agents.core.agent_state import AgentState
 from src.shared.decorator_utils import monitor_llm_call
 
 from .config import (
@@ -104,7 +99,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
 
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        state = kwargs.get("agent_state")
+        state = cast("AgentState | None", kwargs.get("agent_state"))
         result = func(*args, **kwargs)
         if state is not None:
             try:
@@ -128,6 +123,12 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                         cost,
                         state.du,
                     )
+                else:
+                    state.du -= cost
+                    try:
+                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result
@@ -144,6 +145,7 @@ class OllamaClientProtocol(Protocol):
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
     ) -> LLMChatResponse: ...
+
 
 class LLMClientConfig(BaseModel):
     """Simple configuration for ``LLMClient``."""

@@ -3,27 +3,35 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import Any, Optional, cast
+from typing import Any, Callable, Optional, Protocol, cast, TYPE_CHECKING
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
 from typing_extensions import Self
 
-try:  # Support pydantic >= 2 if installed
+_Validator = Callable[..., Any]
+
+if TYPE_CHECKING:
     from pydantic import ConfigDict
-except ImportError:  # pragma: no cover - fallback for old pydantic
-    # pydantic<2 provides ConfigDict as a plain dict
-    ConfigDict = dict  # type: ignore[misc, assignment]
+else:
+    try:  # pragma: no cover - pydantic>=2 preferred at runtime
+        from pydantic import ConfigDict
+    except ImportError:  # pragma: no cover - fallback for old pydantic
+        class ConfigDict(dict[str, Any]):
+            """Fallback ``ConfigDict`` for pydantic < 2."""
+            pass
 
 # Local imports (ensure these are correct and not causing cycles if possible)
 try:  # pragma: no cover - pydantic>=2 preferred
-    from pydantic import field_validator as _field_validator
-    from pydantic import model_validator as _model_validator
+    from pydantic import field_validator as pyd_field_validator, model_validator as pyd_model_validator
 
+    _field_validator: _Validator = pyd_field_validator
+    _model_validator: _Validator = pyd_model_validator
     _PYDANTIC_V2 = True
 except Exception:  # pragma: no cover - fallback to pydantic<2
-    from pydantic import root_validator as _model_validator  # type: ignore[no-redef]
-    from pydantic import validator as _field_validator  # type: ignore[no-redef]
+    from pydantic import root_validator, validator
 
+    _model_validator = cast(_Validator, root_validator)
+    _field_validator = cast(_Validator, validator)
     _PYDANTIC_V2 = False
 
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
@@ -35,7 +43,10 @@ from src.agents.core.roles import (
 )
 from .embedding_utils import compute_embedding
 from src.infra.config import get_config  # Import get_config function
-from src.infra.llm_client import LLMClient, LLMClientConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
@@ -128,16 +139,24 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
-try:
+if TYPE_CHECKING:
     from src.infra.llm_client import (
         OllamaClientProtocol,
         get_default_llm_client,
     )
-except Exception:  # pragma: no cover - fallback when llm_client is missing
-    OllamaClientProtocol = Any  # type: ignore[misc, assignment]
+else:
+    try:
+        from src.infra.llm_client import (
+            OllamaClientProtocol,
+            get_default_llm_client,
+        )
+    except Exception:  # pragma: no cover - fallback when llm_client is missing
+        class OllamaClientProtocol(Protocol):
+            """Fallback protocol used when the real client is unavailable."""
+            ...
 
-    def get_default_llm_client() -> OllamaClientProtocol | None:
-        return None
+        def get_default_llm_client() -> OllamaClientProtocol | None:
+            return None
 
 
 class AgentStateData(BaseModel):
@@ -475,6 +494,8 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 else:
                     model.llm_client = mock_llm_client
             elif llm_client_config:
+                from src.infra.llm_client import LLMClient, LLMClientConfig
+
                 client = None
                 if isinstance(llm_client_config, BaseModel):
                     client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
@@ -559,13 +580,17 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     def to_dict(self: Self, *, exclude_none: bool = False) -> dict[str, Any]:
         """Return a dictionary representation of the agent state."""
         base_model = cast(BaseModel, self)
-        if _PYDANTIC_V2:
-            return base_model.model_dump(  # type: ignore[attr-defined, no-any-return]
-                exclude={
-                    "llm_client",
-                    "mock_llm_client",
-                    "memory_store_manager",
-                },
+        if _PYDANTIC_V2 and hasattr(base_model, "model_dump"):
+            dump_fn = getattr(base_model, "model_dump")
+            return cast(
+                dict[str, Any],
+                dump_fn(
+                    exclude={
+                        "llm_client",
+                        "mock_llm_client",
+                        "memory_store_manager",
+                    },
+                ),
             )
         return base_model.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
 

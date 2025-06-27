@@ -7,14 +7,17 @@ import platform
 import random
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.base_agent import Agent
 
-try:  # pragma: no cover - optional dependency
+if TYPE_CHECKING:
     from src.agents.memory.vector_store import ChromaVectorStoreManager
-except Exception:  # pragma: no cover - fallback when chromadb missing
-    ChromaVectorStoreManager = None  # type: ignore[misc, assignment]
+else:  # pragma: no cover - optional dependency
+    try:
+        from src.agents.memory.vector_store import ChromaVectorStoreManager
+    except Exception:
+        ChromaVectorStoreManager = None
 from src.infra import config
 from src.infra.event_log import log_event
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
@@ -46,7 +49,7 @@ def capture_rng_state() -> dict[str, Any]:
     try:  # pragma: no cover - optional dependency
         import numpy as np
 
-        state["numpy"] = np.random.get_state()
+        state["numpy"] = cast(Any, np.random.get_state())
     except ImportError:
         # ``numpy`` is optional; ignore if unavailable
         pass
@@ -177,7 +180,9 @@ def load_checkpoint(
             board.add_entry(e["content_full"], e["agent_id"], int(e["step"]))
         sim.knowledge_board = board
     else:
-        sim.knowledge_board = KnowledgeBoard(entries=kb_entries)
+        sim.knowledge_board = cast(
+            GraphKnowledgeBoard | KnowledgeBoard, KnowledgeBoard(entries=kb_entries)
+        )
     sim.current_step = data.get("current_step", 0)
     sim.current_agent_index = data.get("current_agent_index", 0)
     sim.collective_ip = data.get("collective_ip", 0.0)
