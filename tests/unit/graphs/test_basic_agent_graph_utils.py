@@ -56,16 +56,16 @@ def test_process_role_change_success(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_process_role_change_invalid_role() -> None:
     state = make_agent_state()
     ledger_mod.ledger = DummyLedger()
-    original = ROLE_EMBEDDINGS.best_role
+    original = ROLE_EMBEDDINGS.nearest_role_from_embedding
 
-    def fake_best_role(role: str, threshold: float = 0.7) -> tuple[str | None, float]:
+    def fake_nearest_role(emb: list[float], threshold: float = 0.7) -> tuple[str | None, float]:
         return None, 0.0
 
-    ROLE_EMBEDDINGS.best_role = fake_best_role
+    ROLE_EMBEDDINGS.nearest_role_from_embedding = fake_nearest_role
     try:
         assert not bag.process_role_change(state, "UnknownRole")
     finally:
-        ROLE_EMBEDDINGS.best_role = original
+        ROLE_EMBEDDINGS.nearest_role_from_embedding = original
     assert state.current_role.name == "Innovator"
 
 
