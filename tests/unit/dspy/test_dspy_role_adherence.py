@@ -1,11 +1,12 @@
 import logging
-import os
 import sys
 from typing import cast
 
 import pytest
 
-if os.environ.get("ENABLE_DSPY_TESTS") != "1":
+from src.infra import config
+
+if not config.get_config("ENABLE_DSPY_TESTS"):
     pytest.skip("DSPy tests disabled", allow_module_level=True)
 
 import dspy

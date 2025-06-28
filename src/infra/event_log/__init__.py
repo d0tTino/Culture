@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from collections.abc import Generator
 from typing import Any
@@ -14,16 +13,17 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - fallback
     KafkaConsumer = KafkaProducer = Any
 
+from src.infra import config
 from src.infra.snapshot import compute_trace_hash
 
-_broker = os.getenv("REDPANDA_BROKER", "localhost:9092")
-_topic = os.getenv("REDPANDA_TOPIC", "culture.events")
+_broker = str(config.get_config("REDPANDA_BROKER") or "localhost:9092")
+_topic = str(config.get_config("REDPANDA_TOPIC") or "culture.events")
 
 _producer: Any | None = None
 
 _consumer_conf = {
     "bootstrap.servers": _broker,
-    "group.id": os.getenv("REPLAY_GROUP", "culture-replay"),
+    "group.id": str(config.get_config("REPLAY_GROUP") or "culture-replay"),
     "auto.offset.reset": "earliest",
 }
 
@@ -41,7 +41,7 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
         event = {**event}
         event.pop("trace_hash", None)
     event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
-    if os.getenv("ENABLE_REDPANDA", "0") != "1":
+    if not config.get_config("ENABLE_REDPANDA"):
         return event_with_hash
     try:
         payload = json.dumps(event_with_hash).encode("utf-8")
@@ -57,7 +57,7 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
     """Retrieve events from Redpanda after ``after_step``."""
-    if os.getenv("ENABLE_REDPANDA", "0") != "1":
+    if not config.get_config("ENABLE_REDPANDA"):
         return []
     events: list[dict[str, Any]] = []
     try:
@@ -91,7 +91,7 @@ def stream_events(
     after_step: int = 0, timeout: float = 1.0
 ) -> Generator[dict[str, Any], None, None]:
     """Yield events from Redpanda until ``timeout`` seconds of inactivity."""
-    if os.getenv("ENABLE_REDPANDA", "0") != "1":
+    if not config.get_config("ENABLE_REDPANDA"):
         if False:
             yield {}
         return

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from sqlalchemy import Column, MetaData, String, Table, select, text
@@ -26,9 +25,7 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 async def _get_session() -> AsyncSession:
     global _engine, _sessionmaker
     if _sessionmaker is None:
-        db_url = os.environ.get("DISCORD_TOKENS_DB_URL") or str(
-            config.get_config("DISCORD_TOKENS_DB_URL") or ""
-        )
+        db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
         if not db_url:
             raise RuntimeError("DISCORD_TOKENS_DB_URL is not set")
         _engine = create_async_engine(db_url)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings
 
-
 BaseSettings = _BaseSettings  # type: ignore[misc]
 
 class ConfigSettings(BaseSettings):
@@ -34,6 +33,11 @@ class ConfigSettings(BaseSettings):
     OLLAMA_REQUEST_TIMEOUT: int = 10
     REDPANDA_BROKER: str = ""
     OPA_URL: str = ""
+    MODEL_NAME: str = "mistral:latest"
+    ROLE_DU_GENERATION: dict[str, float] = {}
+    REDPANDA_TOPIC: str = "culture.events"
+    REPLAY_GROUP: str = "culture-replay"
+    ENABLE_REDPANDA: bool = False
     TARGETED_MESSAGE_MULTIPLIER: float = 3.0
     POSITIVE_RELATIONSHIP_LEARNING_RATE: float = 0.3
     NEGATIVE_RELATIONSHIP_LEARNING_RATE: float = 0.4
@@ -126,12 +130,13 @@ class ConfigSettings(BaseSettings):
         "Analyzer": {"base": 1.0},
     }
     GENE_MUTATION_RATE: float = 0.1
-    ROLE_DU_GENERATION: dict[str, dict[str, float]] = {
-        "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
-        "Innovator": {"base": 1.0, "bonus_factor": 0.5},
-        "Analyzer": {"base": 1.0, "bonus_factor": 0.2},
+    ENABLE_OTEL: bool = False
+    OPA_BLOCKLIST: str = ""
+    HTTP_HOST: str = "0.0.0.0"
+    HTTP_PORT: int = 8000
+    DEBUG_SQLITE: bool = False
+    ENABLE_DSPY_TESTS: bool = False
 
-    }
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
