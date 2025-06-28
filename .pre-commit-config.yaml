@@ -3,7 +3,7 @@ repos:
     rev: v0.4.4
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--fix, --exit-non-zero-on-fix, --config=pyproject.toml]
         exclude: ^(archives/|scripts/archive/|src/ollama/)
       - id: ruff-format
         exclude: ^(archives/|scripts/archive/|src/ollama/)
