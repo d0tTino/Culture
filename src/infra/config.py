@@ -1,9 +1,10 @@
 """Configuration utilities for the Culture project."""
+
 from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -216,29 +217,29 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
+REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
+
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
     global settings
     new_settings = ConfigSettings()
     if validate_required:
-        missing = [
-            k
-            for k in REQUIRED_CONFIG_KEYS
-            if _CONFIG.get(k) is None or str(_CONFIG.get(k)).strip() == ""
-        ]
+        missing = []
+        for key in REQUIRED_CONFIG_KEYS:
+            value = getattr(new_settings, key, None)
+            if value is None or (isinstance(value, str) and value.strip() == ""):
+                missing.append(key)
 
         if missing:
-            raise RuntimeError(
-                "Missing mandatory configuration keys: " + ", ".join(missing)
-            )
+            raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
     try:
         data = settings.model_dump()
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
-    return cast(dict[str, Any], data)
+    return data
+
 
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
@@ -264,6 +265,7 @@ RELATIONSHIP_LABELS = {
     (0.4, 0.7): "Positive",
     (0.7, 1.0): "Allied",
 }
+
 
 def get_relationship_label(score: float) -> str:
     """Return a descriptive relationship label for ``score``."""
