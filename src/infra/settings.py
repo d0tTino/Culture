@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+try:  # pragma: no cover - prefer pydantic-settings if available
+    from pydantic_settings import BaseSettings as _BaseSettings
+except Exception:  # pragma: no cover - fallback for older pydantic
+    from pydantic import BaseSettings as _BaseSettings  # type: ignore[no-redef]
 
-if TYPE_CHECKING:  # pragma: no cover - for type checkers
-    from pydantic_settings import BaseSettings
-else:
-    try:
-        from pydantic_settings import BaseSettings
-    except Exception:  # pragma: no cover - fallback for older pydantic
-        from pydantic import BaseSettings  # type: ignore[misc]
+BaseSettings = _BaseSettings  # type: ignore[misc]
 
 from pydantic_settings import BaseSettings
 
