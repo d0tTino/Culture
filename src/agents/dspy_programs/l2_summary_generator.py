@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from src.infra import llm_client as llm_client_module
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
@@ -25,6 +26,9 @@ try:
 except ImportError as e:
     logger.error(f"Failed to import DSPy or configure Ollama integration: {e}")
     dspy = None
+
+# Re-export the llm_client module so tests can patch it easily
+llm_client = llm_client_module
 
 
 # dspy lacks type hints, so stubs provide minimal types
@@ -144,7 +148,6 @@ class L2SummaryGenerator:
             if not self.l2_predictor or not dspy:
                 logger.warning(
                     "DSPy not available for L2 summary generation - returning empty string"
-
                 )
                 return ""
 

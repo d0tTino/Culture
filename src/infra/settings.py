@@ -1,13 +1,20 @@
 """Application configuration settings using pydantic."""
+
 from __future__ import annotations
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
     OLLAMA_API_BASE: str = "http://localhost:11434"
+    MODEL_NAME: str = ""
+    ROLE_DU_GENERATION: dict[str, float] = {
+        "Facilitator": 1.0,
+        "Innovator": 1.0,
+        "Analyzer": 1.0,
+    }
     DEFAULT_LLM_MODEL: str = "mistral:latest"
     DEFAULT_TEMPERATURE: float = 0.7
     MEMORY_THRESHOLD_L1: float = 0.2
@@ -110,9 +117,7 @@ class ConfigSettings(BaseSettings):
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 
 settings = ConfigSettings()
