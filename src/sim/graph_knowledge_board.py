@@ -100,7 +100,13 @@ class GraphKnowledgeBoard:
             formatted_entries.append(f"[Step {step}, {agent_id}]: {content_summary}")
         return formatted_entries
 
-    def add_entry(self: Self, entry: str, agent_id: str, step: int) -> bool:
+    def add_entry(
+        self: Self,
+        entry: str,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
         entry_id = str(uuid.uuid4())
         formatted_content = f"Step {step} (Agent: {agent_id}): {entry}"
         props = {
@@ -117,6 +123,15 @@ class GraphKnowledgeBoard:
             "GraphKnowledgeBoard: Added entry %s by %s at step %s", entry_id, agent_id, step
         )
         return True
+
+    def add_law_proposal(
+        self: Self,
+        proposal: str,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
+        return self.add_entry(f"Law proposed: {proposal}", agent_id, step, vector)
 
     def clear_board(self: Self) -> None:
         self._run("MATCH (e:KBEntry) DETACH DELETE e")

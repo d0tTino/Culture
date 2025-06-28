@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings
+try:  # pragma: no cover - prefer pydantic-settings if available
+    from pydantic_settings import BaseSettings as _BaseSettings
+except Exception:  # pragma: no cover - fallback for older pydantic
+    from pydantic import BaseSettings as _BaseSettings  # type: ignore[no-redef]
 
+BaseSettings = _BaseSettings  # type: ignore[misc]
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
@@ -11,6 +15,8 @@ class ConfigSettings(BaseSettings):
     OLLAMA_API_BASE: str = ""
     MODEL_NAME: str = ""
     DEFAULT_LLM_MODEL: str = "mistral:latest"
+    # Backwards compatibility with older config keys
+    MODEL_NAME: str = "mistral:latest"
     DEFAULT_TEMPERATURE: float = 0.7
     MEMORY_THRESHOLD_L1: float = 0.2
     MEMORY_THRESHOLD_L2: float = 0.3
@@ -116,6 +122,13 @@ class ConfigSettings(BaseSettings):
         "Analyzer": {"base": 1.0},
     }
     GENE_MUTATION_RATE: float = 0.1
+    # Default generation distribution for each role (used in tests)
+    ROLE_DU_GENERATION: ClassVar[dict[str, Any]] = {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+
+    }
 
     class Config:
         env_file = ".env"
