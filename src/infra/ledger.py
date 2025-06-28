@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 # ruff: noqa: ANN101
 import logging
 import sqlite3
@@ -414,6 +416,74 @@ class Ledger:
         )
         self.conn.commit()
         return winner_id, winning_amount
+
+    # -------------------------------------------------------------
+    # Async helpers and atomic operations
+    # -------------------------------------------------------------
+
+    async def log_change_async(
+        self,
+        agent_id: str,
+        delta_ip: float = 0.0,
+        delta_du: float = 0.0,
+        reason: str = "",
+        gas_price_per_call: float | None = None,
+        gas_price_per_token: float | None = None,
+    ) -> None:
+        """Asynchronous wrapper around :meth:`log_change`."""
+        await asyncio.to_thread(
+            self.log_change,
+            agent_id,
+            delta_ip,
+            delta_du,
+            reason,
+            gas_price_per_call,
+            gas_price_per_token,
+        )
+
+    async def get_balance_async(self, agent_id: str) -> tuple[float, float]:
+        """Return the balance for ``agent_id`` asynchronously."""
+        return await asyncio.to_thread(self.get_balance, agent_id)
+
+    async def spend(
+        self,
+        agent_id: str,
+        ip: float = 0.0,
+        du: float = 0.0,
+        reason: str = "spend",
+        gas_price_per_call: float | None = None,
+        gas_price_per_token: float | None = None,
+    ) -> tuple[float, float]:
+        """Atomically spend resources and return the new balance."""
+        await self.log_change_async(
+            agent_id,
+            -abs(ip),
+            -abs(du),
+            reason,
+            gas_price_per_call,
+            gas_price_per_token,
+        )
+        return await self.get_balance_async(agent_id)
+
+    async def reward(
+        self,
+        agent_id: str,
+        ip: float = 0.0,
+        du: float = 0.0,
+        reason: str = "reward",
+        gas_price_per_call: float | None = None,
+        gas_price_per_token: float | None = None,
+    ) -> tuple[float, float]:
+        """Atomically reward an agent and return the new balance."""
+        await self.log_change_async(
+            agent_id,
+            abs(ip),
+            abs(du),
+            reason,
+            gas_price_per_call,
+            gas_price_per_token,
+        )
+        return await self.get_balance_async(agent_id)
 
 
 ledger = Ledger()
