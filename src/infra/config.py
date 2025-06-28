@@ -245,7 +245,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
     try:
-        data = settings.model_dump()
+        data = settings.model_dump()  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
     _CONFIG.update(cast(dict[str, Any], data))
@@ -257,7 +257,7 @@ def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
     if key is None:
         try:
-            return settings.model_dump()
+            return settings.model_dump()  # type: ignore[attr-defined]
         except AttributeError:  # pragma: no cover - pydantic v1
             return settings.dict()
     if key in _CONFIG and str(_CONFIG.get(key, "")).strip() != "":
