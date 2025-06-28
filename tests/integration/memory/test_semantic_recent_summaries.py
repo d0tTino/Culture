@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("chromadb")
@@ -11,7 +13,7 @@ from tests.unit.memory.test_semantic_memory_manager import DummyDriver
 @pytest.mark.asyncio
 @pytest.mark.memory
 @pytest.mark.usefixtures("chroma_test_dir")
-async def test_nightly_job_and_retrieval(chroma_test_dir: str) -> None:
+async def test_nightly_job_and_retrieval(chroma_test_dir: Path) -> None:
     vector = ChromaVectorStoreManager(
         persist_directory=chroma_test_dir,
         embedding_function=lambda texts: [[0.0] for _ in texts],

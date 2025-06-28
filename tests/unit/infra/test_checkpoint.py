@@ -103,7 +103,7 @@ def test_checkpoint_loads_graph_board(tmp_path, monkeypatch):
     from tests.integration.knowledge_board.test_graph_backend import DummyDriver
 
     monkeypatch.setattr(neo4j.GraphDatabase, "driver", lambda *a, **k: DummyDriver())
-    config.load_config()
+    config.load_config(validate_required=False)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
     sim.knowledge_board.add_entry("hello", sim.agents[0].agent_id, step=0)
 

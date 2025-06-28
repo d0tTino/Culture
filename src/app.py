@@ -21,6 +21,50 @@ from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 from src.utils.loop_helper import use_uvloop_if_available
 
+
+def _simple_yaml(path: Path) -> dict[str, object]:
+    """Very small YAML parser for simple key/value files."""
+    data: dict[str, object] = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" in line:
+            key, value = line.split(":", 1)
+            value = value.strip().strip('"').strip("'")
+            if value.isdigit():
+                data[key.strip()] = int(value)
+            else:
+                data[key.strip()] = value
+    return data
+
+
+def load_scenario(value: str) -> tuple[str, int | None, int | None]:
+    """Return scenario description and optional overrides from a file."""
+    path = Path(value)
+    if path.is_file():
+        try:  # Try full YAML parsing if PyYAML is available
+            import yaml  # type: ignore
+
+            content = yaml.safe_load(path.read_text())
+        except Exception:  # pragma: no cover - fallback
+            content = _simple_yaml(path)
+
+        if isinstance(content, dict):
+            desc = str(content.get("description") or content.get("scenario") or "")
+            steps = content.get("steps")
+            agents = content.get("agents")
+            return (
+                desc,
+                int(steps) if steps is not None else None,
+                int(agents) if agents is not None else None,
+            )
+        if isinstance(content, str):
+            return content, None, None
+        return str(content), None, None
+    return value, None, None
+
+
 use_uvloop_if_available()
 
 try:
@@ -145,6 +189,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     setup_logging()
     args = parse_args()
+    desc, file_steps, file_agents = load_scenario(args.scenario)
+    if file_steps is not None:
+        args.steps = file_steps
+    if file_agents is not None:
+        args.agents = file_agents
+    args.scenario = desc
 
     if args.version:
         from src import __version__

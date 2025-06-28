@@ -17,6 +17,15 @@ python scripts/cleanup_temp_db.py --dry-run
 python scripts/cleanup_temp_db.py
 ```
 
+### `init_agents.py`
+
+Create multiple agents with an initial seed memory stored in ChromaDB.
+
+Usage:
+```bash
+PYTHONPATH=. python scripts/init_agents.py --n 5 "Hello world"
+```
+
 ### `query_agent_memory.py`
 
 Queries an agent's ChromaDB memory store and synthesizes a short answer.

@@ -256,7 +256,7 @@ def mock_ollama_by_default(request: FixtureRequest, monkeypatch: MonkeyPatch) ->
 
 
 @pytest.fixture(scope="session")
-def chroma_test_dir(request: FixtureRequest) -> Generator[str, None, None]:
+def chroma_test_dir(request: FixtureRequest) -> Generator[Path, None, None]:
     """
     Provides a unique ChromaDB test directory for each pytest-xdist worker.
     On Linux, uses /dev/shm/chroma_tests/{worker_id}/ for tmpfs speed.
@@ -265,7 +265,13 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[str, None, None]:
     """
     worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
     if sys.platform.startswith("linux") and Path("/dev/shm").exists():
-        base_dir = f"/dev/shm/chroma_tests/{worker_id}"
+        base_dir = Path("/dev/shm") / "chroma_tests" / worker_id
+        base_dir.mkdir(parents=True, exist_ok=True)
+        yield base_dir
+        try:
+            shutil.rmtree(base_dir)
+        except Exception as e:
+            print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
     else:
         base_dir = get_temp_dir(prefix=f"chroma_tests_{worker_id}_").as_posix()
     ensure_dir(base_dir)
@@ -275,6 +281,7 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[str, None, None]:
         shutil.rmtree(base_dir)
     except Exception as e:
         print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
+
 
 
 @pytest.fixture(autouse=True)

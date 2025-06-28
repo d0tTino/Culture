@@ -10,6 +10,7 @@ import logging
 import time
 import unittest
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -39,7 +40,7 @@ class TestMUSBasedMemoryPruning(unittest.TestCase):
     """Tests for MUS-based memory pruning in the agent memory system."""
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self: Self, request: FixtureRequest, chroma_test_dir: str) -> None:
+    def _inject_fixtures(self: Self, request: FixtureRequest, chroma_test_dir: Path) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 
