@@ -1,3 +1,4 @@
+-r requirements.in
 ruff>=0.3
 mypy==1.10.0
 pytest==7.4.0

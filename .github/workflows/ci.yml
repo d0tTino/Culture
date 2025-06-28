@@ -73,6 +73,10 @@ jobs:
         shell: bash
         run: bash scripts/install_optional_deps.sh
 
+      - name: Verify requirements are up to date
+        shell: bash
+        run: bash scripts/check_requirements.sh
+
 
       # Cache pre-commit environment for faster runs
 
