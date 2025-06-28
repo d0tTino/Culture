@@ -12,11 +12,13 @@ else:
     except Exception:  # pragma: no cover - fallback for older pydantic
         from pydantic import BaseSettings  # type: ignore[misc]
 
+from pydantic_settings import BaseSettings
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
-    OLLAMA_API_BASE: str = "http://localhost:11434"
+    OLLAMA_API_BASE: str = ""
+    MODEL_NAME: str = ""
     DEFAULT_LLM_MODEL: str = "mistral:latest"
     # Backwards compatibility with older config keys
     MODEL_NAME: str = "mistral:latest"
@@ -125,6 +127,7 @@ class ConfigSettings(BaseSettings):
         "Facilitator": {"base": 1.0},
         "Innovator": {"base": 1.0},
         "Analyzer": {"base": 1.0},
+
     }
 
     class Config:

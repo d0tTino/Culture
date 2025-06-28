@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -217,7 +217,8 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
+REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
+
 
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
@@ -237,6 +238,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     settings = new_settings
     _CONFIG = data
     return cast(dict[str, Any], data)
+
 
 
 def get_config(key: str | None = None) -> Any:
