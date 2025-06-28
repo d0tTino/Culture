@@ -235,7 +235,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
             )
     settings = new_settings
     try:
-        data = settings.model_dump()
+        data = settings.model_dump()  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
     return cast(dict[str, Any], data)
@@ -244,7 +244,7 @@ def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
     if key is None:
         try:
-            return settings.model_dump()
+            return settings.model_dump()  # type: ignore[attr-defined]
         except AttributeError:  # pragma: no cover - pydantic v1
             return settings.dict()
     return getattr(settings, key)
