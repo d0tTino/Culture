@@ -97,6 +97,9 @@ class Simulation:
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
 
+        # Lock for concurrent access to message queues
+        self._msg_lock = asyncio.Lock()
+
         # --- Store the simulation scenario ---
         self.scenario = scenario
         if scenario:

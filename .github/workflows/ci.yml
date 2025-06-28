@@ -94,7 +94,7 @@ jobs:
 
       - name: Run mypy
         shell: bash
-        run: mypy --config-file pyproject.toml
+        run: mypy --strict --config-file pyproject.toml
 
 
       - name: Run Tests & Coverage
