@@ -1,7 +1,10 @@
 """Application configuration settings using pydantic."""
 from __future__ import annotations
 
-from pydantic import BaseSettings
+try:
+    from pydantic_settings import BaseSettings
+except Exception:  # pragma: no cover - fallback for pydantic v1
+    from pydantic import BaseSettings  # type: ignore
 
 
 class ConfigSettings(BaseSettings):

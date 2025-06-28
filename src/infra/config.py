@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -238,7 +238,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
         data = settings.model_dump()
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
-    return cast(dict[str, Any], data)
+    return data
 
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
