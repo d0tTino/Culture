@@ -81,7 +81,7 @@ class Simulation:
                 simulation updates to Discord.
         """
         # Reload configuration to pick up any environment overrides set in tests
-        config.load_config()
+        config.load_config(validate_required=False)
 
         self.agents: list[Agent] = agents
         self.current_step: int = 0
@@ -96,6 +96,9 @@ class Simulation:
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
+
+        # Lock for concurrent access to message queues
+        self._msg_lock = asyncio.Lock()
 
         # --- Store the simulation scenario ---
         self.scenario = scenario
@@ -120,9 +123,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -161,11 +164,16 @@ class Simulation:
         logger.info("Initialized storage for last step's messages.")
         # --- End NEW ---
 
+        # Lock to synchronize access to message buffers
+        self._msg_lock = asyncio.Lock()
+
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self._msg_lock = asyncio.Lock()
+
 
         self.track_collective_metrics: bool = True
 
@@ -222,7 +230,7 @@ class Simulation:
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
-    def spawn_agent(
+    async def spawn_agent(
         self: Self,
         agent: "Agent",
         *,
@@ -249,12 +257,13 @@ class Simulation:
             except Exception:
                 pass
             if self.knowledge_board:
-                self.knowledge_board.add_entry(
-                    f"Agent {parent.agent_id} spawned child {agent.agent_id}",
-                    parent.agent_id,
-                    self.current_step,
-                    self.vector.to_dict(),
-                )
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                        parent.agent_id,
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
         else:
             agent.state.mutate_genes(mutation_rate)
 
@@ -262,7 +271,7 @@ class Simulation:
         self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
         self._update_collective_metrics()
 
-    def retire_agent(self: Self, agent: "Agent") -> None:
+    async def retire_agent(self: Self, agent: "Agent") -> None:
         """Retire an agent and compute inheritance."""
         state = agent.state
         state.is_alive = False
@@ -270,12 +279,13 @@ class Simulation:
         state.ip = 0.0
         state.du = 0.0
         if self.knowledge_board:
-            self.knowledge_board.add_entry(
-                f"Agent {agent.agent_id} retired",
-                agent.agent_id,
-                self.current_step,
-                self.vector.to_dict(),
-            )
+            async with self.knowledge_board.lock:
+                self.knowledge_board.add_entry(
+                    f"Agent {agent.agent_id} retired",
+                    agent.agent_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
         agent.update_state(state)
 
     def get_other_agents_public_state(self: Self, current_agent_id: str) -> list[dict[str, Any]]:
@@ -348,7 +358,7 @@ class Simulation:
             current_agent_state.age += 1
             max_age = int(config.get_config("MAX_AGENT_AGE"))
             if current_agent_state.age >= max_age:
-                self.retire_agent(agent)
+                await self.retire_agent(agent)
                 self.current_agent_index = (agent_index + 1) % len(self.agents)
                 return
 
@@ -379,10 +389,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
+                debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {debug_len} messages from pending_messages_for_next_round."
@@ -438,12 +447,13 @@ class Simulation:
                 and action_intent_str == AgentActionIntent.PROPOSE_IDEA.value
                 and message_recipient_id is None
             ):
-                self.knowledge_board.add_entry(
-                    message_content,
-                    agent_id,
-                    self.current_step,
-                    self.vector.to_dict(),
-                )
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        message_content,
+                        agent_id,
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
 
         self.agents[agent_index] = agent
         self.agents[agent_index].update_state(current_agent_state)
@@ -688,6 +698,7 @@ class Simulation:
         """
         logger.info(f"Starting simulation run for {num_steps} steps (async)")
         start_time = time.time()
+        total_steps_executed = 0
         try:
             total_steps_executed = await self.run_step(num_steps)
         finally:
@@ -825,21 +836,23 @@ class Simulation:
             return False
 
         if self.knowledge_board:
-            self.knowledge_board.add_law_proposal(
-                text,
-                proposer_id,
-                self.current_step,
-                self.vector.to_dict(),
-            )
+            async with self.knowledge_board.lock:
+                self.knowledge_board.add_law_proposal(
+                    text,
+                    proposer_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
 
         approved = await _propose(proposer, text, self.agents)
         if approved and self.knowledge_board:
-            self.knowledge_board.add_entry(
-                f"Law approved: {text}",
-                proposer_id,
-                self.current_step,
-                self.vector.to_dict(),
-            )
+            async with self.knowledge_board.lock:
+                self.knowledge_board.add_entry(
+                    f"Law approved: {text}",
+                    proposer_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
 
         return approved
 

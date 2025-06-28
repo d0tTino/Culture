@@ -64,7 +64,9 @@ def test_agent_retirement_and_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
     assert agent.state.inheritance == 15.0
 
     child = DummyAgent("a2")
-    sim.spawn_agent(child, inheritance=agent.state.inheritance)
+    asyncio.get_event_loop().run_until_complete(
+        sim.spawn_agent(child, inheritance=agent.state.inheritance)
+    )
     assert child.state.ip == 25.0  # inherited 15 + default 10
     assert len(sim.agents) == 2
 
@@ -85,7 +87,9 @@ def test_gene_inheritance_no_mutation(monkeypatch: pytest.MonkeyPatch, tmp_path:
     asyncio.get_event_loop().run_until_complete(sim.run_step())
 
     child = DummyAgent("c")
-    sim.spawn_agent(child, inheritance=parent.state.inheritance, parent=parent)
+    asyncio.get_event_loop().run_until_complete(
+        sim.spawn_agent(child, inheritance=parent.state.inheritance, parent=parent)
+    )
 
     assert child.state.genes == parent.state.genes
     assert child.state.parent_id == "p"
@@ -110,7 +114,9 @@ def test_gene_inheritance_with_mutation(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     monkeypatch.setattr(random, "uniform", lambda a, b: 0.1)
     child = DummyAgent("c")
-    sim.spawn_agent(child, inheritance=parent.state.inheritance, parent=parent)
+    asyncio.get_event_loop().run_until_complete(
+        sim.spawn_agent(child, inheritance=parent.state.inheritance, parent=parent)
+    )
 
     assert child.state.genes["g1"] == pytest.approx(0.6)
     rows = ledger.conn.execute("SELECT parent_id, child_id FROM genealogy").fetchall()
