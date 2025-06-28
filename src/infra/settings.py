@@ -1,7 +1,8 @@
 """Application configuration settings using pydantic."""
+
 from __future__ import annotations
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class ConfigSettings(BaseSettings):
@@ -109,6 +110,11 @@ class ConfigSettings(BaseSettings):
     MAX_AGENT_AGE: int = 10
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
+    ROLE_DU_GENERATION: dict[str, dict[str, float]] = {
+        "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
+        "Innovator": {"base": 1.0, "bonus_factor": 0.5},
+        "Analyzer": {"base": 1.0, "bonus_factor": 0.2},
+    }
 
     class Config:
         env_file = ".env"
