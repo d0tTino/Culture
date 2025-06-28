@@ -11,6 +11,7 @@
 - [Running Tests](#running-tests)
 - [culture-ui Frontend](#culture-ui-frontend)
 
+
 ## Vision: The Crucible of Emergent AI
 
 **Culture: An AI Genesis Engine** is an ambitious open-source research project dedicated to creating a dynamic and persistent simulated environment where autonomous AI agents can evolve, interact, and develop complex emergent behaviors. Our primary vision is to build a digital "crucible" – a platform to observe and study the potential genesis of novel AI personalities, dynamic social roles, unique communication styles, AI-driven creativity, and ultimately, rudimentary forms of AI-driven societies and cultures.

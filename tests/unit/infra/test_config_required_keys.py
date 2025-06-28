@@ -13,7 +13,7 @@ def test_load_config_missing_required_keys(monkeypatch: pytest.MonkeyPatch) -> N
     msg = str(exc.value)
     assert "REDPANDA_BROKER" in msg
     assert "OPA_URL" in msg
-    assert "MODEL_NAME" in msg
+    assert "MODEL_NAME" not in msg
 
 
 @pytest.mark.unit

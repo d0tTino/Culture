@@ -21,7 +21,6 @@ def test_l1_summary_generator_failsafe(monkeypatch: MonkeyPatch) -> None:
 @pytest.mark.unit
 def test_l2_summary_generator_failsafe(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(l2_summary_generator, "dspy", None)
-    monkeypatch.setattr(l2_summary_generator.llm_client, "generate_text", lambda *a, **k: "")
     gen = L2SummaryGenerator()
     # Patch l2_predictor to None to trigger fallback/error
     gen.l2_predictor = None

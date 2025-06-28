@@ -1,7 +1,13 @@
 """Application configuration settings using pydantic."""
+
 from __future__ import annotations
 
-from pydantic import BaseSettings
+from typing import ClassVar
+
+try:  # pragma: no cover - prefer pydantic v2
+    from pydantic_settings import BaseSettings
+except ImportError:  # pragma: no cover - fallback for pydantic v1
+    from pydantic import BaseSettings  # type: ignore
 
 
 class ConfigSettings(BaseSettings):
@@ -55,6 +61,12 @@ class ConfigSettings(BaseSettings):
     DU_COST_REQUEST_DETAILED_CLARIFICATION: int = 2
     DU_COST_CREATE_PROJECT: int = 10
     DU_COST_JOIN_PROJECT: int = 1
+    MODEL_NAME: str = "mistral:latest"
+    ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
+        "Facilitator": {"base": 1.0, "bonus_factor": 0.0},
+        "Innovator": {"base": 1.0, "bonus_factor": 0.5},
+        "Analyzer": {"base": 1.0, "bonus_factor": 0.5},
+    }
     MAP_MOVE_IP_COST: float = 0.0
     MAP_MOVE_IP_REWARD: float = 0.0
     MAP_MOVE_DU_COST: float = 0.0
