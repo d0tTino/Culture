@@ -1,4 +1,5 @@
 """Configuration utilities for the Culture project."""
+
 from __future__ import annotations
 
 import importlib
@@ -216,7 +217,8 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
+REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
+
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
@@ -230,6 +232,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     _CONFIG.update(data)
     settings = new_settings
 
+
     if validate_required:
         missing = [k for k in REQUIRED_CONFIG_KEYS if str(_CONFIG.get(k, "")).strip() == ""]
         if missing:
@@ -237,6 +240,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
                 "Missing mandatory configuration keys: " + ", ".join(missing)
             )
     return data
+
 
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
@@ -262,6 +266,7 @@ RELATIONSHIP_LABELS = {
     (0.4, 0.7): "Positive",
     (0.7, 1.0): "Allied",
 }
+
 
 def get_relationship_label(score: float) -> str:
     """Return a descriptive relationship label for ``score``."""

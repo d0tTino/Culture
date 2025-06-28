@@ -1,13 +1,14 @@
 """Application configuration settings using pydantic."""
+
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings
 
-
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
-    OLLAMA_API_BASE: str = "http://localhost:11434"
+    OLLAMA_API_BASE: str = ""
+    MODEL_NAME: str = ""
     DEFAULT_LLM_MODEL: str = "mistral:latest"
     DEFAULT_TEMPERATURE: float = 0.7
     MEMORY_THRESHOLD_L1: float = 0.2
