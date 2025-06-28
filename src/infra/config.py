@@ -1,4 +1,5 @@
 """Configuration utilities for the Culture project."""
+
 from __future__ import annotations
 
 import importlib
@@ -218,27 +219,25 @@ BOOL_CONFIG_KEYS = [
 # outgoing messages.
 REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
 
+
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
-    global settings
+    global settings, _CONFIG
     new_settings = ConfigSettings()
-    if validate_required:
-        missing = [
-            k
-            for k in REQUIRED_CONFIG_KEYS
-            if _CONFIG.get(k) is None or str(_CONFIG.get(k)).strip() == ""
-        ]
-
-        if missing:
-            raise RuntimeError(
-                "Missing mandatory configuration keys: " + ", ".join(missing)
-            )
-    settings = new_settings
     try:
-        data = settings.model_dump()
+        data = new_settings.model_dump()
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
-        data = settings.dict()
+        data = new_settings.dict()
+
+    if validate_required:
+        missing = [k for k in REQUIRED_CONFIG_KEYS if not data.get(k)]
+        if missing:
+            raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
+
+    settings = new_settings
+    _CONFIG = data
     return cast(dict[str, Any], data)
+
 
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
@@ -264,6 +263,7 @@ RELATIONSHIP_LABELS = {
     (0.4, 0.7): "Positive",
     (0.7, 1.0): "Allied",
 }
+
 
 def get_relationship_label(score: float) -> str:
     """Return a descriptive relationship label for ``score``."""
