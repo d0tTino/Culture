@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +14,7 @@ from src.agents.memory.vector_store import ChromaVectorStoreManager
 @pytest.mark.usefixtures("chroma_test_dir")
 class TestSemanticGroupingRetrieval(unittest.TestCase):
     @pytest.fixture(autouse=True)
-    def _inject(self, request, chroma_test_dir):
+    def _inject(self, request, chroma_test_dir: Path):
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 
