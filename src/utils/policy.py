@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import typing
 
 import requests
@@ -16,7 +15,9 @@ def allow_message(content: str | None) -> bool:
     """Return True if the message is allowed by policy."""
     if content is None:
         return True
-    blocked_words = os.getenv("OPA_BLOCKLIST", "").split(",")
+    blocked_words = (
+        config.get_config("OPA_BLOCKLIST").split(",") if config.get_config("OPA_BLOCKLIST") else []
+    )
     content_lower = content.lower()
     return not any(word.strip().lower() in content_lower for word in blocked_words if word.strip())
 

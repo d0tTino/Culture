@@ -25,6 +25,7 @@ class DummyDiscordClient:
 async def test_opa_blocks_message(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
     monkeypatch.setattr(config.settings, "OPA_URL", "http://opa", raising=False)
+
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": False}}
     monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
@@ -48,6 +49,7 @@ async def test_opa_blocks_message(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_opa_modifies_message(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
     monkeypatch.setattr(config.settings, "OPA_URL", "http://opa", raising=False)
+
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": True, "content": "bar"}}
     monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))

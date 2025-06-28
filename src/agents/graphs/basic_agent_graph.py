@@ -239,7 +239,10 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
     if action_intent != "idle":
         role_name = _get_current_role(agent_state_obj)
         role_du_conf = config.ROLE_DU_GENERATION.get(role_name, {"base": 1.0})
-        du_gen_rate = role_du_conf.get("base", 1.0)
+        if isinstance(role_du_conf, dict):
+            du_gen_rate = role_du_conf.get("base", 1.0)
+        else:
+            du_gen_rate = float(role_du_conf)
 
         generated_du = round(du_gen_rate * (0.5 + random.random()), 1)
         if generated_du > 0:
@@ -273,6 +276,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                 [
                     str(mem.get("content", ""))
                     for mem in list(agent_state_obj.short_term_memory)[-10:]
+                    if hasattr(mem, "get")
                 ]
             )
             # Use public property with hasattr

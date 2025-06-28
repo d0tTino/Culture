@@ -9,12 +9,22 @@ try:  # pragma: no cover - prefer pydantic v2
 except ImportError:  # pragma: no cover - fallback for pydantic v1
     from pydantic import BaseSettings  # type: ignore
 
+BaseSettings = _BaseSettings  # type: ignore[misc]
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
     OLLAMA_API_BASE: str = "http://localhost:11434"
+    MODEL_NAME: str = ""
+    ROLE_DU_GENERATION: dict[str, float] = {
+        "Facilitator": 1.0,
+        "Innovator": 1.0,
+        "Analyzer": 1.0,
+    }
+
     DEFAULT_LLM_MODEL: str = "mistral:latest"
+    # Backwards compatibility with older config keys
+    MODEL_NAME: str = "mistral:latest"
     DEFAULT_TEMPERATURE: float = 0.7
     MEMORY_THRESHOLD_L1: float = 0.2
     MEMORY_THRESHOLD_L2: float = 0.3
@@ -28,6 +38,11 @@ class ConfigSettings(BaseSettings):
     OLLAMA_REQUEST_TIMEOUT: int = 10
     REDPANDA_BROKER: str = ""
     OPA_URL: str = ""
+    MODEL_NAME: str = "mistral:latest"
+    ROLE_DU_GENERATION: dict[str, float] = {}
+    REDPANDA_TOPIC: str = "culture.events"
+    REPLAY_GROUP: str = "culture-replay"
+    ENABLE_REDPANDA: bool = False
     TARGETED_MESSAGE_MULTIPLIER: float = 3.0
     POSITIVE_RELATIONSHIP_LEARNING_RATE: float = 0.3
     NEGATIVE_RELATIONSHIP_LEARNING_RATE: float = 0.4
@@ -120,11 +135,21 @@ class ConfigSettings(BaseSettings):
     SNAPSHOT_INTERVAL_STEPS: int = 100
     MAX_AGENT_AGE: int = 10
     AGENT_TOKEN_BUDGET: int = 10000
+    ROLE_DU_GENERATION: dict[str, object] = {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+    }
     GENE_MUTATION_RATE: float = 0.1
+    ENABLE_OTEL: bool = False
+    OPA_BLOCKLIST: str = ""
+    HTTP_HOST: str = "0.0.0.0"
+    HTTP_PORT: int = 8000
+    DEBUG_SQLITE: bool = False
+    ENABLE_DSPY_TESTS: bool = False
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 
 settings = ConfigSettings()

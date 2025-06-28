@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import TYPE_CHECKING, Any, Optional
 
 from src.infra import config
@@ -25,9 +24,7 @@ async def _get_pool() -> Any:
 
     global _pool
     if _pool is None:
-        db_url = os.environ.get("DISCORD_TOKENS_DB_URL") or str(
-            config.get_config("DISCORD_TOKENS_DB_URL") or ""
-        )
+        db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
         if not db_url:
             raise RuntimeError("DISCORD_TOKENS_DB_URL is not set")
         _pool = await asyncpg.create_pool(db_url)
@@ -50,9 +47,7 @@ async def lookup_token(agent_id: str) -> Optional[str]:
     if token:
         return token
 
-    env_tokens = os.environ.get("DISCORD_BOT_TOKEN") or str(
-        config.get_config("DISCORD_BOT_TOKEN") or ""
-    )
+    env_tokens = str(config.get_config("DISCORD_BOT_TOKEN") or "")
     tokens = [t.strip() for t in env_tokens.split(",") if t.strip()]
     if not tokens:
         return None

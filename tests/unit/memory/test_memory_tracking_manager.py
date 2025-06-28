@@ -2,6 +2,7 @@
 """Unit tests for MemoryTrackingManager."""
 
 import unittest
+from pathlib import Path
 
 import pytest
 from typing_extensions import Self
@@ -19,7 +20,7 @@ class TestMemoryTrackingManager(unittest.TestCase):
     """Tests for MemoryTrackingManager."""
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self: Self, chroma_test_dir: str) -> None:
+    def _inject_fixtures(self: Self, chroma_test_dir: Path) -> None:
         self.chroma_test_dir = chroma_test_dir
 
     def setUp(self: Self) -> None:

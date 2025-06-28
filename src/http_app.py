@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import os
 from collections.abc import AsyncGenerator
 from typing import Any
 
 import uvicorn
 from fastapi import Request
 
+from src.infra import config
 from src.interfaces.dashboard_backend import (
-    EventSourceResponse,  # type: ignore[attr-defined]
+    EventSourceResponse,
     SimulationEvent,
     app,
     event_queue,
@@ -55,8 +55,8 @@ def main(argv: list[str] | None = None) -> None:
         print(__version__)
         return
 
-    host = os.getenv("HTTP_HOST", "0.0.0.0")
-    port_str = os.getenv("HTTP_PORT", "8000")
+    host = str(config.get_config("HTTP_HOST") or "0.0.0.0")
+    port_str = str(config.get_config("HTTP_PORT") or "8000")
     try:
         port = int(port_str)
     except ValueError as exc:  # pragma: no cover - simple runtime safeguard

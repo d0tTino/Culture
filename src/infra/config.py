@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -119,6 +119,11 @@ DEFAULT_CONFIG: dict[str, object] = {
     "SNAPSHOT_INTERVAL_STEPS": 100,
     "MAX_AGENT_AGE": 10,
     "AGENT_TOKEN_BUDGET": 10000,
+    "ROLE_DU_GENERATION": {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+    },
     "GENE_MUTATION_RATE": 0.1,
 }
 
@@ -217,15 +222,19 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
+REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
+
+
+
 
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
     global settings, _CONFIG
     settings = ConfigSettings()
+
     try:
-        data = settings.model_dump()
+        data = settings.model_dump()  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
 
@@ -238,14 +247,19 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     return cast(dict[str, Any], data)
 
 
+
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
     if key is None:
         try:
-            return settings.model_dump()
+            return settings.model_dump()  # type: ignore[attr-defined]
         except AttributeError:  # pragma: no cover - pydantic v1
             return settings.dict()
-    return getattr(settings, key)
+    if key in _CONFIG and str(_CONFIG.get(key, "")).strip() != "":
+        return _CONFIG[key]
+    if hasattr(settings, key):
+        return getattr(settings, key)
+    return None
 
 
 def get(setting_name: str, default: str | None = None) -> object:

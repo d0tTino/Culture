@@ -301,6 +301,7 @@ Culture.ai/
 │   ├── minimal_repro.py
 │   └── test_synthesizer.py
 ├── scripts/                   # Utility scripts for project management
+│   ├── init_agents.py       # Initialize agents with seed memories
 │   └── cleanup_temp_db.py     # Script to clean up temporary ChromaDB directories
 ├── src/                       # Source code
 │   ├── app.py                 # Main application entry point
@@ -561,6 +562,10 @@ without the required plugins installed, you may see "unknown mark" warnings.
 Use `scripts/run_tests.py` to automatically adjust options based on the
 available plugins, or invoke `pytest -c pytest.ini` directly.
 
+Set `SKIP_DEP_INSTALL=1` to skip dependency installation when running
+`scripts/run_tests.py` if your environment already has the required
+packages.
+
 See [docs/testing.md](docs/testing.md) for full instructions, marker definitions, and troubleshooting.
 
 ## Quickstart for Developers
@@ -629,8 +634,16 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
    - `SNAPSHOT_COMPRESS=1` to compress simulation snapshots
 
-   - See `.env.example`, `docs/testing.md`, `docs/redpanda_setup.md`,
-     and `docs/opa_setup.md` for details.
+
+7. **Initialize agent memories (optional):**
+   ```bash
+   PYTHONPATH=. python scripts/init_agents.py --n 3 "Hello world"
+   ```
+
+   This pre-populates the ChromaDB store with seed memories for `agent_1` through `agent_3`.
+
+    - See `.env.example`, `docs/testing.md`, `docs/redpanda_setup.md`,
+      and `docs/opa_setup.md` for details.
 
 ### Windows / WSL2 Notes
 
