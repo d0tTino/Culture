@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, ClassVar
+
+if TYPE_CHECKING:  # pragma: no cover - for type checkers
+    from pydantic_settings import BaseSettings
+else:
+    try:
+        from pydantic_settings import BaseSettings
+    except Exception:  # pragma: no cover - fallback for older pydantic
+        from pydantic import BaseSettings  # type: ignore[misc]
+
 from pydantic_settings import BaseSettings
 
 class ConfigSettings(BaseSettings):
@@ -10,6 +20,8 @@ class ConfigSettings(BaseSettings):
     OLLAMA_API_BASE: str = ""
     MODEL_NAME: str = ""
     DEFAULT_LLM_MODEL: str = "mistral:latest"
+    # Backwards compatibility with older config keys
+    MODEL_NAME: str = "mistral:latest"
     DEFAULT_TEMPERATURE: float = 0.7
     MEMORY_THRESHOLD_L1: float = 0.2
     MEMORY_THRESHOLD_L2: float = 0.3
@@ -110,11 +122,12 @@ class ConfigSettings(BaseSettings):
     MAX_AGENT_AGE: int = 10
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
-    MODEL_NAME: str = ""
-    ROLE_DU_GENERATION: dict[str, object] = {
-        "Innovator": {"base": 1.0, "bonus_factor": 0.5},
-        "Analyzer": {"base": 1.0, "bonus_factor": 0.2},
-        "Facilitator": {"base": 1.0, "bonus_factor": 0.0},
+    # Default generation distribution for each role (used in tests)
+    ROLE_DU_GENERATION: ClassVar[dict[str, Any]] = {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+
     }
 
     class Config:

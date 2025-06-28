@@ -145,7 +145,6 @@ class L2SummaryGenerator:
             if not self.l2_predictor or not dspy:
                 logger.warning(
                     "DSPy not available for L2 summary generation - returning empty string"
-
                 )
                 return ""
 
