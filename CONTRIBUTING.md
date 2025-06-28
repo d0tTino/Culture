@@ -10,7 +10,15 @@ Welcome! We're excited that you're interested in contributing to Culture.ai. Thi
 - Install dependencies from `requirements-dev.txt` (includes `pytest-xdist`) in addition to `requirements.txt`.
 - Set up your environment and dependencies as described in the README.
 - Enable an [EditorConfig](https://editorconfig.org/) plugin in your editor if available to match the project's formatting settings.
-- If you modify dependencies, run `scripts/check_requirements.sh` to ensure `requirements.txt` is in sync with `requirements.in`.
+- If you modify dependencies:
+  1. Update `requirements.in` or `requirements-dev.in` as needed.
+  2. Regenerate the lock files:
+     ```bash
+     pip-compile requirements.in -o requirements.txt --no-annotate --no-header
+     pip-compile requirements-dev.in -o requirements-dev.txt --no-annotate --no-header
+     ```
+  3. Run `scripts/check_requirements.sh` to verify the files are in sync.
+  4. Commit the updated `requirements*.txt` files.
 
 ## Code Style Guidelines
 - **Follow [PEP 8](https://peps.python.org/pep-0008/)** for Python code style.
