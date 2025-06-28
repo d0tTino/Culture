@@ -1,7 +1,8 @@
 """Application configuration settings using pydantic."""
+
 from __future__ import annotations
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class ConfigSettings(BaseSettings):
@@ -22,6 +23,11 @@ class ConfigSettings(BaseSettings):
     OLLAMA_REQUEST_TIMEOUT: int = 10
     REDPANDA_BROKER: str = ""
     OPA_URL: str = ""
+    MODEL_NAME: str = "mistral:latest"
+    ROLE_DU_GENERATION: dict[str, float] = {}
+    REDPANDA_TOPIC: str = "culture.events"
+    REPLAY_GROUP: str = "culture-replay"
+    ENABLE_REDPANDA: bool = False
     TARGETED_MESSAGE_MULTIPLIER: float = 3.0
     POSITIVE_RELATIONSHIP_LEARNING_RATE: float = 0.3
     NEGATIVE_RELATIONSHIP_LEARNING_RATE: float = 0.4
@@ -109,6 +115,12 @@ class ConfigSettings(BaseSettings):
     MAX_AGENT_AGE: int = 10
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
+    ENABLE_OTEL: bool = False
+    OPA_BLOCKLIST: str = ""
+    HTTP_HOST: str = "0.0.0.0"
+    HTTP_PORT: int = 8000
+    DEBUG_SQLITE: bool = False
+    ENABLE_DSPY_TESTS: bool = False
 
     class Config:
         env_file = ".env"

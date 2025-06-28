@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 import uuid
 from collections.abc import Mapping, Sequence
@@ -42,9 +41,7 @@ except Exception:  # pragma: no cover - fallback when chromadb missing or faulty
         ) -> None:
             raise ImportError("chromadb is required for SentenceTransformerEmbeddingFunction")
 
-    SentenceTransformerEmbeddingFunction = cast(
-        Any, _SentenceTransformerEmbeddingFunctionFallback
-    )
+    SentenceTransformerEmbeddingFunction = cast(Any, _SentenceTransformerEmbeddingFunctionFallback)
 # Attempt a more standard import for SentenceTransformerEmbeddingFunction
 try:
     from chromadb.exceptions import ChromaDBException
@@ -140,7 +137,11 @@ class ChromaVectorStoreManager(MemoryStore):
                 Settings(chroma_db_impl="duckdb+parquet", persist_directory=str(persist_path))
             )
 
-        self.debug_sqlite = os.getenv("DEBUG_SQLITE", "").lower() in {"1", "true", "yes"}
+        self.debug_sqlite = str(config.get_config("DEBUG_SQLITE") or "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         if self.debug_sqlite:
             self._enable_sqlite_debug(str(persist_path))
 

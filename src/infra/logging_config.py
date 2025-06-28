@@ -4,8 +4,9 @@ Logging configuration for the Culture.ai project.
 
 import logging
 import logging.handlers
-import os
 from pathlib import Path
+
+from src.infra import config
 
 try:  # pragma: no cover - optional dependency
     from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
@@ -53,7 +54,7 @@ def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
 
-    if OTEL_AVAILABLE and os.getenv("ENABLE_OTEL", "0") == "1":
+    if OTEL_AVAILABLE and config.get_config("ENABLE_OTEL"):
         try:  # pragma: no cover - best effort
             resource = Resource.create({"service.name": "culture"})
             provider = LoggerProvider(resource=resource)
