@@ -227,28 +227,23 @@ REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA
 
 
 
+
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
     global settings, _CONFIG
-    new_settings = ConfigSettings()
-    if validate_required:
-        try:
-            data = new_settings.model_dump()
-        except AttributeError:  # pragma: no cover - pydantic v1 fallback
-            data = new_settings.dict()
-        missing = [key for key in REQUIRED_CONFIG_KEYS if str(data.get(key, "")).strip() == ""]
+    settings = ConfigSettings()
 
-
-    if validate_required:
-        missing = [k for k in REQUIRED_CONFIG_KEYS if not data.get(k)]
-        if missing:
-            raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
-    settings = new_settings
     try:
         data = settings.model_dump()  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
-    _CONFIG.update(cast(dict[str, Any], data))
+
+    _CONFIG = dict(data)
+    if validate_required:
+        missing = [k for k in REQUIRED_CONFIG_KEYS if not str(_CONFIG.get(k, "")).strip()]
+        if missing:
+            raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
+
     return cast(dict[str, Any], data)
 
 

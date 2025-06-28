@@ -172,6 +172,7 @@ class Simulation:
         self.messages_to_perceive_this_round: list[
             SimulationMessage
         ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        # Lock protecting message buffers when agents run concurrently
         self._msg_lock = asyncio.Lock()
 
 
@@ -389,6 +390,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
+
                 self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)

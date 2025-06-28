@@ -2,7 +2,7 @@
 
 This guide walks through running the Culture.ai simulation on Windows using WSL2.
 It covers enabling WSL2, installing Python 3.10, setting up Ollama, and running
-the vertical slice example.
+the vertical slice example using `vertical_slice.bat`.
 
 > **GPU Requirements**
 > To utilize GPU acceleration you must run the simulation inside WSL2 with the
@@ -27,8 +27,21 @@ the vertical slice example.
    wsl --update
    ```
    Restart Windows when prompted to enable the latest kernel and GPU features.
-   After reboot, run `wsl --shutdown` to apply the update and restart your
-   distribution. You can verify GPU access inside WSL with `nvidia-smi`.
+After reboot, run `wsl --shutdown` to apply the update and restart your
+distribution. You can verify GPU access inside WSL with `nvidia-smi`.
+
+## Clone the Repository
+
+Open a WSL terminal and clone the Culture.ai repository. All remaining commands
+are issued from this directory.
+
+```bash
+git clone https://github.com/d0tTino/Culture.git
+cd Culture
+cp .env.example .env
+```
+
+The `.env` file stores configuration such as the URL to your Ollama server.
 
 ## Install Python 3.10
 
@@ -62,6 +75,13 @@ install all test requirements:
 scripts\setup_test_env.bat
 ```
 This script uses `py -3.10 -m venv` to ensure it creates the environment with Python 3.10.
+
+Alternatively, run the PowerShell variant to create the environment, install
+dependencies, and pull the default model in one step:
+
+```powershell
+scripts\windows_quick_setup.ps1
+```
 
 Copy the example environment file and customize it if needed:
 
@@ -145,6 +165,27 @@ The script checks for both `venv` and `.venv` directories and activates the firs
 
 The script launches three agents for a few steps and stores their memories in
 ChromaDB. See `docs/walking_vertical_slice.md` for details.
+
+## Quick Walkthrough
+
+1. Clone the repository and enter the directory:
+   ```bash
+   git clone https://github.com/d0tTino/Culture.git
+   cd Culture
+   cp .env.example .env
+   ```
+2. Create the Python environment and pull the model:
+   ```powershell
+   scripts\windows_quick_setup.ps1
+   ```
+3. Start Ollama if it is not already running:
+   ```bash
+   ollama serve &
+   ```
+4. Launch the demo:
+   ```cmd
+   scripts\vertical_slice.bat
+   ```
 
 To verify the setup you can also run the integration test:
 
