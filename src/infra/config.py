@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -220,25 +220,23 @@ REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
-    global settings
+    global settings, _CONFIG
     new_settings = ConfigSettings()
-    if validate_required:
-        missing = [
-            k
-            for k in REQUIRED_CONFIG_KEYS
-            if _CONFIG.get(k) is None or str(_CONFIG.get(k)).strip() == ""
-        ]
+    try:
+        data = new_settings.model_dump()
+    except AttributeError:  # pragma: no cover - pydantic v1 fallback
+        data = new_settings.dict()
 
+    _CONFIG.update(data)
+    settings = new_settings
+
+    if validate_required:
+        missing = [k for k in REQUIRED_CONFIG_KEYS if str(_CONFIG.get(k, "")).strip() == ""]
         if missing:
             raise RuntimeError(
                 "Missing mandatory configuration keys: " + ", ".join(missing)
             )
-    settings = new_settings
-    try:
-        data = settings.model_dump()
-    except AttributeError:  # pragma: no cover - pydantic v1 fallback
-        data = settings.dict()
-    return cast(dict[str, Any], data)
+    return data
 
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""

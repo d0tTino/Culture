@@ -97,6 +97,9 @@ class Simulation:
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
 
+        # Lock for concurrent access to message queues
+        self._msg_lock = asyncio.Lock()
+
         # --- Store the simulation scenario ---
         self.scenario = scenario
         if scenario:
@@ -383,6 +386,7 @@ class Simulation:
                     []
                 )  # Clear pending for the new round accumulation
 
+                debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {debug_len} messages from pending_messages_for_next_round."
