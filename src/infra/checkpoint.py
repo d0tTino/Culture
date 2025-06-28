@@ -105,7 +105,7 @@ def restore_environment(env: dict[str, Any]) -> None:
             os.environ.pop(key, None)
         else:
             os.environ[key] = str(value)
-    config.load_config()
+    config.load_config(validate_required=False)
     log_event({"type": "environment_change", "env": env})
 
 

@@ -9,8 +9,6 @@ except Exception:  # pragma: no cover - fallback for older pydantic
 
 BaseSettings = _BaseSettings  # type: ignore[misc]
 
-from pydantic_settings import BaseSettings
-
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
@@ -118,6 +116,11 @@ class ConfigSettings(BaseSettings):
     SNAPSHOT_INTERVAL_STEPS: int = 100
     MAX_AGENT_AGE: int = 10
     AGENT_TOKEN_BUDGET: int = 10000
+    ROLE_DU_GENERATION: dict[str, object] = {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+    }
     GENE_MUTATION_RATE: float = 0.1
     # Default generation distribution for each role (used in tests)
     ROLE_DU_GENERATION: ClassVar[dict[str, Any]] = {
