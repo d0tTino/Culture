@@ -5,7 +5,6 @@ from __future__ import annotations
 from pydantic_settings import BaseSettings
 
 
-
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
@@ -111,6 +110,11 @@ class ConfigSettings(BaseSettings):
     SNAPSHOT_INTERVAL_STEPS: int = 100
     MAX_AGENT_AGE: int = 10
     AGENT_TOKEN_BUDGET: int = 10000
+    ROLE_DU_GENERATION: dict[str, object] = {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+    }
     GENE_MUTATION_RATE: float = 0.1
 
     class Config:

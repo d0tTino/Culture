@@ -119,6 +119,11 @@ DEFAULT_CONFIG: dict[str, object] = {
     "SNAPSHOT_INTERVAL_STEPS": 100,
     "MAX_AGENT_AGE": 10,
     "AGENT_TOKEN_BUDGET": 10000,
+    "ROLE_DU_GENERATION": {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+    },
     "GENE_MUTATION_RATE": 0.1,
 }
 
