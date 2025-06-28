@@ -65,7 +65,7 @@ def create_project(
             creator_agent_id,
             sim.current_step,
             sim.vector.to_dict(),
-        )  # type: ignore[call-arg]
+        )
 
     if sim.discord_bot:
         embed = sim.discord_bot.create_project_embed(
@@ -109,7 +109,7 @@ def join_project(sim: Simulation, project_id: str, agent_id: str) -> bool:
             agent_id,
             sim.current_step,
             sim.vector.to_dict(),
-        )  # type: ignore[call-arg]
+        )
 
     if sim.discord_bot:
         embed = sim.discord_bot.create_project_embed(
@@ -153,7 +153,7 @@ def leave_project(sim: Simulation, project_id: str, agent_id: str) -> bool:
             agent_id,
             sim.current_step,
             sim.vector.to_dict(),
-        )  # type: ignore[call-arg]
+        )
 
     if sim.discord_bot:
         embed = sim.discord_bot.create_project_embed(
