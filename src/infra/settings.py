@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 
 BaseSettings = _BaseSettings  # type: ignore[misc]
@@ -126,11 +126,10 @@ class ConfigSettings(BaseSettings):
         "Analyzer": {"base": 1.0},
     }
     GENE_MUTATION_RATE: float = 0.1
-    # Default generation distribution for each role (used in tests)
-    ROLE_DU_GENERATION: ClassVar[dict[str, Any]] = {
-        "Facilitator": {"base": 1.0},
-        "Innovator": {"base": 1.0},
-        "Analyzer": {"base": 1.0},
+    ROLE_DU_GENERATION: dict[str, dict[str, float]] = {
+        "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
+        "Innovator": {"base": 1.0, "bonus_factor": 0.5},
+        "Analyzer": {"base": 1.0, "bonus_factor": 0.2},
 
     }
 
