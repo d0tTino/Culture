@@ -120,9 +120,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -163,9 +163,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -383,6 +383,7 @@ class Simulation:
                     []
                 )  # Clear pending for the new round accumulation
 
+                debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
                     f"Turn {self.current_step} (Agent {agent_id}, Index 0): Initialized messages_to_perceive_this_round "
                     f"with {debug_len} messages from pending_messages_for_next_round."

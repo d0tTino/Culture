@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic_settings import BaseSettings
 
 
+
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
