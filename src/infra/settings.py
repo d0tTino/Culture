@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-try:  # pragma: no cover - prefer pydantic-settings if available
-    from pydantic_settings import BaseSettings as _BaseSettings
-except Exception:  # pragma: no cover - fallback for older pydantic
-    from pydantic import BaseSettings as _BaseSettings  # type: ignore[no-redef]
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 BaseSettings = _BaseSettings  # type: ignore[misc]
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
-    OLLAMA_API_BASE: str = ""
+    OLLAMA_API_BASE: str = "http://localhost:11434"
     MODEL_NAME: str = ""
+    ROLE_DU_GENERATION: dict[str, float] = {
+        "Facilitator": 1.0,
+        "Innovator": 1.0,
+        "Analyzer": 1.0,
+    }
+
     DEFAULT_LLM_MODEL: str = "mistral:latest"
     # Backwards compatibility with older config keys
     MODEL_NAME: str = "mistral:latest"
@@ -130,9 +134,7 @@ class ConfigSettings(BaseSettings):
 
     }
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 
 settings = ConfigSettings()
