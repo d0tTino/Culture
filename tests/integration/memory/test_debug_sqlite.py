@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -9,7 +10,7 @@ pytest.importorskip("chromadb")
 
 @pytest.mark.integration
 @pytest.mark.memory
-def test_debug_sqlite_env(monkeypatch, chroma_test_dir, caplog):
+def test_debug_sqlite_env(monkeypatch, chroma_test_dir: Path, caplog):
     monkeypatch.setenv("DEBUG_SQLITE", "1")
     caplog.set_level(logging.DEBUG)
     store = ChromaVectorStoreManager(persist_directory=chroma_test_dir)

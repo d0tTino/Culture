@@ -8,6 +8,7 @@ import logging
 import math
 import unittest
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import pytest
@@ -39,7 +40,7 @@ class TestMemoryUtilityScore(unittest.TestCase):
     """
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self: Self, request: object, chroma_test_dir: str) -> None:
+    def _inject_fixtures(self: Self, request: object, chroma_test_dir: Path) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import subprocess
 import sys
 from configparser import ConfigParser
@@ -31,6 +30,8 @@ def main(argv: list[str]) -> int:
         "hypothesis",
         "boto3",
         "moto",
+        "numpy",
+        "chromadb",
     ]
     if not all(have_module(mod) for mod in required):
         try:
@@ -51,7 +52,6 @@ def main(argv: list[str]) -> int:
                 f"WARNING: dependency installation failed ({exc}). "
                 "Continuing with existing packages."
             )
-
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)

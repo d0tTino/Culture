@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("chromadb")
@@ -10,7 +12,7 @@ from tests.utils.mock_llm import MockLLM
 @pytest.mark.integration
 @pytest.mark.memory
 @pytest.mark.usefixtures("chroma_test_dir")
-def test_frequency_pruning(monkeypatch: pytest.MonkeyPatch, chroma_test_dir: str) -> None:
+def test_frequency_pruning(monkeypatch: pytest.MonkeyPatch, chroma_test_dir: Path) -> None:
     mock_llm_cm = MockLLM({"default": "resp"})
     mock_llm_cm.__enter__()
     try:
