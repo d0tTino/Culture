@@ -8,6 +8,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
 
+from src.utils.paths import ensure_dir
+
 
 @runtime_checkable
 class MemoryStore(Protocol):
@@ -37,8 +39,7 @@ class ChromaMemoryStore(MemoryStore):
         self._store: list[dict[str, Any]] = []
         self._persist_path: Path | None = None
         if persist_directory is not None:
-            persist_dir = Path(persist_directory)
-            persist_dir.mkdir(parents=True, exist_ok=True)
+            persist_dir = ensure_dir(persist_directory)
             self._persist_path = persist_dir / "chroma_memory.json"
             if self._persist_path.exists():
                 try:

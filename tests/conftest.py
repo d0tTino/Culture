@@ -7,7 +7,6 @@ import os
 import shutil
 import socket
 import sys
-import tempfile
 import types
 from collections.abc import Generator
 from pathlib import Path
@@ -24,6 +23,7 @@ project_root = str(Path(__file__).parent.parent.absolute())
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from src.utils.paths import ensure_dir, get_temp_dir  # noqa: E402
 from tests.utils.dummy_chromadb import setup_dummy_chromadb  # noqa: E402
 
 # Ensure np.float_ exists for libraries expecting NumPy <2.0
@@ -273,9 +273,15 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[Path, None, None]:
         except Exception as e:
             print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
     else:
-        with tempfile.TemporaryDirectory(prefix=f"chroma_tests_{worker_id}_") as tmp:
-            dir_path = Path(tmp)
-            yield dir_path
+        base_dir = get_temp_dir(prefix=f"chroma_tests_{worker_id}_").as_posix()
+    ensure_dir(base_dir)
+    yield base_dir
+    # Teardown: remove the directory after the session
+    try:
+        shutil.rmtree(base_dir)
+    except Exception as e:
+        print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
+
 
 
 @pytest.fixture(autouse=True)

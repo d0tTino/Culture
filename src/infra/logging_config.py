@@ -5,7 +5,8 @@ Logging configuration for the Culture.ai project.
 import logging
 import logging.handlers
 import os
-from pathlib import Path
+
+from src.utils.paths import ensure_dir
 
 try:  # pragma: no cover - optional dependency
     from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
@@ -26,8 +27,7 @@ def setup_logging(log_dir: str = "logs") -> tuple[logging.Logger, logging.Logger
         log_dir: Directory to store log files
     """
     # Create log directory if it doesn't exist
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
+    log_path = ensure_dir(log_dir)
 
     # Set up root logger
     root_logger = logging.getLogger()

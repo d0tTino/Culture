@@ -8,6 +8,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
+from src.utils.paths import ensure_dir
+
 from .config import SNAPSHOT_COMPRESS, get_config
 
 zstd: ModuleType | None
@@ -96,8 +98,7 @@ def save_snapshot(
     """
     compress = SNAPSHOT_COMPRESS if compress is None else compress
 
-    path = Path(directory)
-    path.mkdir(parents=True, exist_ok=True)
+    path = ensure_dir(directory)
 
     if compress:
         if zstd is None:
