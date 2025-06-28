@@ -2,6 +2,7 @@
 Defines the Knowledge Board class for maintaining shared knowledge among agents.
 """
 
+import asyncio
 import logging
 import uuid
 from typing import Any, Generic, SupportsIndex, TypeVar
@@ -63,6 +64,8 @@ class KnowledgeBoard:
         else:
             self.entries = LoggingList()
         self.vector = VersionVector()
+        # Lock to synchronize concurrent access to ``entries``
+        self.lock = asyncio.Lock()
         logger.info(
             f"KnowledgeBoard initialized. Instance ID: {id(self)}. Entries list ID: {id(self.entries)} type: {type(self.entries)}"
         )

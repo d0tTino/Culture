@@ -12,6 +12,12 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from src.infra import config
 from src.interfaces import metrics
+from src.interfaces.dashboard_backend import (
+    AgentMessage,
+    SimulationEvent,
+    event_queue,
+    message_sse_queue,
+)
 from src.utils.policy import allow_message, evaluate_with_opa
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -109,16 +115,9 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-
-    async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
-        """Return the Discord client for the given agent."""
-        if agent_id and self.token_lookup:
-            token = self.token_lookup(agent_id)
-            if asyncio.iscoroutine(token):
-                token = await token
-            if isinstance(token, str):
-                return self.clients.get(token, self.client)
-        return self.client
+        self.event_queue = event_queue
+        self.message_queue = message_sse_queue
+        self._forward_task: asyncio.Task[Any] | None = None
 
         # Set up event handlers for the first client only
         @self.client.event
@@ -143,12 +142,35 @@ class SimulationDiscordBot:
                         chan_id = getattr(channel, "id", "unknown")
                         logger.warning(
                             f"Attempted to send message to channel {chan_id} "
-                            f"of type {type(channel).__name__}, which does not support .send()"
+                            f"of type {type(channel).__name__}, which does not support .send()",
                         )
                     else:
                         logger.warning("Attempted to send message to a None channel.")
             else:
                 logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
+
+        @self.client.event
+        async def on_message(message: Any) -> None:
+            if getattr(message, "author", None) == self.client.user:
+                return
+            content = getattr(message, "content", "")
+            await self.event_queue.put(
+                SimulationEvent(
+                    event_type="broadcast",
+                    data={"author": str(getattr(message, "author", "")), "content": content},
+                )
+            )
+
+    async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
+        """Return the Discord client for the given agent."""
+        if agent_id and self.token_lookup:
+            token = self.token_lookup(agent_id)
+            if asyncio.iscoroutine(token):
+                token = await token
+            if isinstance(token, str):
+                return self.clients.get(token, self.client)
+        return self.client
+
 
     async def send_simulation_update(
         self: Self,
@@ -442,6 +464,15 @@ class SimulationDiscordBot:
         )
         return embed
 
+    async def _forward_agent_messages(self: Self) -> None:
+        """Forward AgentMessage objects from the queue to Discord."""
+        try:
+            while True:
+                msg: AgentMessage = await self.message_queue.get()
+                await self.send_simulation_update(content=msg.content, agent_id=msg.agent_id)
+        except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
+            pass
+
     async def run_bot(self: Self) -> None:
         """
         Start the Discord bot and connect to Discord.
@@ -453,6 +484,7 @@ class SimulationDiscordBot:
             for token, client in self.clients.items():
                 setattr(client, "token", token)
                 tasks.append(client.start(token))
+            self._forward_task = asyncio.create_task(self._forward_agent_messages())
             await asyncio.gather(*tasks)
             # Mark bot as ready when all clients have started
             self.is_ready = True
@@ -484,6 +516,13 @@ class SimulationDiscordBot:
                             logger.warning("Attempted to send message to a None channel.")
             for client in self.clients.values():
                 await client.close()
+            if self._forward_task:
+                self._forward_task.cancel()
+                try:
+                    await self._forward_task
+                except asyncio.CancelledError:  # pragma: no cover - expected
+                    pass
+                self._forward_task = None
             self.is_ready = False
             logger.info("Discord bot stopped")
         except (discord.DiscordException, OSError) as e:

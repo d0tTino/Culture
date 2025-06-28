@@ -9,7 +9,7 @@ from fastapi import Request
 
 from src.infra import config
 from src.interfaces.dashboard_backend import (
-    EventSourceResponse,  # type: ignore[attr-defined]
+    EventSourceResponse,
     SimulationEvent,
     app,
     event_queue,

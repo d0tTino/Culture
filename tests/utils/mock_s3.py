@@ -1,21 +1,21 @@
 import shutil
 import sys
-import tempfile
 import types
 from pathlib import Path
 from typing import Any
+
+from src.utils.paths import ensure_dir, get_temp_dir
 
 
 class DummyS3Client:
     """A minimal in-memory S3 client for tests."""
 
     def __init__(self, base_dir: str | None = None) -> None:
-        self.base_dir = Path(base_dir or tempfile.mkdtemp())
-        self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.base_dir = ensure_dir(base_dir or get_temp_dir())
 
     def _path(self, bucket: str, key: str) -> Path:
         path = self.base_dir / bucket / key
-        path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_dir(path.parent)
         return path
 
     def upload_file(self, Filename: str | Path, Bucket: str, Key: str) -> None:

@@ -11,6 +11,7 @@ import logging
 import time
 import unittest
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from typing_extensions import Self
@@ -27,7 +28,7 @@ class TestHierarchicalMemoryPersistence(unittest.TestCase):
     """Tests for hierarchical memory persistence in the agent memory system."""
 
     @pytest.fixture(autouse=True)
-    def _inject_fixtures(self: Self, request: object, chroma_test_dir: str) -> None:
+    def _inject_fixtures(self: Self, request: object, chroma_test_dir: Path) -> None:
         self.request = request
         self.chroma_test_dir = chroma_test_dir
 

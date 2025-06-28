@@ -23,6 +23,7 @@ from typing_extensions import Self
 
 from src.infra import config
 from src.shared.memory_store import MemoryStore
+from src.utils.paths import ensure_dir
 
 chromadb: Any = None
 try:  # pragma: no cover - optional dependency
@@ -105,8 +106,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 heavy ``sentence-transformers`` dependency isn't required.
         """
         # Ensure the directory exists
-        persist_path = Path(persist_directory)
-        persist_path.mkdir(parents=True, exist_ok=True)
+        persist_path = ensure_dir(persist_directory)
 
         if embedding_function is None:
             try:
