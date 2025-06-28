@@ -73,6 +73,10 @@ jobs:
         shell: bash
         run: bash scripts/install_optional_deps.sh
 
+      - name: Verify requirements are up to date
+        shell: bash
+        run: bash scripts/check_requirements.sh
+
 
       # Cache pre-commit environment for faster runs
 
@@ -94,7 +98,7 @@ jobs:
 
       - name: Run mypy
         shell: bash
-        run: mypy --config-file pyproject.toml
+        run: mypy --strict --config-file pyproject.toml
 
 
       - name: Run Tests & Coverage

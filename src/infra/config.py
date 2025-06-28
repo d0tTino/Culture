@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -119,6 +119,11 @@ DEFAULT_CONFIG: dict[str, object] = {
     "SNAPSHOT_INTERVAL_STEPS": 100,
     "MAX_AGENT_AGE": 10,
     "AGENT_TOKEN_BUDGET": 10000,
+    "ROLE_DU_GENERATION": {
+        "Facilitator": {"base": 1.0},
+        "Innovator": {"base": 1.0},
+        "Analyzer": {"base": 1.0},
+    },
     "GENE_MUTATION_RATE": 0.1,
 }
 
@@ -217,12 +222,14 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["REDPANDA_BROKER", "OPA_URL", "MODEL_NAME"]
+REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
+
+
 
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
-    global settings
+    global settings, _CONFIG
     new_settings = ConfigSettings()
     if validate_required:
         try:
@@ -231,6 +238,9 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
             data = new_settings.dict()
         missing = [key for key in REQUIRED_CONFIG_KEYS if str(data.get(key, "")).strip() == ""]
 
+
+    if validate_required:
+        missing = [k for k in REQUIRED_CONFIG_KEYS if not data.get(k)]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
@@ -240,6 +250,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
         data = settings.dict()
     _CONFIG.update(cast(dict[str, Any], data))
     return cast(dict[str, Any], data)
+
 
 
 def get_config(key: str | None = None) -> Any:

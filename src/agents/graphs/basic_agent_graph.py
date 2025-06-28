@@ -276,6 +276,7 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                 [
                     str(mem.get("content", ""))
                     for mem in list(agent_state_obj.short_term_memory)[-10:]
+                    if hasattr(mem, "get")
                 ]
             )
             # Use public property with hasattr

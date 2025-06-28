@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.infra import llm_client as llm_client_module
+
 from src.infra.dspy_ollama_integration import configure_dspy_with_ollama, dspy
 
 # Configure logging
