@@ -46,13 +46,18 @@ class RoleProfile(BaseModel):
     """Profile for a role with embedding and reputation."""
 
     name: str
+    description: str
     embedding: list[float]
     reputation: float = 0.0
 
 
 def create_role_profile(role_name: str) -> RoleProfile:
     """Return a ``RoleProfile`` for the given role name."""
-    return RoleProfile(name=role_name, embedding=ROLE_EMBEDDINGS.get(role_name, _compute_embedding(role_name)))
+    return RoleProfile(
+        name=role_name,
+        description=ROLE_DESCRIPTIONS.get(role_name, "No description available."),
+        embedding=ROLE_EMBEDDINGS.get(role_name, _compute_embedding(role_name)),
+    )
 
 
 def create_default_role_profiles() -> dict[str, RoleProfile]:
@@ -66,10 +71,10 @@ def ensure_profile(role: str | RoleProfile | dict[str, Any]) -> RoleProfile:
         return role
     if isinstance(role, dict):
         name = str(role.get("name", ""))
+        description = str(role.get("description", ROLE_DESCRIPTIONS.get(name, "")))
         embedding = role.get("embedding")
         if embedding is None:
             embedding = ROLE_EMBEDDINGS.get(name, _compute_embedding(name))
         rep = float(role.get("reputation", 0.0))
-        return RoleProfile(name=name, embedding=embedding, reputation=rep)
+        return RoleProfile(name=name, description=description, embedding=embedding, reputation=rep)
     return create_role_profile(str(role))
-

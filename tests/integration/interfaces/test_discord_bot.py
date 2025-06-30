@@ -20,6 +20,7 @@ class AgentMessage:
         self.content = content
         self.step = step
 
+
 sent_by_token: list[str] = []
 
 

@@ -103,19 +103,29 @@ async def retrieve_semantic_context_node(state: AgentTurnState) -> dict[str, Any
 async def generate_thought_and_message_node(
     state: AgentTurnState,
 ) -> dict[str, AgentActionOutput | None]:
+    """Generate a thought and a structured action based on the agent's state."""
     agent = state.get("agent_instance")
     thought = "Thinking..."
     action_intent = "idle"
     if agent and hasattr(agent, "async_select_action_intent"):
-        result = await agent.async_select_action_intent("", "", "", [])
-        if result:
-            action_intent = getattr(result, "chosen_action_intent", "idle")
+        try:
+            result = await agent.async_select_action_intent("", "", "", [])
+            if result:
+                action_intent = getattr(result, "chosen_action_intent", "idle")
+        except Exception as e:
+            logger.error(f"Error in async_select_action_intent: {e}", exc_info=True)
+            action_intent = "idle"  # Fallback to idle
+
     try:
         structured = generate_structured_output(
             "prompt", AgentActionOutput, agent_state=state.get("state")
         )
     except TypeError:
         structured = generate_structured_output("prompt", AgentActionOutput)
+
+    if structured:
+        structured.action_intent = action_intent
+
     return {"structured_output": cast(AgentActionOutput | None, structured)}
 
 
@@ -138,7 +148,6 @@ async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
         if process_role_change(agent_state, requested_role_change):
             AgentController(agent_state).add_memory(
                 f"Changed role to {requested_role_change}",
-
                 {"step": state.get("simulation_step", 0), "type": "role_change"},
             )
         else:

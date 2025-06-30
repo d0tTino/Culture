@@ -11,8 +11,9 @@ import requests
 def test_generate_text_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that generate_text returns None when the underlying client fails."""
     # Arrange
-    # Disable the global mocks for this test to isolate the behavior
-    monkeypatch.setattr("src.shared.llm_mocks.mock_llm_functions", lambda: None)
+    # Patch the mock mode check to ensure we test the real failure path.
+    monkeypatch.setattr("src.infra.llm_client.is_mock_mode_enabled", lambda: False)
+
     # Patch the chat method on the LLMClient class to simulate a network error
     monkeypatch.setattr(
         "src.infra.llm_client.LLMClient.chat",

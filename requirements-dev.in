@@ -1,28 +1,7 @@
--r requirements.in
-ruff>=0.3
-mypy==1.10.0
-pytest==7.4.0
-pytest-cov==4.1.0
-black==23.7.0
-types-requests==2.31.0
-types-pyyaml
-types-redis
-pytest-xdist==3.7.0
-pytest-asyncio>=0.21
-requests
-langgraph==0.2.0
-pydantic>=2.11
-pydantic-settings
-prometheus-client==0.20.0
-hypothesis>=6.0
-pre-commit
-dspy-ai==2.6.27
-numpy>=2
-pip-tools
-zstandard==0.23.0
-neo4j
-testing.postgresql
-respx
+# This file contains the development-specific dependencies.
+# It should be compiled against the base requirements.in.
+# Command: pip-compile requirements-dev.in --output-file requirements-dev.txt
+-c requirements.txt
 
 # Core testing framework
 pytest
@@ -43,16 +22,20 @@ nbmake
 freezegun
 
 # For linting
-ruff
+ruff>=0.3
 pre-commit
+black==23.7.0
 
 # For static analysis
-mypy
+mypy==1.10.0
+types-requests==2.31.0
+types-pyyaml
+types-redis
 
-# For dependency management
+# For dependency management and other tools
 pip-tools
-
-# For working with git in scripts
 GitPython
-
-cachetools==5.5.2
+zstandard==0.23.0
+neo4j
+testing.postgresql
+respx

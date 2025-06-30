@@ -157,7 +157,7 @@ class TestMultiAgentCollaboration(unittest.IsolatedAsyncioTestCase):
 
         # --- GLOBAL ROUND 1 ---
         logger.info("--- Starting GLOBAL ROUND 1 ---")
-        self.simulation.start_new_round()  # Simulation current_step becomes 1
+        # self.simulation.start_new_round()  # This method is removed; run_step now handles advancing the simulation
 
         # --- AgentA proposes an idea (Turn 1 in Round 1) ---
         logger.info("Round 1, Turn 1: AgentA proposes an idea...")
@@ -430,7 +430,7 @@ class TestMultiAgentCollaboration(unittest.IsolatedAsyncioTestCase):
 
         # --- GLOBAL ROUND 2 ---
         logger.info("--- Starting GLOBAL ROUND 2 ---")
-        self.simulation.start_new_round()  # Simulation current_step becomes 2
+        # self.simulation.start_new_round()  # This method is removed; run_step now handles advancing the simulation
         # Now, messages from AgentA (Turn1), B(Turn2), C(Turn3) of Round 1 are in messages_to_perceive_this_round
 
         # --- AgentA's second turn, processes B's feedback and C's encouragement (Turn 1 in Round 2) ---

@@ -9,7 +9,7 @@ try:
     # Optional config class if available in this environment
     from src.infra.llm_client import LLMClientConfig
 except Exception:  # pragma: no cover - fallback if config class absent
-    LLMClientConfig = None  # type: ignore[misc]
+    LLMClientConfig = None  # type: ignore[assignment, misc]
 
 
 def main() -> None:

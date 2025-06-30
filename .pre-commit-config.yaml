@@ -38,7 +38,7 @@ repos:
         pass_filenames: false
       - id: unit-tests
         name: "Run unit test suite"
-        entry: python scripts/run_tests.py --marker "not integration and not ollama"
+        entry: python scripts/run_tests.py -m "not integration and not ollama"
         language: python
         types: [python]
         pass_filenames: false

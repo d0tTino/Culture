@@ -392,33 +392,6 @@ class TestL2SummaryGeneratorLoading(unittest.TestCase):
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l2_summary)
 
-
-class TestL2SummaryGeneratorFallback(unittest.TestCase):
-    """Test fallback behavior when DSPy is unavailable."""
-
-    @patch("src.agents.dspy_programs.l2_summary_generator.llm_client.generate_text")
-    @patch("src.agents.dspy_programs.l2_summary_generator.dspy", new=None)
-    def test_direct_llm_fallback_used_when_dspy_missing(
-        self, mock_generate_text: MagicMock
-    ) -> None:
-        """Ensure generate_text is called when DSPy is missing."""
-        mock_generate_text.return_value = "fallback summary"
-
-        from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
-
-        generator = L2SummaryGenerator()
-        generator.l2_predictor = None
-
-        result = generator.generate_summary(
-            agent_role="Analyzer",
-            l1_summaries_context="context",
-            overall_mood_trend="trend",
-            agent_goals="goals",
-        )
-
-        mock_generate_text.assert_called_once()
-        self.assertEqual(result, "fallback summary")
-
     @patch("src.agents.dspy_programs.l2_summary_generator.Path.exists")
     @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_corrupted(
@@ -471,6 +444,50 @@ class TestL2SummaryGeneratorFallback(unittest.TestCase):
 
             # Assert that the result is the mocked summary
             self.assertEqual(result, mock_prediction.l2_summary)
+
+
+class TestL2SummaryGeneratorFallback(unittest.TestCase):
+    """Test fallback behavior when DSPy is unavailable."""
+
+    def setUp(self):
+        """Set up test environment before each test method."""
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir_name = self.temp_dir.name
+        self.sample_summary = "This is a test fallback summary."
+
+    def tearDown(self):
+        """Clean up after each test method."""
+        self.temp_dir.cleanup()
+
+    def _create_corrupted_l2_compiled_file(self, filename: str) -> str:
+        """Create an invalid/corrupted JSON file."""
+        filepath = Path(self.temp_dir_name) / filename
+        with open(filepath, "w") as f:
+            f.write("{This is not valid JSON!")
+        return filepath
+
+    @patch("src.agents.dspy_programs.l2_summary_generator.llm_client.generate_text")
+    @patch("src.agents.dspy_programs.l2_summary_generator.dspy", new=None)
+    def test_direct_llm_fallback_used_when_dspy_missing(
+        self, mock_generate_text: MagicMock
+    ) -> None:
+        """Ensure generate_text is called when DSPy is missing."""
+        mock_generate_text.return_value = "fallback summary"
+
+        from src.agents.dspy_programs.l2_summary_generator import L2SummaryGenerator
+
+        generator = L2SummaryGenerator()
+        generator.l2_predictor = None
+
+        result = generator.generate_summary(
+            agent_role="Analyzer",
+            l1_summaries_context="context",
+            overall_mood_trend="trend",
+            agent_goals="goals",
+        )
+
+        mock_generate_text.assert_called_once()
+        self.assertEqual(result, "fallback summary")
 
     @patch("src.agents.dspy_programs.l2_summary_generator.logger")
     def test_fallback_if_l2_program_path_is_none(self, mock_logger: MagicMock) -> None:

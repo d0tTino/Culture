@@ -171,7 +171,6 @@ class SimulationDiscordBot:
                 return self.clients.get(token, self.client)
         return self.client
 
-
     async def send_simulation_update(
         self: Self,
         content: Optional[str] = None,

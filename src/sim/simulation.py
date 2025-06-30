@@ -174,7 +174,6 @@ class Simulation:
         ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
         self._msg_lock = asyncio.Lock()
 
-
         self.track_collective_metrics: bool = True
 
         if not self.agents:

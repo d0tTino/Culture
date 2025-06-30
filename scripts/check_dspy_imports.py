@@ -20,9 +20,7 @@ def main() -> None:
             check=True,
         )
         all_py_files = git_files_proc.stdout.splitlines()
-        src_py_files = [
-            f for f in all_py_files if f.startswith("src/") and f not in ALLOWED_FILES
-        ]
+        src_py_files = [f for f in all_py_files if f.startswith("src/") and f not in ALLOWED_FILES]
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"Error getting files from git: {e}", file=sys.stderr)
         sys.exit(1)
@@ -30,7 +28,7 @@ def main() -> None:
     found_forbidden_import = False
     for file_path in src_py_files:
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 for i, line in enumerate(f, 1):
                     if FORBIDDEN_PATTERN.search(line):
                         print(
@@ -47,4 +45,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main() 
+    main()

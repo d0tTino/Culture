@@ -65,6 +65,7 @@ def test_stake_unstake_noop_and_zero_burn_rate(tmp_path: Path) -> None:
 
     assert ledger.get_du_burn_rate("a") == 0.0
 
+
 def test_action_stake_and_refund(tmp_path: Path) -> None:
     db = tmp_path / "ledger.sqlite"
     ledger = Ledger(db)

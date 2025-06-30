@@ -283,7 +283,6 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[Path, None, None]:
         print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
 
 
-
 @pytest.fixture(autouse=True)
 def ensure_dspy_predict(monkeypatch: MonkeyPatch) -> None:
     """Provide a simple dspy.Predict stub if DSPy is unavailable."""
