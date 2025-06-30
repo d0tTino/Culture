@@ -5,25 +5,24 @@ import pytest
 
 pytest.importorskip("requests")
 import requests
-from pytest import MonkeyPatch
-
-from src.infra import llm_client
 
 
 @pytest.mark.unit
-@pytest.mark.require_ollama
-def test_generate_text_failure(monkeypatch: MonkeyPatch) -> None:
+def test_generate_text_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that generate_text returns None when the underlying client fails."""
+    # Arrange
+    # Disable the global mocks for this test to isolate the behavior
+    monkeypatch.setattr("src.shared.llm_mocks.mock_llm_functions", lambda: None)
+    # Patch the chat method on the LLMClient class to simulate a network error
     monkeypatch.setattr(
-        llm_client,
-        "get_ollama_client",
-        lambda: MagicMock(
-            chat=MagicMock(side_effect=requests.exceptions.RequestException("boom"))
-        ),
+        "src.infra.llm_client.LLMClient.chat",
+        MagicMock(side_effect=requests.exceptions.RequestException("boom")),
     )
-    monkeypatch.setattr(
-        llm_client,
-        "_retry_with_backoff",
-        lambda func, *a, **kw: (None, requests.exceptions.RequestException("boom")),
-    )
-    result = llm_client.generate_text("hi")
+    # The generate_text function should catch the exception and return None
+    from src.infra.llm_client import generate_text
+
+    # Act
+    result = generate_text("any prompt")
+
+    # Assert
     assert result is None

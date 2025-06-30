@@ -30,13 +30,15 @@ repos:
 
   - repo: local
     hooks:
-      - id: no-dspy-imports
-        name: "Forbid direct dspy imports"
-        entry: scripts/check_no_dspy_import.sh
-        language: system
+      - id: forbid-direct-dspy-imports
+        name: Forbid direct dspy imports
+        entry: python scripts/check_dspy_imports.py
+        language: python
         types: [python]
+        pass_filenames: false
       - id: unit-tests
         name: "Run unit test suite"
-        entry: python scripts/run_tests.py -m unit
-        language: system
+        entry: python scripts/run_tests.py --marker "not integration and not ollama"
+        language: python
+        types: [python]
         pass_filenames: false

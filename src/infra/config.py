@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 from .settings import ConfigSettings, settings
 
@@ -225,8 +225,6 @@ BOOL_CONFIG_KEYS = [
 REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
 
 
-
-
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
     global settings, _CONFIG
@@ -237,7 +235,6 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
         except AttributeError:  # pragma: no cover - pydantic v1 fallback
             data = new_settings.dict()
         missing = [key for key in REQUIRED_CONFIG_KEYS if str(data.get(key, "")).strip() == ""]
-
 
     if validate_required:
         missing = [k for k in REQUIRED_CONFIG_KEYS if not data.get(k)]
@@ -250,7 +247,6 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
         data = settings.dict()
     _CONFIG.update(cast(dict[str, Any], data))
     return cast(dict[str, Any], data)
-
 
 
 def get_config(key: str | None = None) -> Any:

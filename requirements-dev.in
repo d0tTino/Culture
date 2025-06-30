@@ -23,3 +23,36 @@ zstandard==0.23.0
 neo4j
 testing.postgresql
 respx
+
+# Core testing framework
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+pytest-xdist
+# For nicer diffs
+pytest-clarity
+# For running tests against a real LLM
+pytest-depends
+pytest-skip-slow
+# For snapshot testing
+syrupy
+# For testing notebook examples
+nbmake
+# For mocking
+freezegun
+
+# For linting
+ruff
+pre-commit
+
+# For static analysis
+mypy
+
+# For dependency management
+pip-tools
+
+# For working with git in scripts
+GitPython
+
+cachetools==5.5.2

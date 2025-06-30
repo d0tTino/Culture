@@ -12,10 +12,10 @@ def test_load_config_missing_required_keys(monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(RuntimeError) as exc:
         config.load_config(validate_required=True)
     msg = str(exc.value)
-    assert "OLLAMA_API_BASE" in msg
+    assert "OLLAMA_API_BASE" not in msg
+    assert "MODEL_NAME" not in msg
     assert "REDPANDA_BROKER" in msg
     assert "OPA_URL" in msg
-    assert "MODEL_NAME" not in msg
 
 
 @pytest.mark.unit

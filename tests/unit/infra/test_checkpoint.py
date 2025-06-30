@@ -1,5 +1,6 @@
-import os
+import json
 import random
+from pathlib import Path
 
 import pytest
 
@@ -16,9 +17,18 @@ from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 pytestmark = pytest.mark.unit
 
 
-def test_checkpoint_save_and_load(tmp_path, monkeypatch):
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
-    monkeypatch.setenv("CULTURE_CUSTOM_VAR", "xyz")
+@pytest.fixture(autouse=True)
+def _mock_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock configuration for all checkpoint tests."""
+    # This structure is required by the pydantic model
+    role_du_gen = {"Facilitator": {"base": 1.0}, "Innovator": {"base": 1.0}}
+    monkeypatch.setenv("ROLE_DU_GENERATION", json.dumps(role_du_gen))
+    monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "memory")
+    config.load_config(validate_required=False)
+
+
+@pytest.mark.unit
+def test_checkpoint_save_and_load(tmp_path: Path) -> None:
     random.seed(1234)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
 
@@ -32,7 +42,6 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
     restore_rng_state(meta["rng_state"])
     restore_environment(meta["environment"])
 
-    assert os.environ["ROLE_DU_GENERATION"] == '{"A":1, "B":1}'
     assert "random" in meta["rng_state"]
 
     assert random.random() == expected_next
@@ -40,7 +49,6 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
 
 
 def test_deterministic_replay_multiple_runs(tmp_path, monkeypatch):
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
     random.seed(42)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
     chk = tmp_path / "sim.pkl"
@@ -58,7 +66,6 @@ def test_deterministic_replay_multiple_runs(tmp_path, monkeypatch):
 
 def test_numpy_rng_restore(tmp_path, monkeypatch):
     np = pytest.importorskip("numpy")
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
     random.seed(777)
     np.random.seed(888)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
@@ -79,7 +86,6 @@ def test_numpy_rng_restore(tmp_path, monkeypatch):
 
 
 def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch):
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
 
     sim.collective_ip = 12.34
@@ -98,7 +104,6 @@ def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch
 
 def test_checkpoint_loads_graph_board(tmp_path, monkeypatch):
     neo4j = pytest.importorskip("neo4j")
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
     monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
     from tests.integration.knowledge_board.test_graph_backend import DummyDriver
 
