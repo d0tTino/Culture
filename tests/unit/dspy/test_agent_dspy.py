@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-pytest.skip("DSPy wrapper manual test", allow_module_level=True)
+pytest.importorskip("dspy")
+
+from src.agents.core.agent_state import AgentState
 
 # Configure logging
 logging.basicConfig(

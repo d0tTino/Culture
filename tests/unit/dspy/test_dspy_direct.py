@@ -6,6 +6,8 @@ from typing import cast
 
 import pytest
 
+pytest.importorskip("dspy")
+
 if os.environ.get("ENABLE_DSPY_TESTS") != "1":
     pytest.skip("DSPy tests disabled", allow_module_level=True)
 

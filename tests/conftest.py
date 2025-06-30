@@ -10,7 +10,7 @@ import sys
 import types
 from collections.abc import Generator
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, AsyncGenerator, cast
 from unittest.mock import MagicMock, patch
 
 try:
@@ -212,23 +212,6 @@ if "sse_starlette.sse" not in sys.modules:
     sys.modules["sse_starlette.sse"] = sse_mod
 
 
-def is_ollama_running() -> Optional[bool]:
-    """Check if Ollama server is running by attempting to connect to localhost:11434"""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(0.1)  # Short timeout for quick check
-            s.connect(("localhost", 11434))
-        return True
-    except (OSError, socket.timeout):
-        return False
-
-
-# Mark for tests requiring Ollama
-require_ollama = pytest.mark.skipif(
-    not is_ollama_running(), reason="Ollama server is not running on localhost:11434"
-)
-
-
 @pytest.fixture
 def mock_llm_client() -> Generator[MagicMock, None, None]:
     """Fixture to provide a mocked LLMClient"""
@@ -245,85 +228,82 @@ def mock_ollama_by_default(request: FixtureRequest, monkeypatch: MonkeyPatch) ->
 
     This prevents 404 errors when Ollama is not running.
     """
-    # Skip mocking if test is marked with require_ollama
     if request.node.get_closest_marker("require_ollama"):
         # If marked with require_ollama but server isn't running, the test will be skipped
-        # by the require_ollama mark, so we don't need to do anything here
+        # by the decorator.
         return
 
-    # If test is not explicitly requiring Ollama, mock all Ollama functions
     patch_ollama_functions(monkeypatch)
 
 
 @pytest.fixture(scope="session")
 def chroma_test_dir(request: FixtureRequest) -> Generator[Path, None, None]:
-    """
-    Provides a unique ChromaDB test directory for each pytest-xdist worker.
-    On Linux, uses /dev/shm/chroma_tests/{worker_id}/ for tmpfs speed.
-    On other OSs, falls back to a temp directory.
-    Auto-deletes the directory after the session.
-    """
-    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
-    if sys.platform.startswith("linux") and Path("/dev/shm").exists():
-        base_dir = Path("/dev/shm") / "chroma_tests" / worker_id
-        base_dir.mkdir(parents=True, exist_ok=True)
-        yield base_dir
-        try:
-            shutil.rmtree(base_dir)
-        except Exception as e:
-            print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
-    else:
-        base_dir = get_temp_dir(prefix=f"chroma_tests_{worker_id}_").as_posix()
-    ensure_dir(base_dir)
-    yield base_dir
-    # Teardown: remove the directory after the session
-    try:
-        shutil.rmtree(base_dir)
-    except Exception as e:
-        print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
+    """Create a temporary directory for ChromaDB tests."""
+    temp_dir = get_temp_dir() / "chroma_tests"
+    ensure_dir(temp_dir)
+
+    def finalizer() -> None:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+
+    request.addfinalizer(finalizer)
+    yield temp_dir
 
 
-
+# Ensure DSPy Predict is always available as a dummy class
 @pytest.fixture(autouse=True)
 def ensure_dspy_predict(monkeypatch: MonkeyPatch) -> None:
-    """Provide a simple dspy.Predict stub if DSPy is unavailable."""
+    """Ensure dspy.Predict exists, creating a dummy if needed."""
     try:
-        import dspy
-    except Exception:
-        return
+        import dspy  # type: ignore
 
-    if hasattr(dspy, "Predict"):
-        return
+        if not hasattr(dspy, "Predict"):
 
-    class DummyPredict:
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            pass
+            class DummyPredict:
+                def __init__(self, *args: object, **kwargs: object) -> None:
+                    pass
 
-        def __call__(self, *args: object, **kwargs: object) -> object:
-            return type("Result", (), {"intent": "CONTINUE_COLLABORATION"})()
+                def __call__(self, *args: object, **kwargs: object) -> object:
+                    return types.SimpleNamespace()
 
-    monkeypatch.setattr(dspy, "Predict", DummyPredict, raising=False)
+            monkeypatch.setattr(dspy, "Predict", DummyPredict)
+    except ImportError:
+        pass  # DSPy not installed, nothing to patch
 
 
 @pytest.fixture(autouse=True)
 def ensure_langgraph(monkeypatch: MonkeyPatch) -> None:
-    """Provide minimal langgraph stubs when the package is missing."""
-    if "langgraph" in sys.modules:
-        return
-    import types
-
-    langgraph_mod = types.ModuleType("langgraph")
-    graph_mod = types.ModuleType("langgraph.graph")
-    graph_mod.StateGraph = object
-    graph_mod.START = "START"
-    graph_mod.END = "END"
-    langgraph_mod.graph = graph_mod
-    sys.modules["langgraph"] = langgraph_mod
-    sys.modules["langgraph.graph"] = graph_mod
+    """Ensure langgraph.graph.StateGraph exists, creating a dummy if needed."""
+    try:
+        from langgraph.graph import StateGraph  # noqa F401
+    except ImportError:
+        monkeypatch.setitem(sys.modules, "langgraph.graph", MagicMock())
+        monkeypatch.setitem(sys.modules, "langgraph.prebuilt", MagicMock())
 
 
 @pytest.fixture(autouse=True, scope="session")
 def ensure_required_env() -> None:
-    os.environ.setdefault("REDPANDA_BROKER", "localhost:9092")
-    os.environ.setdefault("OPA_URL", "http://opa")
-    os.environ.setdefault("MODEL_NAME", "mistral:latest")
+    """Set essential env vars if they are not already defined."""
+    if "OLLAMA_API_BASE" not in os.environ:
+        os.environ["OLLAMA_API_BASE"] = "http://localhost:11434"
+    if "MODEL_NAME" not in os.environ:
+        os.environ["MODEL_NAME"] = "mistral:latest"
+
+
+@pytest.fixture(scope="session")
+def ollama_running():
+    import os, socket, pytest
+    host, port = os.getenv("OLLAMA_HOST","127.0.0.1:11434").split(":")
+    s = socket.socket()
+    s.settimeout(0.5)
+    if s.connect_ex((host, int(port))):
+        pytest.skip("Ollama not running")
+    s.close()
+
+
+@pytest.fixture
+def temp_file() -> Generator[Path, None, None]:
+    """Provide a temporary file path that is automatically cleaned up."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_file_path = Path(temp_dir) / "temp_file.txt"
+        yield temp_file_path

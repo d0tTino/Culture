@@ -67,8 +67,6 @@ def build_graph() -> Any:
     graph_builder.add_node("retrieve_semantic_context", retrieve_semantic_context_node)
     graph_builder.add_node("generate_thought_and_message", generate_thought_and_message_node)
 
-    graph_builder.add_node("route_action_intent", route_action_intent)
-
     graph_builder.add_node("handle_propose_idea", handle_propose_idea_node)
     graph_builder.add_node("handle_ask_clarification", handle_ask_clarification_node)
     graph_builder.add_node("handle_continue_collaboration", handle_continue_collaboration_node)
@@ -87,10 +85,9 @@ def build_graph() -> Any:
     graph_builder.add_edge("prepare_relationship_prompt", "retrieve_and_summarize_memories")
     graph_builder.add_edge("retrieve_and_summarize_memories", "retrieve_semantic_context")
     graph_builder.add_edge("retrieve_semantic_context", "generate_thought_and_message")
-    graph_builder.add_edge("generate_thought_and_message", "route_action_intent")
 
     graph_builder.add_conditional_edges(
-        "route_action_intent",
+        "generate_thought_and_message",
         route_action_intent,
         {
             "propose_idea": "handle_propose_idea",

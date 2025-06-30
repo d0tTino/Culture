@@ -160,7 +160,7 @@ else:
 
 
 class AgentStateData(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     agent_id: str
     name: str
@@ -187,12 +187,6 @@ class AgentStateData(BaseModel):
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
-
-    def __init__(self, **data: Any) -> None:
-        """Initialize and conditionally call ``model_post_init`` for Pydantic v1."""
-        super().__init__(**data)
-        if hasattr(self, "model_post_init"):
-            self.model_post_init(None)
 
     last_thought: Optional[str] = None
     last_clarification_question: Optional[str] = None

@@ -375,7 +375,7 @@ def route_action_intent(state: AgentTurnState) -> str:
         "leave_project": "handle_leave_project",
         "send_direct_message": "handle_send_direct_message",
     }
-    return route_map.get(intent, "update_state")
+    return route_map.get(intent, "handle_idle")
 
 
 def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:

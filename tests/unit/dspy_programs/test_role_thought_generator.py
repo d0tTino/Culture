@@ -1,12 +1,14 @@
 import pytest
 from pytest import MonkeyPatch
 
+pytest.importorskip("dspy")
+
+import dsp
+
 from src.agents.dspy_programs.role_thought_generator import (
     FailsafeRoleThoughtGenerator,
     generate_role_prefixed_thought,
 )
-
-pytest.importorskip("dspy")
 
 
 @pytest.mark.unit

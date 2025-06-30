@@ -9,15 +9,8 @@ types-pyyaml
 types-redis
 pytest-xdist==3.7.0
 pytest-asyncio>=0.21
-requests
-langgraph==0.2.0
-pydantic>=2.11
-pydantic-settings
-prometheus-client==0.20.0
 hypothesis>=6.0
 pre-commit
-dspy-ai==2.6.27
-numpy>=2
 pip-tools
 zstandard==0.23.0
 neo4j

@@ -5,8 +5,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from sentence_transformers import SentenceTransformer
+
 from src.agents.core.base_agent import Agent
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra.checkpoint import (
     load_checkpoint,
     restore_environment,
@@ -20,6 +22,20 @@ from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 from src.utils.loop_helper import use_uvloop_if_available
+
+
+def setup_observability():
+    """Configure OpenTelemetry for console-based tracing."""
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import (
+        ConsoleSpanExporter,
+        SimpleSpanProcessor,
+    )
+
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+    trace.set_tracer_provider(provider)
 
 
 def _simple_yaml(path: Path) -> dict[str, object]:
@@ -84,7 +100,7 @@ def create_simulation(
     scenario: str = DEFAULT_SCENARIO,
     use_discord: bool = False,
     use_vector_store: bool = False,
-    vector_store_dir: str = "./chroma_db",
+    vector_store_dir: str = "./weaviate_data",
 ) -> Simulation:
     """Construct a Simulation instance with basic defaults."""
 
@@ -92,6 +108,13 @@ def create_simulation(
     if not ollama_client:
         logging.error("Failed to connect to Ollama. Please ensure Ollama is running.")
         sys.exit(1)
+
+    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    vsm = (
+        WeaviateVectorStoreManager(embedding_function=embedding_model.encode)
+        if use_vector_store
+        else None
+    )
 
     discord_bot = None
     if use_discord and simulation_discord_bot_class:
@@ -107,19 +130,18 @@ def create_simulation(
             else:
                 logging.warning("Discord bot not ready, running without integration.")
 
-    agents = [Agent(agent_id=f"agent_{i + 1}", name=f"Agent_{i + 1}") for i in range(num_agents)]
+    agents = [
+        Agent(
+            agent_id=f"agent_{i + 1}",
+            name=f"Agent_{i + 1}",
+            vector_store_manager=vsm,
+        )
+        for i in range(num_agents)
+    ]
 
     sim = Simulation(
         agents=agents,
-        vector_store_manager=(
-            None
-            if not use_vector_store
-            else (
-                ChromaVectorStoreManager(persist_directory=vector_store_dir)
-                if ChromaVectorStoreManager is not None
-                else None
-            )
-        ),
+        vector_store_manager=vsm,
         scenario=scenario,
         discord_bot=discord_bot,
     )
@@ -142,12 +164,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--discord", action="store_true", help="Enable Discord integration.")
     parser.add_argument(
-        "--vector-store", action="store_true", help="Use ChromaDB for agent memory."
+        "--vector-store", action="store_true", help="Use Weaviate for agent memory."
     )
     parser.add_argument(
         "--vector-dir",
         type=str,
-        default="./chroma_db",
+        default="./weaviate_data",
         help="Directory for vector store persistence.",
     )
     parser.add_argument(
@@ -188,6 +210,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     setup_logging()
+    setup_observability()
     args = parse_args()
     desc, file_steps, file_agents = load_scenario(args.scenario)
     if file_steps is not None:

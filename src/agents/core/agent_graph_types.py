@@ -24,29 +24,22 @@ else:  # pragma: no cover - runtime stub to satisfy get_type_hints
 class AgentActionOutput(BaseModel):
     """Defines the expected structured output from the LLM."""
 
-    model_config = ConfigDict(extra=Extra.forbid)
+    model_config = ConfigDict(extra="forbid")
     thought: str = Field(
-        ...,
-        json_schema_extra={
-            "description": "The agent's internal thought or reasoning for the turn."
-        },
+        description="The agent's internal thought or reasoning for the turn."
     )
     message_content: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "The message to send to other agents, or None if choosing not to send a message."
-            )
-        },
+        description=(
+            "The message to send to other agents, or None if choosing not to send a message."
+        ),
     )
     message_recipient_id: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "The ID of the agent this message is directed to. None means broadcast to all "
-                "agents."
-            )
-        },
+        description=(
+            "The ID of the agent this message is directed to. None means broadcast to all "
+            "agents."
+        ),
     )
     action_intent: Literal[
         "idle",
@@ -59,53 +52,42 @@ class AgentActionOutput(BaseModel):
         "leave_project",
         "send_direct_message",
     ] = Field(
-        default="idle",  # Default intent
-        json_schema_extra={"description": "The agent's primary intent for this turn."},
+        default="idle", description="The agent's primary intent for this turn."
     )
     requested_role_change: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you wish to request a change to a different role, specify the role "
-                "name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as "
-                "null."
-            )
-        },
+        description=(
+            "Optional: If you wish to request a change to a different role, specify the role "
+            "name here (e.g., 'Innovator', 'Analyzer', 'Facilitator'). Otherwise, leave as "
+            "null."
+        ),
     )
     project_name_to_create: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you want to create a new project, specify the name here. This is "
-                "used with the 'create_project' intent."
-            )
-        },
+        description=(
+            "Optional: If you want to create a new project, specify the name here. This is "
+            "used with the 'create_project' intent."
+        ),
     )
     project_description_for_creation: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you want to create a new project, specify the description here. "
-                "This is used with the 'create_project' intent."
-            )
-        },
+        description=(
+            "Optional: If you want to create a new project, specify the description here. "
+            "This is used with the 'create_project' intent."
+        ),
     )
     project_id_to_join_or_leave: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "Optional: If you want to join or leave a project, specify the project ID here. "
-                "This is used with the 'join_project' and 'leave_project' intents."
-            )
-        },
+        description=(
+            "Optional: If you want to join or leave a project, specify the project ID here. "
+            "This is used with the 'join_project' and 'leave_project' intents."
+        ),
     )
     justification: str | None = Field(
         None,
-        json_schema_extra={
-            "description": (
-                "Optional: Justification for the chosen action intent, provided by the LLM."
-            )
-        },
+        description=(
+            "Optional: Justification for the chosen action intent, provided by the LLM."
+        ),
     )
 
 

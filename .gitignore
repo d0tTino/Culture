@@ -29,8 +29,11 @@ wheels/
 MANIFEST
 
 # Virtual environments
+.venv
 .venv/
+.venv_test/
 venv/
+venv.bak/
 env/
 ENV/
 test_venv/

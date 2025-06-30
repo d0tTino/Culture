@@ -18,9 +18,8 @@ def test_missing_ollama_api_base(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPA_URL", "http://opa")
     monkeypatch.setenv("MODEL_NAME", "model")
     monkeypatch.delenv("OLLAMA_API_BASE", raising=False)
-    with pytest.raises(RuntimeError) as exc:
-        config.load_config(validate_required=True)
-    assert "OLLAMA_API_BASE" in str(exc.value)
+    cfg = config.load_config(validate_required=True)
+    assert cfg["OLLAMA_API_BASE"] == "http://localhost:11434"
 
 
 @pytest.mark.unit
@@ -42,3 +41,14 @@ def test_empty_ollama_api_base(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(RuntimeError) as exc:
         config.load_config(validate_required=True)
     assert "OLLAMA_API_BASE" in str(exc.value)
+
+
+@pytest.mark.unit
+def test_missing_redpanda_broker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_API_BASE", "http://localhost:11434")
+    monkeypatch.setenv("OPA_URL", "http://opa")
+    monkeypatch.setenv("MODEL_NAME", "model")
+    monkeypatch.delenv("REDPANDA_BROKER", raising=False)
+    with pytest.raises(RuntimeError) as exc:
+        config.load_config(validate_required=True)
+    assert "REDPANDA_BROKER" in str(exc.value)

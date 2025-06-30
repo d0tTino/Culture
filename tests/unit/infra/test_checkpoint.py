@@ -17,7 +17,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_checkpoint_save_and_load(tmp_path, monkeypatch):
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":{"base":1.0}, "B":{"base":1.0}}')
     monkeypatch.setenv("CULTURE_CUSTOM_VAR", "xyz")
     random.seed(1234)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
@@ -32,7 +32,7 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
     restore_rng_state(meta["rng_state"])
     restore_environment(meta["environment"])
 
-    assert os.environ["ROLE_DU_GENERATION"] == '{"A":1, "B":1}'
+    assert os.environ["ROLE_DU_GENERATION"] == '{"A":{"base":1.0}, "B":{"base":1.0}}'
     assert "random" in meta["rng_state"]
 
     assert random.random() == expected_next
@@ -40,7 +40,7 @@ def test_checkpoint_save_and_load(tmp_path, monkeypatch):
 
 
 def test_deterministic_replay_multiple_runs(tmp_path, monkeypatch):
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":{"base":1.0}, "B":{"base":1.0}}')
     random.seed(42)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
     chk = tmp_path / "sim.pkl"
@@ -58,7 +58,7 @@ def test_deterministic_replay_multiple_runs(tmp_path, monkeypatch):
 
 def test_numpy_rng_restore(tmp_path, monkeypatch):
     np = pytest.importorskip("numpy")
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":{"base":1.0}, "B":{"base":1.0}}')
     random.seed(777)
     np.random.seed(888)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
@@ -79,7 +79,7 @@ def test_numpy_rng_restore(tmp_path, monkeypatch):
 
 
 def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch):
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":{"base":1.0}, "B":{"base":1.0}}')
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
 
     sim.collective_ip = 12.34
@@ -97,8 +97,12 @@ def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch
 
 
 def test_checkpoint_loads_graph_board(tmp_path, monkeypatch):
-    neo4j = pytest.importorskip("neo4j")
-    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":1, "B":1}')
+    try:
+        import neo4j
+    except ImportError:
+        pytest.skip("neo4j not installed")
+
+    monkeypatch.setenv("ROLE_DU_GENERATION", '{"A":{"base":1.0}, "B":{"base":1.0}}')
     monkeypatch.setenv("KNOWLEDGE_BOARD_BACKEND", "graph")
     from tests.integration.knowledge_board.test_graph_backend import DummyDriver
 

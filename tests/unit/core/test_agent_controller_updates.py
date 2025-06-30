@@ -48,7 +48,9 @@ def test_update_relationship_learning_rates_and_history() -> None:
 
 @pytest.mark.unit
 def test_change_role_cost_and_cooldown() -> None:
-    state = AgentState(agent_id="a1", name="A", current_role=create_role_profile("Facilitator"), ip=10.0)
+    state = AgentState(
+        agent_id="a1", name="A", current_role=create_role_profile("Facilitator"), ip=10.0
+    )
     controller = AgentController(state)
 
     assert controller.change_role("Innovator", current_step=1)

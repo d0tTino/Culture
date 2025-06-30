@@ -2,6 +2,7 @@
 Unit tests for the RAGContextSynthesizer class.
 """
 
+import logging
 import unittest
 from unittest.mock import MagicMock, patch
 

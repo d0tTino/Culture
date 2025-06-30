@@ -95,6 +95,7 @@ def test_resolve_auction_tie_breaking_and_refunds(tmp_path: Path) -> None:
     assert ledger.get_staked_du("B") == 0.0
     assert ledger.get_staked_du("C") == 0.0
 
+
 @pytest.mark.integration
 def test_resolve_auction_no_bids(tmp_path: Path) -> None:
     ledger = Ledger(tmp_path / "ledger.sqlite")
@@ -110,4 +111,3 @@ def test_resolve_auction_no_bids(tmp_path: Path) -> None:
         (auction_id,),
     ).fetchone()
     assert row == ("resolved", None)
-
