@@ -1,4 +1,3 @@
-# ruff: noqa: E501, ANN101
 """
 DSPy L2 Summary Generator
 

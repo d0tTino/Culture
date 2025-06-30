@@ -1,7 +1,6 @@
 import asyncio
 
 # Skip self argument annotation warnings in stub classes
-# ruff: noqa: ANN101
 import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -252,8 +251,8 @@ __all__ = [
     "EventSourceResponse",
     "SimulationEvent",
     "app",
-    "event_queue",
     "emit_event",
     "emit_map_action_event",
+    "event_queue",
     "message_sse_queue",
 ]

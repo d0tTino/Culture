@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# ruff: noqa: ANN101
 import functools
 import json
 import logging
@@ -316,9 +315,7 @@ def generate_text(
         if client and hasattr(client, "chat") and hasattr(client.chat, "side_effect"):
             if client.chat.side_effect:
                 try:
-                    return client.chat(
-                        model=model, messages=[{"role": "user", "content": prompt}]
-                    )
+                    return client.chat(model=model, messages=[{"role": "user", "content": prompt}])
                 except _RequestException:
                     return None  # Ensure side_effect exceptions are caught and handled.
 

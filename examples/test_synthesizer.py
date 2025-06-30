@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# ruff: noqa: E501, ANN101, ANN401
 """
 Test script for the RAGContextSynthesizer class
 """

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # Skip self argument annotation warnings for protocol stubs
-# ruff: noqa: ANN101
 import logging
 from typing import Any, Protocol, cast
 
