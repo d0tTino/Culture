@@ -46,7 +46,8 @@ def test_main_invokes_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
         scenario=app.DEFAULT_SCENARIO,
         use_discord=False,
         use_vector_store=False,
-        vector_store_dir="./chroma_db",
+        vector_store_dir="./weaviate_data",
+        db_file=None,
     )
     dummy_sim.async_run.assert_called_once_with(3)
     run_mock.assert_called_once_with(dummy_sim.async_run.return_value)
@@ -87,7 +88,8 @@ def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
         scenario="File scenario",
         use_discord=False,
         use_vector_store=False,
-        vector_store_dir="./chroma_db",
+        vector_store_dir="./weaviate_data",
+        db_file=None,
     )
     dummy_sim.async_run.assert_called_once_with(2)
     run_mock.assert_called_once_with(dummy_sim.async_run.return_value)

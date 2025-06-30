@@ -146,8 +146,33 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
    ```bash
    pip install -r requirements.txt -r requirements-dev.txt
    ```
-   The project currently supports **DSPy 2.6.27**; `requirements.txt` pins `dspy-ai==2.6.27`.
-   You **must** install the development requirements before running `pytest`.
+
+### Platform-Specific Notes
+
+This repository maintains separate dependency lock files for Linux/GPU and Windows/CPU environments:
+- `requirements.in` / `requirements.txt`: For Linux/GPU environments.
+- `requirements.windows.in` / `requirements.windows.txt`: For Windows/CPU environments.
+
+#### Windows Installation
+
+When working on Windows, it's crucial to use the correct requirements file.
+
+1.  **Install dependencies from the Windows-specific file:**
+    ```bash
+    pip install -r requirements.windows.txt -r requirements-dev.txt
+    ```
+
+2.  **PyTorch CPU Version:** The `requirements.windows.txt` file is configured to install the CPU version of PyTorch. If you need to reinstall or update it manually, you must provide the extra index URL:
+    ```bash
+    pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+    ```
+
+#### Dependency Quirks
+
+- **`uvloop`**: This package provides performance improvements but is not supported on Windows. It is only included in the Linux dependencies.
+- **`weaviate-client`**: Version 4 or greater is required for the `weaviate.classes` import and async API. The lock files have `weaviate-client>=4.8,<5`.
+- **`protobuf`**: Pinned to `protobuf>=5.26` to avoid an import error related to `runtime_version` in `grpcio-health-checking`.
+- **`chromadb`**: Builds cleanly from version `0.4.24` onwards with Python 3.11 on Windows.
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
@@ -223,7 +248,7 @@ Run a simulation with the default parameters:
 python -m src.app
 ```
 
-Run a simulation with Discord integration:
+Run a simulation with the Discord integration:
 
 ```bash
 python -m src.app --discord
@@ -259,6 +284,40 @@ You can modify the `DEFAULT_SCENARIO` constant in `src/app.py` to define a speci
 ```python
 DEFAULT_SCENARIO = "The team's objective is to collaboratively design a specification for a decentralized communication protocol suitable for autonomous AI agents operating in a resource-constrained environment. Key considerations are efficiency, security, and scalability."
 ```
+
+## Benchmarking
+
+The project includes a simple benchmarking script to measure performance and track resource usage over time.
+
+### Running the Benchmark
+
+To run the benchmark, execute the following command:
+
+```bash
+python scripts/benchmark_vs.py
+```
+
+This will run a short simulation and save the results to a JSON file in the `benchmarks/` directory.
+
+### Visualizing Benchmark Results
+
+To visualize the benchmark results, you can use the `plot_benchmarks.py` script:
+
+```bash
+python scripts/plot_benchmarks.py
+```
+
+This script reads all the benchmark files in the `benchmarks/` directory, and generates a plot of the total DU (Data Units) delta over time. The plot is saved as `benchmarks.png`.
+
+**Note:** You need to run the benchmark script at least once to generate data before running the plotting script.
+
+![Benchmark Results](benchmarks.png)
+
+## What's Next?
+
+This is a living document, and we welcome contributions to keep it up to date.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## culture-ui Frontend
 

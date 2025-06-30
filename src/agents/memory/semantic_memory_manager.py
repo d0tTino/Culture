@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, UTC
-from typing import TYPE_CHECKING, Any
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -17,6 +17,9 @@ else:  # pragma: no cover - fallback if neo4j not installed
 from typing_extensions import Self
 
 from .vector_store import ChromaVectorStoreManager
+from src.agents.memory.memory_models import importância
+from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
+from src.agents.memory.vector_store import VectorStoreManager
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +156,7 @@ class SemanticMemoryManager:
 
         summary = await asyncio.to_thread(self.consolidate_memories, agent_id)
         if self.driver is not None and summary:
-            now = datetime.now(UTC).isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             with self.driver.session() as session:
                 session.run(
                     """
@@ -167,3 +170,51 @@ class SemanticMemoryManager:
                 )
 
         return None
+
+    def get_l1_summaries_older_than(
+        self, agent_id: str, max_age_days: int = 7
+    ) -> list[importância]:
+        """Get L1 summaries older than a certain number of days."""
+        try:
+            now = datetime.now(timezone.utc)
+            cutoff_date = now - timedelta(days=max_age_days)
+            results = self.vector_store.query_l1_summaries_before_date(
+                agent_id, cutoff_date
+            )
+            return results
+        except Exception as e:
+            logger.exception(
+                f"Error retrieving old L1 summaries for agent {agent_id}: {e}"
+            )
+            return []
+
+    def get_l2_summaries_older_than(
+        self, agent_id: str, max_age_days: int = 30
+    ) -> list[importância]:
+        """Get L2 summaries older than a certain number of days."""
+        try:
+            now = datetime.now(timezone.utc)
+            cutoff_date = now - timedelta(days=max_age_days)
+            results = self.vector_store.query_l2_summaries_before_date(
+                agent_id, cutoff_date
+            )
+            return cast(list[importância], results)
+        except Exception as e:
+            logger.exception(
+                f"Error retrieving old L2 summaries for agent {agent_id}: {e}"
+            )
+            return []
+
+    def get_recent_summaries_l1(
+        self, agent_id: str, limit: int = 5
+    ) -> list[importância]:
+        """Get the most recent L1 summaries for an agent."""
+        try:
+            return self.vector_store.query_l1_summaries_by_recency(
+                agent_id=agent_id, limit=limit
+            )
+        except Exception as e:
+            logger.exception(
+                f"Error retrieving recent summaries for agent {agent_id}: {e}"
+            )
+            return []

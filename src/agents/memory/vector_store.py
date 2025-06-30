@@ -15,7 +15,7 @@ import os
 import time
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, TypeVar, Union, cast
 
@@ -296,7 +296,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 "step": step,
                 "event_type": event_type,
                 "memory_type": memory_type or "raw",
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "retrieval_count": 0,
                 "usage_count": 0,
                 "last_retrieved_timestamp": "",
@@ -882,7 +882,7 @@ class ChromaVectorStoreManager(MemoryStore):
         logger.debug(f"Checking for L2 summaries older than {max_age_days} days")
 
         # Get current time for age comparison
-        current_time = datetime.now(UTC)
+        current_time = datetime.now(timezone.utc)
 
         # Calculate the cutoff date (current time minus max_age_days)
         cutoff_date = current_time - timedelta(days=max_age_days)
@@ -1161,7 +1161,7 @@ class ChromaVectorStoreManager(MemoryStore):
             f"Checking for L1 summaries eligible for MUS-based pruning "
             f"(threshold={mus_threshold}, min_age_days={min_age_days})"
         )
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         # Query all L1 summaries
         try:
             results = self.collection.get(
@@ -1236,7 +1236,7 @@ class ChromaVectorStoreManager(MemoryStore):
             f"(threshold={mus_threshold}, min_age_days={min_age_days})"
         )
 
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
 
         # Query all L2 summaries
         try:
@@ -1367,7 +1367,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 etype,
                 summary,
                 memory_type="consolidated_summary",
-                metadata={"simulation_step_timestamp": datetime.now(UTC).isoformat()},
+                metadata={"simulation_step_timestamp": datetime.now(timezone.utc).isoformat()},
             )
 
         ids_to_delete = [m["memory_id"] for m in raw_memories if "memory_id" in m]

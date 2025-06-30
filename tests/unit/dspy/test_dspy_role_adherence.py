@@ -1,25 +1,12 @@
-import pytest
-
-pytest.importorskip("dspy")
-
-import dsp
 import logging
-import os
 import sys
 from typing import cast
 
 import pytest
-
-if os.environ.get("ENABLE_DSPY_TESTS") != "1":
-    pytest.skip("DSPy tests disabled", allow_module_level=True)
-
-import dspy
-import ollama
-import pytest
 from typing_extensions import Self
 
-if not hasattr(dspy, "Predict"):
-    pytest.skip("dspy Predict not available", allow_module_level=True)
+dspy = pytest.importorskip("dspy")
+ollama = pytest.importorskip("ollama")
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class OllamaLM(dspy.LM):  # type: ignore[no-any-unimported]
+class OllamaLM(dspy.LM):
     """A simple wrapper for Ollama to use with DSPy."""
 
     model_name = "ollama/mistral:latest"
@@ -80,7 +67,7 @@ logger.info("DSPy configured with OllamaLM")
 
 
 # Define the signature for role-prefixed thoughts
-class RolePrefixedThought(dspy.Signature):  # type: ignore[no-any-unimported]
+class RolePrefixedThought(dspy.Signature):
     """Generate an agent's internal thought process that strictly begins with 'As a [ROLE],' or
     'As an [ROLE],'
     and reflects the agent's role and current situation.
@@ -107,7 +94,8 @@ class RolePrefixedThought(dspy.Signature):  # type: ignore[no-any-unimported]
 generate_role_prefixed_thought = dspy.Predict(RolePrefixedThought)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
+@pytest.mark.ollama
 @pytest.mark.dspy
 def test_role_prefix_adherence() -> None:
     """Test that the DSPy program correctly generates thoughts with role prefixes."""
@@ -181,7 +169,9 @@ def test_role_prefix_adherence() -> None:
     logger.info(f"Success rate: {success_rate:.1f}% ({success_count}/{total_tests} successful)")
 
     if success_count == total_tests:
-        logger.info("✅ All tests passed! DSPy role adherence implementation is working correctly.")
+        logger.info(
+            "✅ All tests passed! DSPy role adherence implementation is working correctly."
+        )
     else:
         logger.warning(
             f"⚠️ {total_tests - success_count} tests failed. DSPy role adherence needs improvement."
@@ -191,9 +181,3 @@ def test_role_prefix_adherence() -> None:
     assert (
         success_count == total_tests
     ), f"Only {success_count}/{total_tests} role adherence tests passed"
-
-
-if __name__ == "__main__":
-    test_role_prefix_adherence()
-    # Exit with status code 0 as the test will raise an AssertionError if it fails
-    sys.exit(0)

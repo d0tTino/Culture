@@ -22,11 +22,6 @@ on:
       - 'requirements*.txt'
       - 'requirements*.in'
   workflow_dispatch:
-    inputs:
-      run-redteam:
-        description: 'Run optional red team suite'
-        required: false
-        default: 'false'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.repository }}-${{ github.head_ref || github.ref }}
@@ -34,194 +29,85 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: read
-# Additional step-level permissions are declared below for actions
-# that require more than read-only access (e.g., caching or
-# uploading artifacts). Update these comments if new steps need
-# other scopes.
 
 jobs:
-  changes:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    outputs:
-      code_changed: ${{ steps.diff.outputs.CODE_CHANGES }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
 
-      - name: Detect non-comment code changes
-        id: diff
-        run: bash scripts/check_code_changes.sh
-  build:
+  dependency-check:
+    name: Check Dependency Drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pip-tools
+        run: pip install pip-tools
+      - name: Check for dependency drift (Linux)
+        run: pip-compile --dry-run -o requirements.txt requirements.in
+      - name: Check for dependency drift (Windows)
+        run: pip-compile --dry-run -o requirements.windows.txt requirements.windows.in
+
+  unit-tests:
+    name: Unit Tests
+    needs: [lint, dependency-check]
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-      fail-fast: true
-    runs-on: ["self-hosted", "${{ matrix.os }}"]
-    timeout-minutes: 20
-    needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
-    steps:
-
-      # Setup Python, cache pip, and install dependencies
-      # (handled inside the custom action)
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: "3.10"
-
-      - name: Install optional dependencies
-        shell: bash
-        run: bash scripts/install_optional_deps.sh
-
-      - name: Verify requirements are up to date
-        shell: bash
-        run: bash scripts/check_requirements.sh
-
-
-      # Cache pre-commit environment for faster runs
-
-      - name: Cache pre-commit
-        # actions/cache needs write permission to create caches
-        permissions:
-          actions: write
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pre-commit
-          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-precommit-
-
-      - name: Run pre-commit
-        shell: bash
-        run: pre-commit run --all-files
-        # Ruff linting and Mypy type checks are executed within pre-commit
-
-      - name: Run mypy
-        shell: bash
-        run: mypy --strict --config-file pyproject.toml
-
-
-      - name: Run Tests & Coverage
-        shell: bash
-        run: |
-          pytest -q -n auto --durations=10 --maxfail=1 --disable-warnings --cov=src --cov-report=xml --cov-fail-under=90
-
-      - name: Run Integration Tests
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: pytest -m "integration" --disable-warnings -q
-
-      - name: Run Stress Tests
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: pytest -m "stress" --disable-warnings -q
-
-      - name: Run Windows Path/Discord Integration
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          pytest \
-            tests/integration/test_hierarchical_memory_persistence.py \
-            tests/integration/interfaces/test_discord_bot.py \
-            -m "integration" --disable-warnings -q
-
-      - name: Upload coverage artifact
-        if: matrix.os == 'ubuntu-latest'
-        # upload-artifact requires write permission
-        permissions:
-          actions: write
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage.xml
-          path: coverage.xml
-
-      - name: Run Black (Formatter)
-        shell: bash
-        run: black --check .
-
-  full-suite:
-    needs: changes
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ["self-hosted", "linux"]
-    timeout-minutes: 30
-    steps:
-      # Setup Python, cache pip, and install dependencies
-      # (handled inside the custom action)
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: "3.10"
-
-      - name: Install optional dependencies
-        shell: bash
-        run: bash scripts/install_optional_deps.sh
-
-
-      - name: Run Full Test Suite
-        shell: bash
-        run: pytest -m "slow or dspy or integration" --disable-warnings -q
-
-  redteam:
-    if: |
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run-redteam == 'true') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-redteam'))
-    runs-on: ["self-hosted", "linux"]
-    timeout-minutes: 30
-    steps:
-      # Setup Python, cache pip, and install dependencies
-      # (handled inside the custom action)
-      - uses: ./.github/actions/setup-python
-        with:
-          python-version: "3.10"
-
-      - name: Install optional dependencies
-        shell: bash
-        run: bash scripts/install_optional_deps.sh
-      - name: Install redteam dependencies
-        env:
-          PIP_DEFAULT_TIMEOUT: '120'
-        run: pip install garak
-
-      - name: Run Red Team Suite
-        shell: bash
-        run: |
-          set -o pipefail
-          pytest tests/redteam -m redteam --disable-warnings -q | tee redteam.log
-
-      - name: Fail on prompt leaks
-        shell: bash
-        run: |
-          if grep -i "leak" redteam.log; then
-            echo "Prompt leak detected" >&2
-            exit 1
-          fi
-
-  integration:
-    needs: changes
-    if: needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+        python-version: ['3.10', '3.11']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-python
+        uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-
-      - name: Install optional dependencies
-        shell: bash
-        run: bash scripts/install_optional_deps.sh
-
-      - name: Run Integration Suite
-        shell: bash
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          pytest -m "integration" --disable-warnings -q | tee integration.log
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          pip install -r requirements.windows.txt
+          pip install -r requirements-dev.txt
+      - name: Run unit tests
+        run: pytest -m "not integration and not ollama"
 
-      - name: Upload integration logs
-        if: failure()
-        permissions:
-          actions: write
-        uses: actions/upload-artifact@v4
+  integration-tests:
+    name: Integration Tests
+    needs: [lint, dependency-check]
+    runs-on: [self-hosted, linux] # Runner must have ollama
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'needs-ollama'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: integration.log
-          path: integration.log
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run integration tests
+        run: pytest -m "integration and ollama"

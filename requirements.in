@@ -1,16 +1,17 @@
---extra-index-url https://download.pytorch.org/whl/cpu     # CPU-only torch
-torch==2.3.0+cpu
+# For Linux/GPU
+torch
 numpy<2.0
 
-fastapi
-uvicorn[standard]           # pulls uvicorn-standard that omits uvloop on Windows
-langgraph                   # your orchestration layer
-weaviate-client>=4.8,<5     # v4 API with weaviate.classes
+fastapi>=0.111.0
+uvicorn
+uvloop
+langgraph
+weaviate-client>=4.8,<5
 grpcio-health-checking>=1.64
-protobuf>=5.26,<6           # satisfy grpc*
-httpx~=0.27.0               # satisfy weaviate-client
-validators                  # unpinned – any 0.33-0.36 works on Windows
-authlib                     # unpinned
+protobuf>=5.26,<6
+httpx~=0.27.0
+validators
+authlib
 pydantic>=2.7
 pydantic-settings
 typer

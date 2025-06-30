@@ -3,13 +3,17 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Sequence
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 from typing_extensions import Self
 
+from src.agents.memory.memory_models import importance
+from src.infra.models import UsageStats, VectorDBSummary
+
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
     from .vector_store import ChromaVectorStoreManager
+    from src.agents.memory.vector_store import VectorStoreManager
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,7 @@ class MemoryTrackingManager:
             if not results or not results.get("metadatas"):
                 logger.warning("No metadata found for memories: %s", memory_ids)
                 return
-            current_time = datetime.now(UTC).isoformat()
+            current_time = datetime.now(timezone.utc).isoformat()
             updated_metadatas: list[dict[str, Any]] = []
             metadatas = results["metadatas"]
             for i, memory_id in enumerate(memory_ids):
@@ -107,7 +111,7 @@ class MemoryTrackingManager:
         if last_retrieved:
             try:
                 last_dt = datetime.fromisoformat(last_retrieved)
-                now = datetime.now(UTC)
+                now = datetime.now(timezone.utc)
                 days_since = max(0.0, (now - last_dt).total_seconds() / (24 * 3600))
                 recs = 1.0 / (1.0 + days_since)
             except Exception:  # pragma: no cover - defensive
@@ -115,3 +119,29 @@ class MemoryTrackingManager:
 
         mus = (0.4 * rfs) + (0.4 * rs) + (0.2 * recs)
         return mus
+
+    def update_usage_stats_for_list(
+        self: Self,
+        memory_ids: list[str],
+        agent_id: str,
+        query: str
+    ) -> None:
+        """Update usage stats for a list of memory IDs."""
+        timestamp = datetime.now(timezone.utc)
+        for memory_id in memory_ids:
+            stats = self.get_usage_stats(memory_id, agent_id)
+            # Implementation of the method
+
+    def fetch_vector_db_summaries(
+        self: Self,
+        agent_id: str | None,
+        days: int
+    ) -> list[VectorDBSummary]:
+        """Fetch vector DB summaries for a specific agent or all agents."""
+        if not self.vector_store_manager:
+            return []
+
+        since_date = datetime.now(timezone.utc) - timedelta(days=days)
+        return self.vector_store_manager.get_db_summary(
+            agent_id=agent_id, since_date=since_date
+        )

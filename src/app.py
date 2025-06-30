@@ -15,8 +15,10 @@ from src.infra.checkpoint import (
     restore_rng_state,
     save_checkpoint,
 )
+from src.infra.config import get_config
 from src.infra.llm_client import get_ollama_client
 from src.infra.logging_config import setup_logging
+from src.infra.otel_config import setup_observability
 from src.infra.settings import settings
 from src.infra.warning_filters import configure_warning_filters
 from src.sim.knowledge_board import KnowledgeBoard
@@ -24,8 +26,8 @@ from src.sim.simulation import Simulation
 from src.utils.loop_helper import use_uvloop_if_available
 
 
-def setup_observability():
-    """Configure OpenTelemetry for console-based tracing."""
+def setup_observability() -> None:
+    """Configure OpenTelemetry for console or OTLP-based tracing."""
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import (
@@ -34,7 +36,21 @@ def setup_observability():
     )
 
     provider = TracerProvider()
-    provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+    endpoint = get_config("OTEL_EXPORTER_ENDPOINT")
+
+    if endpoint:
+        try:
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OtlpSpanExporter
+
+            exporter = OtlpSpanExporter(endpoint=endpoint)
+            processor = SimpleSpanProcessor(exporter)
+        except ImportError:
+            logging.warning("Failed to import OtlpSpanExporter, falling back to console exporter.")
+            processor = SimpleSpanProcessor(ConsoleSpanExporter())
+    else:
+        processor = SimpleSpanProcessor(ConsoleSpanExporter())
+
+    provider.add_span_processor(processor)
     trace.set_tracer_provider(provider)
 
 
@@ -101,6 +117,7 @@ def create_simulation(
     use_discord: bool = False,
     use_vector_store: bool = False,
     vector_store_dir: str = "./weaviate_data",
+    db_file: Optional[str] = None,
 ) -> Simulation:
     """Construct a Simulation instance with basic defaults."""
 
@@ -144,9 +161,13 @@ def create_simulation(
         vector_store_manager=vsm,
         scenario=scenario,
         discord_bot=discord_bot,
+        llm_client=ollama_client,
+        num_agents=num_agents,
+        db_file=db_file,
+        steps_to_run=steps,
+        use_vector_store=use_vector_store,
     )
     sim.knowledge_board = KnowledgeBoard()
-    sim.steps_to_run = steps
     return sim
 
 
@@ -205,13 +226,38 @@ def parse_args() -> argparse.Namespace:
         default="agent_1",
         help="Agent ID submitting the proposal.",
     )
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Check simulation setup without running the simulation.",
+    )
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="Run the HTTP server instead of running the simulation directly.",
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Enable development mode for the HTTP server.",
+    )
+    parser.add_argument(
+        "--db-file",
+        type=str,
+        help="Path to a database file for the simulation.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    setup_logging()
-    setup_observability()
+    # Setup logging and observability first
     args = parse_args()
+    setup_logging(level=logging.INFO if not args.verbose else logging.DEBUG)
+    logger = logging.getLogger(__name__)
+
+    if get_config("OTEL_EXPORTER_OTLP_ENDPOINT"):
+        setup_observability()
+
     desc, file_steps, file_agents = load_scenario(args.scenario)
     if file_steps is not None:
         args.steps = file_steps
@@ -244,6 +290,7 @@ def main() -> None:
             use_discord=args.discord,
             use_vector_store=args.vector_store,
             vector_store_dir=args.vector_dir,
+            db_file=args.db_file,
         )
 
     if args.replay and meta:
@@ -255,7 +302,23 @@ def main() -> None:
     if args.proposal:
         asyncio.run(sim.forward_proposal(args.proposer_id, args.proposal))
 
-    asyncio.run(sim.async_run(args.steps))
+    if args.check_only:
+        logger.info("LLM client initialized successfully.")
+        logger.info("Simulation setup checks passed successfully.")
+        return
+
+    if args.http:
+        # Run the HTTP server
+        import uvicorn
+        uvicorn.run(
+            "src.interfaces.http_server:app",
+            host="0.0.0.0",
+            port=8000,
+            reload=args.dev,
+        )
+    else:
+        # Run the simulation directly
+        asyncio.run(sim.async_run())
 
     if args.checkpoint:
         save_checkpoint(sim, args.checkpoint)

@@ -1,9 +1,8 @@
 import pytest
 from pytest import MonkeyPatch
 
-pytest.importorskip("dspy")
+dspy = pytest.importorskip("dspy")
 
-import dsp
 
 from src.agents.dspy_programs.role_thought_generator import (
     FailsafeRoleThoughtGenerator,
@@ -12,7 +11,6 @@ from src.agents.dspy_programs.role_thought_generator import (
 
 
 @pytest.mark.unit
-@pytest.mark.dspy
 def test_failsafe_role_thought_generator_returns_expected() -> None:
     generator = FailsafeRoleThoughtGenerator()
     result = generator("Leader", "context")
@@ -21,7 +19,6 @@ def test_failsafe_role_thought_generator_returns_expected() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.dspy
 def test_generate_role_prefixed_thought_uses_generator(monkeypatch: MonkeyPatch) -> None:
     def dummy(role_name: str, context: str) -> object:
         return type(
@@ -40,7 +37,6 @@ def test_generate_role_prefixed_thought_uses_generator(monkeypatch: MonkeyPatch)
 
 
 @pytest.mark.unit
-@pytest.mark.dspy
 def test_generate_role_prefixed_thought_noncallable(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         "src.agents.dspy_programs.role_thought_generator.get_role_thought_generator",

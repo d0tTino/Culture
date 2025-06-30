@@ -2,9 +2,8 @@
 import pytest
 from pytest import MonkeyPatch
 
-pytest.importorskip("dspy")
+dspy = pytest.importorskip("dspy")
 
-import dsp
 
 from src.agents.dspy_programs.relationship_updater import (
     FailsafeRelationshipUpdater,
