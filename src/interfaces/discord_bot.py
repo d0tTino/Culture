@@ -3,8 +3,6 @@ Discord bot interface for the Culture simulation.
 Provides real-time updates about the simulation to a Discord channel.
 """
 
-# ruff: noqa: ANN401
-
 import asyncio
 import logging
 import typing

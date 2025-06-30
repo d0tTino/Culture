@@ -3,7 +3,6 @@
 from typing import Any, cast
 
 # Skip self argument annotation warnings in helper classes
-# ruff: noqa: ANN101
 
 try:
     from prometheus_client import Counter, Gauge, start_http_server

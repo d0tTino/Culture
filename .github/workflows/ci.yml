@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -12,7 +12,7 @@ on:
       - 'requirements*.txt'
       - 'requirements*.in'
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -35,14 +35,39 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
-# Additional step-level permissions are declared below for actions
-# that require more than read-only access (e.g., caching or
-# uploading artifacts). Update these comments if new steps need
-# other scopes.
 
 jobs:
+  lint-and-check-newlines:
+    name: Lint and Check Newlines
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fail on newline-less blobs
+        run: |
+          if grep -RILPzo '\\n' src tests scripts .github | grep -q .; then
+            echo "::error::File(s) with no newline characters detected"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install ruff black
+
+      - name: Run Ruff Linter
+        run: ruff check .
+
+      - name: Run Black Formatter Check
+        run: black --check .
+
   changes:
     runs-on: ubuntu-latest
+    needs: lint-and-check-newlines
     outputs:
       code_changed: ${{ steps.diff.outputs.CODE_CHANGES }}
     steps:
@@ -61,6 +86,9 @@ jobs:
     timeout-minutes: 20
     needs: changes
     if: needs.changes.outputs.code_changed == 'true'
+    permissions:
+      actions: write
+      contents: read
     steps:
 
       # Setup Python, cache pip, and install dependencies
@@ -81,9 +109,6 @@ jobs:
       # Cache pre-commit environment for faster runs
 
       - name: Cache pre-commit
-        # actions/cache needs write permission to create caches
-        permissions:
-          actions: write
         uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit
@@ -127,9 +152,6 @@ jobs:
 
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest'
-        # upload-artifact requires write permission
-        permissions:
-          actions: write
         uses: actions/upload-artifact@v4
         with:
           name: coverage.xml
@@ -219,8 +241,6 @@ jobs:
 
       - name: Upload integration logs
         if: failure()
-        permissions:
-          actions: write
         uses: actions/upload-artifact@v4
         with:
           name: integration.log

@@ -166,3 +166,10 @@ The `--steps` flag sets how many iterations to perform before exiting. Use `--di
 
 To enable deterministic replay of simulations, follow [docs/redpanda_setup.md](redpanda_setup.md) to install Redpanda and set the `ENABLE_REDPANDA` and `REDPANDA_BROKER` environment variables.
 
+## Known Quirks and Limitations
+
+- **`uvloop`**: The project uses `uvloop` for enhanced asyncio performance on POSIX-compliant systems (Linux, macOS). On Windows, it gracefully falls back to the standard `asyncio` event loop. Performance may differ slightly, but all functionality remains the same.
+- **PyTorch**: If you are using features that require PyTorch (a dependency of `dspy-ai`), you may need to install the CPU-specific version if you do not have a compatible NVIDIA GPU. You can do this by adding `--index-url https://download.pytorch.org/whl/cpu` to your `pip install` commands. The project's extra-index-url for CUDA is defined in `requirements.in` but may not be suitable for all Windows environments.
+
+This document is a work-in-progress. If you encounter other Windows-specific issues, please document them here.
+

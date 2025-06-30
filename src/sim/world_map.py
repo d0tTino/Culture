@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: ANN101
 from collections.abc import Iterable
 from enum import Enum
 from heapq import heappop, heappush

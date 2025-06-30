@@ -1,4 +1,3 @@
-# ruff: noqa: E501, ANN101, ANN401
 import logging
 from pathlib import Path
 

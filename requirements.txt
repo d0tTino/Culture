@@ -99,7 +99,6 @@ deprecated==1.2.18
     # via
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
 dill==0.3.8
     # via
     #   datasets
@@ -147,9 +146,7 @@ fsspec[http]==2025.3.0
 google-auth==2.40.3
     # via kubernetes
 googleapis-common-protos==1.70.0
-    # via
-    #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
+    # via opentelemetry-exporter-otlp-proto-grpc
 greenlet==3.2.3
     # via sqlalchemy
 grpcio==1.73.1
@@ -276,24 +273,15 @@ opentelemetry-api==1.25.0
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp==1.25.0
-    # via -r requirements.in
 opentelemetry-exporter-otlp-proto-common==1.25.0
-    # via
-    #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
+    # via opentelemetry-exporter-otlp-proto-grpc
 opentelemetry-exporter-otlp-proto-grpc==1.25.0
-    # via
-    #   chromadb
-    #   opentelemetry-exporter-otlp
-opentelemetry-exporter-otlp-proto-http==1.25.0
-    # via opentelemetry-exporter-otlp
+    # via chromadb
 opentelemetry-instrumentation==0.46b0
     # via
     #   opentelemetry-instrumentation-asgi
@@ -306,13 +294,10 @@ opentelemetry-proto==1.25.0
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
 opentelemetry-sdk==1.25.0
     # via
-    #   -r requirements.in
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
-    #   opentelemetry-exporter-otlp-proto-http
 opentelemetry-semantic-conventions==0.46b0
     # via
     #   opentelemetry-instrumentation-asgi
@@ -357,6 +342,8 @@ protobuf==4.25.8
     #   googleapis-common-protos
     #   onnxruntime
     #   opentelemetry-proto
+psycopg2-binary==2.9.10
+    # via -r requirements.in
 pulsar-client==3.7.0
     # via chromadb
 pyarrow==20.0.0
@@ -411,6 +398,7 @@ pytz==2025.2
     # via pandas
 pyyaml==6.0.2
     # via
+    #   -r requirements.in
     #   chromadb
     #   datasets
     #   huggingface-hub
@@ -418,6 +406,8 @@ pyyaml==6.0.2
     #   langchain-core
     #   optuna
     #   uvicorn
+redis==6.2.0
+    # via -r requirements.in
 referencing==0.36.2
     # via
     #   jsonschema
@@ -435,7 +425,6 @@ requests==2.32.4
     #   huggingface-hub
     #   kubernetes
     #   langsmith
-    #   opentelemetry-exporter-otlp-proto-http
     #   posthog
     #   requests-oauthlib
     #   requests-toolbelt

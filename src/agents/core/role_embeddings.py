@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # Skip self argument annotation warnings for simple methods
-# ruff: noqa: ANN101
 import math
 
 from .embedding_utils import compute_embedding

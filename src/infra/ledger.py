@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-
-# ruff: noqa: ANN101
 import logging
 import sqlite3
 import time

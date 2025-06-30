@@ -3,8 +3,6 @@ Integration module for using Ollama models with DSPy.
 Provides a proper implementation of DSPy's LM interface for Ollama models.
 """
 
-# ruff: noqa: ANN101, ANN102
-
 import json
 import logging
 import sys
