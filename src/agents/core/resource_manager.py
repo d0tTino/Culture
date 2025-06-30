@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Protocol
 
 # Skip self argument annotation warnings for simple methods
-# ruff: noqa: ANN101
 
 
 class HasResources(Protocol):

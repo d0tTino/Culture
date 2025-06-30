@@ -1,4 +1,3 @@
-# ruff: noqa: ANN101
 from typing import Any
 
 class Signature:

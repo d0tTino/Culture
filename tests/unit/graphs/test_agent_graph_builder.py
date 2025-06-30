@@ -1,7 +1,5 @@
 import pytest
 
-# ruff: noqa: E402
-
 # - allow runtime dependency checks before imports
 
 pytest.importorskip("langgraph")

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# ruff: noqa: RUF006
 import argparse
 import asyncio
 import logging
