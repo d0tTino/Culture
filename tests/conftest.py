@@ -241,17 +241,14 @@ def mock_llm_client() -> Generator[MagicMock, None, None]:
 @pytest.fixture(autouse=True)
 def mock_ollama_by_default(request: FixtureRequest, monkeypatch: MonkeyPatch) -> None:
     """
-    Automatically mock Ollama functions unless the test is explicitly marked with require_ollama.
-
-    This prevents 404 errors when Ollama is not running.
+    Automatically mock Ollama functions unless the test is explicitly marked with require_ollama
+    or disable_global_llm_mock.
     """
-    # Skip mocking if test is marked with require_ollama
-    if request.node.get_closest_marker("require_ollama"):
-        # If marked with require_ollama but server isn't running, the test will be skipped
-        # by the require_ollama mark, so we don't need to do anything here
+    if request.node.get_closest_marker("require_ollama") or request.node.get_closest_marker(
+        "disable_global_llm_mock"
+    ):
         return
 
-    # If test is not explicitly requiring Ollama, mock all Ollama functions
     patch_ollama_functions(monkeypatch)
 
 

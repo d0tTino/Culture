@@ -64,6 +64,7 @@ def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 
 @pytest.mark.unit
+@pytest.mark.disable_global_llm_mock
 def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
     module = importlib.reload(llm_client_mod)
     state = AgentState(agent_id="A", name="Agent")

@@ -38,7 +38,7 @@ async def test_create_project_via_graph() -> None:
     with (
         patch.object(agent, "async_select_action_intent", AsyncMock(return_value=action_output)),
         patch(
-            "src.agents.graphs.graph_nodes.generate_structured_output",
+            "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
             return_value=action_output,
         ),
     ):
@@ -88,7 +88,7 @@ async def test_join_project_via_graph() -> None:
     with (
         patch.object(creator, "async_select_action_intent", AsyncMock(return_value=create_output)),
         patch(
-            "src.agents.graphs.graph_nodes.generate_structured_output",
+            "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
             return_value=create_output,
         ),
     ):
@@ -110,7 +110,7 @@ async def test_join_project_via_graph() -> None:
     with (
         patch.object(joiner, "async_select_action_intent", AsyncMock(return_value=join_output)),
         patch(
-            "src.agents.graphs.graph_nodes.generate_structured_output",
+            "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
             return_value=join_output,
         ),
     ):
@@ -149,7 +149,7 @@ async def test_leave_project_via_graph() -> None:
     with (
         patch.object(agent, "async_select_action_intent", AsyncMock(return_value=create_output)),
         patch(
-            "src.agents.graphs.graph_nodes.generate_structured_output",
+            "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
             return_value=create_output,
         ),
     ):
@@ -171,7 +171,7 @@ async def test_leave_project_via_graph() -> None:
     with (
         patch.object(agent, "async_select_action_intent", AsyncMock(return_value=leave_output)),
         patch(
-            "src.agents.graphs.graph_nodes.generate_structured_output",
+            "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
             return_value=leave_output,
         ),
     ):

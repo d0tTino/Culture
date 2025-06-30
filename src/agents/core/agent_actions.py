@@ -103,6 +103,8 @@ def change_role(state: AgentState, new_role: str, current_step: int) -> bool:
     except Exception:  # pragma: no cover - ledger optional
         logger.debug("Ledger logging failed", exc_info=True)
     state.current_role = create_role_profile(new_role)
+    state.role_embedding = list(state.current_role.embedding)
+    state.reputation_score = state.current_role.reputation
     state.steps_in_current_role = 0
     state.role_history.append((current_step, new_role))
     return True

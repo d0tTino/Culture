@@ -94,7 +94,8 @@ async def test_generate_thought_and_message_node(monkeypatch: pytest.MonkeyPatch
     )
 
     monkeypatch.setattr(
-        "src.agents.graphs.graph_nodes.generate_structured_output", lambda prompt, schema: dummy
+        "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
+        lambda intent, prompt, schema: dummy,
     )
 
     out = await generate_thought_and_message_node({})

@@ -8,6 +8,7 @@ import requests
 
 
 @pytest.mark.unit
+@pytest.mark.disable_global_llm_mock
 def test_generate_text_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that generate_text returns None when the underlying client fails."""
     # Arrange
