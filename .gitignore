@@ -232,3 +232,14 @@ cython_debug/
 # PyCharm
 .idea/
 
+# CI
+/site/
+
+# Transpiled files from the UI
+/culture-ui/dist/
+
+# Ledger
+/ledger.sqlite3
+/ledger.sqlite3-shm
+/ledger.sqlite3-wal
+

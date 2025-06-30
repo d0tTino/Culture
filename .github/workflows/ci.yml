@@ -41,8 +41,42 @@ permissions:
 # other scopes.
 
 jobs:
+  lint-and-check-newlines:
+    name: Lint and Check Newlines
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install ruff black
+
+      - name: Run Ruff Linter
+        run: ruff check .
+
+      - name: Run Black Formatter Check
+        run: black --check .
+
+      - name: Check for missing newlines
+        run: |
+          # Exclude .gitattributes itself from the check.
+          # The grep command looks for files that are NOT binary (-I), recursively (-R),
+          # lists filenames only (-L), uses Perl-compatible regex (-P), and treats the file as zero-terminated (-z)
+          # to correctly handle filenames with special characters. The output is piped to grep -v to filter out
+          # any known-bad files or directories.
+          if git ls-files -z | xargs -0 -r grep -RLP '\\n' | grep -vE '(.gitattributes|snapshots/.*.json)'; then
+            echo "Error: The following files are missing a newline at the end:"
+            git ls-files -z | xargs -0 -r grep -RLP '\\n' | grep -vE '(.gitattributes|snapshots/.*.json)'
+            exit 1
+          fi
   changes:
     runs-on: ubuntu-latest
+    needs: lint-and-check-newlines
     outputs:
       code_changed: ${{ steps.diff.outputs.CODE_CHANGES }}
     steps:
@@ -61,6 +95,9 @@ jobs:
     timeout-minutes: 20
     needs: changes
     if: needs.changes.outputs.code_changed == 'true'
+    permissions:
+      actions: write
+      contents: read
     steps:
 
       # Setup Python, cache pip, and install dependencies
@@ -81,9 +118,6 @@ jobs:
       # Cache pre-commit environment for faster runs
 
       - name: Cache pre-commit
-        # actions/cache needs write permission to create caches
-        permissions:
-          actions: write
         uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit
@@ -127,9 +161,6 @@ jobs:
 
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest'
-        # upload-artifact requires write permission
-        permissions:
-          actions: write
         uses: actions/upload-artifact@v4
         with:
           name: coverage.xml
@@ -138,6 +169,13 @@ jobs:
       - name: Run Black (Formatter)
         shell: bash
         run: black --check .
+
+      - name: Upload integration logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration.log
+          path: integration.log
 
   full-suite:
     needs: changes
@@ -219,8 +257,6 @@ jobs:
 
       - name: Upload integration logs
         if: failure()
-        permissions:
-          actions: write
         uses: actions/upload-artifact@v4
         with:
           name: integration.log
