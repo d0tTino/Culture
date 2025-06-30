@@ -5,8 +5,6 @@ discord.py
 weaviate-client
 chromadb
 ollama
-opentelemetry-sdk
-opentelemetry-exporter-otlp
 dspy-ai==2.6.27
 pydantic>=2.11
 pydantic-settings==2.0.3
@@ -17,3 +15,6 @@ sqlalchemy
 asyncpg
 prometheus-client
 confluent-kafka==2.10.1
+psycopg2-binary
+pyyaml
+redis
