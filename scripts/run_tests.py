@@ -35,7 +35,6 @@ def main(argv: list[str]) -> int:
     ]
     skip_install = os.getenv("SKIP_DEP_INSTALL")
     if not skip_install and not all(have_module(mod) for mod in required):
-
         try:
             subprocess.check_call(
                 [

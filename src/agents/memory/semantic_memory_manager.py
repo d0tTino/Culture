@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -153,7 +153,7 @@ class SemanticMemoryManager:
 
         summary = await asyncio.to_thread(self.consolidate_memories, agent_id)
         if self.driver is not None and summary:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(UTC).isoformat()
             with self.driver.session() as session:
                 session.run(
                     """

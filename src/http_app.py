@@ -26,7 +26,7 @@ async def generate_events(
         event: SimulationEvent | None = await event_queue.get()
         if event is None:
             break
-        yield {"event": "simulation_event", "data": event.json()}
+        yield {"event": "simulation_event", "data": event.model_dump_json()}
 
 
 @app.get("/stream/events")

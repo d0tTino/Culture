@@ -10,12 +10,12 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 from typing_extensions import Self
 
+pytest.importorskip("dspy")
+
 from src.agents.dspy_programs.role_specific_summary_generator import (
     RoleSpecificSummaryGenerator,
     _extract_keywords,
 )
-
-pytest.importorskip("dspy")
 
 
 @pytest.mark.unit

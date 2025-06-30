@@ -120,11 +120,10 @@ class Agent:
                 storage and retrieval. Used to persist memory events.
             async_dspy_manager (Optional[AsyncDSPyManager], optional): Manager for DSPy program execution.
         """
-        # Generate a unique ID if none provided
         self.agent_id = agent_id if agent_id else str(uuid.uuid4())
 
         # Explicitly declare vector_store_manager for Mypy
-        # self.vector_store_manager: MemoryStore | None
+        self.vector_store_manager: MemoryStore | None = vector_store_manager
 
         # Initialize as empty if not provided
         if initial_state is None:

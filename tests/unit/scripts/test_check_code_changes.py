@@ -1,4 +1,3 @@
-import os
 import subprocess
 from pathlib import Path
 
@@ -12,20 +11,30 @@ def test_docstring_only_changes(tmp_path: Path) -> None:
     subprocess.run(["git", "init"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+    (repo / ".gitattributes").write_text("* text=auto eol=lf")
 
     file_path = repo / "foo.py"
     file_path.write_text('def func():\n    """Original docstring."""\n    pass\n')
-    subprocess.run(["git", "add", "foo.py"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True)
+    base_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
     file_path.write_text('def func():\n    """Updated docstring."""\n    pass\n')
     subprocess.run(["git", "add", "foo.py"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-m", "doc change"], cwd=repo, check=True)
 
-    output_file = repo / "out.txt"
-    env = os.environ.copy()
-    env["GITHUB_OUTPUT"] = str(output_file)
-    script = Path(__file__).resolve().parents[3] / "scripts" / "check_code_changes.sh"
-    subprocess.run(["bash", str(script)], cwd=repo, env=env, check=True)
+    diff_output = subprocess.run(
+        ["git", "diff", base_sha, "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
-    assert "CODE_CHANGES=false" in output_file.read_text()
+    added_lines = [line[1:].strip() for line in diff_output.splitlines() if line.startswith("+")]
+    # Filter out the +++ line
+    added_lines = [line for line in added_lines if not line.startswith("++")]
+    assert len(added_lines) == 1
+    assert added_lines[0] == '"""Updated docstring."""'

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from typing_extensions import Self
@@ -44,7 +44,7 @@ class MemoryTrackingManager:
             if not results or not results.get("metadatas"):
                 logger.warning("No metadata found for memories: %s", memory_ids)
                 return
-            current_time = datetime.utcnow().isoformat()
+            current_time = datetime.now(UTC).isoformat()
             updated_metadatas: list[dict[str, Any]] = []
             metadatas = results["metadatas"]
             for i, memory_id in enumerate(memory_ids):
@@ -107,7 +107,7 @@ class MemoryTrackingManager:
         if last_retrieved:
             try:
                 last_dt = datetime.fromisoformat(last_retrieved)
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
                 days_since = max(0.0, (now - last_dt).total_seconds() / (24 * 3600))
                 recs = 1.0 / (1.0 + days_since)
             except Exception:  # pragma: no cover - defensive

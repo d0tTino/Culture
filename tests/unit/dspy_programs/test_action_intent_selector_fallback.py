@@ -1,14 +1,11 @@
-import dspy
 import pytest
-from pytest import MonkeyPatch
-from typing_extensions import Self
-
-from src.agents.dspy_programs import action_intent_selector
 
 pytest.importorskip("dspy")
 
-if not hasattr(dspy, "Predict"):
-    pytest.skip("dspy Predict not available", allow_module_level=True)
+from unittest.mock import MagicMock
+from typing_extensions import Self
+
+from src.agents.dspy_programs import action_intent_selector
 
 
 def test_action_intent_selector_failsafe(monkeypatch: MonkeyPatch) -> None:

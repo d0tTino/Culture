@@ -105,7 +105,7 @@ class SimulationEvent(BaseModel):
 app = FastAPI()
 
 
-@app.get("/stream/messages")
+@app.get("/stream/messages", response_model=None)
 async def stream_messages(request: Request) -> EventSourceResponse:
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         while True:
@@ -115,7 +115,7 @@ async def stream_messages(request: Request) -> EventSourceResponse:
                 msg: AgentMessage = await message_sse_queue.get()
                 yield {
                     "event": "message",
-                    "data": msg.json(),
+                    "data": msg.model_dump_json(),
                 }
             except (RuntimeError, ValueError) as e:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
@@ -158,7 +158,7 @@ async def websocket_events(websocket: WebSocket) -> None:
             event: SimulationEvent | None = await event_queue.get()
             if event is None:
                 break
-            await websocket.send_text(event.json())
+            await websocket.send_text(event.model_dump_json())
     except WebSocketDisconnect:
         pass
 

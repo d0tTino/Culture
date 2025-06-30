@@ -71,10 +71,13 @@ def test_embed_creators(discord_module: object, monkeypatch: pytest.MonkeyPatch)
         def __init__(self, *args: object, **kwargs: object) -> None:
             self.args = args
             self.kwargs = kwargs
+
         def set_author(self, *args: object, **kwargs: object) -> None:
             pass
+
         def add_field(self, *args: object, **kwargs: object) -> None:
             pass
+
     dummy_color = SimpleNamespace(
         blue=lambda: "blue",
         green=lambda: "green",
@@ -87,17 +90,48 @@ def test_embed_creators(discord_module: object, monkeypatch: pytest.MonkeyPatch)
         red=lambda: "red",
         dark_teal=lambda: "dark_teal",
     )
-    monkeypatch.setattr(discord_module, "discord", SimpleNamespace(Embed=DummyEmbed, Color=dummy_color))
+    monkeypatch.setattr(
+        discord_module, "discord", SimpleNamespace(Embed=DummyEmbed, Color=dummy_color)
+    )
     bot = object.__new__(discord_module.SimulationDiscordBot)
-    assert isinstance(discord_module.SimulationDiscordBot.create_step_start_embed(bot, 1), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_step_end_embed(bot, 2), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_knowledge_board_embed(bot, "a", "msg", 3), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_role_change_embed(bot, "a", "old", "new", 4), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_project_embed(bot, "create", "pname", "pid", "a", 5), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_agent_message_embed(bot, "a", "hello", step=6), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_ip_change_embed(bot, "a", 1, 2, "reason", 7), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_du_change_embed(bot, "a", 1.0, 2.0, "reason", 8), DummyEmbed)
-    assert isinstance(discord_module.SimulationDiscordBot.create_agent_action_embed(bot, "a", "idle", step=9), DummyEmbed)
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_step_start_embed(bot, 1), DummyEmbed
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_step_end_embed(bot, 2), DummyEmbed
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_knowledge_board_embed(bot, "a", "msg", 3),
+        DummyEmbed,
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_role_change_embed(bot, "a", "old", "new", 4),
+        DummyEmbed,
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_project_embed(
+            bot, "create", "pname", "pid", "a", 5
+        ),
+        DummyEmbed,
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_agent_message_embed(bot, "a", "hello", step=6),
+        DummyEmbed,
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_ip_change_embed(bot, "a", 1, 2, "reason", 7),
+        DummyEmbed,
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_du_change_embed(
+            bot, "a", 1.0, 2.0, "reason", 8
+        ),
+        DummyEmbed,
+    )
+    assert isinstance(
+        discord_module.SimulationDiscordBot.create_agent_action_embed(bot, "a", "idle", step=9),
+        DummyEmbed,
+    )
     assert isinstance(
         discord_module.SimulationDiscordBot.create_map_action_embed(
             bot, "a", "move", {"position": "x"}, 10

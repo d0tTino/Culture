@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 from .settings import ConfigSettings, settings
 
@@ -225,22 +225,21 @@ BOOL_CONFIG_KEYS = [
 REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
 
 
-
-
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
     global settings, _CONFIG
     new_settings = ConfigSettings()
-    if validate_required:
-        try:
-            data = new_settings.model_dump()
-        except AttributeError:  # pragma: no cover - pydantic v1 fallback
-            data = new_settings.dict()
-        missing = [key for key in REQUIRED_CONFIG_KEYS if str(data.get(key, "")).strip() == ""]
-
+    try:
+        data = new_settings.model_dump()
+    except AttributeError:  # pragma: no cover - pydantic v1 fallback
+        data = new_settings.dict()
 
     if validate_required:
-        missing = [k for k in REQUIRED_CONFIG_KEYS if not data.get(k)]
+        missing = [
+            k
+            for k in REQUIRED_CONFIG_KEYS
+            if not data.get(k) and k != "OPA_URL"  # OPA_URL is allowed to be empty
+        ]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
@@ -248,9 +247,9 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
         data = settings.model_dump()  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
-    _CONFIG.update(cast(dict[str, Any], data))
-    return cast(dict[str, Any], data)
 
+    _CONFIG = cast(dict[str, object], data)
+    return cast(dict[str, Any], data)
 
 
 def get_config(key: str | None = None) -> Any:

@@ -1,3 +1,8 @@
+import pytest
+
+pytest.importorskip("dspy")
+
+import dsp
 import logging
 import os
 import sys
@@ -176,9 +181,7 @@ def test_role_prefix_adherence() -> None:
     logger.info(f"Success rate: {success_rate:.1f}% ({success_count}/{total_tests} successful)")
 
     if success_count == total_tests:
-        logger.info(
-            "✅ All tests passed! DSPy role adherence implementation is working correctly."
-        )
+        logger.info("✅ All tests passed! DSPy role adherence implementation is working correctly.")
     else:
         logger.warning(
             f"⚠️ {total_tests - success_count} tests failed. DSPy role adherence needs improvement."
