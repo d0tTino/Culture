@@ -4,6 +4,10 @@ import HeaderBar from './components/HeaderBar'
 import Home from './pages/Home'
 import MissionOverview from './pages/MissionOverview'
 import AgentDataOverview from './pages/AgentDataOverview'
+import NetworkWebPage from './pages/NetworkWeb'
+import WorldMapPage from './pages/WorldMap'
+import TimelineWidgetPage from './pages/TimelineWidget'
+import KpiCardPage from './pages/KpiCard'
 import DockManager from './components/DockManager'
 import { createDefaultLayout } from './lib/defaultLayout'
 
@@ -20,6 +24,10 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/missions" element={<MissionOverview />} />
             <Route path="/agent-data" element={<AgentDataOverview />} />
+            <Route path="/network-web" element={<NetworkWebPage />} />
+            <Route path="/world-map" element={<WorldMapPage />} />
+            <Route path="/timeline" element={<TimelineWidgetPage />} />
+            <Route path="/kpi-card" element={<KpiCardPage />} />
           </Routes>
         </DockManager>
       </main>

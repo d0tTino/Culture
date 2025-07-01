@@ -22,6 +22,26 @@ export default function Sidebar() {
             Agent Data
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/network-web" className={linkClass}>
+            Network Web
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/world-map" className={linkClass}>
+            World Map
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/timeline" className={linkClass}>
+            Timeline Widget
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/kpi-card" className={linkClass}>
+            KPI Card
+          </NavLink>
+        </li>
       </ul>
     </nav>
   )

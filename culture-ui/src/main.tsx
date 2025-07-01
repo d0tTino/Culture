@@ -4,9 +4,18 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { widgetRegistry } from './lib/widgetRegistry'
-import { TimelineWidget, BreakpointList, EventConsole } from './widgets'
+import {
+  TimelineWidget,
+  BreakpointList,
+  NetworkWeb,
+  WorldMap,
+  KpiCard,
+} from './widgets'
 
-widgetRegistry.register('Timeline', TimelineWidget)
+widgetRegistry.register('TimelineWidget', TimelineWidget)
+widgetRegistry.register('NetworkWeb', NetworkWeb)
+widgetRegistry.register('WorldMap', WorldMap)
+widgetRegistry.register('KpiCard', KpiCard)
 widgetRegistry.register('Breakpoints', BreakpointList)
 widgetRegistry.register('Events', EventConsole)
 
