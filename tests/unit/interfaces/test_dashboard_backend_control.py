@@ -62,7 +62,7 @@ async def test_control_pause_resume() -> None:
     data = json.loads(resp.body)
     assert data["paused"] is True
 
-    resp = await db.control({"command": "set_speed", "speed": 2})
+    resp = await db.control({"command": "set_speed", "value": 2})
     data = json.loads(resp.body)
     assert data["speed"] == 2
 
@@ -97,3 +97,13 @@ async def test_ws_control() -> None:
     await db.ws_control(ws)
     assert ws.accepted is True
     assert json.loads(ws.sent[0])["paused"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_set_speed_invalid_value() -> None:
+    db = load_dashboard_backend()
+    await db.control({"command": "set_speed", "value": 2})
+    resp = await db.control({"command": "set_speed", "value": "bad"})
+    data = json.loads(resp.body)
+    assert data["speed"] == 2
