@@ -9,4 +9,4 @@ class ResizeObserver {
 ;(global as typeof global & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver = ResizeObserver
 
 import { vi } from 'vitest'
-vi.mock('flexlayout-react/style/light.css', () => ({}), { virtual: true })
+vi.mock('flexlayout-react/style/light.css', () => ({}))

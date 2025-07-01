@@ -78,3 +78,9 @@ jobs:
 
       - name: Build
         run: pnpm --filter culture-ui build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter culture-ui exec playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: pnpm --filter culture-ui test:e2e
