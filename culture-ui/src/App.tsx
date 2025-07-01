@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
+import HeaderBar from './components/HeaderBar'
 import Home from './pages/Home'
 import MissionOverview from './pages/MissionOverview'
 import AgentDataOverview from './pages/AgentDataOverview'
@@ -17,6 +18,7 @@ export default function App() {
     <div className="flex h-screen">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
+        <HeaderBar />
         <DockManager defaultLayout={defaultLayout}>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -29,6 +31,7 @@ export default function App() {
           </Routes>
         </DockManager>
       </main>
+
     </div>
   )
 }

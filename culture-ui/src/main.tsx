@@ -17,6 +17,7 @@ widgetRegistry.register('NetworkWeb', NetworkWeb)
 widgetRegistry.register('WorldMap', WorldMap)
 widgetRegistry.register('KpiCard', KpiCard)
 widgetRegistry.register('Breakpoints', BreakpointList)
+widgetRegistry.register('Events', EventConsole)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
