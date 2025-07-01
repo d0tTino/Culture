@@ -25,6 +25,8 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { reorderMissions } from '../lib/reorderMissions'
 
+export { reorderMissions }
+
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: row.id,
