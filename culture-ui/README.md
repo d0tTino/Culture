@@ -58,6 +58,15 @@ pnpm --filter culture-ui format
 
 Husky runs `pnpm lint` and `pnpm type-check` before each commit.
 
+## End-to-end tests
+
+Run Playwright tests against the built UI:
+
+```bash
+pnpm --filter culture-ui build
+pnpm --filter culture-ui test:e2e
+```
+
 ## Workspace integration
 
 `culture-ui` is defined in `pnpm-workspace.yaml`. Running `pnpm install` at the root installs both backend and UI dependencies. Use `--filter culture-ui` to run scripts only for the UI when needed.

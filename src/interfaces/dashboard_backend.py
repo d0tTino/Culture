@@ -171,7 +171,7 @@ async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
         SIM_STATE["paused"] = False
     elif action == "set_speed":
         try:
-            SIM_STATE["speed"] = float(cmd.get("speed", 1))
+            SIM_STATE["speed"] = float(cmd.get("value", 1))
         except (TypeError, ValueError):
             pass
     elif action == "set_breakpoints":
