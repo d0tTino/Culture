@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { act, render, screen } from '@testing-library/react'
 import KpiCard from './KpiCard'
 import { MockEventSource, MockWebSocket, resetMockSources } from '../lib/testUtils'
@@ -8,10 +7,6 @@ afterEach(() => {
 })
 
 describe('KpiCard', () => {
-  type GlobalWithSources = typeof globalThis & {
-    EventSource?: unknown
-    WebSocket?: unknown
-  }
 
   it('renders KPI card', () => {
   ;(globalThis as unknown as { EventSource?: typeof EventSource }).EventSource =

@@ -1,15 +1,16 @@
 import { Layout, Model, TabNode, type IJsonModel } from 'flexlayout-react'
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { getWidget, listWidgets } from '../lib/widgetRegistry'
 import 'flexlayout-react/style/light.css'
 
 export interface DockManagerProps {
   defaultLayout: IJsonModel
+  children?: React.ReactNode
 }
 
 const STORAGE_KEY = 'dockLayout'
 
-export default function DockManager({ defaultLayout }: DockManagerProps) {
+export default function DockManager({ defaultLayout, children }: DockManagerProps) {
   const [model] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -36,13 +37,19 @@ export default function DockManager({ defaultLayout }: DockManagerProps) {
   if (process.env.NODE_ENV === 'test') {
     return (
       <div>
-        {listWidgets().map((key) => {
-          const Widget = getWidget(key)
-          return Widget ? <Widget key={key} /> : null
-        })}
+        {children ??
+          listWidgets().map((key) => {
+            const Widget = getWidget(key)
+            return Widget ? <Widget key={key} /> : null
+          })}
       </div>
     )
   }
 
-  return <Layout model={model} factory={factory} onModelChange={handleModelChange} />
+  return (
+    <>
+      <Layout model={model} factory={factory} onModelChange={handleModelChange} />
+      {children}
+    </>
+  )
 }

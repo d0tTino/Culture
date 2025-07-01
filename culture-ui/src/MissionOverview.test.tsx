@@ -1,9 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { vi } from 'vitest'
-import MissionOverview, { reorderMissions } from './pages/MissionOverview'
-import * as api from './lib/api'
-
-vi.mock('./lib/api')
+import MissionOverview from './pages/MissionOverview'
+import { reorderMissions } from './lib/reorderMissions'
 
 const missions = [
   { id: 1, name: 'Gather Intel', status: 'In Progress', progress: 50 },
@@ -12,9 +9,6 @@ const missions = [
 ]
 
 describe('MissionOverview', () => {
-  beforeEach(() => {
-    ;(api.fetchMissions as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(missions)
-  })
 
   it('renders missions table', async () => {
 
