@@ -36,9 +36,9 @@ describe('useEventSource', () => {
   it('connects via EventSource and receives messages', () => {
     ;(
       globalThis as unknown as {
-        EventSource: typeof MockEventSource
+        EventSource: typeof EventSource
       }
-    ).EventSource = MockEventSource
+    ).EventSource = MockEventSource as unknown as typeof EventSource
 
     render(<TestComponent />)
     const es = MockEventSource.instances[0]
@@ -52,16 +52,16 @@ describe('useEventSource', () => {
   it('falls back to WebSocket when EventSource is unavailable', () => {
     ;(
       globalThis as unknown as {
-        EventSource: undefined
-        WebSocket: typeof MockWebSocket
+        EventSource: typeof EventSource | undefined
+        WebSocket: typeof WebSocket
       }
     ).EventSource = undefined
     ;(
       globalThis as unknown as {
-        EventSource: undefined
-        WebSocket: typeof MockWebSocket
+        EventSource: typeof EventSource | undefined
+        WebSocket: typeof WebSocket
       }
-    ).WebSocket = MockWebSocket
+    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
 
     render(<TestComponent />)
     const ws = MockWebSocket.instances[0]
@@ -75,7 +75,7 @@ describe('useEventSource', () => {
     ;(
       globalThis as unknown as {
         EventSource: typeof EventSource
-        WebSocket: typeof MockWebSocket
+        WebSocket: typeof WebSocket
       }
     ).EventSource = class {
       constructor() {
@@ -85,9 +85,9 @@ describe('useEventSource', () => {
     ;(
       globalThis as unknown as {
         EventSource: typeof EventSource
-        WebSocket: typeof MockWebSocket
+        WebSocket: typeof WebSocket
       }
-    ).WebSocket = MockWebSocket
+    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
 
     render(<TestComponent />)
     const ws = MockWebSocket.instances[0]
@@ -100,16 +100,16 @@ describe('useEventSource', () => {
   it('falls back to WebSocket on EventSource error', () => {
     ;(
       globalThis as unknown as {
-        EventSource: typeof MockEventSource
-        WebSocket: typeof MockWebSocket
+        EventSource: typeof EventSource
+        WebSocket: typeof WebSocket
       }
-    ).EventSource = MockEventSource
+    ).EventSource = MockEventSource as unknown as typeof EventSource
     ;(
       globalThis as unknown as {
-        EventSource: typeof MockEventSource
-        WebSocket: typeof MockWebSocket
+        EventSource: typeof EventSource
+        WebSocket: typeof WebSocket
       }
-    ).WebSocket = MockWebSocket
+    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
 
     render(<TestComponent />)
     const es = MockEventSource.instances[0]
@@ -127,9 +127,9 @@ describe('useEventSource', () => {
   it('cleans up connections on unmount', () => {
     ;(
       globalThis as unknown as {
-        EventSource: typeof MockEventSource
+        EventSource: typeof EventSource
       }
-    ).EventSource = MockEventSource
+    ).EventSource = MockEventSource as unknown as typeof EventSource
 
     const { unmount } = render(<TestComponent />)
     const es = MockEventSource.instances[0]

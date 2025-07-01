@@ -1,5 +1,8 @@
 export class MockEventSource {
   static instances: MockEventSource[] = []
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSED = 2
   url: string
   onmessage: ((ev: MessageEvent) => void) | null = null
   onerror: (() => void) | null = null
@@ -21,6 +24,10 @@ export class MockEventSource {
 
 export class MockWebSocket {
   static instances: MockWebSocket[] = []
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSING = 2
+  static readonly CLOSED = 3
   url: string
   onmessage: ((ev: MessageEvent) => void) | null = null
   closed = false
