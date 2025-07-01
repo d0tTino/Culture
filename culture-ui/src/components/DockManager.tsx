@@ -24,7 +24,7 @@ export default function DockManager({ defaultLayout, children }: DockManagerProp
   })
 
   const factory = useCallback((node: TabNode) => {
-    const id = node.getComponent()
+    const id = node.getComponent() ?? ''
     const Widget = getWidget(id)
     if (Widget) return <Widget />
     return <div>Unknown widget: {id}</div>

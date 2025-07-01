@@ -116,9 +116,9 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border;
   }
   body {
-    @apply bg-brand text-foreground;
+    @apply bg-brand;
   }
 }
