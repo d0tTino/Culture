@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { registerWidget } from '../lib/widgetRegistry'
 import clsx from 'clsx'
 import type { ColumnDef, Row } from '@tanstack/react-table'
 import {
@@ -134,3 +135,5 @@ export default function MissionOverview() {
   )
 
 }
+
+registerWidget('missions', MissionOverview)

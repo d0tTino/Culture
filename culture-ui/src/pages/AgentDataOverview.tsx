@@ -1,5 +1,6 @@
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
 import { agentMetrics } from '../mock/agentMetrics'
+import { registerWidget } from '../lib/widgetRegistry'
 
 export default function AgentDataOverview() {
   const currentAgents = agentMetrics[agentMetrics.length - 1].activeAgents
@@ -38,3 +39,5 @@ export default function AgentDataOverview() {
     </div>
   )
 }
+
+registerWidget('agentData', AgentDataOverview)
