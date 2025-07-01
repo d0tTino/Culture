@@ -9,8 +9,9 @@ afterEach(() => {
 describe('KpiCard', () => {
 
   it('renders KPI card', () => {
-  ;(globalThis as unknown as { EventSource?: typeof EventSource }).EventSource =
-    MockEventSource
+  ;(
+    globalThis as unknown as { EventSource?: typeof EventSource }
+  ).EventSource = MockEventSource as unknown as typeof EventSource
 
     render(<KpiCard />)
     expect(screen.getByTestId('kpi-card')).toBeInTheDocument()
@@ -18,8 +19,9 @@ describe('KpiCard', () => {
   })
 
   it('updates chart on SSE messages', () => {
-  ;(globalThis as unknown as { EventSource?: typeof EventSource }).EventSource =
-    MockEventSource
+  ;(
+    globalThis as unknown as { EventSource?: typeof EventSource }
+  ).EventSource = MockEventSource as unknown as typeof EventSource
 
     render(<KpiCard />)
     const es = MockEventSource.instances[0]
@@ -34,10 +36,12 @@ describe('KpiCard', () => {
   })
 
   it('updates chart using WebSocket fallback', () => {
-  ;(globalThis as unknown as { EventSource?: typeof EventSource }).EventSource =
-    undefined
-  ;(globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket =
-    MockWebSocket
+  ;(
+    globalThis as unknown as { EventSource?: typeof EventSource }
+  ).EventSource = undefined
+  ;(
+    globalThis as unknown as { WebSocket?: typeof WebSocket }
+  ).WebSocket = MockWebSocket as unknown as typeof WebSocket
 
     render(<KpiCard />)
     const ws = MockWebSocket.instances[0]
