@@ -40,3 +40,20 @@ Widgets are rendered based on the registry contents, enabling third‑party exte
 The dashboard includes a **Timeline** widget that visualizes simulation steps. Users can scrub through completed steps using a slider control.
 
 Events may carry tags such as `violence`, `nsfw`, or `sabotage`. When a tag matches one of the configured breakpoints the simulation automatically pauses.
+
+## Control API
+
+The UI sends JSON commands to `/control` to manage the simulation. The current payloads are:
+
+```json
+{ "command": "pause" }
+{ "command": "resume" }
+{ "command": "set_speed", "value": 1.5 }
+{ "command": "set_breakpoints", "tags": ["nsfw"] }
+```
+
+Each request returns the updated simulation state:
+
+```json
+{ "paused": false, "speed": 1.5, "breakpoints": ["nsfw"] }
+```
