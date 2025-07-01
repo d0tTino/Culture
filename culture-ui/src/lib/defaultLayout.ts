@@ -2,6 +2,13 @@ import type { IJsonModel } from 'flexlayout-react'
 import { listWidgets } from './widgetRegistry'
 
 export function createDefaultLayout(): IJsonModel {
+  const widgets = listWidgets()
+  const order = ['NetworkWeb', 'WorldMap', 'TimelineWidget', 'KpiCard']
+  const sorted = [
+    ...order.filter((n) => widgets.includes(n)),
+    ...widgets.filter((n) => !order.includes(n)),
+  ]
+
   return {
     global: {},
     layout: {
@@ -9,7 +16,7 @@ export function createDefaultLayout(): IJsonModel {
       children: [
         {
           type: 'tabset',
-          children: listWidgets().map((name) => ({
+          children: sorted.map((name) => ({
             type: 'tab',
             name,
             component: name,
