@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from neo4j import Driver
@@ -30,7 +31,7 @@ class SemanticMemoryManager:
         self.vector_store = vector_store
         self.driver = driver
         self.topic_groups: dict[str, dict[int, list[dict[str, Any]]]] = {}
-        self.topic_centroids: dict[str, np.ndarray] = {}
+        self.topic_centroids: dict[str, NDArray[np.float64]] = {}
 
     def consolidate_memories(self: Self, agent_id: str) -> str:
         """Consolidate an agent's episodic memories into a semantic summary."""
@@ -74,7 +75,7 @@ class SemanticMemoryManager:
 
         topic_groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
 
-        centroids: list[np.ndarray] = []
+        centroids: list[NDArray[np.float64]] = []
         for mem, emb in zip(memories, embeddings):
             if not centroids:
                 topic_groups[0].append(mem)
