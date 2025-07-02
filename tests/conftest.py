@@ -264,16 +264,10 @@ def chroma_test_dir(request: FixtureRequest) -> Generator[Path, None, None]:
     if sys.platform.startswith("linux") and Path("/dev/shm").exists():
         base_dir = Path("/dev/shm") / "chroma_tests" / worker_id
         base_dir.mkdir(parents=True, exist_ok=True)
-        yield base_dir
-        try:
-            shutil.rmtree(base_dir)
-        except Exception as e:
-            print(f"Warning: Failed to remove Chroma test dir {base_dir}: {e}")
     else:
-        base_dir = get_temp_dir(prefix=f"chroma_tests_{worker_id}_").as_posix()
+        base_dir = Path(get_temp_dir(prefix=f"chroma_tests_{worker_id}_").as_posix())
     ensure_dir(base_dir)
     yield base_dir
-    # Teardown: remove the directory after the session
     try:
         shutil.rmtree(base_dir)
     except Exception as e:
