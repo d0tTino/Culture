@@ -33,6 +33,7 @@ class SemanticMemoryManager:
         self.topic_groups: dict[str, dict[int, list[dict[str, Any]]]] = {}
         self.topic_centroids: dict[str, NDArray[np.float64]] = {}
 
+
     def consolidate_memories(self: Self, agent_id: str) -> str:
         """Consolidate an agent's episodic memories into a semantic summary."""
         memories = self.vector_store.retrieve_filtered_memories(
@@ -70,12 +71,13 @@ class SemanticMemoryManager:
                 if not placed:
                     groups[len(keywords)].append(mem)
             self.topic_groups[agent_id] = groups
-            self.topic_centroids[agent_id] = np.zeros((len(groups), 1))
+            self.topic_centroids[agent_id] = np.zeros((len(groups), 1), dtype=float)
             return groups
 
         topic_groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
 
         centroids: list[NDArray[np.float64]] = []
+
         for mem, emb in zip(memories, embeddings):
             if not centroids:
                 topic_groups[0].append(mem)

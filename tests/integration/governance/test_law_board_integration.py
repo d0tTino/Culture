@@ -43,7 +43,7 @@ from src.sim.simulation import Simulation
 
 
 class DummyState(SimpleNamespace):
-    ip: float = 0.0
+    ip: float = 1.0
     du: float = 0.0
     age: int = 0
     is_alive: bool = True

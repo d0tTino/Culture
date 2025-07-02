@@ -202,6 +202,9 @@ class Simulation:
         # Messages available for agents to perceive in the current round.
         # self.messages_to_perceive_this_round: list[dict[str, Any]] = [] # Already initialized above
 
+        # Background task for forwarding external events (e.g., Discord messages)
+        self._event_task = asyncio.create_task(self._forward_external_events())
+
     # Add method to update collective metrics
     def _update_collective_metrics(self: Self) -> None:
         """
@@ -227,6 +230,50 @@ class Simulation:
                 )
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
+
+    async def _handle_human_command(self: Self, text: str) -> None:
+        """Handle a human-issued command or prompt."""
+        if text.startswith("/kb ") and self.knowledge_board:
+            entry = text[4:].strip()
+            if entry:
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        entry,
+                        "human",
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
+            return
+
+        if not self.agents:
+            return
+
+        target = self.agents[self.current_agent_index]
+        msg = {
+            "step": self.current_step,
+            "sender_id": "human",
+            "recipient_id": target.agent_id,
+            "content": text,
+            "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
+            "sentiment_score": None,
+        }
+        async with self._msg_lock:
+            self.pending_messages_for_next_round.append(msg)
+            self.messages_to_perceive_this_round.append(msg)
+
+    async def _forward_external_events(self: Self) -> None:
+        """Background task that forwards events from ``event_queue``."""
+        try:
+            while True:
+                evt: SimulationEvent | None = await event_queue.get()
+                if evt is None:
+                    break
+                if evt.event_type == "broadcast" and evt.data:
+                    content = evt.data.get("content")
+                    if isinstance(content, str):
+                        await self._handle_human_command(content)
+        except asyncio.CancelledError:  # pragma: no cover - task cancelled
+            pass
 
     async def spawn_agent(
         self: Self,
@@ -370,10 +417,6 @@ class Simulation:
         next_agent_index = (agent_index + 1) % len(self.agents)
 
         if agent_index == 0:
-            async with self._msg_lock:
-                self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []
-
             agent_to_run_index = self.current_agent_index
             agent = self.agents[agent_to_run_index]
             agent_id = agent.agent_id
@@ -399,6 +442,14 @@ class Simulation:
 
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
+
+        # Provide perceived messages and knowledge board content
+        async with self._msg_lock:
+            perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
+        if self.knowledge_board:
+            perception_data["knowledge_board_content"] = (
+                self.knowledge_board.get_recent_entries_for_prompt()
+            )
 
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,
@@ -798,6 +849,8 @@ class Simulation:
                     close_fn()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close vector store manager: %s", exc)
+        if self._event_task:
+            self._event_task.cancel()
         try:
             event_queue.put_nowait(None)
         except asyncio.QueueFull:  # pragma: no cover - defensive
