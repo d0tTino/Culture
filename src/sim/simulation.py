@@ -206,7 +206,12 @@ class Simulation:
         # self.messages_to_perceive_this_round: list[dict[str, Any]] = [] # Already initialized above
 
         # Background task for forwarding external events (e.g., Discord messages)
-        self._event_task = asyncio.create_task(self._forward_external_events())
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self._event_task = None
+        else:
+            self._event_task = asyncio.create_task(self._forward_external_events())
 
     # Add method to update collective metrics
     def _update_collective_metrics(self: Self) -> None:
@@ -267,8 +272,9 @@ class Simulation:
     async def _forward_external_events(self: Self) -> None:
         """Background task that forwards events from ``event_queue``."""
         try:
+            queue = get_event_queue()
             while True:
-                evt: SimulationEvent | None = await event_queue.get()
+                evt: SimulationEvent | None = await queue.get()
                 if evt is None:
                     break
                 if evt.event_type == "broadcast" and evt.data:
@@ -623,6 +629,7 @@ class Simulation:
 
         if (
             self.vector_store_manager
+            and config.MEMORY_STORE_PRUNE_INTERVAL_STEPS > 0
             and self.current_step - self._last_memory_prune_step
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
@@ -634,6 +641,7 @@ class Simulation:
 
         if (
             self.vector_store_manager
+            and config.MEMORY_STORE_PRUNE_INTERVAL_STEPS > 0
             and self.current_step % len(self.agents) == 0
             and self.current_step > self._last_consolidation_step
         ):
