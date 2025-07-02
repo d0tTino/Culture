@@ -2,9 +2,10 @@ from __future__ import annotations
 
 # Skip self argument annotation warnings for protocol stubs
 import logging
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 from src.agents.core.agent_controller import AgentController
+from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.infra.llm_client import (
     analyze_sentiment,
@@ -13,6 +14,18 @@ from src.infra.llm_client import (
 from src.shared.typing import SimulationMessage
 
 from .basic_agent_types import AgentActionOutput, AgentTurnState
+
+ActionIntentLiteral = Literal[
+    "idle",
+    "continue_collaboration",
+    "propose_idea",
+    "ask_clarification",
+    "perform_deep_analysis",
+    "create_project",
+    "join_project",
+    "leave_project",
+    "send_direct_message",
+]
 
 
 class MemoryRetriever(Protocol):
@@ -116,10 +129,13 @@ async def generate_thought_and_message_node(
 ) -> dict[str, AgentActionOutput | None]:
     """Generate a thought and a structured action based on the agent's state."""
     agent = state.get("agent_instance")
-    action_intent = "idle"
-    if agent:
-        # In tests, this can be mocked to return a full AgentActionOutput.
-        result = await agent.async_select_action_intent("", "", "", [])
+    if not agent:
+        return {"structured_output": None}
+
+    # In tests, this can be mocked to return a full AgentActionOutput.
+    # The arguments are placeholders as the mock doesn't use them.
+    result = await cast(Agent, agent).async_select_action_intent("", "", "", [])
+
 
         # If the mocked result is already the full output, just return it.
         if isinstance(result, AgentActionOutput):
@@ -129,22 +145,32 @@ async def generate_thought_and_message_node(
             action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
-        structured = generate_structured_output_from_intent(
-            action_intent, "prompt", AgentActionOutput
+        structured = cast(
+            AgentActionOutput | None,
+            generate_structured_output(
+                "prompt", AgentActionOutput, agent_state=state.get("state")
+            ),
         )
     except TypeError:
-        structured = generate_structured_output_from_intent(
-            action_intent, "prompt", AgentActionOutput
+        structured = cast(
+            AgentActionOutput | None,
+            generate_structured_output("prompt", AgentActionOutput),
+
         )
 
     if structured:
-        structured.action_intent = action_intent
+        structured.action_intent = cast(ActionIntentLiteral, action_intent)
     else:
         # Create a minimal object if generation fails, to avoid losing intent.
         structured = AgentActionOutput(
             thought="Structured output generation failed.",
             message_content="",
+            message_recipient_id=None,
             action_intent=action_intent,
+            requested_role_change=None,
+            project_name_to_create=None,
+            project_description_for_creation=None,
+            project_id_to_join_or_leave=None,
         )
 
     return {"structured_output": cast(AgentActionOutput | None, structured)}
