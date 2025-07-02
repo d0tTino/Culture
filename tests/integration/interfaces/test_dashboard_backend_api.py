@@ -78,8 +78,9 @@ async def test_stream_events_sse(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(http_app, "EventSourceResponse", CaptureESR)
 
-    await db.event_queue.put(db.SimulationEvent(event_type="tick", data={"step": 1}))
-    await db.event_queue.put(None)
+    queue = db.get_event_queue()
+    await queue.put(db.SimulationEvent(event_type="tick", data={"step": 1}))
+    await queue.put(None)
     resp = await http_app.stream_events(DummyRequest())
     event = await resp.gen.__anext__()
     captured.append(event)
@@ -138,8 +139,9 @@ async def test_websocket_events() -> None:
     from src.interfaces import dashboard_backend as db
 
     ws = DummyWebSocket()
-    await db.event_queue.put(db.SimulationEvent(event_type="start", data={"step": 2}))
-    await db.event_queue.put(None)
+    queue = db.get_event_queue()
+    await queue.put(db.SimulationEvent(event_type="start", data={"step": 2}))
+    await queue.put(None)
     await db.websocket_events(ws)
     payload = json.loads(ws.sent[0])
     assert payload["data"]["step"] == 2

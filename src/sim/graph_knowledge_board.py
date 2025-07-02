@@ -6,7 +6,15 @@ import logging
 import uuid
 from typing import Any
 
-from neo4j import Driver, GraphDatabase
+try:  # pragma: no cover - optional dependency
+    from neo4j import Driver, GraphDatabase
+except Exception:  # pragma: no cover - handle missing package
+    Driver = object  # type: ignore[misc]
+
+    class GraphDatabase:  # type: ignore[no-redef]
+        @staticmethod
+        def driver(*_a: object, **_k: object) -> None:
+            raise RuntimeError("neo4j not installed")
 
 try:  # pragma: no cover - optional dependency
     from neo4j.exceptions import Neo4jError

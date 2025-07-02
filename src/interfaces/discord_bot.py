@@ -13,7 +13,7 @@ from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
     AgentMessage,
     SimulationEvent,
-    event_queue,
+    get_event_queue,
     message_sse_queue,
 )
 from src.utils.policy import allow_message, evaluate_with_opa
@@ -113,7 +113,7 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-        self.event_queue = event_queue
+        self.event_queue = get_event_queue()
         self.message_queue = message_sse_queue
         self._forward_task: asyncio.Task[Any] | None = None
 

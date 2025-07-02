@@ -30,7 +30,7 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
     emit_map_action_event,
-    event_queue,
+    get_event_queue,
 )
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
@@ -95,6 +95,9 @@ class Simulation:
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
+
+        # Background task for processing incoming events
+        self._event_listener_task: asyncio.Task[None] | None = None
 
         # Lock for concurrent access to message queues
         self._msg_lock = asyncio.Lock()
@@ -723,11 +726,59 @@ class Simulation:
         }
         await self._emit_environment_event(event)
 
+    async def _event_listener_loop(self: Self) -> None:
+        """Continuously process events from the shared queue."""
+        queue = get_event_queue()
+        try:
+            while True:
+                evt: SimulationEvent | None = await queue.get()
+                if evt is None:
+                    break
+                await self._handle_incoming_event(evt)
+        except asyncio.CancelledError:  # pragma: no cover - task cancelled
+            pass
+
+    async def _handle_incoming_event(self: Self, evt: SimulationEvent) -> None:
+        """Route a ``SimulationEvent`` to agents as a message."""
+        if not evt.data:
+            return
+        sender = str(evt.data.get("author", "external"))
+        content = str(evt.data.get("content", ""))
+        recipient = evt.data.get("recipient_id") if evt.event_type == "direct_message" else None
+        msg: SimulationMessage = {
+            "step": self.current_step,
+            "sender_id": sender,
+            "recipient_id": recipient,
+            "content": content,
+            "action_intent": None,
+            "sentiment_score": None,
+        }
+        async with self._msg_lock:
+            self.pending_messages_for_next_round.append(msg)
+            self.messages_to_perceive_this_round.append(msg)
+
+    async def start_event_listener(self: Self) -> None:
+        """Start background processing of ``event_queue`` events."""
+        if self._event_listener_task is None:
+            self._event_listener_task = asyncio.create_task(self._event_listener_loop())
+
+    async def stop_event_listener(self: Self) -> None:
+        """Stop the background event listener task."""
+        if self._event_listener_task:
+            self._event_listener_task.cancel()
+            try:
+                await self._event_listener_task
+            except asyncio.CancelledError:  # pragma: no cover - expected
+                pass
+            self._event_listener_task = None
+
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
         if not self.agents:
             logger.warning("No agents in simulation to run.")
             return 0
+
+        await self.start_event_listener()
 
         if self.event_kernel.empty():
             self.vector.increment(self.agents[self.current_agent_index].get_id())
@@ -739,6 +790,10 @@ class Simulation:
 
         events = await self.event_kernel.dispatch(max_turns)
         self.vector = self.event_kernel.vector
+
+        # Stop the event listener after each step to avoid leaked tasks in tests
+        await self.stop_event_listener()
+
         return len(events)
 
     async def async_run(self: Self, num_steps: int) -> None:
@@ -759,6 +814,7 @@ class Simulation:
                 "Simulation completed "
                 f"{total_steps_executed} steps in {elapsed_time:.2f} seconds (async)"
             )
+            await self.stop_event_listener()
             self.close()
 
     def apply_event(self: Self, event: dict[str, Any]) -> None:
@@ -835,6 +891,9 @@ class Simulation:
 
     def close(self: Self) -> None:
         """Release resources held by the simulation."""
+        if self._event_listener_task and not self._event_listener_task.done():
+            self._event_listener_task.cancel()
+            self._event_listener_task = None
         if hasattr(self.knowledge_board, "close"):
             try:
                 close_fn = getattr(self.knowledge_board, "close")
@@ -852,7 +911,7 @@ class Simulation:
         if self._event_task:
             self._event_task.cancel()
         try:
-            event_queue.put_nowait(None)
+            get_event_queue().put_nowait(None)
         except asyncio.QueueFull:  # pragma: no cover - defensive
             logger.exception("Failed to enqueue shutdown event")
 
