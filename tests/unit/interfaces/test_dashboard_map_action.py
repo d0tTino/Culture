@@ -23,8 +23,9 @@ class DummyWS:
 
 
 async def _clear_event_queue() -> None:
-    while not db.event_queue.empty():
-        _ = await db.event_queue.get()
+    queue = db.get_event_queue()
+    while not queue.empty():
+        _ = await queue.get()
 
 
 @pytest.mark.unit
@@ -39,7 +40,8 @@ async def test_map_action_sse(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(http_app, "EventSourceResponse", CaptureESR)
     await _clear_event_queue()
     await db.emit_map_action_event("A", 1, "move", position=(1, 0))
-    await db.event_queue.put(None)
+    queue = db.get_event_queue()
+    await queue.put(None)
     resp = await http_app.stream_events(DummyRequest())
     event = await resp.gen.__anext__()
     data = json.loads(event["data"])
@@ -55,7 +57,8 @@ async def test_map_action_websocket() -> None:
     ws = DummyWS()
     await _clear_event_queue()
     await db.emit_map_action_event("B", 2, "gather", resource="wood", success=True)
-    await db.event_queue.put(None)
+    queue = db.get_event_queue()
+    await queue.put(None)
     await db.websocket_events(ws)
     payload = json.loads(ws.sent[0])
     assert payload["event_type"] == "map_action"

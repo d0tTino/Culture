@@ -12,7 +12,7 @@ from src.interfaces.dashboard_backend import (
     EventSourceResponse,
     SimulationEvent,
     app,
-    event_queue,
+    get_event_queue,
 )
 
 
@@ -20,10 +20,11 @@ async def generate_events(
     request: Request,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Yield simulation events from the shared queue."""
+    queue = get_event_queue()
     while True:
         if await request.is_disconnected():
             break
-        event: SimulationEvent | None = await event_queue.get()
+        event: SimulationEvent | None = await queue.get()
         if event is None:
             break
         yield {"event": "simulation_event", "data": event.json()}

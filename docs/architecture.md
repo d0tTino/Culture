@@ -473,9 +473,11 @@ The Simulation Environment (`src/sim/`) manages the overall simulation, includin
 The `Simulation` class (`src/sim/simulation.py`):
 - Initializes and maintains the population of agents
 - Manages the turn-based simulation loop
-- Handles message routing between agents
+- Handles message routing between agents and external inputs
 - Tracks simulation metadata and progress
 - Provides hooks for observation and analysis
+- Listens for interface events via `event_queue` and injects them into the
+  standard message flow so they propagate through LangGraph nodes
 
 #### Knowledge Board
 

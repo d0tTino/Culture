@@ -71,8 +71,24 @@ else:  # pragma: no cover - optional dependency
 
 # Global queue for agent messages
 message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
-# Queue for general simulation events streamed via SSE/WebSocket
-event_queue: asyncio.Queue["SimulationEvent | None"] = asyncio.Queue()
+
+# Queue for general simulation events streamed via SSE/WebSocket.  The queue is
+# lazily created so it binds to the currently running event loop, avoiding
+# cross-loop issues in tests.
+_event_queue: asyncio.Queue["SimulationEvent | None"] | None = None
+
+
+def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
+    """Return the shared event queue, creating it for the active loop."""
+    global _event_queue
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # pragma: no cover - no running loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    if _event_queue is None or _event_queue._loop is not loop:
+        _event_queue = asyncio.Queue()
+    return _event_queue
 
 # Simulation control state
 SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}
@@ -152,9 +168,10 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
 @app.websocket("/ws/events")
 async def websocket_events(websocket: WebSocket) -> None:
     await websocket.accept()
+    queue = get_event_queue()
     try:
         while True:
-            event: SimulationEvent | None = await event_queue.get()
+            event: SimulationEvent | None = await queue.get()
             if event is None:
                 break
             await websocket.send_text(event.json())
@@ -217,11 +234,12 @@ except AttributeError:  # pragma: no cover - stub app may lack decorators
 
 async def emit_event(event: SimulationEvent) -> None:
     """Emit a simulation event and check for breakpoints."""
-    await event_queue.put(event)
+    queue = get_event_queue()
+    await queue.put(event)
     tags = set(event.data.get("tags", [])) if event.data else set()
     if tags & BREAKPOINT_TAGS:
         SIM_STATE["paused"] = True
-        await event_queue.put(
+        await queue.put(
             SimulationEvent(
                 event_type="breakpoint_hit",
                 data={
@@ -253,6 +271,6 @@ __all__ = [
     "app",
     "emit_event",
     "emit_map_action_event",
-    "event_queue",
+    "get_event_queue",
     "message_sse_queue",
 ]

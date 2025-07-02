@@ -122,8 +122,8 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
         pass
 
     with patch("src.interfaces.discord_bot.discord.Client", Client), patch(
-        "src.interfaces.discord_bot.event_queue",
-        q_events,
+        "src.interfaces.dashboard_backend.get_event_queue",
+        lambda: q_events,
     ), patch("src.interfaces.discord_bot.message_sse_queue", q_msgs), patch(
         "src.interfaces.dashboard_backend.EventSourceResponse", object
     ):

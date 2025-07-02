@@ -6,7 +6,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from src.interfaces.dashboard_backend import SimulationEvent, event_queue
+from src.interfaces.dashboard_backend import SimulationEvent, get_event_queue
 
 
 class DummyNeo4j:
@@ -71,8 +71,9 @@ async def test_concurrent_agent_turns() -> None:
 
 
 async def _clear_event_queue() -> None:
-    while not event_queue.empty():
-        _ = await event_queue.get()
+    queue = get_event_queue()
+    while not queue.empty():
+        _ = await queue.get()
 
 
 @pytest.mark.asyncio
@@ -84,7 +85,8 @@ async def test_events_enqueued_during_run_step() -> None:
 
     await sim.run_step()
 
-    evt = await asyncio.wait_for(event_queue.get(), 0.1)
+    queue = get_event_queue()
+    evt = await asyncio.wait_for(queue.get(), 0.1)
     assert isinstance(evt, SimulationEvent)
     assert evt.event_type == "agent_action"
     assert evt.data is not None

@@ -99,6 +99,17 @@ async def retrieve_semantic_context_node(state: AgentTurnState) -> dict[str, Any
     return {"semantic_context": context}
 
 
+def generate_structured_output_from_intent(
+    intent: str,
+    prompt: str,
+    schema: type[AgentActionOutput],
+    **kwargs: Any,
+) -> AgentActionOutput | None:
+    """Compatibility wrapper used by older tests."""
+
+    return generate_structured_output(prompt, schema, **kwargs)
+
+
 async def generate_thought_and_message_node(
     state: AgentTurnState,
 ) -> dict[str, AgentActionOutput | None]:

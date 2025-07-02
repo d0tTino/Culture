@@ -3,15 +3,14 @@ import os
 import sys
 from typing import cast
 
+import dspy
 import pytest
+from typing_extensions import Self
+
+import ollama
 
 if os.environ.get("ENABLE_DSPY_TESTS") != "1":
     pytest.skip("DSPy tests disabled", allow_module_level=True)
-
-import dspy
-import ollama
-import pytest
-from typing_extensions import Self
 
 if not hasattr(dspy, "Predict"):
     pytest.skip("dspy Predict not available", allow_module_level=True)

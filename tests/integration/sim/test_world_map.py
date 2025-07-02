@@ -7,7 +7,7 @@ from typing import Any, ClassVar, cast
 import pytest
 
 from src.agents.core.base_agent import Agent
-from src.interfaces.dashboard_backend import SimulationEvent, event_queue
+from src.interfaces.dashboard_backend import SimulationEvent, get_event_queue
 
 
 class DummyNeo4j:
@@ -57,8 +57,9 @@ class MoveAgent:
 
 
 async def _clear_event_queue() -> None:
-    while not event_queue.empty():
-        _ = await event_queue.get()
+    queue = get_event_queue()
+    while not queue.empty():
+        _ = await queue.get()
 
 
 @pytest.mark.asyncio
@@ -72,8 +73,9 @@ async def test_agent_move_updates_map_and_events() -> None:
 
     assert sim.world_map.agent_positions[agent.agent_id] == (1, 0)
 
-    first = await asyncio.wait_for(event_queue.get(), 0.1)
-    second = await asyncio.wait_for(event_queue.get(), 0.1)
+    queue = get_event_queue()
+    first = await asyncio.wait_for(queue.get(), 0.1)
+    second = await asyncio.wait_for(queue.get(), 0.1)
     assert isinstance(first, SimulationEvent)
     assert isinstance(second, SimulationEvent)
     assert first.event_type == "agent_action"
