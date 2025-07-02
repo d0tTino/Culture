@@ -121,11 +121,14 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
     class Client(DummyDiscordClient):
         pass
 
-    with patch("src.interfaces.discord_bot.discord.Client", Client), patch(
-        "src.interfaces.discord_bot.event_queue",
-        q_events,
-    ), patch("src.interfaces.discord_bot.message_sse_queue", q_msgs), patch(
-        "src.interfaces.dashboard_backend.EventSourceResponse", object
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", Client),
+        patch(
+            "src.interfaces.discord_bot.event_queue",
+            q_events,
+        ),
+        patch("src.interfaces.discord_bot.message_sse_queue", q_msgs),
+        patch("src.interfaces.dashboard_backend.EventSourceResponse", object),
     ):
         bot = SimulationDiscordBot("token", 123)
         assert "on_message" in bot.client._events
