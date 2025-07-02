@@ -604,7 +604,11 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    `--swap-space` option to avoid out-of-memory errors when running more than
    ten agents:
    ```bash
-   scripts/start_vllm.sh  # defaults to port 8001 (override with VLLM_PORT)
+   # Optionally override the model or port used by vLLM (defaults to port 8001)
+   VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
+   scripts/start_vllm.sh
+   # Point the application to the vLLM server
+   export OLLAMA_API_BASE="http://localhost:$VLLM_PORT"
    ```
 5. **Run Weaviate (for vector store, optional):**
    ```bash
@@ -613,8 +617,10 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```
 6. **Configure environment variables:**
    - Copy `.env.example` to `.env` and edit as needed:
-    - `OLLAMA_API_BASE` (e.g., http://localhost:11434)
+    - `OLLAMA_API_BASE` (e.g., http://localhost:11434, or http://localhost:$VLLM_PORT for vLLM)
     - `OLLAMA_REQUEST_TIMEOUT` (request timeout in seconds)
+    - `VLLM_MODEL` (e.g., mistralai/Mistral-7B-Instruct-v0.2) for the vLLM backend
+    - `VLLM_PORT` (e.g., 8001) for the vLLM backend
     - `WEAVIATE_URL` (e.g., http://localhost:8080)
     - `VECTOR_STORE_BACKEND` ("chroma" or "weaviate")
     - `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` (for Discord integration)
