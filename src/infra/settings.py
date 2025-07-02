@@ -100,7 +100,7 @@ class ConfigSettings(BaseSettings):
     MAX_KB_ENTRIES_FOR_PERCEPTION: int = 10
     MAX_KB_ENTRIES: int = 100
     MEMORY_STORE_TTL_SECONDS: int = 60 * 60 * 24 * 7
-    MEMORY_STORE_PRUNE_INTERVAL_STEPS: int = 1
+    MEMORY_STORE_PRUNE_INTERVAL_STEPS: int = 0
     MAX_IP_PER_TICK: float = 10.0
     MAX_DU_PER_TICK: float = 10.0
     GAS_PRICE_PER_CALL: float = 1.0
@@ -109,7 +109,7 @@ class ConfigSettings(BaseSettings):
     S3_BUCKET: str = ""
     S3_PREFIX: str = ""
     SNAPSHOT_INTERVAL_STEPS: int = 100
-    MAX_AGENT_AGE: int = 10
+    MAX_AGENT_AGE: int = 100
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
     ROLE_DU_GENERATION: dict[str, dict[str, float]] = {

@@ -164,6 +164,7 @@ async def generate_thought_and_message_node(
         return {"structured_output": result}
 
     if result is not None:
+
         action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:

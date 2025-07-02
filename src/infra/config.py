@@ -108,7 +108,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MAX_KB_ENTRIES_FOR_PERCEPTION": 10,
     "MAX_KB_ENTRIES": 100,
     "MEMORY_STORE_TTL_SECONDS": 60 * 60 * 24 * 7,
-    "MEMORY_STORE_PRUNE_INTERVAL_STEPS": 1,
+    "MEMORY_STORE_PRUNE_INTERVAL_STEPS": 0,
     "MAX_IP_PER_TICK": 10.0,
     "MAX_DU_PER_TICK": 10.0,
     "GAS_PRICE_PER_CALL": 1.0,
@@ -117,7 +117,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "S3_BUCKET": "",
     "S3_PREFIX": "",
     "SNAPSHOT_INTERVAL_STEPS": 100,
-    "MAX_AGENT_AGE": 10,
+    "MAX_AGENT_AGE": 100,
     "AGENT_TOKEN_BUDGET": 10000,
     "ROLE_DU_GENERATION": {
         "Facilitator": {"base": 1.0},
