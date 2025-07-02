@@ -3,8 +3,12 @@ import time
 import uuid
 from typing import Any, Callable, Optional, cast
 
-import weaviate
-import weaviate.classes as wvc
+try:  # pragma: no cover - optional dependency
+    import weaviate
+    import weaviate.classes as wvc
+except Exception:  # pragma: no cover - allow absence of weaviate
+    weaviate = None
+    wvc = None
 from typing_extensions import Self
 
 from src.shared.memory_store import MemoryStore
