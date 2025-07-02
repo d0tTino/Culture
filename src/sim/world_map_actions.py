@@ -145,7 +145,7 @@ async def process_map_action(
         "action": action_type,
         **details,
     }
-    await sim.event_kernel.schedule(
+    await sim.event_kernel.schedule_immediate(
         lambda data=map_event_data: sim._emit_environment_event(data),
         vector=sim.vector,
     )

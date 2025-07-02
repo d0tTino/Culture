@@ -191,7 +191,7 @@ class Simulation:
             )
             # Prime the event scheduler with the first agent turn
             first_agent = self.agents[0]
-            self.event_kernel.schedule_nowait(
+            self.event_kernel.schedule_immediate_nowait(
                 self._create_agent_event(0),
                 agent_id=first_agent.get_id(),
             )
@@ -623,7 +623,7 @@ class Simulation:
             and self.current_step - self._last_memory_prune_step
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
-            await self.event_kernel.schedule(
+            await self.event_kernel.schedule_immediate(
                 self._prune_memory_event,
                 vector=self.vector,
             )
@@ -635,7 +635,7 @@ class Simulation:
             and self.current_step > self._last_consolidation_step
         ):
             start_step = self.current_step - len(self.agents) + 1
-            await self.event_kernel.schedule(
+            await self.event_kernel.schedule_immediate(
                 lambda start=start_step: self._consolidate_memory_event(start),
                 vector=self.vector,
             )
@@ -660,7 +660,8 @@ class Simulation:
             self._last_semantic_job_step = self.current_step
 
         self.vector.increment(self.agents[next_agent_index].get_id())
-        await self.event_kernel.schedule(
+        await self.event_kernel.schedule_in(
+            1,
             self._create_agent_event(next_agent_index),
             agent_id=self.agents[next_agent_index].get_id(),
             vector=self.vector,
@@ -730,7 +731,7 @@ class Simulation:
 
         if self.event_kernel.empty():
             self.vector.increment(self.agents[self.current_agent_index].get_id())
-            self.event_kernel.schedule_nowait(
+            self.event_kernel.schedule_immediate_nowait(
                 self._create_agent_event(self.current_agent_index),
                 agent_id=self.agents[self.current_agent_index].get_id(),
                 vector=self.vector,
