@@ -45,13 +45,6 @@ class SummaryAgent(Protocol):
 logger = logging.getLogger(__name__)
 
 
-def generate_structured_output_from_intent(
-    intent: str, prompt: str, schema: type[AgentActionOutput]
-) -> AgentActionOutput:
-    """Compatibility shim for older tests."""
-    return generate_structured_output(prompt, schema)
-
-
 def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
     agent_id = state["agent_id"]
     perceived_messages = cast(list[SimulationMessage], state.get("perceived_messages", []))
@@ -147,13 +140,13 @@ async def generate_thought_and_message_node(
     # The arguments are placeholders as the mock doesn't use them.
     result = await cast(Agent, agent).async_select_action_intent("", "", "", [])
 
+    # If the mocked result is already the full output, just return it.
+    if isinstance(result, AgentActionOutput):
+        return {"structured_output": result}
 
-        # If the mocked result is already the full output, just return it.
-        if isinstance(result, AgentActionOutput):
-            return {"structured_output": result}
-
-        if result:
-            action_intent = getattr(result, "chosen_action_intent", "idle")
+    action_intent = "idle"
+    if result:
+        action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
         structured = cast(

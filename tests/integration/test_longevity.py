@@ -139,7 +139,6 @@ class TestLongevity:
     @pytest.mark.asyncio
     @pytest.mark.longevity
     async def test_basic_100_turn_simulation(self):
-        pytest.xfail("Graph stub does not support long running simulation")
         num_turns_to_run = 100  # Reduced from 100 for quicker initial testing, can be increased
         logger.info(f"Starting longevity test: {num_turns_to_run} turns.")
 

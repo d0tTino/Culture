@@ -2,7 +2,6 @@ import pytest
 
 pytest.importorskip("langgraph")
 from langgraph.graph import StateGraph
-
 from src.agents.graphs.agent_graph_builder import build_graph
 
 
