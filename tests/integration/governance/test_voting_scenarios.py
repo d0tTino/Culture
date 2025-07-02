@@ -12,7 +12,7 @@ from src.sim.simulation import Simulation
 
 
 class DummyState(SimpleNamespace):
-    ip: float = 0.0
+    ip: float = 1.0
     du: float = 0.0
     age: int = 0
     is_alive: bool = True
@@ -29,9 +29,10 @@ class DummyState(SimpleNamespace):
 
 
 class DummyAgent:
-    def __init__(self, agent_id: str) -> None:
+    def __init__(self, agent_id: str, ip: float = 1.0) -> None:
         self.agent_id = agent_id
         self.state = DummyState()
+        self.state.ip = ip
 
     def get_id(self) -> str:
         return self.agent_id
@@ -115,3 +116,58 @@ async def test_law_fails_majority_no(monkeypatch: pytest.MonkeyPatch) -> None:
     assert any("Law proposed" in e for e in entries)
     assert not any("Law approved" in e for e in entries)
     assert not calls
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_quadratic_yes_overrides_majority(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPA_URL", "http://opa")
+    monkeypatch.setenv("REDPANDA_BROKER", "localhost:9092")
+    monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
+
+    async def allow(_: str) -> tuple[bool, str]:
+        return True, ""
+
+    votes = [True, False, False]
+
+    async def vote_side_effect(_: object, __: str) -> bool:
+        return votes.pop(0)
+
+    monkeypatch.setattr("src.utils.policy.evaluate_with_opa", allow)
+    monkeypatch.setattr("src.governance.voting._vote", vote_side_effect)
+
+    agents = [
+        DummyAgent("a1", ip=16),
+        DummyAgent("a2", ip=1),
+        DummyAgent("a3", ip=1),
+    ]
+    sim = Simulation(agents=agents)
+    approved = await sim.propose_law("a1", "test law")
+    assert approved is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_quadratic_no_overrides_majority(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPA_URL", "http://opa")
+    monkeypatch.setenv("REDPANDA_BROKER", "localhost:9092")
+    monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
+
+    async def allow(_: str) -> tuple[bool, str]:
+        return True, ""
+
+    votes = [True, True, False]
+
+    async def vote_side_effect(_: object, __: str) -> bool:
+        return votes.pop(0)
+
+    monkeypatch.setattr("src.utils.policy.evaluate_with_opa", allow)
+    monkeypatch.setattr("src.governance.voting._vote", vote_side_effect)
+
+    agents = [
+        DummyAgent("a1", ip=1),
+        DummyAgent("a2", ip=1),
+        DummyAgent("a3", ip=16),
+    ]
+    sim = Simulation(agents=agents)
+    approved = await sim.propose_law("a1", "test law")
+    assert approved is False
