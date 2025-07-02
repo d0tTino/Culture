@@ -47,7 +47,7 @@ class EventKernel:
         """Return remaining token budget for ``agent_id``."""
         return int(self._budgets.get(agent_id, 0))
 
-    async def schedule(
+    async def schedule_immediate(
         self: Self,
         callback: Callable[[], Awaitable[None]],
         *,
@@ -55,7 +55,7 @@ class EventKernel:
         tokens: int = 1,
         vector: VersionVector | None = None,
     ) -> None:
-        """Schedule ``callback`` to run at ``current_step``."""
+        """Schedule ``callback`` to run at the current kernel step."""
         await self.schedule_at(
             self.current_step,
             callback,
@@ -64,6 +64,40 @@ class EventKernel:
             vector=vector,
         )
 
+    # Backwards compatibility
+    async def schedule(
+        self: Self,
+        callback: Callable[[], Awaitable[None]],
+        *,
+        agent_id: str | None = None,
+        tokens: int = 1,
+        vector: VersionVector | None = None,
+    ) -> None:
+        await self.schedule_immediate(
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
+
+    def schedule_immediate_nowait(
+        self: Self,
+        callback: Callable[[], Awaitable[None]],
+        *,
+        agent_id: str | None = None,
+        tokens: int = 1,
+        vector: VersionVector | None = None,
+    ) -> None:
+        """Synchronously schedule ``callback`` at the current kernel step."""
+        self.schedule_at_nowait(
+            self.current_step,
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
+
+    # Backwards compatibility
     def schedule_nowait(
         self: Self,
         callback: Callable[[], Awaitable[None]],
@@ -72,9 +106,42 @@ class EventKernel:
         tokens: int = 1,
         vector: VersionVector | None = None,
     ) -> None:
-        """Synchronously schedule ``callback`` at ``current_step``."""
+        self.schedule_immediate_nowait(
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
+
+    async def schedule_in(
+        self: Self,
+        delay: int,
+        callback: Callable[[], Awaitable[None]],
+        *,
+        agent_id: str | None = None,
+        tokens: int = 1,
+        vector: VersionVector | None = None,
+    ) -> None:
+        """Schedule ``callback`` to run ``delay`` steps in the future."""
+        await self.schedule_at(
+            self.current_step + delay,
+            callback,
+            agent_id=agent_id,
+            tokens=tokens,
+            vector=vector,
+        )
+
+    def schedule_in_nowait(
+        self: Self,
+        delay: int,
+        callback: Callable[[], Awaitable[None]],
+        *,
+        agent_id: str | None = None,
+        tokens: int = 1,
+        vector: VersionVector | None = None,
+    ) -> None:
         self.schedule_at_nowait(
-            self.current_step,
+            self.current_step + delay,
             callback,
             agent_id=agent_id,
             tokens=tokens,

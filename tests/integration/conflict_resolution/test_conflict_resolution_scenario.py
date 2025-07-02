@@ -889,7 +889,9 @@ class TestConflictResolution(unittest.IsolatedAsyncioTestCase):
             # recorded with step ``4``.
 
             agent_a_message_to_c_found = False
-            for msg in (
+            for (
+                msg
+            ) in (
                 self.simulation.pending_messages_for_next_round
             ):  # Check messages generated THIS turn
                 if (

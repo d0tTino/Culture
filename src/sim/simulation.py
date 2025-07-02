@@ -125,9 +125,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -171,9 +171,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
         self._msg_lock = asyncio.Lock()
 
         self.track_collective_metrics: bool = True
@@ -194,7 +194,7 @@ class Simulation:
             )
             # Prime the event scheduler with the first agent turn
             first_agent = self.agents[0]
-            self.event_kernel.schedule_nowait(
+            self.event_kernel.schedule_immediate_nowait(
                 self._create_agent_event(0),
                 agent_id=first_agent.get_id(),
             )
@@ -204,6 +204,9 @@ class Simulation:
         # self.pending_messages_for_next_round: list[dict[str, Any]] = [] # Already initialized above
         # Messages available for agents to perceive in the current round.
         # self.messages_to_perceive_this_round: list[dict[str, Any]] = [] # Already initialized above
+
+        # Background task for forwarding external events (e.g., Discord messages)
+        self._event_task = asyncio.create_task(self._forward_external_events())
 
     # Add method to update collective metrics
     def _update_collective_metrics(self: Self) -> None:
@@ -230,6 +233,50 @@ class Simulation:
                 )
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
+
+    async def _handle_human_command(self: Self, text: str) -> None:
+        """Handle a human-issued command or prompt."""
+        if text.startswith("/kb ") and self.knowledge_board:
+            entry = text[4:].strip()
+            if entry:
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        entry,
+                        "human",
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
+            return
+
+        if not self.agents:
+            return
+
+        target = self.agents[self.current_agent_index]
+        msg = {
+            "step": self.current_step,
+            "sender_id": "human",
+            "recipient_id": target.agent_id,
+            "content": text,
+            "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
+            "sentiment_score": None,
+        }
+        async with self._msg_lock:
+            self.pending_messages_for_next_round.append(msg)
+            self.messages_to_perceive_this_round.append(msg)
+
+    async def _forward_external_events(self: Self) -> None:
+        """Background task that forwards events from ``event_queue``."""
+        try:
+            while True:
+                evt: SimulationEvent | None = await event_queue.get()
+                if evt is None:
+                    break
+                if evt.event_type == "broadcast" and evt.data:
+                    content = evt.data.get("content")
+                    if isinstance(content, str):
+                        await self._handle_human_command(content)
+        except asyncio.CancelledError:  # pragma: no cover - task cancelled
+            pass
 
     async def spawn_agent(
         self: Self,
@@ -373,10 +420,6 @@ class Simulation:
         next_agent_index = (agent_index + 1) % len(self.agents)
 
         if agent_index == 0:
-            async with self._msg_lock:
-                self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []
-
             agent_to_run_index = self.current_agent_index
             agent = self.agents[agent_to_run_index]
             agent_id = agent.agent_id
@@ -390,7 +433,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -400,6 +445,14 @@ class Simulation:
 
         ip_start = current_agent_state.ip
         du_start = current_agent_state.du
+
+        # Provide perceived messages and knowledge board content
+        async with self._msg_lock:
+            perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
+        if self.knowledge_board:
+            perception_data["knowledge_board_content"] = (
+                self.knowledge_board.get_recent_entries_for_prompt()
+            )
 
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,
@@ -573,7 +626,7 @@ class Simulation:
             and self.current_step - self._last_memory_prune_step
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
         ):
-            await self.event_kernel.schedule(
+            await self.event_kernel.schedule_immediate(
                 self._prune_memory_event,
                 vector=self.vector,
             )
@@ -585,7 +638,7 @@ class Simulation:
             and self.current_step > self._last_consolidation_step
         ):
             start_step = self.current_step - len(self.agents) + 1
-            await self.event_kernel.schedule(
+            await self.event_kernel.schedule_immediate(
                 lambda start=start_step: self._consolidate_memory_event(start),
                 vector=self.vector,
             )
@@ -610,7 +663,8 @@ class Simulation:
             self._last_semantic_job_step = self.current_step
 
         self.vector.increment(self.agents[next_agent_index].get_id())
-        await self.event_kernel.schedule(
+        await self.event_kernel.schedule_in(
+            1,
             self._create_agent_event(next_agent_index),
             agent_id=self.agents[next_agent_index].get_id(),
             vector=self.vector,
@@ -728,7 +782,7 @@ class Simulation:
 
         if self.event_kernel.empty():
             self.vector.increment(self.agents[self.current_agent_index].get_id())
-            self.event_kernel.schedule_nowait(
+            self.event_kernel.schedule_immediate_nowait(
                 self._create_agent_event(self.current_agent_index),
                 agent_id=self.agents[self.current_agent_index].get_id(),
                 vector=self.vector,
@@ -854,6 +908,8 @@ class Simulation:
                     close_fn()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close vector store manager: %s", exc)
+        if self._event_task:
+            self._event_task.cancel()
         try:
             get_event_queue().put_nowait(None)
         except asyncio.QueueFull:  # pragma: no cover - defensive

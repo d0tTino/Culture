@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, cast
+from typing import Any
 
 from .settings import ConfigSettings, settings
 
@@ -231,22 +231,23 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     new_settings = ConfigSettings()
     if validate_required:
         try:
-            data = new_settings.model_dump()
+            raw_data = new_settings.model_dump()
         except AttributeError:  # pragma: no cover - pydantic v1 fallback
-            data = new_settings.dict()
-        missing = [key for key in REQUIRED_CONFIG_KEYS if str(data.get(key, "")).strip() == ""]
+            raw_data = new_settings.dict()
+        missing = [key for key in REQUIRED_CONFIG_KEYS if str(raw_data.get(key, "")).strip() == ""]
 
     if validate_required:
-        missing = [k for k in REQUIRED_CONFIG_KEYS if not data.get(k)]
+        missing = [k for k in REQUIRED_CONFIG_KEYS if not raw_data.get(k)]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
+    data: dict[str, Any]
     try:
         data = settings.model_dump()  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - pydantic v1 fallback
         data = settings.dict()
-    _CONFIG.update(cast(dict[str, Any], data))
-    return cast(dict[str, Any], data)
+    _CONFIG.update(data)
+    return data
 
 
 def get_config(key: str | None = None) -> Any:

@@ -126,6 +126,7 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda: q_events,
     ), patch("src.interfaces.discord_bot.message_sse_queue", q_msgs), patch(
         "src.interfaces.dashboard_backend.EventSourceResponse", object
+
     ):
         bot = SimulationDiscordBot("token", 123)
         assert "on_message" in bot.client._events
@@ -145,3 +146,34 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
         assert bot.client.channel.sent
 
         await bot.stop_bot()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_on_message_updates_agent_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    q_events: asyncio.Queue[SimulationEvent] = asyncio.Queue()
+    q_msgs: asyncio.Queue[AgentMessage] = asyncio.Queue()
+
+    class Client(DummyDiscordClient):
+        pass
+
+    with patch("src.interfaces.discord_bot.discord.Client", Client), patch(
+        "src.interfaces.discord_bot.event_queue",
+        q_events,
+    ), patch(
+        "src.interfaces.discord_bot.message_sse_queue",
+        q_msgs,
+    ):
+        bot = SimulationDiscordBot("token", 456)
+        await bot.run_bot()
+        on_msg = bot.client._events["on_message"]
+        msg = MagicMock()
+        msg.content = "hello world"
+        msg.author = "userA"
+        await on_msg(msg)
+        event = await q_events.get()
+        agent_state = {"messages": []}
+        agent_state["messages"].append(event.data["content"])
+        assert agent_state["messages"] == ["hello world"]
+        await bot.stop_bot()
+

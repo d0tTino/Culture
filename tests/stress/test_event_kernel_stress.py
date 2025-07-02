@@ -24,7 +24,7 @@ async def test_mass_event_dispatch_deterministic_replay() -> None:
 
     for i in range(event_count):
         vv = VersionVector({"A": i + 1})
-        kernel.schedule_nowait(_make_cb(order, i), vector=vv)
+        kernel.schedule_immediate_nowait(_make_cb(order, i), vector=vv)
 
     executed = await kernel.dispatch(event_count)
     assert len(executed) == event_count
@@ -36,7 +36,7 @@ async def test_mass_event_dispatch_deterministic_replay() -> None:
     order_replay: list[int] = []
     for i in range(event_count):
         vv = VersionVector({"A": i + 1})
-        replay.schedule_nowait(_make_cb(order_replay, i), vector=vv)
+        replay.schedule_immediate_nowait(_make_cb(order_replay, i), vector=vv)
 
     executed_replay = await replay.dispatch(event_count)
     assert len(executed_replay) == event_count

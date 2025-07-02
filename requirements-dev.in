@@ -39,3 +39,6 @@ zstandard==0.23.0
 neo4j
 testing.postgresql
 respx
+ipython<9
+starlette
+pydantic-settings==2.0.3

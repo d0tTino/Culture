@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from langgraph.graph import END, StateGraph
@@ -78,7 +78,10 @@ def build_graph() -> Any:
     graph_builder.add_node("handle_send_direct_message", handle_send_direct_message_node)
 
     graph_builder.add_node("finalize_message_agent", finalize_message_agent_node)
-    graph_builder.add_node("maybe_consolidate_memories", _maybe_consolidate_memories)
+    graph_builder.add_node(
+        "maybe_consolidate_memories",
+        cast(Any, _maybe_consolidate_memories),
+    )
 
     graph_builder.set_entry_point("analyze_perception_sentiment")
     graph_builder.add_edge("analyze_perception_sentiment", "prepare_relationship_prompt")

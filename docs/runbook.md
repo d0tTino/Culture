@@ -15,7 +15,11 @@ This runbook outlines routine operations for working with Culture.ai.
    Alternatively, start a vLLM server with swap space enabled to avoid
    out-of-memory errors when running many agents:
    ```bash
-   scripts/start_vllm.sh  # defaults to port 8001 (override with VLLM_PORT)
+   # Optionally override the model or port used by vLLM (defaults to port 8001)
+   VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
+   scripts/start_vllm.sh
+   # Point the application to the vLLM server
+   export OLLAMA_API_BASE="http://localhost:$VLLM_PORT"
    ```
 4. (Optional) Start the vector store:
    ```bash
