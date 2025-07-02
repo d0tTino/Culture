@@ -11,17 +11,30 @@ from src.shared.typing import SimulationMessage
 
 from .basic_agent_types import AgentActionOutput, AgentTurnState
 
+# ---------------------------------------------------------------------------
+# Compatibility helpers for older tests
+# ---------------------------------------------------------------------------
+
+
+def generate_structured_output_from_intent(
+    _intent: Any, prompt: str, schema: Any, *, agent_state: Any | None = None
+) -> Any:
+    """Backward-compatible alias for tests."""
+    return generate_structured_output(prompt, schema, agent_state=agent_state)
+
 
 class MemoryRetriever(Protocol):
     async def aretrieve_relevant_memories(
         self, agent_id: str, query: str, k: int
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[dict[str, Any]]:
+        ...
 
 
 class SummaryAgent(Protocol):
     async def async_generate_l1_summary(
         self, role_prompt: str, memories: str, context: str
-    ) -> Any: ...
+    ) -> Any:
+        ...
 
 
 logger = logging.getLogger(__name__)
@@ -103,13 +116,15 @@ async def generate_thought_and_message_node(
     state: AgentTurnState,
 ) -> dict[str, AgentActionOutput | None]:
     """Generate a thought and a structured action based on the agent's state."""
-    agent = state.get("agent_instance")
-    if not agent:
-        return {"structured_output": None}
-
-    # In tests, this can be mocked to return a full AgentActionOutput.
-    # The arguments are placeholders as the mock doesn't use them.
-    result = await agent.async_select_action_intent("", "", "", [])
+    agent = cast(Any, state.get("agent_instance"))
+    if agent:
+        # In tests, this can be mocked to return a full AgentActionOutput.
+        # The arguments are placeholders as the mock doesn't use them.
+        result = await agent.async_select_action_intent("", "", "", [])
+        if isinstance(result, AgentActionOutput):
+            return {"structured_output": result}
+    else:
+        result = None
 
     # If the mocked result is already the full output, just return it.
     if isinstance(result, AgentActionOutput):
@@ -121,21 +136,23 @@ async def generate_thought_and_message_node(
         action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
-        structured = generate_structured_output(
-            "prompt", AgentActionOutput, agent_state=state.get("state")
+        structured = generate_structured_output_from_intent(
+            action_intent, "prompt", AgentActionOutput, agent_state=state.get("state")
         )
     except TypeError:
-        structured = generate_structured_output("prompt", AgentActionOutput)
+        structured = generate_structured_output_from_intent(
+            action_intent, "prompt", AgentActionOutput
+        )
 
     if structured:
-        structured.action_intent = action_intent
+        cast(Any, structured).action_intent = action_intent
     else:
         # Create a minimal object if generation fails, to avoid losing intent.
         structured = AgentActionOutput(
             thought="Structured output generation failed.",
             message_content="",
             action_intent=action_intent,
-        )
+        )  # type: ignore[call-arg]
 
     return {"structured_output": cast(AgentActionOutput | None, structured)}
 

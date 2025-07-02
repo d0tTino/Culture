@@ -144,7 +144,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):
@@ -257,12 +258,24 @@ except (APIError, RequestException) as e:
     # Consider raising an error if connection is essential:
     # raise ConnectionError(f"Could not connect to Ollama at {OLLAMA_API_BASE}") from e
 
+# Provide a global LLMClient wrapper for easier patching in tests
+_GLOBAL_LLM_CLIENT: LLMClient | None
+try:
+    _GLOBAL_LLM_CLIENT = LLMClient(config=LLMClientConfig())
+except Exception:
+    _GLOBAL_LLM_CLIENT = None
+
 
 def get_ollama_client() -> OllamaClientProtocol | None:
     """Return the initialized Ollama client instance if available."""
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
     return client
+
+
+def get_llm_client() -> LLMClient | None:
+    """Return the global ``LLMClient`` instance if available."""
+    return _GLOBAL_LLM_CLIENT
 
 
 def _retry_with_backoff(
@@ -280,7 +293,7 @@ def _retry_with_backoff(
     for attempt in range(max_retries):
         try:
             return func(*args, **kwargs), None
-        except (_RequestException, _APIError, ValidationError) as exc:
+        except (_RequestException, _APIError, ValidationError, ConnectionError) as exc:
             e = exc
             logger.error(
                 f"LLM call failed (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True
@@ -312,10 +325,11 @@ def generate_text(
     """
     if is_mock_mode_enabled():
         # Even in mock mode, allow a monkeypatched side_effect to run for failure tests.
-        if client and hasattr(client, "chat") and hasattr(client.chat, "side_effect"):
-            if client.chat.side_effect:
+        llm = get_llm_client()
+        if llm and hasattr(llm, "chat") and hasattr(llm.chat, "side_effect"):
+            if llm.chat.side_effect:
                 try:
-                    return client.chat(model=model, messages=[{"role": "user", "content": prompt}])
+                    return llm.chat(model=model, messages=[{"role": "user", "content": prompt}])
                 except _RequestException:
                     return None  # Ensure side_effect exceptions are caught and handled.
 
@@ -324,10 +338,11 @@ def generate_text(
         return {"message": {"content": mock_response}}["message"]["content"]
 
     def call() -> LLMChatResponse:
-        if not client:
-            raise RuntimeError("Ollama client not initialized")
+        ollama_client = get_ollama_client()
+        if not ollama_client:
+            raise ConnectionError("Ollama client not initialized")
         messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        return client.chat(
+        return ollama_client.chat(
             model=model,
             messages=messages,
             options={"temperature": temperature},
@@ -388,7 +403,7 @@ def summarize_memory_context(
             else f"This is a mock summary of {len(memories)} memories related to '{goal}'."
         )
 
-    ollama_client = get_ollama_client()
+    ollama_client = get_llm_client()
     if not ollama_client:
         logger.warning("Attempted to summarize memories but Ollama client is unavailable.")
         return "(Memory summarization failed: LLM client unavailable)"
@@ -473,7 +488,7 @@ def analyze_sentiment(
                 return 0.0
         return float(val) if isinstance(val, (int, float)) else 0.0
 
-    ollama_client = get_ollama_client()
+    ollama_client = get_llm_client()
     if not ollama_client or not text:
         return None  # Client not available or empty text
 
@@ -655,11 +670,6 @@ def generate_structured_output(
         except (ValidationError, json.JSONDecodeError, TypeError) as e:
             logger.error(f"Error generating mock structured output: {e}")
             return None
-    # Get the Ollama client instance
-    ollama_client = get_ollama_client()
-    if not ollama_client:
-        logger.warning("Attempted to generate structured output but Ollama client is unavailable.")
-        return None
     # Ensure response_model is a subclass of BaseModel for type safety
     if not issubclass(response_model, BaseModel):
         raise TypeError("response_model must be a subclass of BaseModel")

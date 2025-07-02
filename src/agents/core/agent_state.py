@@ -3,7 +3,7 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import Any, Callable, Optional, Protocol, cast, TYPE_CHECKING
+from typing import Any, Callable, Optional, Protocol, Sequence, cast, TYPE_CHECKING
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
 from typing_extensions import Self
@@ -46,7 +46,7 @@ from src.infra.config import get_config  # Import get_config function
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.infra.llm_client import LLMClient, LLMClientConfig
+    from src.infra.llm import BaseLLMClient, OllamaLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -140,22 +140,22 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 if TYPE_CHECKING:
-    from src.infra.llm_client import (
-        OllamaClientProtocol,
-        get_default_llm_client,
-    )
+    from src.infra.llm import BaseLLMClient, OllamaLLMClient, get_default_llm_client
 else:
     try:
-        from src.infra.llm_client import (
-            OllamaClientProtocol,
-            get_default_llm_client,
-        )
-    except Exception:  # pragma: no cover - fallback when llm_client is missing
-        class OllamaClientProtocol(Protocol):
-            """Fallback protocol used when the real client is unavailable."""
-            ...
+        from src.infra.llm import BaseLLMClient, OllamaLLMClient, get_default_llm_client
+    except Exception:  # pragma: no cover - fallback when llm module is missing
+        class BaseLLMClient(Protocol):
+            async def chat(self, model: str, messages: list[LLMMessage], **kwargs: Any) -> LLMChatResponse:
+                ...
 
-        def get_default_llm_client() -> OllamaClientProtocol | None:
+            async def embed(self, texts: Sequence[str], model: str | None = None) -> list[list[float]]:
+                ...
+
+        class OllamaLLMClient(BaseLLMClient, Protocol):
+            pass
+
+        def get_default_llm_client() -> BaseLLMClient | None:
             return None
 
 
@@ -184,6 +184,7 @@ class AgentStateData(BaseModel):
     projects: dict[str, dict[str, Any]] = Field(default_factory=dict)  # project_id: {details}
     current_project_id: Optional[str] = None
     llm_client_config: Optional[Any] = None  # Configuration data for LLM client
+    # Use Any here to allow MagicMock instances in tests without validation errors
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
@@ -494,13 +495,9 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 else:
                     model.llm_client = mock_llm_client
             elif llm_client_config:
-                from src.infra.llm_client import LLMClient, LLMClientConfig
+                from src.infra.llm import OllamaLLMClient
 
-                client = None
-                if isinstance(llm_client_config, BaseModel):
-                    client = LLMClient(config=cast(LLMClientConfig, llm_client_config))
-                else:
-                    client = LLMClient(config=LLMClientConfig(**llm_client_config))
+                client = OllamaLLMClient()
                 if isinstance(model, dict):
                     model["llm_client"] = client
                 else:
