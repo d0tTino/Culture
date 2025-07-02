@@ -144,7 +144,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):
@@ -324,10 +325,11 @@ def generate_text(
         return {"message": {"content": mock_response}}["message"]["content"]
 
     def call() -> LLMChatResponse:
-        if not client:
+        local_client = get_ollama_client()
+        if not local_client:
             raise RuntimeError("Ollama client not initialized")
         messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        return client.chat(
+        return local_client.chat(
             model=model,
             messages=messages,
             options={"temperature": temperature},

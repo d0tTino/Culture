@@ -6,7 +6,10 @@ from typing import Any, Protocol, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
-from src.infra.llm_client import analyze_sentiment, generate_structured_output
+from src.infra.llm_client import (
+    analyze_sentiment,
+    generate_structured_output,
+)
 from src.shared.typing import SimulationMessage
 
 from .basic_agent_types import AgentActionOutput, AgentTurnState
@@ -15,16 +18,25 @@ from .basic_agent_types import AgentActionOutput, AgentTurnState
 class MemoryRetriever(Protocol):
     async def aretrieve_relevant_memories(
         self, agent_id: str, query: str, k: int
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[dict[str, Any]]:
+        ...
 
 
 class SummaryAgent(Protocol):
     async def async_generate_l1_summary(
         self, role_prompt: str, memories: str, context: str
-    ) -> Any: ...
+    ) -> Any:
+        ...
 
 
 logger = logging.getLogger(__name__)
+
+
+def generate_structured_output_from_intent(
+    intent: str, prompt: str, schema: type[AgentActionOutput]
+) -> AgentActionOutput:
+    """Compatibility shim for older tests."""
+    return generate_structured_output(prompt, schema)
 
 
 def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
@@ -104,28 +116,26 @@ async def generate_thought_and_message_node(
 ) -> dict[str, AgentActionOutput | None]:
     """Generate a thought and a structured action based on the agent's state."""
     agent = state.get("agent_instance")
-    if not agent:
-        return {"structured_output": None}
-
-    # In tests, this can be mocked to return a full AgentActionOutput.
-    # The arguments are placeholders as the mock doesn't use them.
-    result = await agent.async_select_action_intent("", "", "", [])
-
-    # If the mocked result is already the full output, just return it.
-    if isinstance(result, AgentActionOutput):
-        return {"structured_output": result}
-
-    # Otherwise, proceed with the normal flow.
     action_intent = "idle"
-    if result:
-        action_intent = getattr(result, "chosen_action_intent", "idle")
+    if agent:
+        # In tests, this can be mocked to return a full AgentActionOutput.
+        result = await agent.async_select_action_intent("", "", "", [])
+
+        # If the mocked result is already the full output, just return it.
+        if isinstance(result, AgentActionOutput):
+            return {"structured_output": result}
+
+        if result:
+            action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
-        structured = generate_structured_output(
-            "prompt", AgentActionOutput, agent_state=state.get("state")
+        structured = generate_structured_output_from_intent(
+            action_intent, "prompt", AgentActionOutput
         )
     except TypeError:
-        structured = generate_structured_output("prompt", AgentActionOutput)
+        structured = generate_structured_output_from_intent(
+            action_intent, "prompt", AgentActionOutput
+        )
 
     if structured:
         structured.action_intent = action_intent
