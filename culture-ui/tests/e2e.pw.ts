@@ -6,6 +6,7 @@ const tabSelector = '.flexlayout__tab';
 
 test('sidebar and dock layout persist', async ({ page }) => {
   await page.goto('/');
+  await page.waitForLoadState('networkidle');
 
   await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Mission Overview' })).toBeVisible();
@@ -16,6 +17,7 @@ test('sidebar and dock layout persist', async ({ page }) => {
   await expect(tabs).toHaveCount(initialCount);
 
   await page.reload();
+  await page.waitForLoadState('networkidle');
 
   await expect(page.locator(tabSelector)).toHaveCount(initialCount);
 });

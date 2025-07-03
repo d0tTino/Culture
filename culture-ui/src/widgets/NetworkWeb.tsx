@@ -1,11 +1,5 @@
-import { useMemo, type FC } from 'react'
-
-let ForceGraph2D: FC<Record<string, unknown>> = () => <canvas />
-if (process.env.NODE_ENV !== 'test') {
-  // dynamic import avoids bundling in tests
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  ForceGraph2D = require('react-force-graph-2d').default
-}
+import { useMemo, useEffect, useRef } from 'react'
+import ForceGraph2D from 'react-force-graph-2d'
 
 export default function NetworkWeb() {
   const data = useMemo(
@@ -23,9 +17,18 @@ export default function NetworkWeb() {
     [],
   )
 
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (el) el.style.pointerEvents = 'none'
+    const canvas = el?.querySelector('canvas')
+    if (canvas) canvas.style.pointerEvents = 'none'
+  }, [])
+
   return (
-    <div style={{ width: '100%', height: 400 }}>
-      <ForceGraph2D graphData={data} />
+    <div ref={containerRef} style={{ width: '100%', height: 400 }}>
+      <ForceGraph2D graphData={data} enablePointerInteraction={false} />
     </div>
   )
 }
