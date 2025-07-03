@@ -699,6 +699,7 @@ Metrics include `llm_latency_ms`, `llm_calls_total`, `knowledge_board_size`, and
 check the latest values with the `!stats` Discord command.
 
 For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
+When running against a local vLLM server, set `VLLM_API_BASE` to its base URL.
 
 ### Walking Vertical Slice
 To verify your local setup with actual LLM calls, run the minimal demo script:
