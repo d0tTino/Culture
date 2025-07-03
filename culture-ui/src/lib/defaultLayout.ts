@@ -3,7 +3,7 @@ import { listWidgets } from './widgetRegistry'
 
 export function createDefaultLayout(): IJsonModel {
   const widgets = listWidgets()
-  const order = ['NetworkWeb', 'WorldMap', 'TimelineWidget', 'KpiCard']
+  const order = ['NetworkWeb', 'WorldMap', 'TimelineWidget', 'KpiCard', 'MemoryExplorer']
   const sorted = [
     ...order.filter((n) => widgets.includes(n)),
     ...widgets.filter((n) => !order.includes(n)),
