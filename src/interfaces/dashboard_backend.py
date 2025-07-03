@@ -86,9 +86,10 @@ def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
     except RuntimeError:  # pragma: no cover - no running loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    if _event_queue is None or _event_queue._loop is not loop:
+    if _event_queue is None or getattr(_event_queue, "_loop", None) is not loop:  # type: ignore[attr-defined]
         _event_queue = asyncio.Queue()
     return _event_queue
+
 
 # Simulation control state
 SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}

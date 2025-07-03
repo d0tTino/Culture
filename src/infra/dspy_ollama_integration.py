@@ -221,7 +221,7 @@ class OllamaLM(BaseLM):
         start_time = time.time()
 
         # Merge default kwargs with provided kwargs
-        request_kwargs: ollama_types.Options = {
+        request_kwargs: dict[str, Any] = {
             "temperature": self.temperature,
             "num_predict": self.max_tokens,
         }

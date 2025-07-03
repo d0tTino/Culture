@@ -31,13 +31,15 @@ ActionIntentLiteral = Literal[
 
 class MemoryRetriever(Protocol):
     async def aretrieve_relevant_memories(
-        self: Any, agent_id: str, query: str, k: int
+        self, agent_id: str, query: str, k: int
+
     ) -> list[dict[str, Any]]: ...
 
 
 class SummaryAgent(Protocol):
     async def async_generate_l1_summary(
-        self: Any, role_prompt: str, memories: str, context: str
+        self, role_prompt: str, memories: str, context: str
+
     ) -> Any: ...
 
 
@@ -163,7 +165,8 @@ async def generate_thought_and_message_node(
     if isinstance(result, AgentActionOutput):
         return {"structured_output": result}
 
-    if result is not None:
+    action_intent = "idle"
+    if result:
 
         action_intent = getattr(result, "chosen_action_intent", "idle")
 

@@ -1,3 +1,3 @@
-from .graph import END, START
+from .graph import END, START, StateGraph
 
-__all__ = ["END", "START"]
+__all__ = ["END", "START", "StateGraph"]
