@@ -9,6 +9,15 @@ class Registry implements WidgetRegistry {
 
   register(name: string, component: React.ComponentType) {
     this.widgets.set(name, component)
+    try {
+      void fetch('/api/register_widget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }).catch(() => {})
+    } catch {
+      // ignore registration errors
+    }
   }
 
   get(name: string) {

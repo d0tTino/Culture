@@ -20,6 +20,58 @@ class DummyWebSocket:
         self.sent.append(text)
 
 
+def load_dashboard_backend():
+    import importlib
+    import sys
+    import types
+
+    if "fastapi" in sys.modules:
+        fastapi_mod = sys.modules["fastapi"]
+    else:
+        fastapi_mod = types.ModuleType("fastapi")
+        sys.modules["fastapi"] = fastapi_mod
+    if not hasattr(fastapi_mod, "FastAPI") or not hasattr(getattr(fastapi_mod, "FastAPI"), "post"):
+
+        class _FastAPI:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def get(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+            def post(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+            def websocket(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+        fastapi_mod.FastAPI = _FastAPI
+        fastapi_mod.Request = object
+        fastapi_mod.Response = object
+        fastapi_mod.WebSocket = object
+        fastapi_mod.WebSocketDisconnect = Exception
+
+        class _JSONResponse:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                self.body = json.dumps(args[0]).encode() if args else b""
+
+        responses_mod = types.ModuleType("fastapi.responses")
+        responses_mod.JSONResponse = _JSONResponse
+        sys.modules["fastapi.responses"] = responses_mod
+    if "src.interfaces.dashboard_backend" in sys.modules:
+        del sys.modules["src.interfaces.dashboard_backend"]
+    return importlib.import_module("src.interfaces.dashboard_backend")
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_stream_events_sse(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,3 +197,26 @@ async def test_websocket_events() -> None:
     await db.websocket_events(ws)
     payload = json.loads(ws.sent[0])
     assert payload["data"]["step"] == 2
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_message_queue_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from src.interfaces import dashboard_backend as db
+
+    queue: asyncio.Queue[db.AgentMessage] = asyncio.Queue(maxsize=2)
+    monkeypatch.setattr(db, "message_sse_queue", queue)
+
+    msg1 = db.AgentMessage(agent_id="a", content="1", step=1)
+    msg2 = db.AgentMessage(agent_id="a", content="2", step=2)
+    msg3 = db.AgentMessage(agent_id="a", content="3", step=3)
+
+    await db.enqueue_message(msg1)
+    await db.enqueue_message(msg2)
+    await db.enqueue_message(msg3)
+
+    assert queue.qsize() == 2
+    remaining = [queue.get_nowait().content for _ in range(queue.qsize())]
+    assert remaining == ["2", "3"]

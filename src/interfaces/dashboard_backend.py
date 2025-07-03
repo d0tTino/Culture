@@ -1,3 +1,4 @@
+# ruff: noqa: ANN101
 import asyncio
 
 # Skip self argument annotation warnings in stub classes
@@ -69,8 +70,19 @@ else:  # pragma: no cover - optional dependency
                 self.gen = None
 
 
-# Global queue for agent messages
-message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
+# Global queue for agent messages with bounded size
+message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue(maxsize=1000)
+
+
+async def enqueue_message(msg: "AgentMessage") -> None:
+    """Add a message to the SSE queue, dropping the oldest if full."""
+    if message_sse_queue.full():
+        try:
+            message_sse_queue.get_nowait()
+        except asyncio.QueueEmpty:  # pragma: no cover - unlikely
+            pass
+    await message_sse_queue.put(msg)
+
 
 # Queue for general simulation events streamed via SSE/WebSocket.  The queue is
 # lazily created so it binds to the currently running event loop, avoiding
@@ -94,6 +106,8 @@ def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
 # Simulation control state
 SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}
 BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
+# Names of widgets registered by the UI or plugins
+REGISTERED_WIDGETS: set[str] = set()
 
 # Path to the initial missions data bundled with the front-end
 MISSIONS_PATH = (
@@ -164,6 +178,15 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
         except Exception:  # pragma: no cover - defensive
             summaries = []
     return JSONResponse({"summaries": summaries})
+
+
+@app.post("/api/register_widget")
+async def register_widget(widget: dict[str, Any]) -> Response:
+    """Register a widget name provided by the UI or a plugin."""
+    name = widget.get("name")
+    if isinstance(name, str):
+        REGISTERED_WIDGETS.add(name)
+    return JSONResponse({"widgets": sorted(REGISTERED_WIDGETS)})
 
 
 @app.websocket("/ws/events")
@@ -267,11 +290,14 @@ async def emit_map_action_event(
 
 
 __all__ = [
+    "REGISTERED_WIDGETS",
     "EventSourceResponse",
     "SimulationEvent",
     "app",
     "emit_event",
     "emit_map_action_event",
+    "enqueue_message",
     "get_event_queue",
     "message_sse_queue",
+    "register_widget",
 ]

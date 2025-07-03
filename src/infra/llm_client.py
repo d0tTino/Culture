@@ -1,4 +1,4 @@
-"""Provides a client for interacting with the Ollama LLM service."""
+"""Client utilities for interacting with local LLM backends."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from src.shared.typing import (
     LLMChatResponse,
     LLMClientMockResponses,
     LLMMessage,
-    OllamaGenerateResponse,
     SentimentAnalysisResponse,
     StructuredOutputMock,
 )
@@ -61,6 +60,8 @@ from pydantic.fields import FieldInfo
 
 if TYPE_CHECKING:
     from src.agents.core.agent_state import AgentState
+import os
+
 from src.shared.decorator_utils import monitor_llm_call
 
 from .config import (
@@ -69,6 +70,9 @@ from .config import (
     get_config,
 )
 from .ledger import ledger
+
+VLLM_API_BASE = os.environ.get("VLLM_API_BASE")
+USE_VLLM = bool(VLLM_API_BASE)
 
 if TYPE_CHECKING:
     from litellm.exceptions import APIError
@@ -144,8 +148,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -214,49 +217,72 @@ def is_mock_mode_enabled() -> bool:
 
 def is_ollama_available() -> bool:
     """
-    Check if Ollama service is available.
+    Check if the configured LLM service is available.
 
     Returns:
-        bool: True if Ollama is available, False otherwise
+        bool: True if the service is reachable, False otherwise.
     """
     if _MOCK_ENABLED:
-        return True  # When in mock mode, pretend Ollama is available
+        return True  # When in mock mode, pretend the service is available
 
+    base = VLLM_API_BASE or OLLAMA_API_BASE
     try:
-        # Try to connect to Ollama with a small timeout
-        response = requests.get(f"{OLLAMA_API_BASE}", timeout=1)
-
+        # Try to connect to the service with a small timeout
+        response = requests.get(base, timeout=1)
         return bool(getattr(response, "status_code", 0) == 200)
     except RequestException as e:
-        logger.debug(f"Ollama is not available: {e}")
+        logger.debug(f"LLM service at {base} is not available: {e}")
         return False
 
 
-# Check if OLLAMA_API_BASE is set, if not use the default
+# Determine which LLM backend to use and initialize the client accordingly
 if not OLLAMA_API_BASE:
     OLLAMA_API_BASE = "http://localhost:11434"
     logger.warning(f"OLLAMA_API_BASE not set in config, using default: {OLLAMA_API_BASE}")
 else:
     logger.info(f"Using OLLAMA_API_BASE: {OLLAMA_API_BASE}")
 
-# Initialize the Ollama client globally using the configured base URL
-# This assumes the Ollama service is running and accessible.
+
+def _create_vllm_client() -> OllamaClientProtocol:
+    class _Client:
+        def chat(
+            self,
+            model: str,
+            messages: list[LLMMessage],
+            options: dict[str, Any] | None = None,
+        ) -> LLMChatResponse:
+            url = f"{VLLM_API_BASE.rstrip('/')}/v1/chat/completions"
+            payload: JSONDict = {"model": model, "messages": messages}
+            if options:
+                if "temperature" in options:
+                    payload["temperature"] = options["temperature"]
+                if "top_p" in options:
+                    payload["top_p"] = options["top_p"]
+                if "num_predict" in options:
+                    payload["max_tokens"] = options["num_predict"]
+            resp = requests.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+            message = data.get("choices", [{}])[0].get("message", {})
+            return {"message": message, "usage": data.get("usage", {})}
+
+    return _Client()
+
+
 client: OllamaClientProtocol | None
-try:
-    # Ensure OLLAMA_API_BASE is correctly formatted (e.g., 'http://localhost:11434')
-    client = cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
-    # Optional: Perform a quick check to see if the client can connect.
-    # client.list() # This might be too slow or throw errors if Ollama is busy/starting.
-    # A basic check might be better handled during the first actual call.
-    logger.info(f"Ollama client initialized for host: {OLLAMA_API_BASE}")
-except (APIError, RequestException) as e:
-    logger.error(
-        f"Failed to initialize Ollama client for host {OLLAMA_API_BASE}: {e}", exc_info=True
-    )
-    # Set client to None or raise an error if Ollama connection is critical at startup
-    client = None
-    # Consider raising an error if connection is essential:
-    # raise ConnectionError(f"Could not connect to Ollama at {OLLAMA_API_BASE}") from e
+if USE_VLLM:
+    logger.info(f"Using vLLM API base: {VLLM_API_BASE}")
+    client = _create_vllm_client()
+else:
+    try:
+        client = cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
+        logger.info(f"Ollama client initialized for host: {OLLAMA_API_BASE}")
+    except (APIError, RequestException) as e:
+        logger.error(
+            f"Failed to initialize Ollama client for host {OLLAMA_API_BASE}: {e}",
+            exc_info=True,
+        )
+        client = None
 
 
 def get_ollama_client() -> OllamaClientProtocol | None:
@@ -694,23 +720,31 @@ def generate_structured_output(
     )
     timeout_value = timeout if timeout is not None else OLLAMA_REQUEST_TIMEOUT
     try:
-        logger.debug(f"Sending structured prompt to Ollama model '{model}':")
+        logger.debug(f"Sending structured prompt to model '{model}':")
         logger.debug(f"---PROMPT START---\n{structured_prompt}\n---PROMPT END---")
-        url = f"{OLLAMA_API_BASE.rstrip('/')}/api/generate"
-        response = requests.post(
-            url,
-            json={
+        if USE_VLLM:
+            url = f"{VLLM_API_BASE.rstrip('/')}/v1/chat/completions"
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": structured_prompt}],
+                "temperature": temperature,
+            }
+        else:
+            url = f"{OLLAMA_API_BASE.rstrip('/')}/api/generate"
+            payload = {
                 "model": model,
                 "prompt": structured_prompt,
                 "format": "json",
                 "stream": False,
                 "options": {"temperature": temperature, "top_p": 0.95, "num_predict": 400},
-            },
-            timeout=timeout_value,
-        )
+            }
+        response = requests.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
-        result: OllamaGenerateResponse = response.json()
-        response_text: str = result.get("response", "")
+        result: JSONDict = response.json()
+        if USE_VLLM:
+            response_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        else:
+            response_text = result.get("response", "")
         logger.debug(f"FULL RAW LLM RESPONSE: {response_text}")
         try:
             logger.debug(f"Received potential JSON response from Ollama: {response_text}")
