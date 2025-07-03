@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # Skip self argument annotation warnings for protocol stubs
+import asyncio
 import logging
 from typing import Any, Literal, Protocol, cast
 
@@ -31,12 +32,14 @@ ActionIntentLiteral = Literal[
 class MemoryRetriever(Protocol):
     async def aretrieve_relevant_memories(
         self, agent_id: str, query: str, k: int
+
     ) -> list[dict[str, Any]]: ...
 
 
 class SummaryAgent(Protocol):
     async def async_generate_l1_summary(
         self, role_prompt: str, memories: str, context: str
+
     ) -> Any: ...
 
 
@@ -133,10 +136,30 @@ async def generate_thought_and_message_node(
     agent = state.get("agent_instance")
     if not agent:
         return {"structured_output": None}
+    action_intent: str = "idle"
+    result: object | None = None
 
     # In tests, this can be mocked to return a full AgentActionOutput.
     # The arguments are placeholders as the mock doesn't use them.
-    result = await cast(Agent, agent).async_select_action_intent("", "", "", [])
+    try:
+        timeout = getattr(getattr(agent, "async_dspy_manager", None), "default_timeout", 10.0)
+        result = await asyncio.wait_for(
+            cast(Agent, agent).async_select_action_intent("", "", "", []),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Agent %s: async_select_action_intent timed out after %.2fs",
+            getattr(agent, "agent_id", "?"),
+            timeout,
+        )
+    except Exception as exc:  # pragma: no cover - best effort fallback
+        logger.error(
+            "Agent %s: Error in async_select_action_intent: %s",
+            getattr(agent, "agent_id", "?"),
+            exc,
+            exc_info=True,
+        )
 
     # If the mocked result is already the full output, just return it.
     if isinstance(result, AgentActionOutput):
@@ -144,6 +167,7 @@ async def generate_thought_and_message_node(
 
     action_intent = "idle"
     if result:
+
         action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
