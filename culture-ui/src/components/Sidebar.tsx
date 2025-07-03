@@ -47,6 +47,11 @@ export default function Sidebar() {
             KPI Card
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/memory" className={linkClass}>
+            Memory Explorer
+          </NavLink>
+        </li>
       </ul>
     </nav>
   )

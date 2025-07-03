@@ -1,37 +1,15 @@
-import { useEffect, useState } from 'react'
-import { registerWidget } from '../lib/widgetRegistry'
+import EventConsole from '../widgets/EventConsole'
+import BreakpointList from '../widgets/BreakpointList'
 
-interface SummaryResponse {
-  summaries: string[]
-}
-
-export default function MemoryExplorerPage() {
-  const [summaries, setSummaries] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch('/api/agents/agent-1/semantic_summaries')
-      .then((res) => res.json() as Promise<SummaryResponse>)
-      .then((data) => setSummaries(data.summaries ?? []))
-      .finally(() => setLoading(false))
-  }, [])
-
+export default function MemoryExplorer() {
   return (
-    <div className="p-4 space-y-4" data-testid="memory-explorer">
+    <div className="p-4 space-y-4">
       <h1 className="text-xl font-bold">Memory Explorer</h1>
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <ul className="space-y-2 max-h-64 overflow-y-auto">
-          {summaries.map((s, i) => (
-            <li key={i} className="border p-2 rounded">
-              {s}
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="grid gap-4 grid-cols-2">
+        <BreakpointList />
+        <EventConsole />
+      </div>
     </div>
   )
 }
 
-registerWidget('MemoryExplorer', MemoryExplorerPage)
