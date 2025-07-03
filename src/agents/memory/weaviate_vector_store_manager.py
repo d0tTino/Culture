@@ -7,8 +7,8 @@ try:  # pragma: no cover - optional dependency
     import weaviate
     import weaviate.classes as wvc
 except Exception:  # pragma: no cover - allow absence of weaviate
-    weaviate = None
-    wvc = None
+    weaviate = None  # type: ignore[assignment]
+    wvc = None  # type: ignore[assignment]
 from typing_extensions import Self
 
 from src.shared.memory_store import MemoryStore
@@ -97,7 +97,7 @@ class WeaviateVectorStoreManager(MemoryStore):
         else:
             host = "localhost"
             port = 8080
-        return weaviate.connect_to_custom(
+        return cast(Any, weaviate).connect_to_custom(
             http_host=host,
             http_port=port,
             http_secure=url.startswith("https"),

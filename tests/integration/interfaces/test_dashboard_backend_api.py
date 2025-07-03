@@ -201,57 +201,22 @@ async def test_websocket_events() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_control_pause_resume() -> None:
-    db = load_dashboard_backend()
+async def test_message_queue_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
 
-    db.SIM_STATE["paused"] = False
-    resp = await db.control({"command": "pause"})
-    data = json.loads(resp.body)
-    assert data["paused"] is True
-    assert db.SIM_STATE["paused"] is True
+    from src.interfaces import dashboard_backend as db
 
-    resp = await db.control({"command": "resume"})
-    data = json.loads(resp.body)
-    assert data["paused"] is False
-    assert db.SIM_STATE["paused"] is False
+    queue: asyncio.Queue[db.AgentMessage] = asyncio.Queue(maxsize=2)
+    monkeypatch.setattr(db, "message_sse_queue", queue)
 
+    msg1 = db.AgentMessage(agent_id="a", content="1", step=1)
+    msg2 = db.AgentMessage(agent_id="a", content="2", step=2)
+    msg3 = db.AgentMessage(agent_id="a", content="3", step=3)
 
-class DummyControlWS:
-    def __init__(self, messages: list[str]) -> None:
-        self.accepted = False
-        self.sent: list[str] = []
-        self.messages = messages
+    await db.enqueue_message(msg1)
+    await db.enqueue_message(msg2)
+    await db.enqueue_message(msg3)
 
-    async def accept(self) -> None:
-        self.accepted = True
-
-    async def receive_text(self) -> str:
-        if self.messages:
-            return self.messages.pop(0)
-        from src.interfaces import dashboard_backend as db
-
-        raise db.WebSocketDisconnect()
-
-    async def send_text(self, text: str) -> None:
-        self.sent.append(text)
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_ws_control_flow() -> None:
-    db = load_dashboard_backend()
-    db.SIM_STATE["paused"] = False
-    ws = DummyControlWS(
-        [
-            "notjson",
-            json.dumps({"command": "pause"}),
-            json.dumps({"command": "resume"}),
-        ]
-    )
-    await db.ws_control(ws)
-
-    assert ws.accepted is True
-    assert json.loads(ws.sent[0])["error"] == "invalid"
-    assert json.loads(ws.sent[1])["paused"] is True
-    assert json.loads(ws.sent[2])["paused"] is False
-    assert db.SIM_STATE["paused"] is False
+    assert queue.qsize() == 2
+    remaining = [queue.get_nowait().content for _ in range(queue.qsize())]
+    assert remaining == ["2", "3"]

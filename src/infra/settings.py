@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except Exception:  # pragma: no cover - optional dependency
+    from pydantic import BaseModel
+
+    class BaseSettings(BaseModel):
+        """Fallback settings base class."""
+
+    SettingsConfigDict = dict  # type: ignore[misc]
 
 
 class ConfigSettings(BaseSettings):
