@@ -94,6 +94,8 @@ def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
 # Simulation control state
 SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}
 BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
+# Names of widgets registered by the UI or plugins
+REGISTERED_WIDGETS: set[str] = set()
 
 # Path to the initial missions data bundled with the front-end
 MISSIONS_PATH = (
@@ -164,6 +166,15 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
         except Exception:  # pragma: no cover - defensive
             summaries = []
     return JSONResponse({"summaries": summaries})
+
+
+@app.post("/api/register_widget")
+async def register_widget(widget: dict[str, Any]) -> Response:
+    """Register a widget name provided by the UI or a plugin."""
+    name = widget.get("name")
+    if isinstance(name, str):
+        REGISTERED_WIDGETS.add(name)
+    return JSONResponse({"widgets": sorted(REGISTERED_WIDGETS)})
 
 
 @app.websocket("/ws/events")
@@ -267,6 +278,7 @@ async def emit_map_action_event(
 
 
 __all__ = [
+    "REGISTERED_WIDGETS",
     "EventSourceResponse",
     "SimulationEvent",
     "app",
@@ -274,4 +286,5 @@ __all__ = [
     "emit_map_action_event",
     "get_event_queue",
     "message_sse_queue",
+    "register_widget",
 ]

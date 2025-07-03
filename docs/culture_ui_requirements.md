@@ -57,3 +57,18 @@ Each request returns the updated simulation state:
 ```json
 { "paused": false, "speed": 1.5, "breakpoints": ["nsfw"] }
 ```
+
+## Widget Registration API
+
+Plugins can inform the backend about available UI widgets by calling:
+
+```http
+POST /api/register_widget
+{ "name": "MyWidget" }
+```
+
+The response returns the complete set of registered widget names:
+
+```json
+{ "widgets": ["MyWidget"] }
+```
