@@ -35,14 +35,20 @@ from .embedding_utils import compute_embedding
 from .roles import ensure_profile
 
 if TYPE_CHECKING:
-    from src.interfaces.dashboard_backend import AgentMessage as DashboardAgentMessage
-    from src.interfaces.dashboard_backend import message_sse_queue
+    from src.interfaces.dashboard_backend import (
+        AgentMessage as DashboardAgentMessage,
+    )
+    from src.interfaces.dashboard_backend import (
+        enqueue_message,
+        message_sse_queue,
+    )
 else:  # pragma: no cover - optional runtime dependency
     try:
-        from src.interfaces.dashboard_backend import AgentMessage as DashboardAgentMessage
-        from src.interfaces.dashboard_backend import (
-            message_sse_queue,
-        )
+        from src.interfaces import dashboard_backend as _db
+
+        DashboardAgentMessage = _db.AgentMessage
+        message_sse_queue = _db.message_sse_queue
+        enqueue_message = getattr(_db, "enqueue_message", message_sse_queue.put)
     except Exception:
 
         class DashboardAgentMessage(BaseModel):  # minimal stub for tests
@@ -55,6 +61,10 @@ else:  # pragma: no cover - optional runtime dependency
             extra: dict[str, Any] | None = None
 
         message_sse_queue: asyncio.Queue[DashboardAgentMessage] = asyncio.Queue()
+
+        async def enqueue_message(msg: DashboardAgentMessage) -> None:
+            await message_sse_queue.put(msg)
+
 
 from src.shared.memory_store import MemoryStore
 from src.shared.typing import SimulationMessage
@@ -925,7 +935,7 @@ class Agent:
                 action_intent=action_intent,
                 extra=extra,
             )
-            await message_sse_queue.put(msg)
+            await enqueue_message(msg)
         except Exception as e:
             logging.error(f"Failed to broadcast message to dashboard SSE: {e}")
 

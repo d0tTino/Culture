@@ -1,3 +1,4 @@
+# ruff: noqa: ANN101
 import asyncio
 
 # Skip self argument annotation warnings in stub classes
@@ -69,8 +70,19 @@ else:  # pragma: no cover - optional dependency
                 self.gen = None
 
 
-# Global queue for agent messages
-message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue()
+# Global queue for agent messages with bounded size
+message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue(maxsize=1000)
+
+
+async def enqueue_message(msg: "AgentMessage") -> None:
+    """Add a message to the SSE queue, dropping the oldest if full."""
+    if message_sse_queue.full():
+        try:
+            message_sse_queue.get_nowait()
+        except asyncio.QueueEmpty:  # pragma: no cover - unlikely
+            pass
+    await message_sse_queue.put(msg)
+
 
 # Queue for general simulation events streamed via SSE/WebSocket.  The queue is
 # lazily created so it binds to the currently running event loop, avoiding
@@ -272,6 +284,7 @@ __all__ = [
     "app",
     "emit_event",
     "emit_map_action_event",
+    "enqueue_message",
     "get_event_queue",
     "message_sse_queue",
 ]

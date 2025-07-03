@@ -145,3 +145,26 @@ async def test_websocket_events() -> None:
     await db.websocket_events(ws)
     payload = json.loads(ws.sent[0])
     assert payload["data"]["step"] == 2
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_message_queue_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from src.interfaces import dashboard_backend as db
+
+    queue: asyncio.Queue[db.AgentMessage] = asyncio.Queue(maxsize=2)
+    monkeypatch.setattr(db, "message_sse_queue", queue)
+
+    msg1 = db.AgentMessage(agent_id="a", content="1", step=1)
+    msg2 = db.AgentMessage(agent_id="a", content="2", step=2)
+    msg3 = db.AgentMessage(agent_id="a", content="3", step=3)
+
+    await db.enqueue_message(msg1)
+    await db.enqueue_message(msg2)
+    await db.enqueue_message(msg3)
+
+    assert queue.qsize() == 2
+    remaining = [queue.get_nowait().content for _ in range(queue.qsize())]
+    assert remaining == ["2", "3"]
