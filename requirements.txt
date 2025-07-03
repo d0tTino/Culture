@@ -248,7 +248,7 @@ multidict==6.6.0
     #   yarl
 multiprocess==0.70.16
     # via datasets
-numpy==2.3.1
+numpy==2.2.6
     # via
     #   chroma-hnswlib
     #   chromadb

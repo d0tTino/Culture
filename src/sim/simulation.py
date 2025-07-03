@@ -252,6 +252,21 @@ class Simulation:
             return
 
         target = self.agents[self.current_agent_index]
+        state = target.state
+        ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE"))
+        du_cost = float(config.get_config("DU_COST_PER_ACTION"))
+
+        if state.ip < ip_cost or state.du < du_cost:
+            logger.info("Rejecting human command for %s: insufficient resources", target.agent_id)
+            return
+
+        state.ip -= ip_cost
+        state.du -= du_cost
+        try:
+            await ledger.spend(target.agent_id, ip=ip_cost, du=du_cost, reason="human_dm")
+        except Exception:  # pragma: no cover - optional
+            logger.debug("Ledger spend failed", exc_info=True)
+
         msg = {
             "step": self.current_step,
             "sender_id": "human",
@@ -266,9 +281,10 @@ class Simulation:
 
     async def _forward_external_events(self: Self) -> None:
         """Background task that forwards events from ``event_queue``."""
+        queue = get_event_queue()
         try:
             while True:
-                evt: SimulationEvent | None = await event_queue.get()
+                evt: SimulationEvent | None = await queue.get()
                 if evt is None:
                     break
                 if evt.event_type == "broadcast" and evt.data:

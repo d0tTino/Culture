@@ -31,25 +31,16 @@ ActionIntentLiteral = Literal[
 class MemoryRetriever(Protocol):
     async def aretrieve_relevant_memories(
         self, agent_id: str, query: str, k: int
-    ) -> list[dict[str, Any]]:
-        ...
+    ) -> list[dict[str, Any]]: ...
 
 
 class SummaryAgent(Protocol):
     async def async_generate_l1_summary(
         self, role_prompt: str, memories: str, context: str
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
 
 logger = logging.getLogger(__name__)
-
-
-def generate_structured_output_from_intent(
-    intent: str, prompt: str, schema: type[AgentActionOutput]
-) -> AgentActionOutput:
-    """Compatibility shim for older tests."""
-    return generate_structured_output(prompt, schema)
 
 
 def analyze_perception_sentiment_node(state: AgentTurnState) -> dict[str, Any]:
@@ -147,13 +138,13 @@ async def generate_thought_and_message_node(
     # The arguments are placeholders as the mock doesn't use them.
     result = await cast(Agent, agent).async_select_action_intent("", "", "", [])
 
+    # If the mocked result is already the full output, just return it.
+    if isinstance(result, AgentActionOutput):
+        return {"structured_output": result}
 
-        # If the mocked result is already the full output, just return it.
-        if isinstance(result, AgentActionOutput):
-            return {"structured_output": result}
-
-        if result:
-            action_intent = getattr(result, "chosen_action_intent", "idle")
+    action_intent = "idle"
+    if result:
+        action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
         structured = cast(
@@ -166,7 +157,6 @@ async def generate_thought_and_message_node(
         structured = cast(
             AgentActionOutput | None,
             generate_structured_output("prompt", AgentActionOutput),
-
         )
 
     if structured:
