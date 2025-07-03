@@ -20,6 +20,58 @@ class DummyWebSocket:
         self.sent.append(text)
 
 
+def load_dashboard_backend():
+    import importlib
+    import sys
+    import types
+
+    if "fastapi" in sys.modules:
+        fastapi_mod = sys.modules["fastapi"]
+    else:
+        fastapi_mod = types.ModuleType("fastapi")
+        sys.modules["fastapi"] = fastapi_mod
+    if not hasattr(fastapi_mod, "FastAPI") or not hasattr(getattr(fastapi_mod, "FastAPI"), "post"):
+
+        class _FastAPI:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def get(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+            def post(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+            def websocket(self, *args: object, **kwargs: object):
+                def dec(fn):
+                    return fn
+
+                return dec
+
+        fastapi_mod.FastAPI = _FastAPI
+        fastapi_mod.Request = object
+        fastapi_mod.Response = object
+        fastapi_mod.WebSocket = object
+        fastapi_mod.WebSocketDisconnect = Exception
+
+        class _JSONResponse:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                self.body = json.dumps(args[0]).encode() if args else b""
+
+        responses_mod = types.ModuleType("fastapi.responses")
+        responses_mod.JSONResponse = _JSONResponse
+        sys.modules["fastapi.responses"] = responses_mod
+    if "src.interfaces.dashboard_backend" in sys.modules:
+        del sys.modules["src.interfaces.dashboard_backend"]
+    return importlib.import_module("src.interfaces.dashboard_backend")
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_stream_events_sse(monkeypatch: pytest.MonkeyPatch) -> None:

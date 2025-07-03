@@ -10,6 +10,7 @@ import {
   NetworkWeb,
   WorldMap,
   KpiCard,
+  EventConsole,
 } from './widgets'
 
 widgetRegistry.register('TimelineWidget', TimelineWidget)
