@@ -39,9 +39,11 @@ class SimulationDiscordBot:
     """
     A Discord bot that provides real-time updates about the Culture simulation.
 
-    This bot connects to a specified Discord channel and sends read-only updates
-    about simulation events, including Knowledge Board updates, agent messages,
-    role changes, and other significant state changes.
+    This bot connects to a specified Discord channel and sends updates about
+    simulation events, including Knowledge Board updates, agent messages, role
+    changes, and other significant state changes. Incoming Discord messages are
+    placed on the shared event queue and ultimately handled by
+    ``Simulation._handle_human_command``.
     """
 
     def __init__(
