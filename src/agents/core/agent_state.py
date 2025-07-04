@@ -3,12 +3,10 @@ import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import Any, Callable, Optional, Protocol, cast, TYPE_CHECKING
+from typing import Any, Optional, Protocol, cast, TYPE_CHECKING
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
 from typing_extensions import Self
-
-_Validator = Callable[..., Any]
 
 if TYPE_CHECKING:
     from pydantic import ConfigDict
@@ -20,19 +18,7 @@ else:
             """Fallback ``ConfigDict`` for pydantic < 2."""
             pass
 
-# Local imports (ensure these are correct and not causing cycles if possible)
-try:  # pragma: no cover - pydantic>=2 preferred
-    from pydantic import field_validator as pyd_field_validator, model_validator as pyd_model_validator
-
-    _field_validator: _Validator = pyd_field_validator
-    _model_validator: _Validator = pyd_model_validator
-    _PYDANTIC_V2 = True
-except Exception:  # pragma: no cover - fallback to pydantic<2
-    from pydantic import root_validator, validator
-
-    _model_validator = cast(_Validator, root_validator)
-    _field_validator = cast(_Validator, validator)
-    _PYDANTIC_V2 = False
+from src.shared.pydantic_compat import _PYDANTIC_V2, field_validator, model_validator
 
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
 from src.agents.core.roles import (
@@ -51,22 +37,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def field_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic field validators."""
-    if not _PYDANTIC_V2:
-        mode = kwargs.pop("mode", None)
-        if mode == "before":
-            kwargs["pre"] = True
-    return _field_validator(*args, **kwargs)
-
-
-def model_validator(*args: Any, **kwargs: Any) -> Any:
-    """Compatibility wrapper for Pydantic model validators."""
-    if not _PYDANTIC_V2:
-        mode = kwargs.pop("mode", None)
-        if mode == "before":
-            kwargs["pre"] = True
-    return _model_validator(*args, **kwargs)
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -592,7 +562,12 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     },
                 ),
             )
-        return base_model.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
+        return cast(
+            dict[str, Any],
+            base_model.dict(
+                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+            ),
+        )
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":

@@ -6,6 +6,8 @@ import importlib
 import logging
 from typing import Any
 
+from src.shared.pydantic_compat import _PYDANTIC_V2
+
 from .settings import ConfigSettings, settings
 
 logger = logging.getLogger(__name__)
@@ -230,10 +232,11 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     global settings, _CONFIG
     new_settings = ConfigSettings()
     if validate_required:
-        try:
-            raw_data = new_settings.model_dump()
-        except AttributeError:  # pragma: no cover - pydantic v1 fallback
-            raw_data = new_settings.dict()
+        raw_data = (
+            new_settings.model_dump()
+            if _PYDANTIC_V2
+            else new_settings.dict()
+        )
         missing = [key for key in REQUIRED_CONFIG_KEYS if str(raw_data.get(key, "")).strip() == ""]
 
     if validate_required:
@@ -242,10 +245,11 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
     data: dict[str, Any]
-    try:
-        data = settings.model_dump()  # type: ignore[attr-defined]
-    except AttributeError:  # pragma: no cover - pydantic v1 fallback
-        data = settings.dict()
+    data = (
+        settings.model_dump()  # type: ignore[attr-defined]
+        if _PYDANTIC_V2
+        else settings.dict()
+    )
     _CONFIG.update(data)
     return data
 
@@ -253,10 +257,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
     if key is None:
-        try:
-            return settings.model_dump()  # type: ignore[attr-defined]
-        except AttributeError:  # pragma: no cover - pydantic v1
-            return settings.dict()
+        return settings.model_dump() if _PYDANTIC_V2 else settings.dict()
     if key in _CONFIG and str(_CONFIG.get(key, "")).strip() != "":
         return _CONFIG[key]
     if hasattr(settings, key):

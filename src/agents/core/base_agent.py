@@ -67,6 +67,7 @@ else:  # pragma: no cover - optional runtime dependency
 
 
 from src.shared.memory_store import MemoryStore
+from src.shared.pydantic_compat import _PYDANTIC_V2
 from src.shared.typing import SimulationMessage
 
 from .agent_controller import AgentController
@@ -75,7 +76,7 @@ from .agent_controller import AgentController
 from .agent_graph_types import AgentActionOutput, AgentTurnState  # RESTORE THIS IMPORT
 
 # Import AgentState and AgentActionIntent first (no circular dependency)
-from .agent_state import _PYDANTIC_V2, AgentActionIntent, AgentState
+from .agent_state import AgentActionIntent, AgentState
 
 # Use TYPE_CHECKING to avoid circular import issues
 if TYPE_CHECKING:

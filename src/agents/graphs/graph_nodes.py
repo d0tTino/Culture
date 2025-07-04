@@ -167,19 +167,17 @@ async def generate_thought_and_message_node(
         action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
-        structured = cast(
-            AgentActionOutput | None,
-            generate_structured_output_from_intent(
-                action_intent,
-                "prompt",
-                AgentActionOutput,
-                agent_state=state.get("state"),
-            ),
+        structured = generate_structured_output_from_intent(
+            action_intent,
+            "prompt",
+            AgentActionOutput,
+            agent_state=state.get("state"),
         )
     except TypeError:
-        structured = cast(
-            AgentActionOutput | None,
-            generate_structured_output_from_intent(action_intent, "prompt", AgentActionOutput),
+        structured = generate_structured_output_from_intent(
+            action_intent,
+            "prompt",
+            AgentActionOutput,
         )
 
     if structured:
