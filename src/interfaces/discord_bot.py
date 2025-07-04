@@ -8,6 +8,8 @@ import logging
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+from typing_extensions import Self
+
 from src.infra import config
 from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
@@ -17,6 +19,9 @@ from src.interfaces.dashboard_backend import (
     message_sse_queue,
 )
 from src.utils.policy import allow_message, evaluate_with_opa
+
+# Backwards compatibility for tests expecting a module-level queue
+event_queue = get_event_queue()
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     import discord
@@ -30,7 +35,6 @@ else:  # pragma: no cover - runtime import with fallback
 
         discord = MagicMock()
         commands = MagicMock()
-from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 

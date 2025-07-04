@@ -16,10 +16,11 @@ class LLMMessage(TypedDict):
     content: str
 
 
-class LLMChatResponse(TypedDict):
+class LLMChatResponse(TypedDict, total=False):
     """Return type for Ollama chat calls."""
 
     message: LLMMessage
+    usage: JSONDict
 
 
 class ChatOptions(TypedDict, total=False):

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, c
 
 from src.shared.typing import (
     JSONDict,
+    JSONValue,
     LLMChatResponse,
     LLMClientMockResponses,
     LLMMessage,
@@ -252,7 +253,10 @@ def _create_vllm_client() -> OllamaClientProtocol:
             options: dict[str, Any] | None = None,
         ) -> LLMChatResponse:
             url = f"{VLLM_API_BASE.rstrip('/')}/v1/chat/completions"
-            payload: JSONDict = {"model": model, "messages": messages}
+            payload: JSONDict = {
+                "model": model,
+                "messages": cast(list[JSONValue], messages),
+            }
             if options:
                 if "temperature" in options:
                     payload["temperature"] = options["temperature"]
@@ -262,9 +266,10 @@ def _create_vllm_client() -> OllamaClientProtocol:
                     payload["max_tokens"] = options["num_predict"]
             resp = requests.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
             resp.raise_for_status()
-            data = resp.json()
-            message = data.get("choices", [{}])[0].get("message", {})
-            return {"message": message, "usage": data.get("usage", {})}
+            data = cast(JSONDict, resp.json())
+            choices = cast(list[JSONDict], data.get("choices", []))
+            message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
+            return {"message": cast(LLMMessage, message), "usage": cast(JSONDict, data.get("usage", {}))}
 
     return _Client()
 
@@ -740,11 +745,14 @@ def generate_structured_output(
             }
         response = requests.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
-        result: JSONDict = response.json()
+        result = cast(JSONDict, response.json())
         if USE_VLLM:
-            response_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            choices = cast(list[JSONDict], result.get("choices", []))
+            first_choice = choices[0] if choices else {}
+            message = cast(JSONDict, first_choice.get("message", {}))
+            response_text = str(message.get("content", ""))
         else:
-            response_text = result.get("response", "")
+            response_text = str(result.get("response", ""))
         logger.debug(f"FULL RAW LLM RESPONSE: {response_text}")
         try:
             logger.debug(f"Received potential JSON response from Ollama: {response_text}")
