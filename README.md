@@ -48,7 +48,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **Collective Metrics:** The simulation tracks collective IP and DU, and agents perceive these global metrics.
 * **Dynamic Roles & Basic Goals:** Agents can be assigned roles (Innovator, Analyzer, Facilitator) that influence their behavior and can dynamically request role changes.
 * **Basic Group/Project Affiliation:** Agents can propose, create, join, and leave projects.
-* **Initial Discord Output:** A read-only Discord bot interface provides real-time visibility into simulation events.
+* **Initial Discord Output:** A Discord bot interface provides real-time visibility into simulation events and routes any user messages through the shared event queue (see `Simulation._handle_human_command`).
 * **DSPy Integration:** Advanced prompt optimization using DSPy with local Ollama models.
 * **LLM Performance Monitoring:** Comprehensive monitoring of LLM call performance metrics.
 * **Memory Pruning System:** Sophisticated pruning to maintain optimal performance while preserving critical information.
