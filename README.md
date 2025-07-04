@@ -722,8 +722,8 @@ Run the full test suite (after installing development dependencies):
 ```bash
 python -m pytest tests/
 ```
-`pytest-xdist` is required for this command because the default `pytest.ini` uses `-n auto`.
-Install it via `requirements-dev.txt` if you haven't already.
+`pytest-xdist` enables parallel execution via the `-n auto` option in `pytest.ini`.
+`scripts/run_tests.py` checks for this plugin and strips `-n auto` if it isn't installed, so tests still run serially without it.
 These tests also rely on optional packages (`chromadb`, `weaviate-client`, `langgraph`) which are included in `requirements.txt` and installed in CI.
 Generate a coverage report:
 ```bash
