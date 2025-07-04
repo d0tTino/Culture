@@ -19,6 +19,23 @@ def have_module(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
+def strip_xdist_flags(args: list[str]) -> list[str]:
+    """Remove ``-n`` options if pytest-xdist is unavailable."""
+    cleaned: list[str] = []
+    skip = False
+    for part in args:
+        if skip:
+            skip = False
+            continue
+        if part == "-n":
+            skip = True
+            continue
+        if part.startswith("-n=") or part.startswith("-nauto") or part == "-nauto":
+            continue
+        cleaned.append(part)
+    return cleaned
+
+
 def main(argv: list[str]) -> int:
     has_xdist = have_module("xdist")
     has_asyncio = have_module("pytest_asyncio")
@@ -81,6 +98,8 @@ def main(argv: list[str]) -> int:
             modified = True
 
     cmd = [sys.executable, "-m", "pytest"]
+    if not has_asyncio:
+        cmd.extend(["-m", "not asyncio"])  # skip async tests when plugin absent
 
     if modified:
         with NamedTemporaryFile("w", delete=False) as tmp:
@@ -90,7 +109,7 @@ def main(argv: list[str]) -> int:
     else:
         cmd.extend(["-c", str(INI_FILE)])
 
-    cmd.extend(argv)
+    cmd.extend(strip_xdist_flags(argv) if not has_xdist else argv)
     return subprocess.call(cmd)
 
 
