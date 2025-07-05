@@ -33,6 +33,11 @@ export default function Sidebar() {
           </NavLink>
         </li>
         <li>
+          <NavLink to="/live-map" className={linkClass}>
+            Live Map
+          </NavLink>
+        </li>
+        <li>
           <NavLink to="/timeline" className={linkClass}>
             Timeline Widget
           </NavLink>
@@ -45,11 +50,6 @@ export default function Sidebar() {
         <li>
           <NavLink to="/kpi-card" className={linkClass}>
             KPI Card
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/memory" className={linkClass}>
-            Memory Explorer
           </NavLink>
         </li>
       </ul>
