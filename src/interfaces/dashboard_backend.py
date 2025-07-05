@@ -85,22 +85,24 @@ async def enqueue_message(msg: "AgentMessage") -> None:
     await message_sse_queue.put(msg)
 
 
-# Queue for general simulation events streamed via SSE/WebSocket.  The queue is
+# Queue for general simulation events streamed via SSE/WebSocket. The queue is
 # lazily created so it binds to the currently running event loop, avoiding
-# cross-loop issues in tests.
+# cross-loop issues in tests. If called outside of a running loop, a new loop is
+# created temporarily without being set globally.
 _event_queue: asyncio.Queue["SimulationEvent | None"] | None = None
+_event_queue_loop: asyncio.AbstractEventLoop | None = None
 
 
 def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
     """Return the shared event queue, creating it for the active loop."""
-    global _event_queue
+    global _event_queue, _event_queue_loop
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:  # pragma: no cover - no running loop
         loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    if _event_queue is None or getattr(_event_queue, "_loop", None) is not loop:  # type: ignore[attr-defined]
+    if _event_queue is None or _event_queue_loop is not loop:
         _event_queue = asyncio.Queue()
+        _event_queue_loop = loop
     return _event_queue
 
 
@@ -182,13 +184,6 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
     return JSONResponse({"summaries": summaries})
 
 
-@app.get("/api/widgets")
-async def list_widgets() -> Response:
-    """Return all registered widgets with metadata."""
-    return JSONResponse({"widgets": WIDGET_REGISTRY.list()})
-
-
-@app.post("/api/widgets")
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -202,6 +197,11 @@ async def register_widget(widget: dict[str, Any]) -> Response:
 async def register_widget_legacy(widget: dict[str, Any]) -> Response:
     """Backward compatible widget registration endpoint."""
     return await register_widget(widget)
+
+try:
+    app.post("/api/register_widget")(register_widget)
+except AttributeError:  # pragma: no cover - stub app may lack decorators
+    pass
 
 
 @app.websocket("/ws/events")
