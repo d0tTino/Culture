@@ -8,6 +8,7 @@
 ## Summary
 - [Vision](#vision-the-crucible-of-emergent-ai)
 - [Setup](#installation)
+- [Windows / WSL2 Setup](docs/windows_setup.md)
 - [Running Tests](#running-tests)
 - [culture-ui Frontend](#culture-ui-frontend)
 
@@ -48,7 +49,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **Collective Metrics:** The simulation tracks collective IP and DU, and agents perceive these global metrics.
 * **Dynamic Roles & Basic Goals:** Agents can be assigned roles (Innovator, Analyzer, Facilitator) that influence their behavior and can dynamically request role changes.
 * **Basic Group/Project Affiliation:** Agents can propose, create, join, and leave projects.
-* **Initial Discord Output:** A read-only Discord bot interface provides real-time visibility into simulation events.
+* **Initial Discord Output:** A Discord bot interface provides real-time visibility into simulation events and routes any user messages through the shared event queue (see `Simulation._handle_human_command`).
 * **DSPy Integration:** Advanced prompt optimization using DSPy with local Ollama models.
 * **LLM Performance Monitoring:** Comprehensive monitoring of LLM call performance metrics.
 * **Memory Pruning System:** Sophisticated pruning to maintain optimal performance while preserving critical information.
@@ -722,8 +723,8 @@ Run the full test suite (after installing development dependencies):
 ```bash
 python -m pytest tests/
 ```
-`pytest-xdist` is required for this command because the default `pytest.ini` uses `-n auto`.
-Install it via `requirements-dev.txt` if you haven't already.
+`pytest-xdist` enables parallel execution via the `-n auto` option in `pytest.ini`.
+`scripts/run_tests.py` checks for this plugin and strips `-n auto` if it isn't installed, so tests still run serially without it.
 These tests also rely on optional packages (`chromadb`, `weaviate-client`, `langgraph`) which are included in `requirements.txt` and installed in CI.
 Generate a coverage report:
 ```bash

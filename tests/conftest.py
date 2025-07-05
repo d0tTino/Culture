@@ -154,6 +154,37 @@ if "weaviate" not in sys.modules:
     sys.modules["weaviate"] = weaviate_mod
     sys.modules["weaviate.classes"] = classes_mod
 
+if "starlette" not in sys.modules:
+    try:  # pragma: no cover - optional dependency
+        import starlette  # noqa: F401
+    except ImportError:
+        starlette_mod = types.ModuleType("starlette")
+
+        class _WS:
+            async def accept(self) -> None:  # pragma: no cover - simple stub
+                pass
+
+            async def send_text(self, text: str) -> None:  # pragma: no cover - simple stub
+                pass
+
+        class _WSD(Exception):  # pragma: no cover - simple stub
+            pass
+
+        class _Resp:  # pragma: no cover - simple stub
+            def __init__(self, content: object = "", *args: object, **kwargs: object) -> None:
+                self.body = content
+
+        websockets_mod = types.ModuleType("starlette.websockets")
+        websockets_mod.WebSocket = _WS
+        websockets_mod.WebSocketDisconnect = _WSD
+        responses_mod = types.ModuleType("starlette.responses")
+        responses_mod.Response = _Resp
+        starlette_mod.websockets = websockets_mod
+        starlette_mod.responses = responses_mod
+        sys.modules["starlette"] = starlette_mod
+        sys.modules["starlette.websockets"] = websockets_mod
+        sys.modules["starlette.responses"] = responses_mod
+
 
 if "fastapi" not in sys.modules:
     try:  # pragma: no cover - optional dependency
@@ -166,6 +197,12 @@ if "fastapi" not in sys.modules:
                 pass
 
             def get(self, *args: object, **kwargs: object):
+                def decorator(fn: Callable[..., object]) -> Callable[..., object]:
+                    return fn
+
+                return decorator
+
+            def post(self, *args: object, **kwargs: object):
                 def decorator(fn: Callable[..., object]) -> Callable[..., object]:
                     return fn
 

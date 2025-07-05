@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-try:
-    from pydantic_settings import BaseSettings, SettingsConfigDict
-except Exception:  # pragma: no cover - optional dependency
-    from pydantic import BaseModel
+from typing import ClassVar
 
-    class BaseSettings(BaseModel):
-        """Fallback settings base class."""
-
-    SettingsConfigDict = dict  # type: ignore[misc]
+from src.shared.pydantic_compat import BaseSettings, SettingsConfigDict
 
 
 class ConfigSettings(BaseSettings):
@@ -120,7 +114,7 @@ class ConfigSettings(BaseSettings):
     MAX_AGENT_AGE: int = 100
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
-    ROLE_DU_GENERATION: dict[str, dict[str, float]] = {
+    ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
         "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
         "Innovator": {"base": 1.0, "bonus_factor": 0.5},
         "Analyzer": {"base": 1.0, "bonus_factor": 0.2},
