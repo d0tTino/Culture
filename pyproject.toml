@@ -74,8 +74,8 @@ exclude = [
     , "dspy_ai/.*"
 
 ]
-# Only type-check the application source code for now
-files = ["src"]
+# Include stubs to catch issues early
+files = ["src", "stubs"]
 # Temporarily disable the Pydantic mypy plugin due to compatibility issues
 # plugins = ["pydantic.mypy"]
 strict = true  # Global strict typing
