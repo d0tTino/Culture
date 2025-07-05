@@ -1,6 +1,9 @@
-"""
-Discord bot interface for the Culture simulation.
-Provides real-time updates about the simulation to a Discord channel.
+"""Discord bot interface for the Culture simulation.
+
+Provides real-time updates about the simulation to a Discord channel and
+forwards user messages to :meth:`Simulation._handle_human_command`. Messages
+prefixed with ``/broadcast`` will be delivered to all agents, incurring a single
+IP/DU cost for the currently active agent.
 """
 
 import asyncio
