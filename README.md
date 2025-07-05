@@ -8,6 +8,7 @@
 ## Summary
 - [Vision](#vision-the-crucible-of-emergent-ai)
 - [Setup](#installation)
+- [Windows / WSL2 Setup](docs/windows_setup.md)
 - [Running Tests](#running-tests)
 - [culture-ui Frontend](#culture-ui-frontend)
 
