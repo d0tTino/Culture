@@ -254,33 +254,73 @@ class Simulation:
         if not self.agents:
             return
 
+        broadcast = False
+        if text.startswith("/broadcast "):
+            broadcast = True
+            text = text[len("/broadcast ") :].strip()
+
         target = self.agents[self.current_agent_index]
         state = target.state
-        ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE"))
-        du_cost = float(config.get_config("DU_COST_PER_ACTION"))
+        if broadcast:
+            ip_cost = float(
+                config.get_config("IP_COST_BROADCAST_MESSAGE")
+                or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+            )
+            du_cost = float(
+                config.get_config("DU_COST_BROADCAST_ACTION")
+                or config.get_config("DU_COST_PER_ACTION")
+            )
+        else:
+            ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE"))
+            du_cost = float(config.get_config("DU_COST_PER_ACTION"))
 
         if state.ip < ip_cost or state.du < du_cost:
-            logger.info("Rejecting human command for %s: insufficient resources", target.agent_id)
+            logger.info(
+                "Rejecting human %s for %s: insufficient resources",
+                "broadcast" if broadcast else "command",
+                target.agent_id,
+            )
             return
 
         state.ip -= ip_cost
         state.du -= du_cost
         try:
-            await ledger.spend(target.agent_id, ip=ip_cost, du=du_cost, reason="human_dm")
+            await ledger.spend(
+                target.agent_id,
+                ip=ip_cost,
+                du=du_cost,
+                reason="human_broadcast" if broadcast else "human_dm",
+            )
         except Exception:  # pragma: no cover - optional
             logger.debug("Ledger spend failed", exc_info=True)
 
-        msg = {
-            "step": self.current_step,
-            "sender_id": "human",
-            "recipient_id": target.agent_id,
-            "content": text,
-            "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
-            "sentiment_score": None,
-        }
+        msgs = []
+        if broadcast:
+            for ag in self.agents:
+                msgs.append(
+                    {
+                        "step": self.current_step,
+                        "sender_id": "human",
+                        "recipient_id": ag.agent_id,
+                        "content": text,
+                        "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
+                        "sentiment_score": None,
+                    }
+                )
+        else:
+            msgs.append(
+                {
+                    "step": self.current_step,
+                    "sender_id": "human",
+                    "recipient_id": target.agent_id,
+                    "content": text,
+                    "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
+                    "sentiment_score": None,
+                }
+            )
         async with self._msg_lock:
-            self.pending_messages_for_next_round.append(msg)
-            self.messages_to_perceive_this_round.append(msg)
+            self.pending_messages_for_next_round.extend(msgs)
+            self.messages_to_perceive_this_round.extend(msgs)
 
     async def _forward_external_events(self: Self) -> None:
         """Background task that forwards events from ``event_queue``."""
@@ -453,7 +493,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -468,9 +510,9 @@ class Simulation:
         async with self._msg_lock:
             perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
         if self.knowledge_board:
-            perception_data["knowledge_board_content"] = (
-                self.knowledge_board.get_recent_entries_for_prompt()
-            )
+            perception_data[
+                "knowledge_board_content"
+            ] = self.knowledge_board.get_recent_entries_for_prompt()
 
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,

@@ -42,7 +42,9 @@ class ConfigSettings(BaseSettings):
     MAX_RELATIONSHIP_SCORE: float = 1.0
     MOOD_UPDATE_RATE: float = 0.2
     IP_COST_SEND_DIRECT_MESSAGE: float = 1.0
+    IP_COST_BROADCAST_MESSAGE: float = 1.0
     DU_COST_PER_ACTION: float = 1.0
+    DU_COST_BROADCAST_ACTION: float = 1.0
     ROLE_CHANGE_COOLDOWN: int = 3
     IP_AWARD_FOR_PROPOSAL: int = 5
     IP_COST_TO_POST_IDEA: int = 2

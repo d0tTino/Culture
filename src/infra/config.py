@@ -48,7 +48,9 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MAX_RELATIONSHIP_SCORE": 1.0,
     "MOOD_UPDATE_RATE": 0.2,
     "IP_COST_SEND_DIRECT_MESSAGE": 1.0,
+    "IP_COST_BROADCAST_MESSAGE": 1.0,
     "DU_COST_PER_ACTION": 1.0,
+    "DU_COST_BROADCAST_ACTION": 1.0,
     "ROLE_CHANGE_COOLDOWN": 3,
     "IP_AWARD_FOR_PROPOSAL": 5,
     "IP_COST_TO_POST_IDEA": 2,
@@ -152,7 +154,9 @@ FLOAT_CONFIG_KEYS = [
     "MAX_RELATIONSHIP_SCORE",
     "MOOD_UPDATE_RATE",
     "IP_COST_SEND_DIRECT_MESSAGE",
+    "IP_COST_BROADCAST_MESSAGE",
     "DU_COST_PER_ACTION",
+    "DU_COST_BROADCAST_ACTION",
     "ROLE_CHANGE_IP_COST",
     "MAX_IP_PER_TICK",
     "MAX_DU_PER_TICK",
@@ -232,11 +236,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     global settings, _CONFIG
     new_settings = ConfigSettings()
     if validate_required:
-        raw_data = (
-            new_settings.model_dump()
-            if _PYDANTIC_V2
-            else new_settings.dict()
-        )
+        raw_data = new_settings.model_dump() if _PYDANTIC_V2 else new_settings.dict()
         missing = [key for key in REQUIRED_CONFIG_KEYS if str(raw_data.get(key, "")).strip() == ""]
 
     if validate_required:
@@ -245,11 +245,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     settings = new_settings
     data: dict[str, Any]
-    data = (
-        settings.model_dump()  # type: ignore[attr-defined]
-        if _PYDANTIC_V2
-        else settings.dict()
-    )
+    data = settings.model_dump() if _PYDANTIC_V2 else settings.dict()  # type: ignore[attr-defined]
     _CONFIG.update(data)
     return data
 
