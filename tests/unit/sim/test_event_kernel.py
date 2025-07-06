@@ -1,5 +1,9 @@
+import asyncio
+from typing import Any
+
 import pytest
 
+from src.interfaces.dashboard_backend import SimulationEvent
 from src.sim.event_kernel import EventKernel
 from src.sim.version_vector import VersionVector
 
@@ -100,3 +104,60 @@ async def test_schedule_in_future() -> None:
     events += await kernel.dispatch(1)
     assert order == [1, 2, 3]
     assert [e.step for e in events] == [0, 1, 2]
+
+
+@pytest.mark.asyncio
+async def test_emit_environment_event_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    kernel = EventKernel()
+    events: dict[str, Any] = {}
+
+    async def fake_emit_event(evt: Any) -> None:
+        events["event"] = evt
+
+    async def fake_emit_map_action(agent_id: str, step: int, action: str, **details: Any) -> None:
+        events["map_called"] = True
+
+    monkeypatch.setattr("src.interfaces.dashboard_backend.emit_event", fake_emit_event)
+    monkeypatch.setattr(
+        "src.sim.event_kernel.emit_map_action_event",
+        fake_emit_map_action,
+    )
+    monkeypatch.setattr(
+        "src.infra.event_log.log_event",
+        lambda e: {**e, "trace_hash": "x"},
+    )
+
+    event = {
+        "type": "map_action",
+        "agent_id": "A",
+        "step": 1,
+        "action": "move",
+        "position": (1, 0),
+    }
+
+    await kernel.emit_environment_event(event)
+
+    assert events.get("map_called") is True
+
+
+@pytest.mark.asyncio
+async def test_forward_external_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    queue: asyncio.Queue[SimulationEvent | None] = asyncio.Queue()
+
+    monkeypatch.setattr(
+        "src.interfaces.dashboard_backend.get_event_queue",
+        lambda: queue,
+    )
+
+    kernel = EventKernel()
+    received: list[str] = []
+
+    async def handler(text: str) -> None:
+        received.append(text)
+
+    task = asyncio.create_task(kernel.forward_external_events(handler))
+    await queue.put(SimulationEvent(event_type="broadcast", data={"content": "hi"}))
+    await queue.put(None)
+    await task
+
+    assert received == ["hi"]
