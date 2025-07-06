@@ -269,7 +269,10 @@ def _create_vllm_client() -> OllamaClientProtocol:
             data = cast(JSONDict, resp.json())
             choices = cast(list[JSONDict], data.get("choices", []))
             message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
-            return {"message": cast(LLMMessage, message), "usage": cast(JSONDict, data.get("usage", {}))}
+            return {
+                "message": cast(LLMMessage, message),
+                "usage": cast(JSONDict, data.get("usage", {})),
+            }
 
     return _Client()
 
@@ -291,7 +294,31 @@ else:
 
 
 def get_ollama_client() -> OllamaClientProtocol | None:
-    """Return the initialized Ollama client instance if available."""
+    """Return the initialized LLM client, switching backends if needed."""
+    global client, VLLM_API_BASE, USE_VLLM
+    env_base = os.environ.get("VLLM_API_BASE")
+
+    if env_base:
+        if not USE_VLLM or env_base != VLLM_API_BASE:
+            VLLM_API_BASE = env_base
+            USE_VLLM = True
+            logger.info("Switching to vLLM client for base %s", VLLM_API_BASE)
+            client = _create_vllm_client()
+    elif USE_VLLM:
+        USE_VLLM = False
+        VLLM_API_BASE = None
+        try:
+            client = cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
+            logger.info("Switching to Ollama client for host %s", OLLAMA_API_BASE)
+        except (APIError, RequestException) as e:  # pragma: no cover - optional
+            logger.error(
+                "Failed to initialize Ollama client for host %s: %s",
+                OLLAMA_API_BASE,
+                e,
+                exc_info=True,
+            )
+            client = None
+
     if client is None:
         logger.error("Ollama client is not available. Check connection and configuration.")
     return client

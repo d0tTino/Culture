@@ -75,6 +75,7 @@ exclude = [
 
 ]
 # Type-check src and stubs directories
+
 files = ["src", "stubs"]
 # Temporarily disable the Pydantic mypy plugin due to compatibility issues
 # plugins = ["pydantic.mypy"]

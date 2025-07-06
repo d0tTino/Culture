@@ -44,15 +44,19 @@ Create a virtual environment for the project:
 
 ```bash
 python3.10 -m venv venv
-source venv/bin/activate  # Linux/macOS
-# Windows:
-.\venv\Scripts\activate.bat  # or .venv\Scripts\activate.bat
+source venv/bin/activate  # run this inside your WSL2 shell
+# Windows command prompt or PowerShell:
+venv\Scripts\activate.bat  # use .venv\Scripts\activate.bat if the folder is named `.venv`
 ```
 Activate the environment whenever you open a new terminal before running any
-Python commands:
+Python commands. Use the appropriate command for your shell:
+
+```bash
+source venv/bin/activate  # WSL2
+```
 
 ```cmd
-.\venv\Scripts\activate.bat
+venv\Scripts\activate.bat
 ```
 
 Alternatively, run the helper script to automatically create `.venv` and
@@ -132,14 +136,17 @@ This script mirrors `scripts/start_vllm.sh` and honors the `VLLM_MODEL`,
    ```bash
    python -m examples.walking_vertical_slice
    ```
-   On Windows you can instead run the convenience script:
+   On Windows you can instead run the convenience script from a command
+   prompt or PowerShell window:
    ```cmd
    scripts\vertical_slice.bat
    ```
 
-   Before running the batch script copy `.env.example` to `.env` and set
-   `OLLAMA_API_BASE` to your Ollama instance URL. Once **Issue&nbsp;1** is fixed
-   the script will automatically load variables from `.env`.
+   This batch file automatically calls `venv\Scripts\activate.bat` (or
+   `.venv\Scripts\activate.bat`) to activate your virtual environment before
+   launching the demo. Copy `.env.example` to `.env` and set
+   `OLLAMA_API_BASE` to your Ollama instance URL so the script can load the
+   correct configuration.
 
 The script checks for both `venv` and `.venv` directories and activates the first one it finds.
 

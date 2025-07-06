@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
-import { widgetRegistry } from './lib/widgetRegistry'
+import { widgetRegistry, loadRemoteWidgets } from './lib/widgetRegistry'
 import {
   TimelineWidget,
   BreakpointList,
@@ -19,6 +19,8 @@ widgetRegistry.register('WorldMap', WorldMap)
 widgetRegistry.register('KpiCard', KpiCard)
 widgetRegistry.register('Breakpoints', BreakpointList)
 widgetRegistry.register('Events', EventConsole)
+
+void loadRemoteWidgets();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

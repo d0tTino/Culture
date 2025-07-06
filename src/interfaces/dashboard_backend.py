@@ -1,4 +1,3 @@
-# ruff: noqa: ANN101
 import asyncio
 
 # Skip self argument annotation warnings in stub classes
@@ -6,6 +5,8 @@ import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
+
+from .widget_registry import WidgetRegistry
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -84,30 +85,33 @@ async def enqueue_message(msg: "AgentMessage") -> None:
     await message_sse_queue.put(msg)
 
 
-# Queue for general simulation events streamed via SSE/WebSocket.  The queue is
+# Queue for general simulation events streamed via SSE/WebSocket. The queue is
 # lazily created so it binds to the currently running event loop, avoiding
-# cross-loop issues in tests.
+# cross-loop issues in tests. If called outside of a running loop, a new loop is
+# created temporarily without being set globally.
 _event_queue: asyncio.Queue["SimulationEvent | None"] | None = None
+_event_queue_loop: asyncio.AbstractEventLoop | None = None
 
 
 def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
     """Return the shared event queue, creating it for the active loop."""
-    global _event_queue
+    global _event_queue, _event_queue_loop
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:  # pragma: no cover - no running loop
         loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    if _event_queue is None or getattr(_event_queue, "_loop", None) is not loop:  # type: ignore[attr-defined]
+    if _event_queue is None or _event_queue_loop is not loop:
         _event_queue = asyncio.Queue()
+        _event_queue_loop = loop
     return _event_queue
 
 
 # Simulation control state
 SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}
 BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
-# Names of widgets registered by the UI or plugins
-REGISTERED_WIDGETS: set[str] = set()
+
+# Registry of widgets registered by the UI or plugins
+WIDGET_REGISTRY = WidgetRegistry()
 
 # Path to the initial missions data bundled with the front-end
 MISSIONS_PATH = (
@@ -180,13 +184,24 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
     return JSONResponse({"summaries": summaries})
 
 
-@app.post("/api/register_widget")
 async def register_widget(widget: dict[str, Any]) -> Response:
-    """Register a widget name provided by the UI or a plugin."""
+    """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
     if isinstance(name, str):
-        REGISTERED_WIDGETS.add(name)
-    return JSONResponse({"widgets": sorted(REGISTERED_WIDGETS)})
+        meta = {k: v for k, v in widget.items() if k != "name"}
+        WIDGET_REGISTRY.register(name, meta)
+    return JSONResponse({"widgets": WIDGET_REGISTRY.list()})
+
+
+@app.post("/api/register_widget")
+async def register_widget_legacy(widget: dict[str, Any]) -> Response:
+    """Backward compatible widget registration endpoint."""
+    return await register_widget(widget)
+
+try:
+    app.post("/api/register_widget")(register_widget)
+except AttributeError:  # pragma: no cover - stub app may lack decorators
+    pass
 
 
 @app.websocket("/ws/events")
@@ -290,7 +305,7 @@ async def emit_map_action_event(
 
 
 __all__ = [
-    "REGISTERED_WIDGETS",
+    "WIDGET_REGISTRY",
     "EventSourceResponse",
     "SimulationEvent",
     "app",
@@ -298,6 +313,7 @@ __all__ = [
     "emit_map_action_event",
     "enqueue_message",
     "get_event_queue",
+    "list_widgets",
     "message_sse_queue",
     "register_widget",
 ]
