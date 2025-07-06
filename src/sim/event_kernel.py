@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import heapq
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from typing_extensions import Self
 
+from src.infra.event_log import log_event
 from src.infra.snapshot import compute_trace_hash
+from src.interfaces.dashboard_backend import (
+    SimulationEvent,
+    emit_event,
+    emit_map_action_event,
+    get_event_queue,
+)
 
 from .version_vector import VersionVector
 
@@ -211,3 +219,44 @@ class EventKernel:
 
     def empty(self: Self) -> bool:
         return not self._queue
+
+    async def emit_environment_event(self: Self, event: dict[str, Any]) -> None:
+        """Log and forward an environment event."""
+        event_with_hash = log_event(event)
+        if event_with_hash is None:
+            event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
+        if event.get("type") == "map_action":
+            await emit_map_action_event(
+                event.get("agent_id", ""),
+                event.get("step", 0),
+                event.get("action", ""),
+                **{
+                    k: v
+                    for k, v in event.items()
+                    if k not in {"type", "agent_id", "step", "action", "trace_hash"}
+                },
+            )
+        else:
+            await emit_event(SimulationEvent(event_type=event["type"], data=event_with_hash))
+
+    async def forward_external_events(
+        self: Self, handler: Callable[[str], Awaitable[None]]
+    ) -> None:
+        """Forward broadcast events from the shared queue to ``handler``.
+
+        This coroutine listens indefinitely on the global event queue and
+        passes the ``content`` of any broadcast events to ``handler``. The
+        loop exits when the queue yields ``None``.
+        """
+        queue = get_event_queue()
+        try:
+            while True:
+                evt: SimulationEvent | None = await queue.get()
+                if evt is None:
+                    break
+                if evt.event_type == "broadcast" and evt.data:
+                    content = evt.data.get("content")
+                    if isinstance(content, str):
+                        await handler(content)
+        except asyncio.CancelledError:
+            pass

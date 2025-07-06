@@ -29,7 +29,6 @@ from src.infra.snapshot import (
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
-    emit_map_action_event,
     get_event_queue,
 )
 from src.shared.typing import SimulationMessage
@@ -209,7 +208,9 @@ class Simulation:
         except RuntimeError:
             self._event_task = None
         else:
-            self._event_task = asyncio.create_task(self._forward_external_events())
+            self._event_task = asyncio.create_task(
+                self.event_kernel.forward_external_events(self._handle_human_command)
+            )
 
     # Add method to update collective metrics
     def _update_collective_metrics(self: Self) -> None:
@@ -281,22 +282,6 @@ class Simulation:
         async with self._msg_lock:
             self.pending_messages_for_next_round.append(msg)
             self.messages_to_perceive_this_round.append(msg)
-
-    async def _forward_external_events(self: Self) -> None:
-        """Background task that forwards events from ``event_queue``."""
-        queue = get_event_queue()
-        try:
-            queue = get_event_queue()
-            while True:
-                evt: SimulationEvent | None = await queue.get()
-                if evt is None:
-                    break
-                if evt.event_type == "broadcast" and evt.data:
-                    content = evt.data.get("content")
-                    if isinstance(content, str):
-                        await self._handle_human_command(content)
-        except asyncio.CancelledError:  # pragma: no cover - task cancelled
-            pass
 
     async def spawn_agent(
         self: Self,
@@ -693,27 +678,6 @@ class Simulation:
     def _create_agent_event(self: Self, agent_index: int) -> Callable[[], Awaitable[None]]:
         return lambda: self._run_agent_turn(agent_index)
 
-    async def _emit_environment_event(self: Self, event: dict[str, Any]) -> None:
-        event_with_hash = log_event(event)
-        if event_with_hash is None:
-            event_with_hash = {
-                **event,
-                "trace_hash": compute_trace_hash(event),
-            }
-        if event.get("type") == "map_action":
-            await emit_map_action_event(
-                event.get("agent_id", ""),
-                event.get("step", 0),
-                event.get("action", ""),
-                **{
-                    k: v
-                    for k, v in event.items()
-                    if k not in {"type", "agent_id", "step", "action", "trace_hash"}
-                },
-            )
-        else:
-            await emit_event(SimulationEvent(event_type=event["type"], data=event_with_hash))
-
     async def _prune_memory_event(self: Self) -> None:
         if not self.vector_store_manager:
             return
@@ -723,7 +687,7 @@ class Simulation:
                 "type": "memory_prune",
                 "step": self.current_step,
             }
-            await self._emit_environment_event(event)
+            await self.event_kernel.emit_environment_event(event)
         except (ChromaDBException, ValidationError, OSError) as exc:
             logger.error("Failed to prune memory store: %s", exc)
 
@@ -744,7 +708,7 @@ class Simulation:
             "step": self.current_step,
             "start": start_step,
         }
-        await self._emit_environment_event(event)
+        await self.event_kernel.emit_environment_event(event)
 
     async def _event_listener_loop(self: Self) -> None:
         """Continuously process events from the shared queue."""
