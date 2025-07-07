@@ -67,3 +67,4 @@ async def test_role_change_grants_extra_turn() -> None:
     assert agent_a.turns == 2
     assert agent_b.turns == 0
     assert sim.current_agent_index == 1
+    sim.close()

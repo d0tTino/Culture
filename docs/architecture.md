@@ -321,8 +321,6 @@ This node:
 
 Several nodes manage the memory lifecycle:
 - `_maybe_consolidate_memories`: Triggers L1/L2 summary generation
-- `_maybe_prune_l1_memories`: Age-based L1 memory pruning
-- `_maybe_prune_l2_memories`: Age-based L2 memory pruning
 - `_maybe_prune_l1_memories_mus`: MUS-based L1 memory pruning
 - `_maybe_prune_l2_memories_mus`: MUS-based L2 memory pruning
 

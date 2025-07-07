@@ -148,6 +148,10 @@ async def test_forward_external_events(monkeypatch: pytest.MonkeyPatch) -> None:
         "src.interfaces.dashboard_backend.get_event_queue",
         lambda: queue,
     )
+    monkeypatch.setattr(
+        "src.sim.event_kernel.get_event_queue",
+        lambda: queue,
+    )
 
     kernel = EventKernel()
     received: list[str] = []

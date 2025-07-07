@@ -74,6 +74,7 @@ async def test_human_command_deducts_resources(
     assert du == pytest.approx(1.0)
     async with sim._msg_lock:
         assert sim.pending_messages_for_next_round[-1]["content"] == "hello"
+    sim.close()
 
 
 @pytest.mark.asyncio
@@ -100,3 +101,4 @@ async def test_human_command_rejected_without_resources(
     assert du == pytest.approx(0.5)
     async with sim._msg_lock:
         assert sim.pending_messages_for_next_round == []
+    sim.close()

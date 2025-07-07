@@ -42,6 +42,7 @@ def main(argv: list[str]) -> int:
     # Install dependencies if any are missing unless skipped via env var
     required = [
         "fastapi",
+        "pytest_asyncio",
         "sqlalchemy",
         "zstandard",
         "requests",

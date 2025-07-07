@@ -139,8 +139,12 @@ class SimulationEvent(BaseModel):
 app = FastAPI()
 
 
-@app.get("/stream/messages")
-async def stream_messages(request: Request) -> EventSourceResponse:
+@app.get(
+    "/stream/messages",
+    response_class=EventSourceResponse,
+    response_model=None,
+)
+async def stream_messages(request: Request) -> Response:
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         while True:
             if await request.is_disconnected():
@@ -197,6 +201,7 @@ async def register_widget(widget: dict[str, Any]) -> Response:
 async def register_widget_legacy(widget: dict[str, Any]) -> Response:
     """Backward compatible widget registration endpoint."""
     return await register_widget(widget)
+
 
 try:
     app.post("/api/register_widget")(register_widget)
@@ -313,7 +318,6 @@ __all__ = [
     "emit_map_action_event",
     "enqueue_message",
     "get_event_queue",
-    "list_widgets",
     "message_sse_queue",
     "register_widget",
 ]
