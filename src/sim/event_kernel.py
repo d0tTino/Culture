@@ -251,7 +251,12 @@ class EventKernel:
         queue = get_event_queue()
         try:
             while True:
-                evt: SimulationEvent | None = await queue.get()
+                try:
+                    evt: SimulationEvent | None = await queue.get()
+                except RuntimeError as exc:
+                    if "Event loop is closed" in str(exc):
+                        break
+                    raise
                 if evt is None:
                     break
                 if evt.event_type == "broadcast" and evt.data:

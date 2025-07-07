@@ -128,8 +128,8 @@ async def test_agent_state() -> None:
                 logger.info(f"Current role from state: {agent.state.role}")
                 logger.info(f"Most recent role change: {agent.state.role_history[-1]}")
                 # Check logged history details
-
     finally:
+        sim.close()
         mock_llm_cm.__exit__(None, None, None)
 
 

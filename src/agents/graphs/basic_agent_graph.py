@@ -320,14 +320,6 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
     return updated_state_dict
 
 
-def _maybe_prune_l1_memories(state: AgentTurnState) -> dict[str, Any]:
-    return dict(state)
-
-
-def _maybe_prune_l2_memories(state: AgentTurnState) -> dict[str, Any]:
-    return dict(state)
-
-
 def _format_messages(messages: list[dict[str, Any]]) -> str:
     if not messages:
         return "  No messages were perceived in the previous step."

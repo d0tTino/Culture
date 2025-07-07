@@ -34,6 +34,7 @@ def model_validator(*args: Any, **kwargs: Any) -> Any:
             kwargs["pre"] = True
     return _model_validator(*args, **kwargs)
 
+
 try:
     from pydantic_settings import (
         BaseSettings as _PydanticBaseSettings,
@@ -49,5 +50,5 @@ except Exception:  # pragma: no cover - optional dependency
 
     _SettingsConfigDict = _FallbackSettingsConfigDict
 
-BaseSettings = _PydanticBaseSettings
-SettingsConfigDict = _SettingsConfigDict  # type: ignore[misc]
+BaseSettings = _PydanticBaseSettings  # type: ignore[assignment]
+SettingsConfigDict = _SettingsConfigDict  # type: ignore[assignment]

@@ -65,3 +65,4 @@ async def test_logs_use_start_values(caplog: pytest.LogCaptureFixture) -> None:
     messages = [rec.getMessage() for rec in caplog.records]
     assert any("IP: 1.0 (from 0.0)" in m for m in messages)
     assert any("DU: 2.0 (from 0.0)" in m for m in messages)
+    sim.close()
