@@ -17,7 +17,15 @@ import uuid
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
+
+if TYPE_CHECKING:
+    from neo4j import Driver
+else:  # pragma: no cover - fallback if neo4j not installed
+    try:
+        from neo4j import Driver
+    except Exception:  # pragma: no cover - defensive
+        Driver = object
 
 from pydantic import ValidationError
 from typing_extensions import Self
@@ -96,6 +104,7 @@ class ChromaVectorStoreManager(MemoryStore):
         self: Self,
         persist_directory: str = "./chroma_db",
         embedding_function: Any | None = None,
+        semantic_driver: Driver | None = None,
     ) -> None:
         """Initialize the vector store manager.
 
@@ -105,6 +114,9 @@ class ChromaVectorStoreManager(MemoryStore):
                 provided, ``SentenceTransformerEmbeddingFunction`` is used. This
                 parameter allows tests to provide a lightweight stub so that the
                 heavy ``sentence-transformers`` dependency isn't required.
+            semantic_driver: Neo4j driver used for retrieving semantic summaries.
+                This is optional and can be ``None`` when semantic summaries are
+                not persisted via Neo4j.
         """
         # Ensure the directory exists
         persist_path = ensure_dir(persist_directory)
@@ -126,6 +138,7 @@ class ChromaVectorStoreManager(MemoryStore):
                 embedding_function = _dummy_embedding
 
         self.embedding_function: Any = embedding_function
+        self.semantic_driver = semantic_driver
 
         # Initialize the persistent ChromaDB client
         logger.info(f"Initializing ChromaDB client with persistence directory: {persist_path}")
@@ -1426,3 +1439,23 @@ class ChromaVectorStoreManager(MemoryStore):
                 exc_info=True,
             )
             return []
+
+    # ------------------------------------------------------------------
+    # Semantic summaries interface
+    # ------------------------------------------------------------------
+    def get_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
+        """Return recent semantic summaries stored via the semantic driver."""
+        if self.semantic_driver is None:
+            return []
+        with self.semantic_driver.session() as session:
+            records = session.run(
+                """
+                MATCH (a:Agent {id: $agent_id})-[:HAS_SEMANTIC]->(s:SemanticMemory)
+                RETURN s.summary AS summary
+                ORDER BY s.created_at DESC
+                LIMIT $limit
+                """,
+                agent_id=agent_id,
+                limit=limit,
+            )
+            return [record["summary"] for record in records]

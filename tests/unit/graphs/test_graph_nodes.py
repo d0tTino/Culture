@@ -58,6 +58,9 @@ class DummyManager:
     ) -> list[dict[str, str]]:
         return [{"content": "m1"}, {"content": "m2"}]
 
+    def get_semantic_summaries(self, agent_id: str, limit: int = 2) -> list[str]:
+        return ["sem1"]
+
 
 class DummyAgent:
     async def async_generate_l1_summary(

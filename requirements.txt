@@ -406,6 +406,8 @@ pyyaml==6.0.2
     #   langchain-core
     #   optuna
     #   uvicorn
+pytest-asyncio==0.23.8
+    # via -r requirements-dev.in
 redis==6.2.0
     # via -r requirements.in
 referencing==0.36.2

@@ -79,14 +79,16 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
     manager = cast(MemoryRetriever | None, state.get("vector_store_manager"))
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
-    semantic_manager = cast(SemanticMemoryManager | None, state.get("semantic_manager"))
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
     memories = await manager.aretrieve_relevant_memories(state["agent_id"], query="", k=5)
     memories_content = [m.get("content", "") for m in memories]
-    if semantic_manager:
-        semantic = semantic_manager.get_recent_summaries(state["agent_id"], limit=2)
-        memories_content.extend(semantic)
+    if hasattr(manager, "get_semantic_summaries"):
+        try:
+            semantic = cast(Any, manager).get_semantic_summaries(state["agent_id"], limit=2)
+            memories_content.extend(semantic)
+        except Exception:  # pragma: no cover - defensive
+            pass
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
     summary_result = await agent.async_generate_l1_summary(

@@ -1,6 +1,11 @@
 # Changelog
 
+
 All notable changes to this project will be documented in this file.
+
+## [0.2.1] - 2025-07-08
+### Fixed
+- Added ``pytest-asyncio`` to runtime requirements so asynchronous tests run without plugin errors.
 
 ## [0.2.0] - 2025-07-01
 ### Added
