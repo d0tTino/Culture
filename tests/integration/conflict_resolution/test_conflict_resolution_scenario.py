@@ -16,6 +16,8 @@ if str(project_root) not in sys.path:
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 try:
     import dspy  # pragma: no cover - optional dependency
 except Exception:
