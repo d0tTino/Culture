@@ -79,3 +79,12 @@ The UI includes pages for monitoring active missions and reviewing agent data:
 - **Agent Data Overview** – lists observations, messages and other data gathered by agents.
 
 Screenshots will be added to this README as these pages mature.
+
+## Storyboard Widget
+
+The Storyboard widget streams simulation events from `/stream/events` and
+displays agent coordinates and current mood values. A "Summaries" tab fetches
+recent memory summaries for the selected agent via
+`/api/agents/{id}/semantic_summaries`.
+
+Run the development server and navigate to `/storyboard` to see it in action.
