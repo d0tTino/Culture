@@ -107,7 +107,12 @@ def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
 
 
 # Simulation control state
-SIM_STATE: dict[str, Any] = {"paused": False, "speed": 1.0, "semantic_manager": None}
+SIM_STATE: dict[str, Any] = {
+    "paused": False,
+    "speed": 1.0,
+    "semantic_manager": None,
+    "simulation": None,
+}
 BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
 
 # Registry of widgets registered by the UI or plugins
@@ -134,6 +139,11 @@ class SimulationEvent(BaseModel):
 
     event_type: str
     data: dict[str, Any] | None = None
+
+
+class LawProposal(BaseModel):
+    proposer_id: str
+    text: str
 
 
 app = FastAPI()
@@ -186,6 +196,19 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
         except Exception:  # pragma: no cover - defensive
             summaries = []
     return JSONResponse({"summaries": summaries})
+
+
+@app.post("/api/propose_law")
+async def api_propose_law(proposal: LawProposal) -> Response:
+    """Submit a law proposal to the active simulation."""
+    sim = SIM_STATE.get("simulation")
+    approved = False
+    if sim is not None:
+        try:
+            approved = await sim.propose_law(proposal.proposer_id, proposal.text)
+        except Exception:  # pragma: no cover - defensive
+            approved = False
+    return JSONResponse({"approved": approved})
 
 
 async def register_widget(widget: dict[str, Any]) -> Response:
@@ -312,7 +335,9 @@ async def emit_map_action_event(
 __all__ = [
     "WIDGET_REGISTRY",
     "EventSourceResponse",
+    "LawProposal",
     "SimulationEvent",
+    "api_propose_law",
     "app",
     "emit_event",
     "emit_map_action_event",

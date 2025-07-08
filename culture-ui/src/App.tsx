@@ -8,6 +8,7 @@ import MemoryExplorerPage from './pages/MemoryExplorer'
 import LiveMapPage from './pages/LiveMap'
 import NetworkWebPage from './pages/NetworkWeb'
 import WorldMapPage from './pages/WorldMap'
+import LawProposalPage from './pages/LawProposal'
 import TimelineWidgetPage from './pages/TimelineWidget'
 import KpiCardPage from './pages/KpiCard'
 import StoryboardPage from './pages/Storyboard'
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/network-web" element={<NetworkWebPage />} />
             <Route path="/world-map" element={<WorldMapPage />} />
             <Route path="/timeline" element={<TimelineWidgetPage />} />
+            <Route path="/propose-law" element={<LawProposalPage />} />
             <Route path="/kpi-card" element={<KpiCardPage />} />
             <Route path="/storyboard" element={<StoryboardPage />} />
             <Route path="/memory" element={<MemoryExplorer />} />
