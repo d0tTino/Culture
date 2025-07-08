@@ -79,10 +79,37 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
     manager = cast(MemoryRetriever | None, state.get("vector_store_manager"))
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
+    semantic_manager = cast(SemanticMemoryManager | None, state.get("semantic_manager"))
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
+
     memories = await manager.aretrieve_relevant_memories(state["agent_id"], query="", k=5)
     memories_content = [m.get("content", "") for m in memories]
+
+    if semantic_manager:
+        import asyncio
+
+        semantic_memories = await asyncio.to_thread(
+            semantic_manager.retrieve_context,
+            state["agent_id"],
+            "",
+            5,
+        )
+        memories.extend(semantic_memories)
+        memories_content.extend(m.get("content", "") for m in semantic_memories)
+
+        tracker = getattr(manager, "tracking_manager", None)
+        if tracker:
+            mem_ids = [
+                m.get("memory_id") or m.get("id")
+                for m in semantic_memories
+                if m.get("memory_id") or m.get("id")
+            ]
+            try:
+                tracker.update_usage_stats(mem_ids)
+            except Exception:  # pragma: no cover - defensive
+                pass
+
     if hasattr(manager, "get_semantic_summaries"):
         try:
             semantic = cast(Any, manager).get_semantic_summaries(state["agent_id"], limit=2)

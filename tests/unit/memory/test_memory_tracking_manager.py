@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Unit tests for MemoryTrackingManager."""
 
+import asyncio
 import unittest
 from pathlib import Path
 
@@ -48,6 +49,57 @@ class TestMemoryTrackingManager(unittest.TestCase):
         self.manager.record_retrieval([mem_id], [0.9])
         mus = self.manager.calculate_mus(mem_id)
         self.assertGreaterEqual(mus, 0.0)
+
+    @pytest.mark.asyncio
+    def test_unified_retrieval_usage_updates(self: Self) -> None:
+        """Ensure usage stats are updated for vector and semantic retrieval."""
+        from types import SimpleNamespace
+
+        from src.agents.graphs.graph_nodes import retrieve_and_summarize_memories_node
+        from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
+
+        semantic_manager = SemanticMemoryManager(self.vector_store, driver=None)
+        for i in range(2):
+            self.vector_store.add_memory(
+                agent_id=self.agent_id,
+                step=i,
+                event_type="thought",
+                content=f"m{i}",
+            )
+
+        semantic_manager.group_memories_by_topic(self.agent_id, num_topics=1)
+
+        calls: list[list[str]] = []
+
+        from unittest.mock import patch
+
+        patcher = patch.object(
+            self.vector_store.tracking_manager,
+            "update_usage_stats",
+            lambda ids, relevance_scores=None, increment_count=True: calls.append(list(ids)),
+        )
+        patcher.start()
+
+        class DummyAgent:
+            async def async_generate_l1_summary(
+                self, role_prompt: str, memories: str, context: str
+            ) -> SimpleNamespace:
+                return SimpleNamespace(summary="S")
+
+        state = {
+            "agent_id": self.agent_id,
+            "vector_store_manager": self.vector_store,
+            "semantic_manager": semantic_manager,
+            "agent_instance": DummyAgent(),
+            "state": SimpleNamespace(role_prompt="r"),
+        }
+
+        asyncio.get_event_loop().run_until_complete(retrieve_and_summarize_memories_node(state))
+
+        patcher.stop()
+
+        assert len(calls) == 2
+        assert all(calls)
 
 
 if __name__ == "__main__":
