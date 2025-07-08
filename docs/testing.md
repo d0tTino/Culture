@@ -15,12 +15,14 @@ environment and install these dependencies.
 `pip-compile` command used by `scripts/check_requirements.sh`.
 Run this script to verify that `requirements.txt` matches
 `requirements.in` whenever dependencies change.
-The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, `requests` for HTTP utilities, and `numpy>=2` for compatibility with certain examples.
+The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, `requests` for HTTP utilities, `aiosqlite` for async SQLite tests, and `numpy>=2` for compatibility with certain examples.
 
 If these optional packages are not installed, running `pytest` directly will
 raise warnings because `pytest.ini` specifies `-n auto` and
 `asyncio_mode=strict`. Use `scripts/run_tests.py` instead, which automatically
-detects available plugins and strips those options.
+detects available plugins, strips those options, and emits a warning when
+`numpy`, `sqlalchemy`, `requests`, or `aiosqlite` are missing. Tests requiring
+these packages are skipped automatically.
 
 ## Test Markers and Suite Structure
 

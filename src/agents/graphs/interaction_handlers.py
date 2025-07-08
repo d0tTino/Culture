@@ -105,7 +105,6 @@ def handle_create_project_node(state: AgentTurnState) -> dict[str, Any]:
                 ledger.resolve_auction(aid)
             except Exception:  # pragma: no cover - optional
                 logger.debug("Ledger auction failed", exc_info=True)
-            agent_state.du -= config.DU_COST_CREATE_PROJECT
         start_du = agent_state.du
 
         project_id = simulation.create_project(
@@ -154,7 +153,6 @@ def handle_join_project_node(state: AgentTurnState) -> dict[str, Any]:
                 ledger.resolve_auction(aid)
             except Exception:  # pragma: no cover - optional
                 logger.debug("Ledger auction failed", exc_info=True)
-            agent_state.du -= config.DU_COST_JOIN_PROJECT
         start_du = agent_state.du
 
         if simulation.join_project(project_id, agent_state.agent_id):

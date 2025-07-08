@@ -42,3 +42,9 @@ respx
 ipython<9
 starlette
 pydantic-settings==2.0.3
+
+# Optional runtime libraries used in certain tests
+numpy
+requests
+sqlalchemy
+aiosqlite
