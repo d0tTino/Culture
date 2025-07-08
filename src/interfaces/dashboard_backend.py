@@ -182,7 +182,7 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
     summaries: list[str] = []
     if manager is not None:
         try:
-            summaries = manager.get_recent_summaries(agent_id, limit=limit)
+            summaries = manager.get_semantic_summaries(agent_id, limit=limit)
         except Exception:  # pragma: no cover - defensive
             summaries = []
     return JSONResponse({"summaries": summaries})

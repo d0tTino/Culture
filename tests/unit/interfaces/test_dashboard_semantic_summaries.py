@@ -11,7 +11,7 @@ class DummyManager:
         self.raise_exc = raise_exc
         self.calls: list[tuple[str, int]] = []
 
-    def get_recent_summaries(self, agent_id: str, limit: int = 3) -> list[str]:
+    def get_semantic_summaries(self, agent_id: str, limit: int = 3) -> list[str]:
         self.calls.append((agent_id, limit))
         if self.raise_exc:
             raise RuntimeError("boom")

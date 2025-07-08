@@ -139,6 +139,7 @@ add_memory()        # Add a new memory to the store
 retrieve_relevant_memories()  # Retrieve memories by semantic similarity
 retrieve_filtered_memories()  # Retrieve memories by metadata filters
 query_memories()    # Combined semantic and metadata filtering
+get_semantic_summaries()  # Fetch consolidated semantic summaries
 ```
 
 #### WeaviateVectorStoreManager
@@ -289,6 +290,7 @@ This node:
 - Retrieves relevant memories using RAG techniques
 - Summarizes retrieved memories for context
 - Balances recent and important older memories
+- Includes the latest semantic summaries via ``ChromaVectorStoreManager``
 
 #### generate_thought_and_message_node
 
