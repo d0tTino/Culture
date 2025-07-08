@@ -11,6 +11,7 @@ import {
   WorldMap,
   KpiCard,
   EventConsole,
+  Storyboard,
 } from './widgets'
 
 widgetRegistry.register('TimelineWidget', TimelineWidget)
@@ -19,6 +20,7 @@ widgetRegistry.register('WorldMap', WorldMap)
 widgetRegistry.register('KpiCard', KpiCard)
 widgetRegistry.register('Breakpoints', BreakpointList)
 widgetRegistry.register('Events', EventConsole)
+widgetRegistry.register('Storyboard', Storyboard)
 
 void loadRemoteWidgets();
 

@@ -10,6 +10,7 @@ import NetworkWebPage from './pages/NetworkWeb'
 import WorldMapPage from './pages/WorldMap'
 import TimelineWidgetPage from './pages/TimelineWidget'
 import KpiCardPage from './pages/KpiCard'
+import StoryboardPage from './pages/Storyboard'
 import MemoryExplorer from './pages/MemoryExplorer'
 import DockManager from './components/DockManager'
 import { createDefaultLayout } from './lib/defaultLayout'
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/world-map" element={<WorldMapPage />} />
             <Route path="/timeline" element={<TimelineWidgetPage />} />
             <Route path="/kpi-card" element={<KpiCardPage />} />
+            <Route path="/storyboard" element={<StoryboardPage />} />
             <Route path="/memory" element={<MemoryExplorer />} />
           </Routes>
         </DockManager>
