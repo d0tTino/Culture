@@ -43,6 +43,11 @@ export default function Sidebar() {
           </NavLink>
         </li>
         <li>
+          <NavLink to="/propose-law" className={linkClass}>
+            Propose Law
+          </NavLink>
+        </li>
+        <li>
           <NavLink to="/memory" className={linkClass}>
             Memory Explorer
           </NavLink>
