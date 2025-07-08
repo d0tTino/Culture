@@ -50,5 +50,5 @@ except Exception:  # pragma: no cover - optional dependency
 
     _SettingsConfigDict = _FallbackSettingsConfigDict
 
-BaseSettings = _PydanticBaseSettings  # type: ignore[assignment]
-SettingsConfigDict = _SettingsConfigDict  # type: ignore[assignment]
+BaseSettings = cast(Any, _PydanticBaseSettings)
+SettingsConfigDict = cast(Any, _SettingsConfigDict)

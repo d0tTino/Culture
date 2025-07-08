@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Run pytest with optional plugin-based adjustments."""
+"""Run pytest with optional plugin-based adjustments.
+
+This helper detects available plugins like ``pytest-xdist`` and ``pytest-asyncio``
+and removes incompatible options from ``pytest.ini`` when they are missing. It
+also checks for a few optional runtime libraries (``numpy``, ``sqlalchemy``,
+``requests``) and prints a warning when they are not installed so that tests
+depending on them can be skipped cleanly.
+"""
 
 from __future__ import annotations
 
@@ -44,6 +51,7 @@ def main(argv: list[str]) -> int:
         "fastapi",
         "pytest_asyncio",
         "sqlalchemy",
+        "aiosqlite",
         "zstandard",
         "requests",
         "hypothesis",
@@ -72,6 +80,15 @@ def main(argv: list[str]) -> int:
                 f"WARNING: dependency installation failed ({exc}). "
                 "Continuing with existing packages."
             )
+
+    optional = ["numpy", "sqlalchemy", "requests", "aiosqlite"]
+    missing_optional = [mod for mod in optional if not have_module(mod)]
+    if missing_optional:
+        joined = ", ".join(missing_optional)
+        print(
+            f"WARNING: optional packages missing: {joined}. "
+            "Tests depending on them will be skipped."
+        )
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)
