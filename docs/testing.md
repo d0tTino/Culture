@@ -10,19 +10,20 @@ To run the tests, install dependencies from both `requirements.txt` and `require
 pip install -r requirements.txt -r requirements-dev.txt
 ```
 You can also run `scripts/setup_test_env.sh` to automatically create a virtual
-environment and install these dependencies.
-`requirements-dev.txt` also installs **pip-tools**, which provides the
-`pip-compile` command used by `scripts/check_requirements.sh`.
-Run this script to verify that `requirements.txt` matches
-`requirements.in` whenever dependencies change.
-The development requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for asynchronous tests, `requests` for HTTP utilities, `aiosqlite` for async SQLite tests, and `numpy>=2` for compatibility with certain examples.
+environment and install these dependencies. `requirements-dev.txt` installs
+**pip-tools**, which provides the `pip-compile` command used by
+`scripts/check_requirements.sh`. Run this script to verify that `requirements.txt`
+matches `requirements.in` whenever dependencies change. The development
+requirements include `pytest-xdist` for parallel execution, `pytest-asyncio` for
+asynchronous tests, `requests` for HTTP utilities, `aiosqlite` for async SQLite
+tests, and `numpy>=2` for compatibility with certain examples.
 
-If these optional packages are not installed, running `pytest` directly will
-raise warnings because `pytest.ini` specifies `-n auto` and
-`asyncio_mode=strict`. Use `scripts/run_tests.py` instead, which automatically
-detects available plugins, strips those options, and emits a warning when
-`numpy`, `sqlalchemy`, `requests`, or `aiosqlite` are missing. Tests requiring
-these packages are skipped automatically.
+If any of these optional packages are missing, `scripts/run_tests.py` prints a
+warning and skips affected tests automatically. For example, the SQL token store
+tests require both `sqlalchemy` and `aiosqlite`; tests that patch the
+`requests` library or depend on `numpy` are treated the same way. Running
+`pytest` directly may fail because `pytest.ini` specifies `-n auto` and
+`asyncio_mode=strict`.
 
 ## Test Markers and Suite Structure
 

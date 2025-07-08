@@ -83,12 +83,32 @@ def main(argv: list[str]) -> int:
 
     optional = ["numpy", "sqlalchemy", "requests", "aiosqlite"]
     missing_optional = [mod for mod in optional if not have_module(mod)]
+
+    skip_map = {
+        "aiosqlite": [ROOT / "tests" / "integration" / "interfaces" / "test_token_sql.py"],
+        "sqlalchemy": [ROOT / "tests" / "integration" / "interfaces" / "test_token_sql.py"],
+        "numpy": [ROOT / "tests" / "unit" / "infra" / "test_checkpoint.py"],
+        "requests": [
+            ROOT / "tests" / "unit" / "utils" / "test_policy.py",
+            ROOT / "tests" / "unit" / "infra" / "test_llm_client_url.py",
+            ROOT / "tests" / "unit" / "infra" / "test_llm_client_vllm.py",
+            ROOT / "tests" / "unit" / "infra" / "test_dspy_ollama_config.py",
+            ROOT / "tests" / "unit" / "memory" / "test_role_history.py",
+            ROOT / "tests" / "unit" / "interfaces" / "test_discord_policy.py",
+            ROOT / "tests" / "integration" / "governance" / "test_law_board_integration.py",
+        ],
+    }
+    ignore_paths: set[Path] = set()
+    for mod in missing_optional:
+        ignore_paths.update(skip_map.get(mod, []))
+
     if missing_optional:
         joined = ", ".join(missing_optional)
-        print(
-            f"WARNING: optional packages missing: {joined}. "
-            "Tests depending on them will be skipped."
+        msg = (
+            f"WARNING: missing optional packages: {joined}. "
+            "Skipping tests that require them."
         )
+        print(msg)
 
     cfg = ConfigParser()
     cfg.read(INI_FILE)
@@ -126,6 +146,9 @@ def main(argv: list[str]) -> int:
         cmd.extend(["-c", temp_ini])
     else:
         cmd.extend(["-c", str(INI_FILE)])
+
+    for path in sorted(ignore_paths):
+        cmd.append(f"--ignore={path}")
 
     cmd.extend(strip_xdist_flags(argv) if not has_xdist else argv)
     return subprocess.call(cmd)

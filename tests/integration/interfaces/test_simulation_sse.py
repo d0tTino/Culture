@@ -1,21 +1,20 @@
 import asyncio
 import json
 from types import SimpleNamespace
+from typing import Callable
 
 import httpx
 import pytest
+from starlette.responses import Response
 
-import src.http_app as http_app
+# Skip this test if FastAPI is not available.
+pytest.importorskip("fastapi")
+
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.interfaces import dashboard_backend as db
 from src.sim.simulation import Simulation
 from tests.unit.memory.test_semantic_memory_manager import DummyDriver
-
-
-class DummyRequest:
-    async def is_disconnected(self) -> bool:
-        return False
 
 
 class DummyAgent:
