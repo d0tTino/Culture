@@ -82,9 +82,12 @@ Screenshots will be added to this README as these pages mature.
 
 ## Storyboard Widget
 
-The Storyboard widget streams simulation events from `/stream/events` and
+The Storyboard widget streams simulation events from `/ws/events` and
 displays agent coordinates and current mood values. A "Summaries" tab fetches
 recent memory summaries for the selected agent via
 `/api/agents/{id}/semantic_summaries`.
+
+Memory Explorer features an agent selector input that reloads summaries whenever
+the chosen ID changes.
 
 Run the development server and navigate to `/storyboard` to see it in action.

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useEventSource } from '../lib/useEventSource'
 
 interface SnapshotEvent {
   data?: {
@@ -9,7 +8,20 @@ interface SnapshotEvent {
 }
 
 export default function Storyboard() {
-  const event = useEventSource<SnapshotEvent>()
+  const [event, setEvent] = useState<SnapshotEvent | null>(null)
+  useEffect(() => {
+    const ws = new WebSocket('/ws/events')
+    ws.onmessage = (ev) => {
+      try {
+        setEvent(JSON.parse(ev.data))
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+    return () => {
+      ws.close()
+    }
+  }, [])
   const [positions, setPositions] = useState<Record<string, [number, number]>>({})
   const [moods, setMoods] = useState<Record<string, number>>({})
   const [tab, setTab] = useState<'map' | 'summaries'>('map')

@@ -59,8 +59,8 @@ compiled = graph.compile()
 
 # Test routing
 print("Testing routing for option_a result:")
-result_a = compiled.invoke({"choice": "option_a"})
+result_a = compiled.invoke({"choice": "option_a"})  # type: ignore[attr-defined]
 print(result_a)
 print("Testing routing for option_b result:")
-result_b = compiled.invoke({"choice": "option_b"})
+result_b = compiled.invoke({"choice": "option_b"})  # type: ignore[attr-defined]
 print(result_b)
