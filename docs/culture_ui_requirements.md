@@ -72,3 +72,31 @@ The response returns the complete set of registered widget names:
 ```json
 { "widgets": ["MyWidget"] }
 ```
+
+## Plug-in Development
+
+External plug-ins can add new dashboard widgets without modifying the core UI. A plug-in typically serves a JavaScript bundle and registers its widget with the backend:
+
+```http
+POST /api/register_widget
+{ "name": "MyWidget", "script_url": "http://localhost:5173/my_widget.js" }
+```
+
+Additional metadata keys may be included. The response contains the updated list of widget names:
+
+```json
+{ "widgets": ["MyWidget", "OtherWidget"] }
+```
+
+Once registered, the UI automatically loads the provided `script_url` so the widget behaves like a built-in panel.
+On the frontend, import and call the `registerWidgetBackend` helper exported
+from `culture-ui`:
+
+```ts
+import { registerWidgetBackend } from 'culture-ui/lib'
+
+await registerWidgetBackend({
+  name: 'MyWidget',
+  scriptUrl: 'http://localhost:5173/my_widget.js',
+})
+```
