@@ -24,3 +24,10 @@ This brief report summarizes the current state of LLM-based components in the pr
 1. Rerun the vertical slice periodically to obtain logs of summarization and intent selection.
 2. Monitor the resulting `LLM_CALL_METRICS` logs to evaluate latency, success rate, and directive adherence.
 
+## Latency Benchmark
+
+`scripts/benchmark_llm.py` measures the average latency of a simple prompt using
+both Ollama and vLLM. In the current environment the Ollama client fell back to
+a stub implementation, completing instantly, while attempts to contact the vLLM
+server failed after repeated connection errors (~7s for one retry cycle).
+

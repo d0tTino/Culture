@@ -746,6 +746,20 @@ check the latest values with the `!stats` Discord command.
 For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
 When running against a local vLLM server, set `VLLM_API_BASE` to its base URL.
 
+### Starting the vLLM Server
+`scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API with sensible defaults.
+Run it from the project root, optionally overriding the model or port:
+
+```bash
+VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
+```
+
+After the server is running, point the application to it:
+
+```bash
+export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+```
+
 ### Walking Vertical Slice
 To verify your local setup with actual LLM calls, run the minimal demo script:
 ```bash
