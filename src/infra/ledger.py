@@ -26,7 +26,8 @@ class Ledger:
                 agent_id TEXT PRIMARY KEY,
                 ip REAL DEFAULT 0,
                 du REAL DEFAULT 0,
-                staked_du REAL DEFAULT 0
+                staked_du REAL DEFAULT 0,
+                staked_ip REAL DEFAULT 0
             )
             """
         )
@@ -90,6 +91,19 @@ class Ledger:
             CREATE TABLE IF NOT EXISTS genealogy (
                 parent_id TEXT,
                 child_id TEXT PRIMARY KEY
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS law_proposals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proposer_id TEXT,
+                text TEXT,
+                approved INTEGER,
+                yes_weight REAL,
+                no_weight REAL,
+                ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -212,6 +226,44 @@ class Ledger:
         """Return the amount of staked DU for ``agent_id``."""
         cur = self.conn.execute(
             "SELECT staked_du FROM agent_balances WHERE agent_id=?",
+            (agent_id,),
+        )
+        row = cur.fetchone()
+        return float(row[0]) if row else 0.0
+
+    def stake_ip(self, agent_id: str, amount: float) -> None:
+        """Stake IP for ``agent_id`` and record the transaction."""
+        if amount <= 0:
+            return
+        self.log_change(agent_id, -amount, 0.0, "stake_ip")
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO agent_balances(agent_id, staked_ip)
+            VALUES(?, ?)
+            ON CONFLICT(agent_id) DO UPDATE SET
+                staked_ip = staked_ip + excluded.staked_ip
+            """,
+            (agent_id, float(amount)),
+        )
+        self.conn.commit()
+
+    def unstake_ip(self, agent_id: str, amount: float) -> None:
+        """Unstake IP for ``agent_id`` and record the transaction."""
+        if amount <= 0:
+            return
+        self.log_change(agent_id, amount, 0.0, "unstake_ip")
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE agent_balances SET staked_ip = MAX(staked_ip - ?, 0) WHERE agent_id=?",
+            (float(amount), agent_id),
+        )
+        self.conn.commit()
+
+    def get_staked_ip(self, agent_id: str) -> float:
+        """Return the amount of staked IP for ``agent_id``."""
+        cur = self.conn.execute(
+            "SELECT staked_ip FROM agent_balances WHERE agent_id=?",
             (agent_id,),
         )
         row = cur.fetchone()
@@ -355,6 +407,48 @@ class Ledger:
             (parent_id, child_id),
         )
         self.conn.commit()
+
+    def record_law_proposal(
+        self,
+        proposer_id: str,
+        text: str,
+        approved: bool,
+        yes_weight: float,
+        no_weight: float,
+    ) -> None:
+        """Store a law proposal and its result."""
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO law_proposals(proposer_id, text, approved, yes_weight, no_weight)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                proposer_id,
+                text,
+                int(bool(approved)),
+                float(yes_weight),
+                float(no_weight),
+            ),
+        )
+        self.conn.commit()
+
+    def get_law_proposals(self, limit: int | None = None) -> list[dict[str, object]]:
+        """Return stored law proposals."""
+        cur = self.conn.cursor()
+        query = "SELECT proposer_id, text, approved, yes_weight, no_weight, ts FROM law_proposals ORDER BY id DESC"
+        rows = cur.execute(query + (" LIMIT ?" if limit else ""), ([int(limit)] if limit else [])).fetchall()
+        return [
+            {
+                "proposer_id": str(r[0]),
+                "text": str(r[1]),
+                "approved": bool(r[2]),
+                "yes_weight": float(r[3]),
+                "no_weight": float(r[4]),
+                "ts": r[5],
+            }
+            for r in rows
+        ]
 
     # -------------------------------------------------------------
     # Auction management
