@@ -78,7 +78,6 @@ class TestMemoryTrackingManager(unittest.TestCase):
             "update_usage_stats",
             lambda ids, relevance_scores=None, increment_count=True: calls.append(list(ids)),
         )
-        patcher.start()
 
         class DummyAgent:
             async def async_generate_l1_summary(
@@ -94,9 +93,10 @@ class TestMemoryTrackingManager(unittest.TestCase):
             "state": SimpleNamespace(role_prompt="r"),
         }
 
-        asyncio.get_event_loop().run_until_complete(retrieve_and_summarize_memories_node(state))
-
-        patcher.stop()
+        with patcher:
+            asyncio.get_event_loop().run_until_complete(
+                retrieve_and_summarize_memories_node(state)
+            )
 
         assert len(calls) == 2
         assert all(calls)
