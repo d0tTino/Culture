@@ -20,22 +20,22 @@ else:  # pragma: no cover - optional runtime dependency
     except Exception:
 
         class FastAPI:
-            def __init__(self, *args: object, **kwargs: object) -> None:  # noqa: ANN101
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
-            def get(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:  # noqa: ANN101
+            def get(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
                 return dec
 
-            def post(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:  # noqa: ANN101
+            def post(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
                 return dec
 
-            def websocket(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:  # noqa: ANN101
+            def websocket(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
@@ -45,7 +45,7 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class Response:  # pragma: no cover - minimal stub
-            def __init__(self, *args: object, **kwargs: object) -> None:  # noqa: ANN101
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
         class WebSocket:  # pragma: no cover - minimal stub
@@ -55,7 +55,7 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class JSONResponse:  # pragma: no cover - minimal stub
-            def __init__(self, content: object, *args: object, **kwargs: object) -> None:  # noqa: ANN101
+            def __init__(self, content: object, *args: object, **kwargs: object) -> None:
                 self.body = json.dumps(content).encode("utf-8")
 
 
@@ -69,7 +69,7 @@ else:  # pragma: no cover - optional dependency
     except Exception:
 
         class EventSourceResponse:  # pragma: no cover - minimal stub
-            def __init__(self, *args: object, **kwargs: object) -> None:  # noqa: ANN101
+            def __init__(self, *args: object, **kwargs: object) -> None:
                 self.gen = None
 
 

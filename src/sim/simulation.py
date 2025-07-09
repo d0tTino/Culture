@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import logging
 import random
+import threading
 import time
 from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
@@ -97,6 +98,9 @@ class Simulation:
 
         # Background task for processing incoming events
         self._event_listener_task: asyncio.Task[None] | None = None
+        self._event_task: asyncio.Task[Any] | None = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
+        self._event_loop_thread: threading.Thread | None = None
 
         # Lock for concurrent access to message queues
         self._msg_lock = asyncio.Lock()
@@ -204,13 +208,26 @@ class Simulation:
 
         # Background task for forwarding external events (e.g., Discord messages)
         try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            self._event_task = None
-        else:
+            loop = asyncio.get_running_loop()
+            self._event_loop = loop
             self._event_task = asyncio.create_task(
                 self.event_kernel.forward_external_events(self._handle_human_command)
             )
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+
+            def _run() -> None:
+                asyncio.set_event_loop(loop)
+                get_event_queue()
+                self._event_task = loop.create_task(
+                    self.event_kernel.forward_external_events(self._handle_human_command)
+                )
+                loop.run_forever()
+
+            self._event_loop = loop
+            thread = threading.Thread(target=_run, daemon=True)
+            self._event_loop_thread = thread
+            thread.start()
 
     # Add method to update collective metrics
     def _update_collective_metrics(self: Self) -> None:
@@ -936,6 +953,13 @@ class Simulation:
                 logger.exception("Failed to close vector store manager: %s", exc)
         if self._event_task:
             self._event_task.cancel()
+        if self._event_loop:
+            if self._event_loop.is_running():
+                self._event_loop.call_soon_threadsafe(self._event_loop.stop)
+            if self._event_loop_thread:
+                self._event_loop_thread.join(timeout=0.1)
+            self._event_loop = None
+            self._event_loop_thread = None
         try:
             get_event_queue().put_nowait(None)
         except asyncio.QueueFull:  # pragma: no cover - defensive
