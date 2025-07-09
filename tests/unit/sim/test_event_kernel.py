@@ -10,6 +10,14 @@ from src.sim.version_vector import VersionVector
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def patch_dashboard_emit_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _noop(*_args: Any, **_kwargs: Any) -> None:
+        pass
+
+    monkeypatch.setattr("src.interfaces.dashboard_backend.emit_event", _noop)
+
+
 def _make_cb(order: list[int], n: int):
     async def _cb() -> None:
         order.append(n)
