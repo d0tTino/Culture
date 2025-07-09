@@ -6,6 +6,8 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from src.infra.ledger import ledger
+
 from .widget_registry import WidgetRegistry
 
 if TYPE_CHECKING:
@@ -211,6 +213,16 @@ async def api_propose_law(proposal: LawProposal) -> Response:
     return JSONResponse({"approved": approved})
 
 
+@app.get("/api/proposals")
+async def api_get_proposals(limit: int = 10) -> Response:
+    """Return stored law proposals."""
+    try:
+        proposals = ledger.get_law_proposals(limit)
+    except Exception:  # pragma: no cover - defensive
+        proposals = []
+    return JSONResponse({"proposals": proposals})
+
+
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -337,6 +349,7 @@ __all__ = [
     "EventSourceResponse",
     "LawProposal",
     "SimulationEvent",
+    "api_get_proposals",
     "api_propose_law",
     "app",
     "emit_event",
