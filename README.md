@@ -7,6 +7,7 @@
 
 ## Summary
 - [Vision](#vision-the-crucible-of-emergent-ai)
+- [Getting Started](#getting-started)
 - [Setup](#installation)
 - [Windows / WSL2 Setup](docs/windows_setup.md)
 - [Running Tests](#running-tests)
@@ -127,6 +128,49 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 - Runtime dependencies now include `numpy>=2`
 - Additional development and testing dependencies in `requirements-dev.txt` (required for the full test suite)
 - `pydantic` is required for both runtime and development
+
+## Getting Started
+
+Follow these steps to run the example simulation locally:
+
+1. **Clone the repository and create a virtual environment**
+   ```bash
+   git clone https://github.com/d0tTino/Culture.git
+   cd Culture
+   python3.10 -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate.bat
+   ```
+2. **Install the dependencies**
+   ```bash
+   pip install -r requirements.txt -r requirements-dev.txt
+   ```
+3. **Copy the example environment file and adjust settings**
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `OLLAMA_API_BASE` if your Ollama server runs on a different URL. Set
+   `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` if you plan to use the Discord
+   bot.
+4. **Install or update Ollama and pull the model**
+   ```bash
+   curl https://ollama.ai/install.sh | sh
+   ollama pull mistral:latest
+   ollama serve &
+   ```
+5. **Run the vertical slice demo**
+   ```bash
+   make local-slice
+   ```
+   This launches a short simulation with three agents and persists their
+   memories in ChromaDB.
+6. **Start the optional dashboard**
+   ```bash
+   python -m src.http_app
+   ```
+7. **Connect Discord (optional)**
+   ```bash
+   python -m src.app --discord --steps 3
+   ```
 
 ## Installation
 
