@@ -1,5 +1,6 @@
 """Provide test-friendly stubs for optional dependencies."""
 
+import asyncio
 import os
 import sys
 import types
@@ -34,3 +35,11 @@ try:  # pragma: no cover - handle langgraph API changes
     sys.modules.setdefault("langgraph.graph.graph", _lg_graph)
 except Exception:
     pass
+
+if sys.platform.startswith("linux"):
+    try:  # pragma: no cover - optional dependency
+        import uvloop
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    except Exception:
+        pass
