@@ -3,5 +3,5 @@ START = "START"
 
 
 class StateGraph:
-    def __init__(self) -> None:  # noqa: ANN101
+    def __init__(self) -> None:
         self.nodes: dict[str, object] = {}
