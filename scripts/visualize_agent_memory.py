@@ -531,6 +531,31 @@ def generate_html_visualization(
     return "\n".join(html)
 
 
+def visualize_agent_memory(
+    vector_store: ChromaVectorStoreManager,
+    agent_id: str,
+    output_format: str = "text",
+    max_length: int = 200,
+) -> str:
+    """Return a memory visualization for ``agent_id``."""
+
+    l2_summaries = get_all_l2_summaries(vector_store, agent_id)
+    l1_summaries = get_all_l1_summaries(vector_store, agent_id)
+
+    if not l2_summaries and not l1_summaries:
+        raise ValueError(f"No memories found for agent {agent_id}")
+
+    l2_to_l1s, unassigned_l1s = determine_l1_l2_relationships(l1_summaries, l2_summaries)
+
+    if output_format == "text":
+        return generate_text_visualization(l2_summaries, l2_to_l1s, unassigned_l1s, max_length)
+    if output_format == "html":
+        return generate_html_visualization(
+            agent_id, l2_summaries, l2_to_l1s, unassigned_l1s, max_length
+        )
+    raise ValueError(f"Unsupported output format: {output_format}")
+
+
 def main() -> int:
     """Main function to run the visualization."""
     args = parse_args()
@@ -552,41 +577,29 @@ def main() -> int:
         logger.error(f"Failed to connect to ChromaDB: {e}")
         return 1
 
-    # Get all L2 and L1 summaries for the agent
-    l2_summaries = get_all_l2_summaries(vector_store, agent_id)
-    l1_summaries = get_all_l1_summaries(vector_store, agent_id)
-
-    if not l2_summaries and not l1_summaries:
-        logger.error(f"No memories found for agent {agent_id}")
+    try:
+        visualization = visualize_agent_memory(
+            vector_store,
+            agent_id=agent_id,
+            output_format=output_format,
+            max_length=max_length,
+        )
+    except ValueError as exc:
+        logger.error(str(exc))
         return 1
 
-    # Determine relationships between L1 and L2 summaries
-    l2_to_l1s, unassigned_l1s = determine_l1_l2_relationships(l1_summaries, l2_summaries)
-
-    # Generate visualization based on chosen format
     if output_format == "text":
-        visualization = generate_text_visualization(
-            l2_summaries, l2_to_l1s, unassigned_l1s, max_length
-        )
-        print(visualization)
-
-        # Optionally save to file
         output_file = f"agent_{agent_id}_memory_visualization.txt"
-        with open(output_file, "w") as f:
-            f.write(visualization)
-        logger.info(f"Text visualization saved to {output_file}")
-
-    elif output_format == "html":
-        visualization = generate_html_visualization(
-            agent_id, l2_summaries, l2_to_l1s, unassigned_l1s, max_length
-        )
-
-        # Save HTML to file
+    else:
         output_file = f"agent_{agent_id}_memory_visualization.html"
-        with open(output_file, "w") as f:
-            f.write(visualization)
-        logger.info(f"HTML visualization saved to {output_file}")
+
+    with open(output_file, "w") as f:
+        f.write(visualization)
+    logger.info(f"{output_format.capitalize()} visualization saved to {output_file}")
+    if output_format == "html":
         print(f"HTML visualization saved to {output_file}")
+    else:
+        print(visualization)
 
     return 0
 
