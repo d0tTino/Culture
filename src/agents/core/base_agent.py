@@ -25,6 +25,7 @@ else:  # pragma: no cover - optional dependency
         from src.agents.memory.vector_store import ChromaVectorStoreManager
     except Exception:
         ChromaVectorStoreManager = None
+from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreManager
 from src.infra import config
 from src.infra.async_dspy_manager import AsyncDSPyManager
@@ -114,6 +115,7 @@ class Agent:
         agent_id: str | None = None,
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
+        memory_service: MemoryService | None = None,
         vector_store_manager: Optional[MemoryStore] = None,
         async_dspy_manager: Optional[AsyncDSPyManager] = None,
     ):
@@ -127,6 +129,8 @@ class Agent:
                 If None is provided, default values will be used.
             name (str, optional): A name for the agent. If None is provided,
                 a default name based on agent_id will be used.
+            memory_service (MemoryService | None): Unified memory service. If ``None``,
+                one will be created from ``vector_store_manager``.
             vector_store_manager (Optional[MemoryStore], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             async_dspy_manager (Optional[AsyncDSPyManager], optional): Manager for DSPy program execution.
@@ -285,9 +289,15 @@ class Agent:
             sys.modules.pop("src.agents.graphs.basic_agent_graph", None)
             importlib.import_module("src.agents.graphs.basic_agent_graph")
 
+        # Memory service initialization
+        if memory_service is None:
+            mem_vs = vector_store_manager
+        else:
+            mem_vs = memory_service.vector_store
+
         # Vector Store Manager Initialization
-        if vector_store_manager:
-            self.vector_store_manager = vector_store_manager
+        if mem_vs:
+            self.vector_store_manager = mem_vs
         else:
             backend = (
                 config.VECTOR_STORE_BACKEND
@@ -307,6 +317,8 @@ class Agent:
                 self.vector_store_manager = ChromaVectorStoreManager(
                     persist_directory=getattr(config, "VECTOR_STORE_DIR", "./chroma_db")
                 )
+
+        self.memory_service = memory_service or MemoryService(self.vector_store_manager)
 
         # Async DSPy Manager Initialization
         if async_dspy_manager:
@@ -391,6 +403,7 @@ class Agent:
         self: Self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
+        memory_service: MemoryService | None = None,
         vector_store_manager: (
             MemoryStore | None
         ) = None,  # Accepts any vector store manager implementation
@@ -403,6 +416,8 @@ class Agent:
             simulation_step (int): The current step number from the simulation.
             environment_perception (Dict[str, Any], optional): Perception data from the
                 environment.
+            memory_service (MemoryService | None): Unified memory service. If ``None``,
+                the agent's ``memory_service`` attribute is used.
             vector_store_manager (Optional[MemoryStore], optional): Manager for vector-based memory
                 storage and retrieval. Used to persist memory events.
             knowledge_board (Optional[KnowledgeBoard], optional): Knowledge board instance
@@ -451,10 +466,13 @@ class Agent:
         # Start with any memories retrieved in previous turns
         memory_history_list: list[dict[str, Any]] = list(self._memory_history)
 
-        active_store = vector_store_manager or getattr(self, "vector_store_manager", None)
-        if active_store is not None and hasattr(active_store, "aretrieve_relevant_memories"):
+        active_service = memory_service or getattr(self, "memory_service", None)
+        if active_service is None and vector_store_manager is not None:
+            active_service = MemoryService(vector_store_manager)
+
+        if active_service is not None:
             try:
-                retrieved_memories = await cast(Any, active_store).aretrieve_relevant_memories(
+                retrieved_memories = await active_service.retrieve_relevant_memories(
                     self.agent_id,
                     query="",
                     k=5,
@@ -512,6 +530,7 @@ class Agent:
             "agent_goal": agent_goal,  # Use the extracted agent goal
             "updated_state": {},  # Initialize empty
             "vector_store_manager": vector_store_manager,  # Pass the vector store manager
+            "memory_service": active_service,
             "rag_summary": "(No memory summary available yet)",  # Initialize with default summary
             "knowledge_board_content": knowledge_board_content,  # Pass the knowledge board content
             "knowledge_board": knowledge_board,  # Pass the knowledge board instance

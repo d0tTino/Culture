@@ -7,7 +7,7 @@ from typing import Any, Literal, Protocol, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.base_agent import Agent
-from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
+from src.agents.memory.memory_service import MemoryService
 from src.infra.llm_client import (
     analyze_sentiment,
     generate_structured_output,
@@ -77,45 +77,26 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 
 
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
-    manager = cast(MemoryRetriever | None, state.get("vector_store_manager"))
+    manager = cast(MemoryService | None, state.get("memory_service"))
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
-    semantic_manager = cast(SemanticMemoryManager | None, state.get("semantic_manager"))
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
 
-    memories = await manager.aretrieve_relevant_memories(state["agent_id"], query="", k=5)
+    memories = await manager.retrieve_relevant_memories(state["agent_id"], query="", k=5)
     memories_content = [m.get("content", "") for m in memories]
+    import asyncio
 
-    if semantic_manager:
-        import asyncio
+    semantic_memories = await asyncio.to_thread(
+        manager.retrieve_semantic_context,
+        state["agent_id"],
+        "",
+        5,
+    )
+    memories.extend(semantic_memories)
+    memories_content.extend(m.get("content", "") for m in semantic_memories)
 
-        semantic_memories = await asyncio.to_thread(
-            semantic_manager.retrieve_context,
-            state["agent_id"],
-            "",
-            5,
-        )
-        memories.extend(semantic_memories)
-        memories_content.extend(m.get("content", "") for m in semantic_memories)
-
-        tracker = getattr(manager, "tracking_manager", None)
-        if tracker:
-            mem_ids = [
-                m.get("memory_id") or m.get("id")
-                for m in semantic_memories
-                if m.get("memory_id") or m.get("id")
-            ]
-            try:
-                tracker.update_usage_stats(mem_ids)
-            except Exception:  # pragma: no cover - defensive
-                pass
-
-    if hasattr(manager, "get_semantic_summaries"):
-        try:
-            semantic = cast(Any, manager).get_semantic_summaries(state["agent_id"], limit=2)
-            memories_content.extend(semantic)
-        except Exception:  # pragma: no cover - defensive
-            pass
+    semantic = manager.get_recent_semantic_summaries(state["agent_id"], limit=2)
+    memories_content.extend(semantic)
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
     summary_result = await agent.async_generate_l1_summary(
@@ -129,14 +110,14 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
 
 async def retrieve_semantic_context_node(state: AgentTurnState) -> dict[str, Any]:
     """Retrieve semantically grouped context for the agent."""
-    semantic_manager = cast(SemanticMemoryManager | None, state.get("semantic_manager"))
-    if not semantic_manager:
+    service = cast(MemoryService | None, state.get("memory_service"))
+    if not service:
         return {"semantic_context": ""}
     query = state.get("rag_summary", "")
     import asyncio
 
     memories = await asyncio.to_thread(
-        semantic_manager.retrieve_context,
+        service.retrieve_semantic_context,
         state["agent_id"],
         query,
         5,
