@@ -126,47 +126,49 @@ class SimulationDiscordBot:
         self.message_queue = message_sse_queue
         self._forward_task: asyncio.Task[Any] | None = None
 
-        # Set up event handlers for the first client only
-        @self.client.event
-        async def on_ready() -> None:
-            """Event handler that fires when the bot connects to Discord."""
-            self.is_ready = True
-            logger.info(f"Discord bot {self.client.user} connected and ready!")
+        # Set up event handlers for all clients
+        for _token, client in self.clients.items():
 
-            # Get the target channel and send a startup message
-            channel = self.client.get_channel(self.channel_id)
-            if channel:
-                embed = discord.Embed(
-                    title="🤖 Culture Simulation Bot Online",
-                    description="Connected and ready to provide simulation updates!",
-                    color=discord.Color.blue(),
-                )
-                embed.set_footer(text=f"Channel ID: {self.channel_id}")
-                if hasattr(channel, "send"):
-                    await channel.send(embed=embed)
-                else:
-                    if channel is not None:
-                        chan_id = getattr(channel, "id", "unknown")
-                        logger.warning(
-                            f"Attempted to send message to channel {chan_id} "
-                            f"of type {type(channel).__name__}, which does not support .send()",
-                        )
+            @client.event  # type: ignore[misc]
+            async def on_ready(client: Any = client) -> None:
+                """Event handler that fires when the bot connects to Discord."""
+                self.is_ready = True
+                logger.info(f"Discord bot {client.user} connected and ready!")
+
+                # Get the target channel and send a startup message
+                channel = client.get_channel(self.channel_id)
+                if channel:
+                    embed = discord.Embed(
+                        title="🤖 Culture Simulation Bot Online",
+                        description="Connected and ready to provide simulation updates!",
+                        color=discord.Color.blue(),
+                    )
+                    embed.set_footer(text=f"Channel ID: {self.channel_id}")
+                    if hasattr(channel, "send"):
+                        await channel.send(embed=embed)
                     else:
-                        logger.warning("Attempted to send message to a None channel.")
-            else:
-                logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
+                        if channel is not None:
+                            chan_id = getattr(channel, "id", "unknown")
+                            logger.warning(
+                                f"Attempted to send message to channel {chan_id} "
+                                f"of type {type(channel).__name__}, which does not support .send()",
+                            )
+                        else:
+                            logger.warning("Attempted to send message to a None channel.")
+                else:
+                    logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
-        @self.client.event
-        async def on_message(message: Any) -> None:
-            if getattr(message, "author", None) == self.client.user:
-                return
-            content = getattr(message, "content", "")
-            await self.event_queue.put(
-                SimulationEvent(
-                    event_type="broadcast",
-                    data={"author": str(getattr(message, "author", "")), "content": content},
+            @client.event  # type: ignore[misc]
+            async def on_message(message: Any, client: Any = client) -> None:
+                if getattr(message, "author", None) == client.user:
+                    return
+                content = getattr(message, "content", "")
+                await self.event_queue.put(
+                    SimulationEvent(
+                        event_type="broadcast",
+                        data={"author": str(getattr(message, "author", "")), "content": content},
+                    )
                 )
-            )
 
     async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
         """Return the Discord client for the given agent."""

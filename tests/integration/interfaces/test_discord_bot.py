@@ -93,6 +93,38 @@ async def test_multi_token_start_and_send() -> None:
     assert sent_by_token == ["tok2"]
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_multi_token_message_forwarding() -> None:
+    q_events: asyncio.Queue[SimulationEvent] = asyncio.Queue()
+    q_msgs: asyncio.Queue[AgentMessage] = asyncio.Queue()
+
+    class Client(DummyDiscordClient):
+        pass
+
+    tokens = ["tok1", "tok2"]
+
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", Client),
+        patch("src.interfaces.dashboard_backend.get_event_queue", lambda: q_events),
+        patch("src.interfaces.discord_bot.message_sse_queue", q_msgs),
+    ):
+        bot = SimulationDiscordBot(tokens, 999)
+        await bot.run_bot()
+
+        for token in tokens:
+            assert "on_message" in bot.clients[token]._events
+            on_msg = bot.clients[token]._events["on_message"]
+            msg = MagicMock()
+            msg.content = f"hello-{token}"
+            msg.author = f"user_{token}"
+            await on_msg(msg)
+            stored = await q_events.get()
+            assert (stored.data or {}).get("content") == f"hello-{token}"
+
+        await bot.stop_bot()
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_say_command(simulation_bot: SimulationDiscordBot) -> None:
