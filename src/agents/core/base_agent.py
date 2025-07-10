@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 from pydantic import BaseModel
 from typing_extensions import Self
 
+from src.extensions import BEHAVIOR_REGISTRY
+
 if TYPE_CHECKING:
     from src.agents.memory.vector_store import ChromaVectorStoreManager
 else:  # pragma: no cover - optional dependency
@@ -680,6 +682,7 @@ class Agent:
                         f"Agent {self.agent_id} updated last_action_intent to: {self._state.last_action_intent}"
                     )
 
+                BEHAVIOR_REGISTRY.run(self, turn_output)
                 return turn_output
             else:
                 logger.warning(

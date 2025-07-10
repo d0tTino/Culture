@@ -12,6 +12,7 @@
 - [Windows / WSL2 Setup](docs/windows_setup.md)
 - [Running Tests](#running-tests)
 - [culture-ui Frontend](#culture-ui-frontend)
+- [Extensions and Plug-ins](#extensions-and-plug-ins)
 
 ## Vision: The Crucible of Emergent AI
 
@@ -331,6 +332,11 @@ A Husky pre-commit hook runs `pnpm lint` and `pnpm type-check` automatically.
 
 See [culture-ui/README.md](culture-ui/README.md) for additional details.
 UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture_ui_requirements.md).
+
+## Extensions and Plug-ins
+
+Culture exposes simple hooks for registering dashboard widgets and agent behaviors.
+See [docs/plugins.md](docs/plugins.md) for details.
 
 ## Project Structure
 
