@@ -128,9 +128,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -173,9 +173,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -512,9 +512,9 @@ class Simulation:
         async with self._msg_lock:
             perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
         if self.knowledge_board:
-            perception_data[
-                "knowledge_board_content"
-            ] = self.knowledge_board.get_recent_entries_for_prompt()
+            perception_data["knowledge_board_content"] = (
+                self.knowledge_board.get_recent_entries_for_prompt()
+            )
 
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,
@@ -992,7 +992,7 @@ class Simulation:
 
     async def propose_law(self: Self, proposer_id: str, text: str) -> bool:
         """Allow an agent to propose a law and trigger a vote."""
-        from src.governance import propose_law as _propose
+        from src.governance.service import governance
 
         proposer = next((a for a in self.agents if a.agent_id == proposer_id), None)
         if proposer is None:
@@ -1007,7 +1007,7 @@ class Simulation:
                     self.vector.to_dict(),
                 )
 
-        approved = await _propose(proposer, text, self.agents)
+        approved = await governance.propose_law(proposer, text, self.agents)
         if approved and self.knowledge_board:
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(

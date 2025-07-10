@@ -13,3 +13,7 @@ Votes are weighted by the amount of influence points (IP) agents have staked. Pa
 ```bash
 python examples/governance/list_proposals_example.py
 ```
+
+The core voting logic lives in ``src.governance.service`` where
+``GovernanceService`` exposes methods for proposing laws, weighting votes via
+the ledger, and retrieving previous proposals.

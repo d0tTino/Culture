@@ -1,3 +1,4 @@
+import importlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -55,25 +56,26 @@ async def test_weights_include_staked_ip(monkeypatch: pytest.MonkeyPatch, tmp_pa
     ledger = Ledger(tmp_path / "ledger.sqlite")
     board = LawBoard(tmp_path / "laws.sqlite")
 
-    import importlib
-
     voting_mod = importlib.import_module("src.governance.voting")
-    monkeypatch.setattr(voting_mod, "law_board", board)
-    monkeypatch.setattr(voting_mod, "ledger", ledger)
-    monkeypatch.setattr(db, "ledger", ledger)
+    gservice = importlib.import_module("src.governance.service")
+    monkeypatch.setattr(gservice, "law_board", board)
+    monkeypatch.setattr(gservice, "ledger", ledger)
+    monkeypatch.setattr(voting_mod, "governance", gservice.governance)
+    monkeypatch.setattr(db, "governance", gservice.governance)
 
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
+
     async def allow_policy(_p: str) -> tuple[bool, str]:
         return True, ""
 
-    monkeypatch.setattr(voting_mod, "evaluate_with_opa", allow_policy)
+    monkeypatch.setattr(gservice, "evaluate_with_opa", allow_policy)
 
     votes = [True, False]
 
     async def fake_vote(_a: DummyAgent, _t: str) -> bool:
         return votes.pop(0)
 
-    monkeypatch.setattr(voting_mod, "_vote", fake_vote)
+    monkeypatch.setattr(gservice.governance, "vote", fake_vote)
 
     ledger.log_change("a1", 10.0, 0.0, "fund")
     ledger.log_change("a2", 10.0, 0.0, "fund")
@@ -90,4 +92,3 @@ async def test_weights_include_staked_ip(monkeypatch: pytest.MonkeyPatch, tmp_pa
     resp = await db.api_get_proposals(limit=1)
     data = json.loads(resp.body)
     assert data["proposals"][0]["approved"] is True
-

@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from src.infra.ledger import ledger
+from src.governance.service import governance
 
 from .widget_registry import WidgetRegistry
 
@@ -216,10 +216,7 @@ async def api_propose_law(proposal: LawProposal) -> Response:
 @app.get("/api/proposals")
 async def api_get_proposals(limit: int = 10) -> Response:
     """Return stored law proposals."""
-    try:
-        proposals = ledger.get_law_proposals(limit)
-    except Exception:  # pragma: no cover - defensive
-        proposals = []
+    proposals = governance.get_proposals(limit)
     return JSONResponse({"proposals": proposals})
 
 
