@@ -2,13 +2,18 @@ import asyncio
 
 # Skip self argument annotation warnings in stub classes
 import json
+import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from pydantic import BaseModel
+
 from src.governance.service import governance
 
 from .widget_registry import WidgetRegistry
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -20,22 +25,24 @@ else:  # pragma: no cover - optional runtime dependency
     except Exception:
 
         class FastAPI:
-            def __init__(self, *args: object, **kwargs: object) -> None:
+            def __init__(self: "FastAPI", *args: object, **kwargs: object) -> None:
                 pass
 
-            def get(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+            def get(self: "FastAPI", *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
                 return dec
 
-            def post(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+            def post(self: "FastAPI", *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
                 return dec
 
-            def websocket(self, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+            def websocket(
+                self: "FastAPI", *args: object, **kwargs: object
+            ) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
@@ -45,7 +52,7 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class Response:  # pragma: no cover - minimal stub
-            def __init__(self, *args: object, **kwargs: object) -> None:
+            def __init__(self: "Response", *args: object, **kwargs: object) -> None:
                 pass
 
         class WebSocket:  # pragma: no cover - minimal stub
@@ -55,11 +62,11 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class JSONResponse:  # pragma: no cover - minimal stub
-            def __init__(self, content: object, *args: object, **kwargs: object) -> None:
+            def __init__(
+                self: "JSONResponse", content: object, *args: object, **kwargs: object
+            ) -> None:
                 self.body = json.dumps(content).encode("utf-8")
 
-
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from sse_starlette.sse import EventSourceResponse
@@ -69,7 +76,7 @@ else:  # pragma: no cover - optional dependency
     except Exception:
 
         class EventSourceResponse:  # pragma: no cover - minimal stub
-            def __init__(self, *args: object, **kwargs: object) -> None:
+            def __init__(self: "EventSourceResponse", *args: object, **kwargs: object) -> None:
                 self.gen = None
 
 
@@ -191,12 +198,14 @@ async def get_missions() -> Response:
 async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
     """Return recent semantic summaries for an agent."""
     manager = SIM_STATE.get("semantic_manager")
-    summaries: list[str] = []
     if manager is not None:
         try:
             summaries = manager.get_semantic_summaries(agent_id, limit=limit)
-        except Exception:  # pragma: no cover - defensive
-            summaries = []
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Failed to get semantic summaries for %s", agent_id, exc_info=exc)
+            return JSONResponse({"error": "summary retrieval failed"}, status_code=500)
+    else:
+        summaries = []
     return JSONResponse({"summaries": summaries})
 
 

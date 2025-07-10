@@ -48,4 +48,4 @@ async def test_get_semantic_summaries_error(monkeypatch: pytest.MonkeyPatch) -> 
 
     resp = await db.get_semantic_summaries("agent")
     data = json.loads(resp.body)
-    assert data == {"summaries": []}
+    assert data["error"] == "summary retrieval failed"
