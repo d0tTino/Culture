@@ -126,6 +126,7 @@ class AgentTurnState(TypedDict):
     agent_goal: str  # The agent\'s goal for the simulation
     updated_state: dict[str, object]  # Output field: The updated state after the turn
     vector_store_manager: object | None  # For persisting memories to vector store
+    memory_service: object | None  # Unified memory service
     rag_summary: str  # Summarized memories from vector store
     knowledge_board_content: list[str]  # Current entries on the knowledge board
     knowledge_board: object | None  # The knowledge board instance for posting entries

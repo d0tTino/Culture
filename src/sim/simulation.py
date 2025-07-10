@@ -14,6 +14,7 @@ from typing_extensions import Self
 from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentActionIntent
+from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.governance import evaluate_policy
@@ -61,6 +62,7 @@ class Simulation:
     def __init__(
         self: Self,
         agents: list["Agent"],
+        memory_service: MemoryService | None = None,
         vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
         semantic_manager: Optional["SemanticMemoryManager"] = None,
         scenario: str = "",
@@ -71,9 +73,12 @@ class Simulation:
 
         Args:
             agents (list[Agent]): A list of Agent instances participating
-                                  in the simulation.
+                in the simulation.
+            memory_service (MemoryService | None): Unified memory service. If
+                ``None``, one will be created from ``vector_store_manager`` and
+                ``semantic_manager``.
             vector_store_manager (Optional[ChromaVectorStoreManager]): Manager for
-                                  vector-based agent memory storage and retrieval.
+                vector-based agent memory storage and retrieval.
             scenario (str): Description of the simulation scenario that provides
                 context for agent interactions.
             discord_bot (Optional[SimulationDiscordBot]): Discord bot for sending
@@ -139,9 +144,13 @@ class Simulation:
         self.collective_du: float = 0.0
         logger.info("Simulation initialized with collective IP/DU tracking.")
 
-        # --- Store the vector store manager ---
-        self.vector_store_manager = vector_store_manager
-        if vector_store_manager:
+        # --- Initialize memory service ---
+        if memory_service is None:
+            memory_service = MemoryService(vector_store_manager, semantic_manager)
+        self.memory_service = memory_service
+        self.vector_store_manager = memory_service.vector_store
+        self.semantic_manager = memory_service.semantic_manager
+        if self.vector_store_manager:
             logger.info("Simulation initialized with vector store manager for memory persistence.")
         else:
             logger.warning(
@@ -149,7 +158,6 @@ class Simulation:
                 "Memory will not be persisted."
             )
 
-        self.semantic_manager = semantic_manager
         self._last_semantic_job_step = 0
         self._last_memory_prune_step = 0
         self._last_consolidation_step = 0
@@ -519,6 +527,7 @@ class Simulation:
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,
             environment_perception=perception_data,
+            memory_service=self.memory_service,
             vector_store_manager=self.vector_store_manager,
             knowledge_board=self.knowledge_board,
         )
@@ -684,7 +693,7 @@ class Simulation:
         turn_counter_this_run_step += 1
 
         if (
-            self.vector_store_manager
+            self.memory_service.vector_store
             and config.MEMORY_STORE_PRUNE_INTERVAL_STEPS > 0
             and self.current_step - self._last_memory_prune_step
             >= config.MEMORY_STORE_PRUNE_INTERVAL_STEPS
@@ -696,7 +705,7 @@ class Simulation:
             self._last_memory_prune_step = self.current_step
 
         if (
-            self.vector_store_manager
+            self.memory_service.vector_store
             and config.MEMORY_STORE_PRUNE_INTERVAL_STEPS > 0
             and self.current_step % len(self.agents) == 0
             and self.current_step > self._last_consolidation_step
@@ -721,7 +730,7 @@ class Simulation:
         ):
             for ag in self.agents:
                 try:
-                    await self.semantic_manager.run_nightly_job(ag.agent_id)
+                    await self.memory_service.run_semantic_job(ag.agent_id)
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.error("Failed semantic nightly job: %s", exc)
             self._last_semantic_job_step = self.current_step
@@ -738,10 +747,12 @@ class Simulation:
         return lambda: self._run_agent_turn(agent_index)
 
     async def _prune_memory_event(self: Self) -> None:
-        if not self.vector_store_manager:
+        if not self.memory_service.vector_store:
             return
         try:
-            self.vector_store_manager.prune(int(config.MEMORY_STORE_TTL_SECONDS))
+            self.memory_service.prune_expired(int(config.MEMORY_STORE_TTL_SECONDS))
+            # Additionally prune memories based on MUS thresholds
+            self.memory_service.prune_mus()
             event = {
                 "type": "memory_prune",
                 "step": self.current_step,
@@ -751,11 +762,11 @@ class Simulation:
             logger.error("Failed to prune memory store: %s", exc)
 
     async def _consolidate_memory_event(self: Self, start_step: int) -> None:
-        if not self.vector_store_manager:
+        if not self.memory_service.vector_store:
             return
         for ag in self.agents:
             try:
-                await self.vector_store_manager.aconsolidate_daily_memories(
+                await self.memory_service.aconsolidate_daily_memories(
                     ag.agent_id,
                     start_step,
                     self.current_step,
@@ -918,6 +929,7 @@ class Simulation:
             agent.run_turn(
                 simulation_step=start_step + idx,
                 environment_perception={},
+                memory_service=self.memory_service,
                 vector_store_manager=self.vector_store_manager,
                 knowledge_board=self.knowledge_board,
             )
@@ -944,11 +956,9 @@ class Simulation:
                     close_fn()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close knowledge board: %s", exc)
-        if self.vector_store_manager and hasattr(self.vector_store_manager, "close"):
+        if hasattr(self.memory_service, "close"):
             try:
-                close_fn = getattr(self.vector_store_manager, "close")
-                if callable(close_fn):
-                    close_fn()
+                self.memory_service.close()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close vector store manager: %s", exc)
         if self._event_task:

@@ -1,0 +1,109 @@
+"""Unified memory service for agent operations."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from typing_extensions import Self
+
+from .semantic_memory_manager import SemanticMemoryManager
+from .vector_store import ChromaVectorStoreManager
+
+
+class MemoryService:
+    """Wrap vector store and semantic memory managers."""
+
+    def __init__(
+        self: Self,
+        vector_store: ChromaVectorStoreManager | None = None,
+        semantic_manager: SemanticMemoryManager | None = None,
+    ) -> None:
+        self.vector_store = vector_store
+        self.semantic_manager = semantic_manager
+
+    def add_memory(
+        self: Self,
+        agent_id: str,
+        step: int,
+        event_type: str,
+        content: str,
+        memory_type: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        if not self.vector_store:
+            return ""
+        return self.vector_store.add_memory(
+            agent_id, step, event_type, content, memory_type, metadata
+        )
+
+    async def retrieve_relevant_memories(
+        self: Self, agent_id: str, query: str = "", k: int = 5
+    ) -> list[dict[str, Any]]:
+        if not self.vector_store:
+            return []
+        return await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
+
+    def retrieve_semantic_context(
+        self: Self, agent_id: str, query: str, k: int = 5
+    ) -> list[dict[str, Any]]:
+        if not self.semantic_manager:
+            return []
+        return self.semantic_manager.retrieve_context(agent_id, query, k)
+
+    def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
+        if not self.semantic_manager:
+            return []
+        return self.semantic_manager.get_recent_summaries(agent_id, limit)
+
+    async def run_semantic_job(self: Self, agent_id: str) -> None:
+        if not self.semantic_manager:
+            return None
+        await self.semantic_manager.run_nightly_job(agent_id)
+        return None
+
+    def consolidate_daily_memories(
+        self: Self, agent_id: str, start_step: int, end_step: int
+    ) -> None:
+        if not self.vector_store:
+            return None
+        self.vector_store.consolidate_daily_memories(agent_id, start_step, end_step)
+        return None
+
+    async def aconsolidate_daily_memories(
+        self: Self, agent_id: str, start_step: int, end_step: int
+    ) -> None:
+        if not self.vector_store:
+            return None
+        await self.vector_store.aconsolidate_daily_memories(agent_id, start_step, end_step)
+        return None
+
+    def prune_expired(self: Self, ttl_seconds: int) -> int:
+        if not self.vector_store:
+            return 0
+        return self.vector_store.prune(ttl_seconds)
+
+    def prune_mus(
+        self: Self,
+        l1_threshold: float = 0.2,
+        l2_threshold: float = 0.3,
+        l2_age_days: int = 30,
+        l1_min_age_days: int = 0,
+        l2_min_age_days: int = 0,
+    ) -> int:
+        if not self.vector_store:
+            return 0
+        return self.vector_store.prune_memories_hybrid(
+            l1_threshold,
+            l2_threshold,
+            l2_age_days,
+            l1_min_age_days,
+            l2_min_age_days,
+        )
+
+    def close(self: Self) -> None:
+        if self.vector_store and hasattr(self.vector_store, "close"):
+            try:
+                self.vector_store.close()
+            except Exception:
+                pass
+        return None

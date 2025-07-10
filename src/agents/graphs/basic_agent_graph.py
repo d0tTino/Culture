@@ -20,6 +20,7 @@ from src.agents.core.roles import ensure_profile
 
 # Import L1SummaryGenerator for DSPy-based L1 summary generation
 from src.agents.dspy_programs.l1_summary_generator import L1SummaryGenerator
+from src.agents.memory.memory_service import MemoryService
 
 # Import L2SummaryGenerator for DSPy-based L2 summary generation
 from src.infra import config  # Import config for role change parameters
@@ -298,9 +299,9 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                     memory_summary,
                     {"step": sim_step, "type": "consolidated_summary"},
                 )
-                vector_store = state.get("vector_store_manager")
-                if vector_store and hasattr(vector_store, "add_memory"):
-                    vector_store.add_memory(
+                service = state.get("memory_service")
+                if service and hasattr(service, "add_memory"):
+                    cast(MemoryService, service).add_memory(
                         agent_id,
                         sim_step,
                         "consolidated_summary",
@@ -371,14 +372,18 @@ def route_action_intent(state: AgentTurnState) -> str:
 
 
 def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
-    manager = state.get("semantic_manager")
+    manager = state.get("memory_service")
     step = int(state.get("simulation_step", 0))
     interval = int(
         config.get_config_value_with_override("SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 24)
     )
     if manager and interval > 0 and step % interval == 0:
         try:
-            manager.consolidate_memories(state["agent_id"])
+            cast(MemoryService, manager).consolidate_daily_memories(
+                state["agent_id"],
+                max(0, step - interval + 1),
+                step,
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Semantic consolidation failed: %s", exc, exc_info=True)
     return dict(state)

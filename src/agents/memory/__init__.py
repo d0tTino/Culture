@@ -7,6 +7,7 @@ including persistence, retrieval, and memory utility operations.
 
 from typing import TYPE_CHECKING
 
+from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 
@@ -18,6 +19,6 @@ else:  # pragma: no cover - optional dependency
     except Exception:
         ChromaVectorStoreManager = None
 
-__all__ = ["MemoryTrackingManager", "SemanticMemoryManager"]
+__all__ = ["MemoryService", "MemoryTrackingManager", "SemanticMemoryManager"]
 if ChromaVectorStoreManager is not None:
     __all__.insert(0, "ChromaVectorStoreManager")
