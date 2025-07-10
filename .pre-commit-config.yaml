@@ -36,6 +36,12 @@ repos:
         language: python
         types: [python]
         pass_filenames: false
+      - id: pydantic-v2-compat
+        name: Pydantic v2 compatibility
+        entry: python scripts/check_pydantic_v2_compat.py
+        language: python
+        types: [python]
+        pass_filenames: false
       - id: unit-tests
         name: "Run unit test suite"
         entry: python scripts/run_tests.py -m "not integration and not ollama"
