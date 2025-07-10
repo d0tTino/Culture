@@ -194,6 +194,17 @@ age: Annotated[int, Field(ge=0, le=120)]
 - Prepare a PR for `feature/pydantic-v2-migration` with a summary of changes and critical review areas.
 - **Rollback:** If major issues arise, abandon the feature branch and revert.
 
+### Automated Compatibility Check
+
+- Added a `pydantic-v2-compat` hook to `.pre-commit-config.yaml`.
+- The hook runs `scripts/check_pydantic_v2_compat.py` which scans tracked Python files for
+  common Pydantic v1 patterns such as `@validator`, `@root_validator`, `class Config`, and
+  `.dict()` calls.
+- The script fails if deprecated APIs are found, preventing accidental reintroduction of
+  v1 features.
+- `pyproject.toml` now enables the `pydantic.mypy` plugin so that mypy can better type-check
+  models and surface additional deprecation warnings.
+
 ---
 
 ## 6. Effort Estimation
