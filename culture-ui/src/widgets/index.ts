@@ -5,5 +5,6 @@ export { default as WorldMap } from './WorldMap'
 export { default as KpiCard } from './KpiCard'
 export { default as EventConsole } from './EventConsole'
 export { default as Storyboard } from './Storyboard'
+export { default as AgentTimeline } from './AgentTimeline'
 
 
