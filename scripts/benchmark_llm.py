@@ -46,7 +46,11 @@ def time_calls(func: Callable[[], None], runs: int) -> list[float]:
 def benchmark(prompt: str, model: str, runs: int, vllm_base: str) -> None:
     # Benchmark Ollama
     os.environ.pop("VLLM_API_BASE", None)
-    llm_client.get_ollama_client()  # refresh client
+    try:
+        llm_client.get_ollama_client()  # refresh client
+    except llm_client.LLMClientInitError as exc:
+        print(f"Failed to initialize LLM client: {exc}")
+        return
 
     def ollama_call() -> None:
         llm_client.generate_text(prompt, model=model)
@@ -58,7 +62,11 @@ def benchmark(prompt: str, model: str, runs: int, vllm_base: str) -> None:
 
     # Benchmark vLLM
     os.environ["VLLM_API_BASE"] = vllm_base
-    llm_client.get_ollama_client()  # switch to vLLM
+    try:
+        llm_client.get_ollama_client()  # switch to vLLM
+    except llm_client.LLMClientInitError as exc:
+        print(f"Failed to initialize vLLM client: {exc}")
+        return
 
     def vllm_call() -> None:
         llm_client.generate_text(prompt, model=model)

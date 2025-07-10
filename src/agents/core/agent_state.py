@@ -14,9 +14,12 @@ else:
     try:  # pragma: no cover - pydantic>=2 preferred at runtime
         from pydantic import ConfigDict
     except ImportError:  # pragma: no cover - fallback for old pydantic
+
         class ConfigDict(dict[str, Any]):
             """Fallback ``ConfigDict`` for pydantic < 2."""
+
             pass
+
 
 from src.shared.pydantic_compat import _PYDANTIC_V2, field_validator, model_validator
 
@@ -35,8 +38,6 @@ if TYPE_CHECKING:
     from src.infra.llm_client import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
-
-
 
 
 # Helper function for the default_factory to keep the lambda clean
@@ -113,20 +114,27 @@ if TYPE_CHECKING:
     from src.infra.llm_client import (
         OllamaClientProtocol,
         get_default_llm_client,
+        LLMClientInitError,
     )
 else:
     try:
         from src.infra.llm_client import (
             OllamaClientProtocol,
             get_default_llm_client,
+            LLMClientInitError,
         )
     except Exception:  # pragma: no cover - fallback when llm_client is missing
+
         class OllamaClientProtocol(Protocol):
             """Fallback protocol used when the real client is unavailable."""
+
             ...
 
         def get_default_llm_client() -> OllamaClientProtocol | None:
             return None
+
+        class LLMClientInitError(RuntimeError):
+            pass
 
 
 class AgentStateData(BaseModel):
@@ -476,7 +484,11 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                 else:
                     model.llm_client = client
             else:
-                default_client = get_default_llm_client()
+                try:
+                    default_client = get_default_llm_client()
+                except LLMClientInitError as exc:
+                    logger.error(f"Failed to initialize default LLM client: {exc}")
+                    raise
                 if isinstance(model, dict):
                     model["llm_client"] = default_client
                 else:
@@ -510,7 +522,11 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return model
         else:
             if not model.role_history:
-                role_name = model.current_role.name if isinstance(model.current_role, RoleProfile) else model.current_role
+                role_name = (
+                    model.current_role.name
+                    if isinstance(model.current_role, RoleProfile)
+                    else model.current_role
+                )
                 model.role_history = [(model.step_counter, role_name)]
             if not model.mood_history:
                 model.mood_history = [(model.step_counter, model.mood_level)]
@@ -562,9 +578,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     },
                 ),
             )
-        return base_model.dict(
-            exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
-        )
+        return base_model.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":
@@ -577,7 +591,11 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             clean_data["current_role"] = create_role_profile(cur)
         obj = cls(**clean_data)
         if not obj.llm_client:
-            obj.llm_client = get_default_llm_client()
+            try:
+                obj.llm_client = get_default_llm_client()
+            except LLMClientInitError as exc:
+                logger.error(f"Failed to initialize default LLM client: {exc}")
+                raise
         if not obj.role_history:
             obj.role_history = [(obj.step_counter, obj.current_role.name)]
         if not obj.mood_history:
