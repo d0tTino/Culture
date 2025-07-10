@@ -33,11 +33,18 @@ class SemanticMemoryManager:
         self.topic_groups: dict[str, dict[int, list[dict[str, Any]]]] = {}
         self.topic_centroids: dict[str, NDArray[np.float64]] = {}
 
-
-    def consolidate_memories(self: Self, agent_id: str) -> str:
-        """Consolidate an agent's episodic memories into a semantic summary."""
-        memories = self.vector_store.retrieve_filtered_memories(
-            agent_id, filters={"memory_type": "raw"}, limit=None
+    def consolidate_memories(
+        self: Self,
+        agent_id: str,
+        episodic_memories: list[dict[str, Any]] | None = None,
+    ) -> str:
+        """Consolidate episodic memories into a semantic summary."""
+        memories = (
+            episodic_memories
+            if episodic_memories is not None
+            else self.vector_store.retrieve_filtered_memories(
+                agent_id, filters={"memory_type": "raw"}, limit=None
+            )
         )
         if not memories:
             return ""
@@ -150,11 +157,15 @@ class SemanticMemoryManager:
             )
             return [record["summary"] for record in records]
 
-    async def run_nightly_job(self: Self, agent_id: str) -> None:
+    async def run_nightly_job(
+        self: Self,
+        agent_id: str,
+        episodic_memories: list[dict[str, Any]] | None = None,
+    ) -> None:
         """Asynchronously consolidate memories and persist the summary."""
         import asyncio
 
-        summary = await asyncio.to_thread(self.consolidate_memories, agent_id)
+        summary = await asyncio.to_thread(self.consolidate_memories, agent_id, episodic_memories)
         if self.driver is not None and summary:
             now = datetime.utcnow().isoformat()
             with self.driver.session() as session:
