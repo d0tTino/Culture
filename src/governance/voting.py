@@ -12,6 +12,11 @@ async def _vote(agent: Agent, proposal: str) -> bool:
     return await governance.vote(agent, proposal)
 
 
-async def propose_law(proposer: Agent, text: str, agents: Iterable[Agent]) -> bool:
+async def propose_law(
+    proposer: Agent,
+    text: str,
+    agents: Iterable[Agent],
+    vote_weights: dict[str, int] | None = None,
+) -> bool:
     """Delegate to :class:`GovernanceService`."""
-    return await governance.propose_law(proposer, text, agents)
+    return await governance.propose_law(proposer, text, agents, vote_weights)
