@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -18,6 +18,7 @@ describe('MemoryExplorer', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
@@ -45,5 +46,32 @@ describe('MemoryExplorer', () => {
     expect(
       fetchMock.mock.calls.some((c) => c[0] === '/api/agents/agent-2/semantic_summaries'),
     ).toBe(true)
+  })
+
+  it('keeps previous summaries when fetch fails', async () => {
+    render(
+      <MemoryRouter initialEntries={["/memory"]}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('hello world')).toBeInTheDocument()
+
+    fetchMock.mockRejectedValueOnce(new Error('fail'))
+
+    const input = screen.getByLabelText('agent-select')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'agent-2')
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/agents/agent-2/semantic_summaries',
+      ),
+    )
+
+    expect(screen.queryByText('hello world')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('summaries').textContent?.trim(),
+    ).toBe('hello world')
   })
 })
