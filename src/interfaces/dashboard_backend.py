@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from pydantic import BaseModel
 
 from src.governance.service import governance
+from src.infra.ledger import ledger
 
 from .widget_registry import WidgetRegistry
 
@@ -229,6 +230,26 @@ async def api_get_proposals(limit: int = 10) -> Response:
     return JSONResponse({"proposals": proposals})
 
 
+@app.get("/api/token_balances")
+async def api_token_balances() -> Response:
+    """Return DU/IP and token balances for all agents."""
+
+    def _load() -> dict[str, dict[str, Any]]:
+        cur = ledger.conn.execute("SELECT agent_id, ip, du FROM agent_balances")
+        balances: dict[str, dict[str, Any]] = {
+            row[0]: {"ip": float(row[1]), "du": float(row[2]), "tokens": {}}
+            for row in cur.fetchall()
+        }
+        cur = ledger.conn.execute("SELECT agent_id, token, amount FROM agent_tokens")
+        for agent_id, token, amount in cur.fetchall():
+            agent = balances.setdefault(agent_id, {"ip": 0.0, "du": 0.0, "tokens": {}})
+            agent["tokens"][token] = int(amount)
+        return balances
+
+    agents = await asyncio.to_thread(_load)
+    return JSONResponse({"agents": agents})
+
+
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -357,6 +378,7 @@ __all__ = [
     "SimulationEvent",
     "api_get_proposals",
     "api_propose_law",
+    "api_token_balances",
     "app",
     "emit_event",
     "emit_map_action_event",
