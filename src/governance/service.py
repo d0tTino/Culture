@@ -4,6 +4,8 @@ import asyncio
 import math
 from collections.abc import Iterable
 
+from typing_extensions import Self
+
 from src.agents.core.base_agent import Agent
 from src.infra.ledger import ledger
 from src.utils.policy import evaluate_with_opa
@@ -14,26 +16,44 @@ from .law_board import law_board
 class GovernanceService:
     """Service coordinating law proposals and voting."""
 
-    async def vote(self, agent: Agent, proposal: str) -> bool:
+    async def vote(self: Self, agent: Agent, proposal: str) -> bool:
         """Return the agent's vote (True=approve) using the OPA policy."""
         allowed, _ = await evaluate_with_opa(proposal)
         return allowed
 
-    async def propose_law(self, proposer: Agent, text: str, agents: Iterable[Agent]) -> bool:
-        """Propose ``text`` to ``agents`` and persist the result."""
+    async def propose_law(
+        self: Self,
+        proposer: Agent,
+        text: str,
+        agents: Iterable[Agent],
+        vote_weights: dict[str, int] | None = None,
+    ) -> bool:
+        """Propose ``text`` to ``agents`` and persist the result.
+
+        When ``vote_weights`` is provided, each agent may cast multiple votes.
+        The cost in influence points (IP) for casting ``n`` votes is ``n^2``.
+        """
         allowed, _ = await evaluate_with_opa(text)
         if not allowed:
             return False
 
         votes = await asyncio.gather(*[self.vote(a, text) for a in agents])
         weights: list[float] = []
-        for a in agents:
-            base_ip = getattr(a.state, "ip", 0.0)
-            try:
-                staked = ledger.get_staked_ip(a.agent_id)
-            except Exception:
-                staked = 0.0
-            weights.append(math.sqrt(base_ip + staked))
+        if vote_weights is None:
+            for a in agents:
+                base_ip = getattr(a.state, "ip", 0.0)
+                try:
+                    staked = ledger.get_staked_ip(a.agent_id)
+                except Exception:
+                    staked = 0.0
+                weights.append(math.sqrt(base_ip + staked))
+        else:
+            spend_tasks = []
+            for a in agents:
+                w = int(vote_weights.get(a.agent_id, 1))
+                weights.append(float(w))
+                spend_tasks.append(ledger.spend(a.agent_id, ip=float(w * w), reason="vote"))
+            await asyncio.gather(*spend_tasks, return_exceptions=True)
 
         yes_weight = sum(w for w, v in zip(weights, votes) if v)
         no_weight = sum(w for w, v in zip(weights, votes) if not v)
@@ -52,7 +72,7 @@ class GovernanceService:
             pass
         return approved
 
-    def get_proposals(self, limit: int | None = None) -> list[dict[str, object]]:
+    def get_proposals(self: Self, limit: int | None = None) -> list[dict[str, object]]:
         """Return stored law proposals."""
         try:
             return ledger.get_law_proposals(limit)

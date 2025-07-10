@@ -17,3 +17,15 @@ python examples/governance/list_proposals_example.py
 The core voting logic lives in ``src.governance.service`` where
 ``GovernanceService`` exposes methods for proposing laws, weighting votes via
 the ledger, and retrieving previous proposals.
+
+## Weighted Votes
+
+Additional votes can be submitted by passing `--vote-weights` with a comma
+separated list of `agent_id=weight` pairs. Each extra vote costs its square in
+IP. For example, to give `agent_1` three votes and `agent_2` a single vote:
+
+```bash
+python src/app.py \
+  --proposal "Allow concerts" --proposer-id agent_1 \
+  --vote-weights agent_1=3,agent_2=1
+```
