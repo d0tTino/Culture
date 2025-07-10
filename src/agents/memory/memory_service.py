@@ -55,10 +55,14 @@ class MemoryService:
             return []
         return self.semantic_manager.get_recent_summaries(agent_id, limit)
 
-    async def run_semantic_job(self: Self, agent_id: str) -> None:
+    async def run_semantic_job(
+        self: Self,
+        agent_id: str,
+        episodic_memories: list[dict[str, Any]] | None = None,
+    ) -> None:
         if not self.semantic_manager:
             return None
-        await self.semantic_manager.run_nightly_job(agent_id)
+        await self.semantic_manager.run_nightly_job(agent_id, episodic_memories)
         return None
 
     def consolidate_daily_memories(

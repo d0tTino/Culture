@@ -53,6 +53,15 @@ The implementation uses ChromaDB as a vector store to persist memories for long-
 - Metadata filtering to distinguish between different memory types
 - Long-term persistence across simulation runs
 
+## Retrieval Flow
+
+1. Episodic memories are stored in the vector store via `MemoryService`.
+2. During a turn, the agent retrieves the most relevant episodic memories.
+3. These retrieved memories are passed back to `SemanticMemoryManager` which
+   immediately consolidates them into a higher level summary.
+4. The latest semantic summaries are then used alongside episodic memories for
+   generation.
+
 ## Testing
 
 Integration tests verify the memory consolidation functionality.

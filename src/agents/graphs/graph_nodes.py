@@ -77,26 +77,49 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 
 
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
-    manager = cast(MemoryService | None, state.get("memory_service"))
+    manager = cast(
+        MemoryService | MemoryRetriever | None,
+        state.get("memory_service") or state.get("vector_store_manager"),
+    )
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
 
-    memories = await manager.retrieve_relevant_memories(state["agent_id"], query="", k=5)
+    if hasattr(manager, "retrieve_relevant_memories"):
+        memories = await cast(MemoryService, manager).retrieve_relevant_memories(
+            state["agent_id"], query="", k=5
+        )
+    else:
+        memories = await cast(MemoryRetriever, manager).aretrieve_relevant_memories(
+            state["agent_id"], query="", k=5
+        )
+    try:
+        if hasattr(manager, "run_semantic_job"):
+            await cast(MemoryService, manager).run_semantic_job(
+                state["agent_id"], episodic_memories=memories
+            )
+    except Exception:  # pragma: no cover - defensive
+        logger.error("Semantic consolidation failed", exc_info=True)
     memories_content = [m.get("content", "") for m in memories]
     import asyncio
 
-    semantic_memories = await asyncio.to_thread(
-        manager.retrieve_semantic_context,
-        state["agent_id"],
-        "",
-        5,
-    )
-    memories.extend(semantic_memories)
-    memories_content.extend(m.get("content", "") for m in semantic_memories)
+    semantic_memories: list[dict[str, Any]] = []
+    if hasattr(manager, "retrieve_semantic_context"):
+        semantic_memories = await asyncio.to_thread(
+            cast(MemoryService, manager).retrieve_semantic_context,
+            state["agent_id"],
+            "",
+            5,
+        )
+        memories.extend(semantic_memories)
+        memories_content.extend(m.get("content", "") for m in semantic_memories)
 
-    semantic = manager.get_recent_semantic_summaries(state["agent_id"], limit=2)
-    memories_content.extend(semantic)
+    semantic: list[str] = []
+    if hasattr(manager, "get_recent_semantic_summaries"):
+        semantic = cast(MemoryService, manager).get_recent_semantic_summaries(
+            state["agent_id"], limit=2
+        )
+        memories_content.extend(semantic)
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
     summary_result = await agent.async_generate_l1_summary(
