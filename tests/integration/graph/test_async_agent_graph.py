@@ -3,6 +3,10 @@ import logging
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class DummyVectorStore:
     async def aretrieve_relevant_memories(
@@ -14,7 +18,6 @@ class DummyVectorStore:
         return ["summary1"]
 
 
-import pytest
 from pytest import LogCaptureFixture
 
 pytest.importorskip("langgraph")
