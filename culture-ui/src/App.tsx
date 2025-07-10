@@ -12,6 +12,7 @@ import LawProposalPage from './pages/LawProposal'
 import TimelineWidgetPage from './pages/TimelineWidget'
 import KpiCardPage from './pages/KpiCard'
 import StoryboardPage from './pages/Storyboard'
+import AgentTimelinePage from './pages/AgentTimeline'
 import MemoryExplorer from './pages/MemoryExplorer'
 import DockManager from './components/DockManager'
 import { createDefaultLayout } from './lib/defaultLayout'
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/network-web" element={<NetworkWebPage />} />
             <Route path="/world-map" element={<WorldMapPage />} />
             <Route path="/timeline" element={<TimelineWidgetPage />} />
+            <Route path="/agent-timeline" element={<AgentTimelinePage />} />
             <Route path="/propose-law" element={<LawProposalPage />} />
             <Route path="/kpi-card" element={<KpiCardPage />} />
             <Route path="/storyboard" element={<StoryboardPage />} />
