@@ -13,6 +13,14 @@ from pathlib import Path
 from typing import Callable, Optional
 from unittest.mock import MagicMock, patch
 
+pytest_plugins = ["tests.pytest_asyncio_stub"]
+
+# Provide a minimal module so tests can import pytest_asyncio
+if "pytest_asyncio" not in sys.modules:
+    import types
+
+    sys.modules["pytest_asyncio"] = types.ModuleType("pytest_asyncio")
+
 try:
     import numpy as np
 except Exception:

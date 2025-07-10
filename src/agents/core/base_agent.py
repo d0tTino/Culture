@@ -29,7 +29,7 @@ from src.agents.memory.weaviate_vector_store_manager import WeaviateVectorStoreM
 from src.infra import config
 from src.infra.async_dspy_manager import AsyncDSPyManager
 from src.infra.config import get_config
-from src.infra.llm_client import get_ollama_client
+from src.infra.llm_client import LLMClientInitError, get_ollama_client
 
 from .embedding_utils import compute_embedding
 from .roles import ensure_profile
@@ -164,7 +164,11 @@ class Agent:
         reputation = initial_state.get("reputation", {})
 
         # LLM Client Initialization - MOVED EARLIER
-        self.llm_client = get_ollama_client()
+        try:
+            self.llm_client = get_ollama_client()
+        except LLMClientInitError as exc:
+            logger.error(f"Agent failed to initialize LLM client: {exc}")
+            raise
 
         # Get project id and ensure current_project_id and current_project_affiliation are in sync
 

@@ -93,6 +93,12 @@ _APIError = APIError
 
 logger = logging.getLogger(__name__)
 
+
+# Exception raised when the LLM client cannot be initialized.
+class LLMClientInitError(RuntimeError):
+    """Raised when both vLLM and Ollama client initialization fail."""
+
+
 # Define generic type variables for Pydantic models and call signatures
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -164,7 +170,10 @@ class LLMClient:
 
     def __init__(self: LLMClient, config: LLMClientConfig) -> None:
         self.config = config
-        self._client = get_ollama_client()
+        try:
+            self._client = get_ollama_client()
+        except LLMClientInitError:
+            raise
 
     @monitor_llm_call(model_param="model", context="ollama_chat")
     def chat(
@@ -277,13 +286,17 @@ def _create_vllm_client() -> OllamaClientProtocol:
     return _Client()
 
 
+def _create_ollama_client() -> OllamaClientProtocol:
+    return cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
+
+
 client: OllamaClientProtocol | None
 if USE_VLLM:
     logger.info(f"Using vLLM API base: {VLLM_API_BASE}")
     client = _create_vllm_client()
 else:
     try:
-        client = cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
+        client = _create_ollama_client()
         logger.info(f"Ollama client initialized for host: {OLLAMA_API_BASE}")
     except (APIError, RequestException) as e:
         logger.error(
@@ -293,34 +306,48 @@ else:
         client = None
 
 
-def get_ollama_client() -> OllamaClientProtocol | None:
-    """Return the initialized LLM client, switching backends if needed."""
+def get_ollama_client() -> OllamaClientProtocol:
+    """Return the initialized LLM client, retrying and switching backends if needed."""
     global client, VLLM_API_BASE, USE_VLLM
     env_base = os.environ.get("VLLM_API_BASE")
 
-    if env_base:
-        if not USE_VLLM or env_base != VLLM_API_BASE:
-            VLLM_API_BASE = env_base
-            USE_VLLM = True
-            logger.info("Switching to vLLM client for base %s", VLLM_API_BASE)
-            client = _create_vllm_client()
-    elif USE_VLLM:
+    if env_base and (not USE_VLLM or env_base != VLLM_API_BASE):
+        VLLM_API_BASE = env_base
+        USE_VLLM = True
+        logger.info("Switching to vLLM client for base %s", VLLM_API_BASE)
+        client = None
+    elif not env_base and USE_VLLM:
         USE_VLLM = False
         VLLM_API_BASE = None
-        try:
-            client = cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
-            logger.info("Switching to Ollama client for host %s", OLLAMA_API_BASE)
-        except (APIError, RequestException) as e:  # pragma: no cover - optional
-            logger.error(
-                "Failed to initialize Ollama client for host %s: %s",
-                OLLAMA_API_BASE,
-                e,
-                exc_info=True,
-            )
-            client = None
+        logger.info("Switching to Ollama client for host %s", OLLAMA_API_BASE)
+        client = None
 
     if client is None:
-        logger.error("Ollama client is not available. Check connection and configuration.")
+        primary = _create_vllm_client if USE_VLLM else _create_ollama_client
+        secondary = _create_ollama_client if USE_VLLM else _create_vllm_client
+
+        client, err = _retry_with_backoff(primary)
+        if client is None:
+            logger.error(
+                "Failed to initialize %s client: %s",
+                "vLLM" if USE_VLLM else "Ollama",
+                err,
+                exc_info=True,
+            )
+            client, err = _retry_with_backoff(secondary)
+            if client is None:
+                logger.error(
+                    "Failed to initialize %s client: %s",
+                    "Ollama" if USE_VLLM else "vLLM",
+                    err,
+                    exc_info=True,
+                )
+                raise LLMClientInitError("Failed to initialize vLLM and Ollama clients")
+            USE_VLLM = not USE_VLLM
+            if USE_VLLM:
+                VLLM_API_BASE = env_base
+            else:
+                VLLM_API_BASE = None
     return client
 
 
@@ -384,8 +411,6 @@ def generate_text(
 
     def call() -> LLMChatResponse:
         local_client = get_ollama_client()
-        if not local_client:
-            raise RuntimeError("Ollama client not initialized")
         messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
         return local_client.chat(
             model=model,
@@ -393,7 +418,11 @@ def generate_text(
             options={"temperature": temperature},
         )
 
-    response, error = _retry_with_backoff(call)
+    try:
+        response, error = _retry_with_backoff(call)
+    except LLMClientInitError as exc:
+        logger.error(f"Failed to initialize LLM client: {exc}")
+        return None
 
     if error:
         logger.error(f"Failed to generate text after retries: {error}")
@@ -448,9 +477,13 @@ def summarize_memory_context(
             else f"This is a mock summary of {len(memories)} memories related to '{goal}'."
         )
 
-    ollama_client = get_ollama_client()
-    if not ollama_client:
-        logger.warning("Attempted to summarize memories but Ollama client is unavailable.")
+    try:
+        ollama_client = get_ollama_client()
+    except LLMClientInitError as exc:
+        logger.warning(
+            "Attempted to summarize memories but %s",
+            exc,
+        )
         return "(Memory summarization failed: LLM client unavailable)"
 
     # Format memories as a bulleted list for the prompt
@@ -533,9 +566,13 @@ def analyze_sentiment(
                 return 0.0
         return float(val) if isinstance(val, (int, float)) else 0.0
 
-    ollama_client = get_ollama_client()
-    if not ollama_client or not text:
-        return None  # Client not available or empty text
+    if not text:
+        return None
+    try:
+        ollama_client = get_ollama_client()
+    except LLMClientInitError as exc:
+        logger.error(f"Sentiment analysis failed to init client: {exc}")
+        return None
 
     # Simple prompt for sentiment classification
     prompt = (
@@ -716,9 +753,10 @@ def generate_structured_output(
             logger.error(f"Error generating mock structured output: {e}")
             return None
     # Get the Ollama client instance
-    ollama_client = get_ollama_client()
-    if not ollama_client:
-        logger.warning("Attempted to generate structured output but Ollama client is unavailable.")
+    try:
+        ollama_client = get_ollama_client()
+    except LLMClientInitError as exc:
+        logger.warning("Attempted to generate structured output but %s", exc)
         return None
     # Ensure response_model is a subclass of BaseModel for type safety
     if not issubclass(response_model, BaseModel):
@@ -801,7 +839,7 @@ def generate_structured_output(
         return None
 
 
-def get_default_llm_client() -> OllamaClientProtocol | None:
+def get_default_llm_client() -> OllamaClientProtocol:
     """
     Creates and returns a default LLM client instance for use in simulations.
     This function is a convenience wrapper that returns the global client.
