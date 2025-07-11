@@ -1,4 +1,5 @@
-import { useState, FormEvent } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { registerWidget } from '../lib/widgetRegistry'
 import { proposeLaw } from '../lib/api'
 
