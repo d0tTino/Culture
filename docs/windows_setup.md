@@ -4,6 +4,14 @@ This guide walks through running the Culture.ai simulation on Windows using WSL2
 It covers enabling WSL2, installing Python 3.10, setting up Ollama, and running
 the vertical slice example.
 
+## Quick Setup Checklist
+
+1. [Enable WSL2](#enable-wsl2)
+2. [Install Python 3.10](#install-python-310)
+3. [Install Ollama (≥0.1.34)](#install-ollama-0134)
+4. [Run the Example Vertical Slice](#run-the-example-vertical-slice)
+5. [Run the Simulation](#run-the-simulation)
+
 > **GPU Requirements**
 > To utilize GPU acceleration you must run the simulation inside WSL2 with the
 > [NVIDIA drivers for WSL](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)

@@ -9,7 +9,7 @@
 - [Vision](#vision-the-crucible-of-emergent-ai)
 - [Getting Started](#getting-started)
 - [Setup](#installation)
-- [Windows / WSL2 Setup](docs/windows_setup.md)
+- [Windows / WSL2 Setup Checklist](docs/windows_setup.md#quick-setup-checklist)
 - [Running Tests](#running-tests)
 - [culture-ui Frontend](#culture-ui-frontend)
 - [Extensions and Plug-ins](#extensions-and-plug-ins)
@@ -197,9 +197,9 @@ Follow these steps to run the example simulation locally:
 
 4. Install Ollama following the [official instructions](https://ollama.ai/download)
 
-   On Windows the project is designed to run inside WSL2. Follow the
-   step-by-step guide in [docs/windows_setup.md](docs/windows_setup.md) to enable
-   GPU support, install Ollama, and activate the virtual environment.
+  On Windows the project is designed to run inside WSL2. Follow the
+  [quick setup checklist](docs/windows_setup.md#quick-setup-checklist) to enable
+  GPU support, install Ollama, and activate the virtual environment.
 
 5. Pull the required models:
    ```bash
@@ -220,7 +220,7 @@ Once Ollama is running you can launch a basic simulation:
 ```bash
 python -m src.app --steps 5 --discord
 ```
-See [docs/windows_setup.md#run-the-simulation](docs/windows_setup.md#run-the-simulation) for a step-by-step guide on Windows.
+See [the Windows setup checklist](docs/windows_setup.md#quick-setup-checklist) for a step-by-step guide on Windows.
 
 
 ## Code Linting and Formatting
@@ -710,7 +710,7 @@ services can reach it. Configure the connection with the `OLLAMA_API_BASE` and
 GPU acceleration is only available when Ollama runs inside WSL2 or Docker.
 Install the NVIDIA drivers for WSL2 and run all Python commands from your WSL2
 shell. For step-by-step instructions, see
-[docs/windows_setup.md](docs/windows_setup.md).
+[the Windows setup checklist](docs/windows_setup.md#quick-setup-checklist).
 The provided `scripts\vertical_slice.bat` detects both `venv` and `.venv` virtual environments when activating the demo.
 
 ### Running the Simulation
