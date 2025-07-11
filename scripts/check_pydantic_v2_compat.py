@@ -27,6 +27,19 @@ def tracked_python_files() -> list[Path]:
     return [Path(p) for p in proc.stdout.splitlines()]
 
 
+def target_files() -> list[Path]:
+    """Return files to lint, falling back to all tracked Python files."""
+    if len(sys.argv) > 1:
+        return [Path(p) for p in sys.argv[1:] if p.endswith(".py")]
+    staged = subprocess.run(
+        ["git", "diff", "--name-only", "--cached", "--diff-filter=ACM", "*.py"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    return [Path(p) for p in staged] or tracked_python_files()
+
+
 class Visitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.issues: list[tuple[int, str]] = []
@@ -72,7 +85,7 @@ def check_file(path: Path) -> list[str]:
 
 def main() -> int:
     has_errors = False
-    for file in tracked_python_files():
+    for file in target_files():
         for issue in check_file(file):
             print(issue, file=sys.stderr)
             has_errors = True

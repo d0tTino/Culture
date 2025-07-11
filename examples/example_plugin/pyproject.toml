@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "example-plugin"
+version = "0.1.0"
+description = "Example Culture plug-in"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.entry-points."culture.plugins"]
+example_plugin = "example_plugin:setup"
