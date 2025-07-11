@@ -27,7 +27,10 @@ async def test_opa_blocks_message(monkeypatch: pytest.MonkeyPatch) -> None:
     config.load_config(validate_required=False)
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": False}}
-    monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(
+        "src.utils.policy.httpx.AsyncClient.post",
+        AsyncMock(return_value=mock_resp),
+    )
     with (
         patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient),
         patch("src.interfaces.discord_bot.discord.TextChannel", DummyChannel),
@@ -50,7 +53,10 @@ async def test_opa_modifies_message(monkeypatch: pytest.MonkeyPatch) -> None:
     config.load_config(validate_required=False)
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": True, "content": "bar"}}
-    monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(
+        "src.utils.policy.httpx.AsyncClient.post",
+        AsyncMock(return_value=mock_resp),
+    )
     with (
         patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient),
         patch("src.interfaces.discord_bot.discord.TextChannel", DummyChannel),
