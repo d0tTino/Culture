@@ -29,3 +29,5 @@ async def test_nightly_job_and_retrieval(chroma_test_dir: Path) -> None:
     assert driver.store[0]["agent"] == "agent"
     recent = manager.get_recent_summaries("agent", limit=1)
     assert recent == ["first\nsecond"]
+    blended = manager.blend_episodic_and_semantic("agent", "third", limit=1)
+    assert "third" in blended and "first" in blended

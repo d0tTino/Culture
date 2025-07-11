@@ -8,7 +8,7 @@ class DummyManager:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def consolidate_memories(self, agent_id: str) -> None:
+    def consolidate_daily_memories(self, agent_id: str, start_step: int, end_step: int) -> None:
         self.calls.append(agent_id)
 
 
@@ -17,7 +17,7 @@ class DummyManager:
 def test_consolidation_runs_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
     dummy = DummyManager()
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 1)
-    state = {"agent_id": "agent1", "simulation_step": 1, "semantic_manager": dummy}
+    state = {"agent_id": "agent1", "simulation_step": 1, "memory_service": dummy}
     _maybe_consolidate_memories(state)
     assert dummy.calls == ["agent1"]
 
@@ -27,6 +27,6 @@ def test_consolidation_runs_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_consolidation_skipped_when_not_due(monkeypatch: pytest.MonkeyPatch) -> None:
     dummy = DummyManager()
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 5)
-    state = {"agent_id": "agent1", "simulation_step": 1, "semantic_manager": dummy}
+    state = {"agent_id": "agent1", "simulation_step": 1, "memory_service": dummy}
     _maybe_consolidate_memories(state)
     assert dummy.calls == []
