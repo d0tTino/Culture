@@ -57,6 +57,16 @@ export default function Sidebar() {
             KPI Card
           </NavLink>
         </li>
+        <li>
+          <NavLink to="/balances" className={linkClass}>
+            Token Balances
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/auctions" className={linkClass}>
+            Auctions
+          </NavLink>
+        </li>
       </ul>
     </nav>
   )

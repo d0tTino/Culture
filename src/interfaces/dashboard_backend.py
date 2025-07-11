@@ -258,6 +258,33 @@ async def api_token_balances() -> Response:
     return JSONResponse({"agents": agents})
 
 
+@app.get("/api/auctions")
+async def api_auctions() -> Response:
+    """Return auctions and their current bids."""
+
+    def _load() -> list[dict[str, Any]]:
+        cur = ledger.conn.execute("SELECT id, item, status, winner_id FROM auctions")
+        auctions: list[dict[str, Any]] = []
+        for row in cur.fetchall():
+            bid_rows = ledger.conn.execute(
+                "SELECT agent_id, amount FROM bids WHERE auction_id=? ORDER BY amount DESC, id ASC",
+                (row[0],),
+            ).fetchall()
+            auctions.append(
+                {
+                    "id": int(row[0]),
+                    "item": row[1],
+                    "status": row[2],
+                    "winner_id": row[3],
+                    "bids": [{"agent_id": b[0], "amount": float(b[1])} for b in bid_rows],
+                }
+            )
+        return auctions
+
+    auctions = await asyncio.to_thread(_load)
+    return JSONResponse({"auctions": auctions})
+
+
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -384,6 +411,7 @@ __all__ = [
     "EventSourceResponse",
     "LawProposal",
     "SimulationEvent",
+    "api_auctions",
     "api_get_proposals",
     "api_propose_law",
     "api_token_balances",

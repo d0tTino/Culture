@@ -83,7 +83,13 @@ async def test_multi_token_start_and_send() -> None:
     def lookup(aid: str) -> str:
         return tokens[1] if aid == "agent_b" else tokens[0]
 
-    with patch("src.interfaces.discord_bot.discord.Client", RecordingClient):
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", RecordingClient),
+        patch(
+            "src.interfaces.discord_bot.evaluate_with_opa",
+            AsyncMock(side_effect=lambda content: (True, content)),
+        ),
+    ):
         bot = SimulationDiscordBot(tokens, 123, token_lookup=lookup)
         await bot.run_bot()
         await bot.send_simulation_update(content="hi", agent_id="agent_b")
