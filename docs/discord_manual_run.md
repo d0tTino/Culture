@@ -34,6 +34,21 @@ LLM latency: 0 ms; KB size: 0
 ```
 These commands are helpful for manual smoke testing of the Discord interface.
 
+### Slash Commands
+
+When channels are mapped to specific agents you can also use slash commands:
+
+```text
+/status
+```
+Shows the agent's current IP and DU balance as an ephemeral message.
+
+```text
+/stats
+```
+Displays latency and Knowledge Board size, also ephemeral. These commands only
+respond if the mapped agent has remaining IP and DU.
+
 ### Using Multiple Bot Tokens
 You can run the simulation with several Discord bot accounts. Tokens are stored
 in a PostgreSQL table named `discord_tokens` with columns `agent_id` and
