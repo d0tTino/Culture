@@ -71,3 +71,19 @@ from src.extensions import load_plugins
 load_plugins()
 ```
 
+
+## Installing the Example Plug-in
+
+An example package is included in `examples/example_plugin`. Install it in editable mode:
+
+```bash
+pip install -e examples/example_plugin
+```
+
+After installation call `load_plugins()` so Culture can register its hooks:
+
+```python
+from src.extensions import load_plugins
+
+load_plugins()
+```
