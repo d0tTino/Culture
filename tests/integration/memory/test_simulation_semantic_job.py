@@ -24,6 +24,7 @@ class DummyAgent:
         self,
         simulation_step: int,
         environment_perception: dict | None = None,
+        memory_service: object | None = None,
         vector_store_manager: object | None = None,
         knowledge_board: object | None = None,
     ) -> dict:
@@ -42,6 +43,12 @@ def setup_semantic_manager(tmp_path):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_simulation_schedules_semantic_job(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    from src.sim import simulation as sim_module
+
+    async def _allow(action):
+        return True
+
+    monkeypatch.setattr(sim_module, "evaluate_policy", _allow)
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 1)
     manager, vector, driver = setup_semantic_manager(tmp_path)
     agent = DummyAgent("a1")

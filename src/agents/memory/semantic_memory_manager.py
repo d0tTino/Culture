@@ -157,6 +157,14 @@ class SemanticMemoryManager:
             )
             return [record["summary"] for record in records]
 
+    def blend_episodic_and_semantic(
+        self: Self, agent_id: str, episodic_summary: str, limit: int = 3
+    ) -> str:
+        """Blend a new episodic summary with recent semantic summaries."""
+        recent = self.get_recent_summaries(agent_id, limit)
+        parts = [episodic_summary, *recent]
+        return "\n".join(part for part in parts if part)
+
     async def run_nightly_job(
         self: Self,
         agent_id: str,
