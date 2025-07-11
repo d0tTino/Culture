@@ -86,6 +86,7 @@ class MoveAgent(DummyAgent):
         simulation_step: int,
         environment_perception: dict | None = None,
         vector_store_manager: object | None = None,
+        memory_service: object | None = None,
         knowledge_board: object | None = None,
     ) -> dict:
         return {
@@ -101,11 +102,11 @@ async def test_law_persisted(monkeypatch: pytest.MonkeyPatch, tmp_path):
     import importlib
 
     lb_mod = importlib.import_module("src.governance.law_board")
-    voting_mod = importlib.import_module("src.governance.voting")
+    service_mod = importlib.import_module("src.governance.service")
     policy_mod = importlib.import_module("src.governance.policy")
 
     monkeypatch.setattr(lb_mod, "law_board", board)
-    monkeypatch.setattr(voting_mod, "law_board", board)
+    monkeypatch.setattr(service_mod, "law_board", board)
     monkeypatch.setattr(policy_mod, "law_board", board)
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
 
@@ -129,17 +130,17 @@ async def test_action_checked_against_laws(monkeypatch: pytest.MonkeyPatch, tmp_
     import importlib
 
     lb_mod = importlib.import_module("src.governance.law_board")
-    voting_mod = importlib.import_module("src.governance.voting")
+    service_mod = importlib.import_module("src.governance.service")
     policy_mod = importlib.import_module("src.governance.policy")
 
     monkeypatch.setattr(lb_mod, "law_board", board)
-    monkeypatch.setattr(voting_mod, "law_board", board)
+    monkeypatch.setattr(service_mod, "law_board", board)
     monkeypatch.setattr(policy_mod, "law_board", board)
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
 
     payloads = []
 
-    def fake_post(url: str, json: dict, timeout: int = 2):
+    async def fake_post(self, url: str, json: dict, timeout: int = 2):
         payloads.append(json)
 
         class Res:
@@ -148,7 +149,7 @@ async def test_action_checked_against_laws(monkeypatch: pytest.MonkeyPatch, tmp_
 
         return Res()
 
-    monkeypatch.setattr("src.governance.policy.requests.post", fake_post)
+    monkeypatch.setattr("src.governance.policy.httpx.AsyncClient.post", fake_post)
 
     agent = MoveAgent("a1")
     sim = Simulation(agents=[agent])

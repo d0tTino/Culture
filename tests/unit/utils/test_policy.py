@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,7 +12,10 @@ async def test_evaluate_with_opa_blocks(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": False, "content": "filtered"}}
-    monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(
+        "src.utils.policy.httpx.AsyncClient.post",
+        AsyncMock(return_value=mock_resp),
+    )
     allowed, new_content = await evaluate_with_opa("test")
     assert allowed is False
     assert new_content == "filtered"
@@ -24,7 +27,10 @@ async def test_evaluate_with_opa_allows(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setitem(config._CONFIG, "OPA_URL", "http://opa")
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"result": {"allow": True}}
-    monkeypatch.setattr("src.utils.policy.requests.post", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(
+        "src.utils.policy.httpx.AsyncClient.post",
+        AsyncMock(return_value=mock_resp),
+    )
     allowed, new_content = await evaluate_with_opa("hello")
     assert allowed is True
     assert new_content == "hello"
