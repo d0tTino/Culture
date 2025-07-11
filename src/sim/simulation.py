@@ -21,6 +21,7 @@ from src.governance import evaluate_policy
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.ledger import ledger
+from src.infra.llm_client import get_llm_client
 from src.infra.logging_config import setup_logging
 from src.infra.snapshot import (
     compute_trace_hash,
@@ -133,9 +134,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -181,9 +182,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -503,9 +504,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -1084,6 +1083,12 @@ def main() -> None:
     # Configure logging
     setup_logging()
     logging.getLogger().setLevel(getattr(logging, args.verbosity))
+
+    try:
+        get_llm_client()
+    except Exception as exc:
+        logging.error("SIMULATION: Failed to initialize LLM client: %s", exc)
+        return
 
     # Test DSPy modules
     logging.info("SIMULATION: Attempting to import DSPy role_thought_generator as a test...")

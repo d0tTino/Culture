@@ -171,7 +171,7 @@ class LLMClient:
     def __init__(self: LLMClient, config: LLMClientConfig) -> None:
         self.config = config
         try:
-            self._client = get_ollama_client()
+            self._client = get_llm_client()
         except LLMClientInitError:
             raise
 
@@ -306,7 +306,7 @@ else:
         client = None
 
 
-def get_ollama_client() -> OllamaClientProtocol:
+def get_llm_client() -> OllamaClientProtocol:
     """Return the initialized LLM client, retrying and switching backends if needed."""
     global client, VLLM_API_BASE, USE_VLLM
     env_base = os.environ.get("VLLM_API_BASE")
@@ -349,6 +349,11 @@ def get_ollama_client() -> OllamaClientProtocol:
             else:
                 VLLM_API_BASE = None
     return client
+
+
+def get_ollama_client() -> OllamaClientProtocol:
+    """Backward compatibility wrapper for :func:`get_llm_client`."""
+    return get_llm_client()
 
 
 def _retry_with_backoff(
@@ -410,7 +415,7 @@ def generate_text(
         return {"message": {"content": mock_response}}["message"]["content"]
 
     def call() -> LLMChatResponse:
-        local_client = get_ollama_client()
+        local_client = get_llm_client()
         messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
         return local_client.chat(
             model=model,
@@ -478,7 +483,7 @@ def summarize_memory_context(
         )
 
     try:
-        ollama_client = get_ollama_client()
+        ollama_client = get_llm_client()
     except LLMClientInitError as exc:
         logger.warning(
             "Attempted to summarize memories but %s",
@@ -569,7 +574,7 @@ def analyze_sentiment(
     if not text:
         return None
     try:
-        ollama_client = get_ollama_client()
+        ollama_client = get_llm_client()
     except LLMClientInitError as exc:
         logger.error(f"Sentiment analysis failed to init client: {exc}")
         return None
@@ -754,7 +759,7 @@ def generate_structured_output(
             return None
     # Get the Ollama client instance
     try:
-        ollama_client = get_ollama_client()
+        ollama_client = get_llm_client()
     except LLMClientInitError as exc:
         logger.warning("Attempted to generate structured output but %s", exc)
         return None
@@ -847,7 +852,7 @@ def get_default_llm_client() -> OllamaClientProtocol:
     Returns:
         The initialized Ollama client instance
     """
-    return get_ollama_client()
+    return get_llm_client()
 
 
 @charge_du_cost

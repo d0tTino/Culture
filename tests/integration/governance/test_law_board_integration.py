@@ -10,7 +10,7 @@ sys.modules.setdefault(
     SimpleNamespace(
         LLMClient=object,
         LLMClientConfig=object,
-        get_ollama_client=lambda: None,
+        get_llm_client=lambda: None,
         generate_text=lambda *a, **k: "",
         summarize_memory_context=lambda *a, **k: "",
         client=SimpleNamespace(),
