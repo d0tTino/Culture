@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from typing import Any, cast
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ import pytest
 from src.infra.ledger import Ledger
 
 # Provide a minimal stub for src.infra.llm_client so that tests can run
-stub = types.ModuleType("llm_client")
+stub = cast(Any, types.ModuleType("llm_client"))
 
 
 class LLMClient:  # pragma: no cover - simple stub
@@ -18,13 +19,13 @@ class LLMClient:  # pragma: no cover - simple stub
 
 stub.LLMClient = LLMClient
 stub.client = object()
-stub.get_ollama_client = lambda: stub.client
+stub.get_llm_client = lambda: stub.client
 stub.generate_text = lambda *args, **kwargs: ""
 stub.summarize_memory_context = lambda *args, **kwargs: ""
 sys.modules.setdefault("src.infra.llm_client", stub)
 
 # Basic stub for the external ``ollama`` package used by llm mocks
-ollama_stub = types.ModuleType("ollama")
+ollama_stub = cast(Any, types.ModuleType("ollama"))
 ollama_stub.Client = lambda *args, **kwargs: object()
 ollama_stub.list = lambda *args, **kwargs: []
 ollama_stub.pull = lambda *args, **kwargs: None

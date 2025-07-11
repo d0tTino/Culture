@@ -27,7 +27,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     ChromaVectorStoreManager = None
 from src.infra.config import get_config
-from src.infra.llm_client import get_ollama_client
+from src.infra.llm_client import get_llm_client
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
@@ -77,7 +77,7 @@ def create_base_simulation(
 ) -> Simulation:
     """Create a baseline simulation for the verification tests."""
 
-    ollama_client = get_ollama_client()
+    ollama_client = get_llm_client()
     if not ollama_client:
         logging.error("Failed to connect to Ollama. Please ensure Ollama is running.")
         sys.exit(1)

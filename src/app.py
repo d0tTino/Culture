@@ -13,7 +13,7 @@ from src.infra.checkpoint import (
     restore_rng_state,
     save_checkpoint,
 )
-from src.infra.llm_client import LLMClientInitError, get_ollama_client
+from src.infra.llm_client import LLMClientInitError, get_llm_client
 from src.infra.logging_config import setup_logging
 from src.infra.settings import settings
 from src.infra.warning_filters import configure_warning_filters
@@ -89,7 +89,7 @@ def create_simulation(
     """Construct a Simulation instance with basic defaults."""
 
     try:
-        ollama_client = get_ollama_client()
+        ollama_client = get_llm_client()
     except LLMClientInitError as exc:
         logging.error("Failed to connect to LLM backend: %s", exc)
         sys.exit(1)

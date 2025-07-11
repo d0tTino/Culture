@@ -20,7 +20,7 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
 
     fake_client = MagicMock()
     fake_client.chat.return_value = {"message": {"content": "hi"}}
-    monkeypatch.setattr(module, "get_ollama_client", lambda: fake_client)
+    monkeypatch.setattr(module, "get_llm_client", lambda: fake_client)
     monkeypatch.setattr(
         module,
         "_retry_with_backoff",
@@ -72,7 +72,7 @@ def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
 
     fake_client = MagicMock()
     fake_client.chat.return_value = {"message": {"content": "hi"}}
-    monkeypatch.setattr(module, "get_ollama_client", lambda: fake_client)
+    monkeypatch.setattr(module, "get_llm_client", lambda: fake_client)
     monkeypatch.setattr(
         module,
         "_retry_with_backoff",
