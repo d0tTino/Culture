@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from typing_extensions import Self
 
 from src.infra import config
+from src.infra.ledger import ledger
 from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
     AgentMessage,
@@ -41,6 +42,8 @@ else:  # pragma: no cover - runtime import with fallback
 
 logger = logging.getLogger(__name__)
 
+active_bot: "SimulationDiscordBot | None" = None
+
 
 class SimulationDiscordBot:
     """
@@ -60,6 +63,8 @@ class SimulationDiscordBot:
         token_lookup: (
             Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]] | None
         ) = None,
+        *,
+        channel_map: dict[str, int] | None = None,
     ) -> None:
         """
         Initialize the Discord bot with token and target channel.
@@ -101,7 +106,11 @@ class SimulationDiscordBot:
             raise RuntimeError("No Discord bot tokens provided")
         self.bot_tokens = tokens
         self.channel_id = channel_id
+        self.channel_map: dict[str, int] = channel_map or {}
+        self.channel_to_agent: dict[int, str] = {v: k for k, v in self.channel_map.items()}
         self.is_ready = False
+        global active_bot
+        active_bot = self
         if token_lookup is None:
             db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
             if db_url:
@@ -163,12 +172,13 @@ class SimulationDiscordBot:
                 if getattr(message, "author", None) == client.user:
                     return
                 content = getattr(message, "content", "")
-                await self.event_queue.put(
-                    SimulationEvent(
-                        event_type="broadcast",
-                        data={"author": str(getattr(message, "author", "")), "content": content},
-                    )
-                )
+                channel_id = getattr(getattr(message, "channel", None), "id", None)
+                recipient = self.channel_to_agent.get(channel_id)
+                evt_type = "direct_message" if recipient else "broadcast"
+                data = {"author": str(getattr(message, "author", "")), "content": content}
+                if recipient:
+                    data["recipient_id"] = recipient
+                await self.event_queue.put(SimulationEvent(event_type=evt_type, data=data))
 
     async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
         """Return the Discord client for the given agent."""
@@ -209,9 +219,10 @@ class SimulationDiscordBot:
                 return False
         try:
             client = await self._select_client(agent_id)
-            channel = client.get_channel(self.channel_id)
+            target_channel_id = self.channel_map.get(agent_id, self.channel_id)
+            channel = client.get_channel(target_channel_id)
             if not channel:
-                logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
+                logger.warning(f"Could not find Discord channel with ID: {target_channel_id}")
                 return False
             if embed:
                 if hasattr(channel, "send"):
@@ -566,3 +577,40 @@ async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
     await ctx.send(stats_text)
+
+
+@typing.no_type_check
+@bot.tree.command(name="status")
+async def slash_status(interaction: Any) -> None:
+    """Return IP/DU balance for the mapped agent."""
+    agent_id = None
+    if active_bot is not None:
+        channel = getattr(interaction, "channel", None)
+        chan_id = getattr(channel, "id", None)
+        agent_id = active_bot.channel_to_agent.get(chan_id)
+    if agent_id:
+        ip, du = await ledger.get_balance_async(agent_id)
+        if ip <= 0 or du <= 0:
+            await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
+            return
+        await interaction.response.send_message(f"IP: {ip:.1f}; DU: {du:.1f}", ephemeral=True)
+    else:
+        await interaction.response.send_message("Unknown channel", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="stats")
+async def slash_stats(interaction: Any) -> None:
+    """Return runtime metrics if the agent has resources."""
+    agent_id = None
+    if active_bot is not None:
+        channel = getattr(interaction, "channel", None)
+        chan_id = getattr(channel, "id", None)
+        agent_id = active_bot.channel_to_agent.get(chan_id)
+    if agent_id:
+        ip, du = await ledger.get_balance_async(agent_id)
+        if ip <= 0 or du <= 0:
+            await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
+            return
+    stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
+    await interaction.response.send_message(stats_text, ephemeral=True)
