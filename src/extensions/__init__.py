@@ -42,25 +42,28 @@ def register_agent_behavior(func: Callable[[Any, dict[str, Any]], None]) -> None
     BEHAVIOR_REGISTRY.register(func)
 
 
-def register_widget_backend(
+async def register_widget_backend(
     name: str,
     script_url: str,
     backend_url: str = "http://localhost:8000",
 ) -> None:
     """Register a UI widget with the Culture backend."""
 
-    resp = httpx.post(
-        f"{backend_url.rstrip('/')}/api/register_widget",
-        json={"name": name, "script_url": script_url},
-        timeout=10,
-    )
-    resp.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{backend_url.rstrip('/')}/api/register_widget",
+                json={"name": name, "script_url": script_url},
+            )
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:  # pragma: no cover - network failures
+        logger.exception("Widget registration failed: %s", exc)
 
 
 DEFAULT_PLUGIN_GROUP = "culture.plugins"
 
 
-def load_plugins(
+async def load_plugins(
     group: str = DEFAULT_PLUGIN_GROUP, *, backend_url: str = "http://localhost:8000"
 ) -> None:
     """Load entry-point plugins and optionally register their widgets."""
@@ -79,7 +82,7 @@ def load_plugins(
                 "name",
                 "script_url",
             }.issubset(result):
-                register_widget_backend(
+                await register_widget_backend(
                     name=result["name"],
                     script_url=result["script_url"],
                     backend_url=backend_url,

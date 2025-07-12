@@ -11,7 +11,7 @@ Use `register_widget_backend` to inform the backend about a widget:
 ```python
 from src.extensions import register_widget_backend
 
-register_widget_backend(
+await register_widget_backend(
     name="ExampleWidget",
     script_url="http://localhost:5173/example.js",
 )
@@ -68,7 +68,7 @@ plug-ins. Any dictionary returned is passed to `register_widget_backend`:
 ```python
 from src.extensions import load_plugins
 
-load_plugins()
+await load_plugins()
 ```
 
 
@@ -85,5 +85,5 @@ After installation call `load_plugins()` so Culture can register its hooks:
 ```python
 from src.extensions import load_plugins
 
-load_plugins()
+await load_plugins()
 ```
