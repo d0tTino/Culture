@@ -15,11 +15,12 @@ class DummyEntryPoints(list[object]):
 
 
 @pytest.mark.unit
-def test_example_plugin_load(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_example_plugin_load(monkeypatch: pytest.MonkeyPatch) -> None:
     BEHAVIOR_REGISTRY._behaviors.clear()
     widgets: list[tuple[str, str, str]] = []
 
-    def register_widget_backend(
+    async def register_widget_backend(
         name: str, script_url: str, backend_url: str = "http://localhost:8000"
     ) -> None:
         widgets.append((name, script_url, backend_url))
@@ -28,7 +29,7 @@ def test_example_plugin_load(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(metadata, "entry_points", lambda: DummyEntryPoints([ep]))
     monkeypatch.setattr("src.extensions.register_widget_backend", register_widget_backend)
 
-    load_plugins(backend_url="http://backend")
+    await load_plugins(backend_url="http://backend")
 
     assert example_plugin.log_turn in BEHAVIOR_REGISTRY._behaviors
     assert widgets == [("ExampleWidget", "http://localhost:5173/example.js", "http://backend")]
