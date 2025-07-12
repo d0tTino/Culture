@@ -140,6 +140,27 @@ class SemanticMemoryManager:
         memories = self.topic_groups[agent_id].get(best, [])
         return memories[:k]
 
+    def retrieve_context_with_scores(
+        self: Self, agent_id: str, query: str, k: int = 5
+    ) -> list[dict[str, Any]]:
+        """Return semantic context with relevance scores."""
+        memories = self.retrieve_context(agent_id, query, k)
+        if not memories:
+            return []
+
+        import numpy as np
+
+        query_emb = np.array(self.vector_store.get_embedding(query), dtype=float)
+        for mem in memories:
+            emb = np.array(self.vector_store.get_embedding(mem.get("content", "")), dtype=float)
+            score = float(
+                emb @ query_emb / (np.linalg.norm(emb) * np.linalg.norm(query_emb) + 1e-8)
+            )
+            mem["relevance_score"] = score
+
+        memories.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
+        return memories[:k]
+
     def get_recent_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         """Return recent semantic summaries for an agent."""
         if self.driver is None:
