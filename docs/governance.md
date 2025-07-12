@@ -29,3 +29,13 @@ python src/app.py \
   --proposal "Allow concerts" --proposer-id agent_1 \
   --vote-weights agent_1=3,agent_2=1
 ```
+
+## Dashboard API
+
+The dashboard backend exposes a few read-only endpoints for governance data.
+
+### `GET /api/laws`
+Returns a list of laws that have been passed and recorded on the law board.
+
+### `GET /api/votes`
+Lists recent law proposals with their vote totals as stored in the ledger.
