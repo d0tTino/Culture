@@ -89,3 +89,4 @@ async def test_weighted_votes_deduct_ip(monkeypatch: pytest.MonkeyPatch, tmp_pat
     proposals = ledger.get_law_proposals()
     assert proposals[0]["yes_weight"] == pytest.approx(3.0)
     assert proposals[0]["no_weight"] == pytest.approx(2.0)
+    assert proposals[0]["ip_spent"] == pytest.approx(11.0)

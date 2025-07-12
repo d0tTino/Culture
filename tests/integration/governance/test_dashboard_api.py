@@ -17,7 +17,7 @@ async def test_laws_and_votes_endpoints(monkeypatch: pytest.MonkeyPatch, tmp_pat
     board.add_law("be nice")
 
     ledger = Ledger(tmp_path / "ledger.sqlite")
-    ledger.record_law_proposal("a1", "be nice", True, 1.0, 0.0)
+    ledger.record_law_proposal("a1", "be nice", True, 1.0, 0.0, 0.0)
 
     monkeypatch.setattr(db, "law_board", board)
     monkeypatch.setattr(db, "ledger", ledger)
