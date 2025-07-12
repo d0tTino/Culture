@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
+from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 if TYPE_CHECKING:
     from neo4j import Driver
@@ -63,22 +65,29 @@ class SemanticMemoryManager:
 
         groups: dict[int, list[dict[str, Any]]]
 
-        # Fallback to keyword grouping if embeddings contain no information
+        # Fallback to TF-IDF or random clustering if embeddings contain no information
         if embeddings.size == 0 or np.allclose(embeddings, 0.0):
+            n_clusters = min(num_topics, len(texts))
+            if n_clusters == 0:
+                return {}
+
+            vectorizer = TfidfVectorizer(stop_words="english")
+            tfidf_matrix = vectorizer.fit_transform(texts)
+
+            if tfidf_matrix.nnz == 0:
+                labels = np.arange(len(texts)) % n_clusters
+                centroids = np.zeros((n_clusters, 1), dtype=float)
+            else:
+                km = KMeans(n_clusters=n_clusters, n_init=1, random_state=0)
+                labels = km.fit_predict(tfidf_matrix)
+                centroids = km.cluster_centers_.astype(float)
+
             groups = defaultdict(list)
-            keywords = ["cat", "dog"]
-            for mem in memories:
-                text = mem["content"].lower()
-                placed = False
-                for i, kw in enumerate(keywords):
-                    if kw in text:
-                        groups[i].append(mem)
-                        placed = True
-                        break
-                if not placed:
-                    groups[len(keywords)].append(mem)
+            for label, mem in zip(labels, memories):
+                groups[int(label)].append(mem)
+
             self.topic_groups[agent_id] = groups
-            self.topic_centroids[agent_id] = np.zeros((len(groups), 1), dtype=float)
+            self.topic_centroids[agent_id] = centroids
             return groups
 
         topic_groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
