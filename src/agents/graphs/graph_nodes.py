@@ -31,13 +31,13 @@ ActionIntentLiteral = Literal[
 
 class MemoryRetriever(Protocol):
     async def aretrieve_relevant_memories(
-        self, agent_id: str, query: str, k: int
+        self: Any, agent_id: str, query: str, k: int
     ) -> list[dict[str, Any]]: ...
 
 
 class SummaryAgent(Protocol):
     async def async_generate_l1_summary(
-        self, role_prompt: str, memories: str, context: str
+        self: Any, role_prompt: str, memories: str, context: str
     ) -> Any: ...
 
 
@@ -101,18 +101,6 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     except Exception:  # pragma: no cover - defensive
         logger.error("Semantic consolidation failed", exc_info=True)
     memories_content = [m.get("content", "") for m in memories]
-    import asyncio
-
-    semantic_memories: list[dict[str, Any]] = []
-    if hasattr(manager, "retrieve_semantic_context"):
-        semantic_memories = await asyncio.to_thread(
-            cast(MemoryService, manager).retrieve_semantic_context,
-            state["agent_id"],
-            "",
-            5,
-        )
-        memories.extend(semantic_memories)
-        memories_content.extend(m.get("content", "") for m in semantic_memories)
 
     semantic: list[str] = []
     if hasattr(manager, "get_recent_semantic_summaries"):
@@ -129,24 +117,6 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     )
     summary = getattr(summary_result, "summary", "")
     return {"rag_summary": summary, "memory_history_list": memories}
-
-
-async def retrieve_semantic_context_node(state: AgentTurnState) -> dict[str, Any]:
-    """Retrieve semantically grouped context for the agent."""
-    service = cast(MemoryService | None, state.get("memory_service"))
-    if not service:
-        return {"semantic_context": ""}
-    query = state.get("rag_summary", "")
-    import asyncio
-
-    memories = await asyncio.to_thread(
-        service.retrieve_semantic_context,
-        state["agent_id"],
-        query,
-        5,
-    )
-    context = "\n".join(m.get("content", "") for m in memories)
-    return {"semantic_context": context}
 
 
 def generate_structured_output_from_intent(

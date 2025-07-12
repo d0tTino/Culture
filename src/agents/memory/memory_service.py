@@ -44,21 +44,12 @@ class MemoryService:
             episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
 
         semantic: list[dict[str, Any]] = []
-        if self.semantic_manager and self.vector_store:
+        if self.semantic_manager:
             import asyncio
 
-            import numpy as np
-
             semantic = await asyncio.to_thread(
-                self.semantic_manager.retrieve_context, agent_id, query, k
+                self.semantic_manager.retrieve_context_with_scores, agent_id, query, k
             )
-            q_emb = np.array(self.vector_store.get_embedding(query), dtype=float)
-            for mem in semantic:
-                emb = np.array(
-                    self.vector_store.get_embedding(mem.get("content", "")), dtype=float
-                )
-                score = float(emb @ q_emb / (np.linalg.norm(emb) * np.linalg.norm(q_emb) + 1e-8))
-                mem["relevance_score"] = score
 
         combined = episodic + semantic
         combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
