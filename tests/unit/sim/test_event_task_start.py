@@ -1,5 +1,4 @@
 import asyncio
-import time
 
 import pytest
 
@@ -41,24 +40,27 @@ class DummyAgent:
 
 
 @pytest.mark.unit
-def test_event_task_runs_without_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_event_task_runs_without_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     received: list[str] = []
 
     async def handler(self: Simulation, text: str) -> None:
         received.append(text)
 
     monkeypatch.setattr(Simulation, "_handle_human_command", handler)
+
+    async def dummy_listener(self: Simulation) -> None:
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(Simulation, "_event_listener_loop", dummy_listener)
     sim = Simulation([DummyAgent()])
+    await sim.start_event_listener()
 
-    async def send() -> None:
-        queue = get_event_queue()
-        await queue.put(
-            SimulationEvent(event_type="broadcast", data={"content": "hi"})
-        )
+    queue = get_event_queue()
+    await queue.put(SimulationEvent(event_type="broadcast", data={"content": "hi"}))
+    await asyncio.sleep(0.05)
 
-    fut = asyncio.run_coroutine_threadsafe(send(), sim._event_loop)
-    fut.result()
-    time.sleep(0.05)
+    await sim.stop_event_listener()
     sim.close()
 
     assert received == ["hi"]

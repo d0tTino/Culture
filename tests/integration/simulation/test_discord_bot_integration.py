@@ -104,7 +104,8 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         agent = DummyAgent("A")
         sim = Simulation([agent], discord_bot=bot)
 
-        await bot.run_bot()
+        tasks = bot.run_bot()
+        await asyncio.gather(*tasks[:-1])
 
         on_msg = bot.client._events["on_message"]
         msg = MagicMock()

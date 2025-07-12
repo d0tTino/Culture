@@ -91,7 +91,8 @@ async def test_multi_token_start_and_send() -> None:
         ),
     ):
         bot = SimulationDiscordBot(tokens, 123, token_lookup=lookup)
-        await bot.run_bot()
+        tasks = bot.run_bot()
+        await asyncio.gather(*tasks[:-1])
         await bot.send_simulation_update(content="hi", agent_id="agent_b")
         await bot.stop_bot()
 
@@ -116,7 +117,8 @@ async def test_multi_token_message_forwarding() -> None:
         patch("src.interfaces.discord_bot.message_sse_queue", q_msgs),
     ):
         bot = SimulationDiscordBot(tokens, 999)
-        await bot.run_bot()
+        tasks = bot.run_bot()
+        await asyncio.gather(*tasks[:-1])
 
         for token in tokens:
             assert "on_message" in bot.clients[token]._events
@@ -172,7 +174,8 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
     ):
         bot = SimulationDiscordBot("token", 123)
         assert "on_message" in bot.client._events
-        await bot.run_bot()
+        tasks = bot.run_bot()
+        await asyncio.gather(*tasks[:-1])
 
         on_msg = bot.client._events["on_message"]
         msg = MagicMock()
@@ -211,7 +214,8 @@ async def test_on_message_updates_agent_state(monkeypatch: pytest.MonkeyPatch) -
         ),
     ):
         bot = SimulationDiscordBot("token", 456)
-        await bot.run_bot()
+        tasks = bot.run_bot()
+        await asyncio.gather(*tasks[:-1])
         on_msg = bot.client._events["on_message"]
         msg = MagicMock()
         msg.content = "hello world"
