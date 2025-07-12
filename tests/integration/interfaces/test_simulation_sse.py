@@ -9,10 +9,8 @@ import pytest
 pytest.importorskip("fastapi")
 
 from src import http_app
-from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.app import create_simulation
 from src.interfaces import dashboard_backend as db
-from src.sim.simulation import Simulation
 from tests.integration.interfaces.test_dashboard_backend_api import DummyRequest
 from tests.unit.memory.test_semantic_memory_manager import DummyDriver
 
@@ -47,13 +45,24 @@ async def _clear_event_queue() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_simulation_emits_sse(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    vector = ChromaVectorStoreManager(
-        persist_directory=tmp_path, embedding_function=lambda t: [[0.0] for _ in t]
-    )
-    driver = DummyDriver()
-    manager = SemanticMemoryManager(vector, driver)
+    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: DummyDriver(), raising=False)
+
+    async def _allow(_: str) -> bool:
+        return True
+
+    monkeypatch.setattr("src.governance.evaluate_policy", _allow)
+    monkeypatch.setattr("src.sim.simulation.evaluate_policy", _allow)
     agent = DummyAgent("a1")
-    sim = Simulation([agent], vector_store_manager=vector, semantic_manager=manager)
+    sim = create_simulation(
+        num_agents=1,
+        steps=1,
+        scenario="sse",
+        use_vector_store=True,
+        vector_store_dir=tmp_path,
+        use_semantic_memory=True,
+        semantic_db_uri="bolt://dummy",
+    )
+    manager = sim.semantic_manager
 
     class CaptureESR:
         def __init__(self, gen: object) -> None:
@@ -82,7 +91,8 @@ async def test_stream_messages_async_client(monkeypatch: pytest.MonkeyPatch) -> 
     msg = db.AgentMessage(agent_id="agent-1", content="hello", step=1)
     await db.enqueue_message(msg)
 
-    async with httpx.AsyncClient(app=http_app.app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=http_app.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         async with client.stream("GET", "/stream/messages") as resp:
             data_line = None
             async for line in resp.aiter_lines():
@@ -97,13 +107,24 @@ async def test_stream_messages_async_client(monkeypatch: pytest.MonkeyPatch) -> 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_semantic_summaries_endpoint(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    vector = ChromaVectorStoreManager(
-        persist_directory=tmp_path, embedding_function=lambda t: [[0.0] for _ in t]
-    )
-    driver = DummyDriver()
-    manager = SemanticMemoryManager(vector, driver)
+    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: DummyDriver(), raising=False)
+
+    async def _allow(_: str) -> bool:
+        return True
+
+    monkeypatch.setattr("src.governance.evaluate_policy", _allow)
+    monkeypatch.setattr("src.sim.simulation.evaluate_policy", _allow)
     agent = DummyAgent("agent-1")
-    sim = Simulation([agent], vector_store_manager=vector, semantic_manager=manager)
+    sim = create_simulation(
+        num_agents=1,
+        steps=1,
+        scenario="sse",
+        use_vector_store=True,
+        vector_store_dir=tmp_path,
+        use_semantic_memory=True,
+        semantic_db_uri="bolt://dummy",
+    )
+    manager = sim.semantic_manager
 
     monkeypatch.setitem(db.SIM_STATE, "semantic_manager", manager)
     monkeypatch.setitem(db.SIM_STATE, "simulation", sim)
@@ -111,7 +132,8 @@ async def test_semantic_summaries_endpoint(monkeypatch: pytest.MonkeyPatch, tmp_
     await _clear_event_queue()
     await sim.run_step()
 
-    async with httpx.AsyncClient(app=http_app.app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=http_app.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/api/agents/agent-1/semantic_summaries")
     assert resp.status_code == 200
     data = resp.json()

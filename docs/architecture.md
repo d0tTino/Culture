@@ -120,6 +120,7 @@ The Agent Core components interact with:
 ### Overview
 
 The Agent Memory system (`src/agents/memory/`) provides sophisticated memory capabilities for agents, including hierarchical memory organization, vector-based storage and retrieval, and intelligent pruning mechanisms.
+Semantic summaries are managed separately in a Neo4j database via the `SemanticMemoryManager` and are blended with episodic memories during retrieval.
 
 ### Key Components
 
@@ -163,6 +164,10 @@ delete_collection() # Drop the entire class/collection
 **Configuration:**
 - Set `VECTOR_STORE_BACKEND=weaviate` and `WEAVIATE_URL` in your environment or `.env` file to use Weaviate.
 - The agent will use WeaviateVectorStoreManager for all memory operations if configured.
+
+#### SemanticMemoryManager
+
+The `SemanticMemoryManager` (`src/agents/memory/semantic_memory_manager.py`) consolidates episodic memories into higher-level summaries stored in a Neo4j database. This allows agents to recall key themes and topics beyond what fits in the vector store. The manager groups memories by topic and provides retrieval APIs used alongside episodic memory search.
 
 #### Memory Hierarchy
 

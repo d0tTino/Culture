@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.agents.core.base_agent import Agent
+from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.infra.checkpoint import (
     load_checkpoint,
@@ -85,6 +86,10 @@ def create_simulation(
     use_discord: bool = False,
     use_vector_store: bool = False,
     vector_store_dir: str = "./chroma_db",
+    use_semantic_memory: bool = False,
+    semantic_db_uri: str = "bolt://localhost:7687",
+    semantic_user: str = "neo4j",
+    semantic_password: str = "test",
 ) -> Simulation:
     """Construct a Simulation instance with basic defaults."""
 
@@ -110,17 +115,30 @@ def create_simulation(
 
     agents = [Agent(agent_id=f"agent_{i + 1}", name=f"Agent_{i + 1}") for i in range(num_agents)]
 
+    vector_store = (
+        None
+        if not use_vector_store
+        else (
+            ChromaVectorStoreManager(persist_directory=vector_store_dir)
+            if ChromaVectorStoreManager is not None
+            else None
+        )
+    )
+
+    semantic_manager = None
+    if use_semantic_memory and vector_store is not None:
+        try:
+            from neo4j import GraphDatabase
+
+            driver = GraphDatabase.driver(semantic_db_uri, auth=(semantic_user, semantic_password))
+            semantic_manager = SemanticMemoryManager(vector_store, driver)
+        except Exception as exc:  # pragma: no cover - optional dependency
+            logging.error("Failed to connect to semantic DB: %s", exc)
+
     sim = Simulation(
         agents=agents,
-        vector_store_manager=(
-            None
-            if not use_vector_store
-            else (
-                ChromaVectorStoreManager(persist_directory=vector_store_dir)
-                if ChromaVectorStoreManager is not None
-                else None
-            )
-        ),
+        vector_store_manager=vector_store,
+        semantic_manager=semantic_manager,
         scenario=scenario,
         discord_bot=discord_bot,
     )
@@ -150,6 +168,29 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="./chroma_db",
         help="Directory for vector store persistence.",
+    )
+    parser.add_argument(
+        "--semantic-memory",
+        action="store_true",
+        help="Enable semantic memory consolidation.",
+    )
+    parser.add_argument(
+        "--semantic-db",
+        type=str,
+        default="bolt://localhost:7687",
+        help="Neo4j connection URI for semantic memory.",
+    )
+    parser.add_argument(
+        "--semantic-user",
+        type=str,
+        default="neo4j",
+        help="Neo4j username for semantic memory.",
+    )
+    parser.add_argument(
+        "--semantic-password",
+        type=str,
+        default="test",
+        help="Neo4j password for semantic memory.",
     )
     parser.add_argument(
         "--no-warning-filters",
@@ -222,6 +263,10 @@ def main() -> None:
             use_discord=args.discord,
             use_vector_store=args.vector_store,
             vector_store_dir=args.vector_dir,
+            use_semantic_memory=args.semantic_memory,
+            semantic_db_uri=args.semantic_db,
+            semantic_user=args.semantic_user,
+            semantic_password=args.semantic_password,
         )
 
     if args.replay and meta:
