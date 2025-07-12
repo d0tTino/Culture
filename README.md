@@ -300,6 +300,32 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+### Discord Commands
+When running with Discord integration you can issue slash commands directly in
+your channel.
+
+```text
+/broadcast Hello from the outside
+```
+Sends a broadcast message to all agents.
+
+```text
+/kb Add multi-agent architecture diagram to the KB
+```
+Creates a new entry on the shared Knowledge Board.
+
+See `/status` and `/stats` for ephemeral information about agent resources and
+latency.
+
+### Troubleshooting Permission Errors
+If the bot fails to respond to commands:
+- Confirm the bot's role allows **Send Messages**, **Read Message History**, and
+  **Use Application Commands** in the channel.
+- Double-check `DISCORD_CHANNEL_ID` is correct and the bot has access to that
+  channel.
+- Re-invite the bot with the `applications.commands` scope if slash commands do
+  not appear.
+
 ### Configuring a Simulation Scenario
 
 You can modify the `DEFAULT_SCENARIO` constant in `src/app.py` to define a specific context and goal for your agents:
@@ -686,11 +712,17 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
          token TEXT NOT NULL
      );
      ```
-   - `ENABLE_OTEL=1` to activate OpenTelemetry log export
-   - `OTEL_EXPORTER_ENDPOINT` to override the OTLP log endpoint
-   - `ENABLE_REDPANDA=1` to log events to Redpanda
-   - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
-   - `SNAPSHOT_COMPRESS=1` to compress simulation snapshots
+  - Run with a comma-separated token list when you don't use a database:
+    ```bash
+    DISCORD_BOT_TOKEN="token1,token2" python -m src.app --discord
+    ```
+  - When `DISCORD_TOKENS_DB_URL` is set the application loads tokens from the
+    database and assigns them to agents by `agent_id` at startup.
+  - `ENABLE_OTEL=1` to activate OpenTelemetry log export
+  - `OTEL_EXPORTER_ENDPOINT` to override the OTLP log endpoint
+  - `ENABLE_REDPANDA=1` to log events to Redpanda
+  - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
+  - `SNAPSHOT_COMPRESS=1` to compress simulation snapshots
 
 
 7. **Initialize agent memories (optional):**

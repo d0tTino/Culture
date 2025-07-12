@@ -49,6 +49,16 @@ Shows the agent's current IP and DU balance as an ephemeral message.
 Displays latency and Knowledge Board size, also ephemeral. These commands only
 respond if the mapped agent has remaining IP and DU.
 
+```text
+/broadcast Hello from the outside
+```
+Sends a broadcast message to all agents.
+
+```text
+/kb Add multi-agent architecture diagram to the KB
+```
+Adds a new entry to the shared Knowledge Board.
+
 ### Using Multiple Bot Tokens
 You can run the simulation with several Discord bot accounts. Tokens are stored
 in a PostgreSQL table named `discord_tokens` with columns `agent_id` and
@@ -56,3 +66,12 @@ in a PostgreSQL table named `discord_tokens` with columns `agent_id` and
 value is provided the application will create the table automatically using
 SQLAlchemy. `DISCORD_BOT_TOKEN` can be left blank or contain a comma-separated
 fallback list.
+
+### Troubleshooting Permission Errors
+If slash commands fail or the bot cannot send messages:
+- Ensure the bot role has **Send Messages**, **Read Message History**, and **Use
+  Application Commands** permissions in the target channel.
+- Double-check that `DISCORD_CHANNEL_ID` points to a channel the bot can
+  access.
+- Re-invite the bot with the `applications.commands` scope if commands do not
+  appear.
