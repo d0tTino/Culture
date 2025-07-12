@@ -103,10 +103,15 @@ class Ledger:
                 approved INTEGER,
                 yes_weight REAL,
                 no_weight REAL,
+                ip_spent REAL DEFAULT 0,
                 ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        cur = self.conn.execute("PRAGMA table_info(law_proposals)")
+        cols = [r[1] for r in cur.fetchall()]
+        if "ip_spent" not in cols:
+            self.conn.execute("ALTER TABLE law_proposals ADD COLUMN ip_spent REAL DEFAULT 0")
         self.conn.commit()
         self.gas_price_per_call = float(settings.GAS_PRICE_PER_CALL)
         self.gas_price_per_token = float(settings.GAS_PRICE_PER_TOKEN)
@@ -415,13 +420,14 @@ class Ledger:
         approved: bool,
         yes_weight: float,
         no_weight: float,
-    ) -> None:
+        ip_spent: float = 0.0,
+    ) -> int:
         """Store a law proposal and its result."""
         cur = self.conn.cursor()
         cur.execute(
             """
-            INSERT INTO law_proposals(proposer_id, text, approved, yes_weight, no_weight)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO law_proposals(proposer_id, text, approved, yes_weight, no_weight, ip_spent)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 proposer_id,
@@ -429,15 +435,19 @@ class Ledger:
                 int(bool(approved)),
                 float(yes_weight),
                 float(no_weight),
+                float(ip_spent),
             ),
         )
         self.conn.commit()
+        return int(cur.lastrowid)
 
     def get_law_proposals(self, limit: int | None = None) -> list[dict[str, object]]:
         """Return stored law proposals."""
         cur = self.conn.cursor()
-        query = "SELECT proposer_id, text, approved, yes_weight, no_weight, ts FROM law_proposals ORDER BY id DESC"
-        rows = cur.execute(query + (" LIMIT ?" if limit else ""), ([int(limit)] if limit else [])).fetchall()
+        query = "SELECT proposer_id, text, approved, yes_weight, no_weight, ip_spent, ts FROM law_proposals ORDER BY id DESC"
+        rows = cur.execute(
+            query + (" LIMIT ?" if limit else ""), ([int(limit)] if limit else [])
+        ).fetchall()
         return [
             {
                 "proposer_id": str(r[0]),
@@ -445,7 +455,8 @@ class Ledger:
                 "approved": bool(r[2]),
                 "yes_weight": float(r[3]),
                 "no_weight": float(r[4]),
-                "ts": r[5],
+                "ip_spent": float(r[5]),
+                "ts": r[6],
             }
             for r in rows
         ]

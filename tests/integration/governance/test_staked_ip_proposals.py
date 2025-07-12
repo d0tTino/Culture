@@ -88,6 +88,7 @@ async def test_weights_include_staked_ip(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     proposals = ledger.get_law_proposals()
     assert proposals and proposals[0]["approved"] is True
+    assert proposals[0]["ip_spent"] == pytest.approx(0.0)
 
     resp = await db.api_get_proposals(limit=1)
     data = json.loads(resp.body)

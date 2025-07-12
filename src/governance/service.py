@@ -39,6 +39,7 @@ class GovernanceService:
 
         votes = await asyncio.gather(*[self.vote(a, text) for a in agents])
         weights: list[float] = []
+        ip_spent = 0.0
         if vote_weights is None:
             for a in agents:
                 base_ip = getattr(a.state, "ip", 0.0)
@@ -52,7 +53,9 @@ class GovernanceService:
             for a in agents:
                 w = int(vote_weights.get(a.agent_id, 1))
                 weights.append(float(w))
-                spend_tasks.append(ledger.spend(a.agent_id, ip=float(w * w), reason="vote"))
+                cost = float(w * w)
+                ip_spent += cost
+                spend_tasks.append(ledger.spend(a.agent_id, ip=cost, reason="vote"))
             await asyncio.gather(*spend_tasks, return_exceptions=True)
 
         yes_weight = sum(w for w, v in zip(weights, votes) if v)
@@ -67,6 +70,7 @@ class GovernanceService:
                 approved,
                 yes_weight,
                 no_weight,
+                ip_spent,
             )
         except Exception:
             pass
