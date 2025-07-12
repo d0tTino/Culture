@@ -92,28 +92,32 @@ class SemanticMemoryManager:
 
         topic_groups: dict[int, list[dict[str, Any]]] = defaultdict(list)
 
-        centroids: list[NDArray[np.float64]] = []
+        centroid_list: list[NDArray[np.float64]] = []
 
         for mem, emb in zip(memories, embeddings):
-            if not centroids:
+            if not centroid_list:
                 topic_groups[0].append(mem)
-                centroids.append(emb)
+                centroid_list.append(emb)
                 continue
             sims = (
-                centroids @ emb / (np.linalg.norm(centroids, axis=1) * np.linalg.norm(emb) + 1e-8)
+                centroid_list
+                @ emb
+                / (np.linalg.norm(centroid_list, axis=1) * np.linalg.norm(emb) + 1e-8)
             )
             idx = int(np.argmax(sims))
-            if sims[idx] < threshold and len(centroids) < num_topics:
-                topic_groups[len(centroids)].append(mem)
-                centroids.append(emb)
+            if sims[idx] < threshold and len(centroid_list) < num_topics:
+                topic_groups[len(centroid_list)].append(mem)
+                centroid_list.append(emb)
             else:
                 topic_groups[idx].append(mem)
-                c = centroids[idx]
-                centroids[idx] = (c * (len(topic_groups[idx]) - 1) + emb) / len(topic_groups[idx])
+                c = centroid_list[idx]
+                centroid_list[idx] = (c * (len(topic_groups[idx]) - 1) + emb) / len(
+                    topic_groups[idx]
+                )
 
         self.topic_groups[agent_id] = topic_groups
         self.topic_centroids[agent_id] = (
-            np.stack(centroids) if centroids else np.empty((0, embeddings.shape[1]))
+            np.stack(centroid_list) if centroid_list else np.empty((0, embeddings.shape[1]))
         )
         return topic_groups
 

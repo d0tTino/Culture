@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,7 +38,8 @@ async def test_sharded_start_and_send() -> None:
         DummyShardedClient,
     ):
         bot = SimulationShardedDiscordBot("tok", 456)
-        await bot.run_bot()
+        tasks = bot.run_bot()
+        await asyncio.gather(*tasks[:-1])
         await bot.send_simulation_update(content="hello")
         await bot.stop_bot()
 

@@ -134,6 +134,7 @@ class SimulationDiscordBot:
         self.event_queue = get_event_queue()
         self.message_queue = message_sse_queue
         self._forward_task: asyncio.Task[Any] | None = None
+        self._client_tasks: list[asyncio.Task[Any]] = []
 
         # Set up event handlers for all clients
         for _token, client in self.clients.items():
@@ -492,23 +493,17 @@ class SimulationDiscordBot:
         except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
             pass
 
-    async def run_bot(self: Self) -> None:
-        """
-        Start the Discord bot and connect to Discord.
-        This is a blocking call that should be run in an asyncio task.
-        """
-        try:
-            logger.info(f"Starting Discord bot(s), connecting to channel ID: {self.channel_id}")
-            tasks = []
-            for token, client in self.clients.items():
-                setattr(client, "token", token)
-                tasks.append(client.start(token))
-            self._forward_task = asyncio.create_task(self._forward_agent_messages())
-            await asyncio.gather(*tasks)
-            # Mark bot as ready when all clients have started
-            self.is_ready = True
-        except (discord.DiscordException, OSError) as e:
-            logger.error(f"Error starting Discord bot: {e}")
+    def run_bot(self: Self) -> list[asyncio.Task[Any]]:
+        """Start the Discord bot and return running tasks."""
+        logger.info(f"Starting Discord bot(s), connecting to channel ID: {self.channel_id}")
+        tasks: list[asyncio.Task[Any]] = []
+        for token, client in self.clients.items():
+            setattr(client, "token", token)
+            tasks.append(asyncio.create_task(client.start(token)))
+        self._client_tasks = tasks
+        self._forward_task = asyncio.create_task(self._forward_agent_messages())
+        self.is_ready = True
+        return [*tasks, self._forward_task]
 
     async def stop_bot(self: Self) -> None:
         """Stop the Discord bot and close the connection."""
@@ -535,6 +530,14 @@ class SimulationDiscordBot:
                             logger.warning("Attempted to send message to a None channel.")
             for client in self.clients.values():
                 await client.close()
+            for t in self._client_tasks:
+                if not t.done():
+                    t.cancel()
+                    try:
+                        await t
+                    except asyncio.CancelledError:  # pragma: no cover - expected
+                        pass
+            self._client_tasks.clear()
             if self._forward_task:
                 self._forward_task.cancel()
                 try:

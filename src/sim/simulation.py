@@ -216,27 +216,9 @@ class Simulation:
         # self.messages_to_perceive_this_round: list[dict[str, Any]] = [] # Already initialized above
 
         # Background task for forwarding external events (e.g., Discord messages)
-        try:
-            loop = asyncio.get_running_loop()
-            self._event_loop = loop
-            self._event_task = asyncio.create_task(
-                self.event_kernel.forward_external_events(self._handle_human_command)
-            )
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-
-            def _run() -> None:
-                asyncio.set_event_loop(loop)
-                get_event_queue()
-                self._event_task = loop.create_task(
-                    self.event_kernel.forward_external_events(self._handle_human_command)
-                )
-                loop.run_forever()
-
-            self._event_loop = loop
-            thread = threading.Thread(target=_run, daemon=True)
-            self._event_loop_thread = thread
-            thread.start()
+        self._event_task = None
+        self._event_loop = None
+        self._event_loop_thread = None
 
     # Add method to update collective metrics
     def _update_collective_metrics(self: Self) -> None:
@@ -814,6 +796,10 @@ class Simulation:
         """Start background processing of ``event_queue`` events."""
         if self._event_listener_task is None:
             self._event_listener_task = asyncio.create_task(self._event_listener_loop())
+        if self._event_task is None:
+            self._event_task = asyncio.create_task(
+                self.event_kernel.forward_external_events(self._handle_human_command)
+            )
 
     async def stop_event_listener(self: Self) -> None:
         """Stop the background event listener task."""
