@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from pydantic import BaseModel
 
+from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra.ledger import ledger
 from src.sim.quests import get_quests
@@ -157,6 +158,23 @@ class LawProposal(BaseModel):
     text: str
 
 
+class LawsResponse(BaseModel):
+    laws: list[str]
+
+
+class VoteRecord(BaseModel):
+    proposer_id: str
+    text: str
+    approved: bool
+    yes_weight: float
+    no_weight: float
+    ts: Any
+
+
+class VotesResponse(BaseModel):
+    votes: list[VoteRecord]
+
+
 app = FastAPI()
 
 
@@ -236,6 +254,22 @@ async def api_get_proposals(limit: int = 10) -> Response:
     """Return stored law proposals."""
     proposals = governance.get_proposals(limit)
     return JSONResponse({"proposals": proposals})
+
+
+@app.get("/api/laws", response_model=LawsResponse)
+async def api_get_laws() -> Response:
+    """Return passed laws from the law board."""
+
+    laws = law_board.get_laws()
+    return JSONResponse({"laws": laws})
+
+
+@app.get("/api/votes", response_model=VotesResponse)
+async def api_get_votes(limit: int = 10) -> Response:
+    """Return stored voting history."""
+
+    votes = ledger.get_law_proposals(limit)
+    return JSONResponse({"votes": votes})
 
 
 @app.get("/api/token_balances")
@@ -410,9 +444,14 @@ __all__ = [
     "WIDGET_REGISTRY",
     "EventSourceResponse",
     "LawProposal",
+    "LawsResponse",
     "SimulationEvent",
+    "VoteRecord",
+    "VotesResponse",
     "api_auctions",
+    "api_get_laws",
     "api_get_proposals",
+    "api_get_votes",
     "api_propose_law",
     "api_token_balances",
     "app",
