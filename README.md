@@ -44,6 +44,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
     * **Level 1 (Session Summaries):** Short-term memories are consolidated into session summaries.
     * **Level 2 (Chapter Summaries):** Level 1 summaries are further consolidated into longer-term chapter summaries.
     * **Persistence & Retrieval:** Both memory levels are persisted in a ChromaDB vector store and are retrievable via RAG, with dedicated test suites validating this functionality.
+* **Semantic Memory:** Higher-level summaries are stored in Neo4j via the SemanticMemoryManager.
 * **Retrieval Augmented Generation (RAG):** Agents utilize RAG to inject relevant past memories and knowledge board content into their context for decision-making.
 * **Shared Knowledge Board (v1):** A central repository where agents can post ideas and information, which is then perceived by other agents.
 * **Resource Management (IP/DU):** Agents manage and utilize Influence Points (IP) and Data Units (DU) for actions like posting to the knowledge board, proposing projects, and changing roles.
@@ -55,6 +56,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **DSPy Integration:** Advanced prompt optimization using DSPy with local Ollama models.
 * **LLM Performance Monitoring:** Comprehensive monitoring of LLM call performance metrics.
 * **Memory Pruning System:** Sophisticated pruning to maintain optimal performance while preserving critical information.
+* **Semantic Memory:** Consolidation of episodic memories into topic-based summaries stored in Neo4j.
 * **AsyncDSPyManager:** Concurrency layer allowing parallel DSPy calls without blocking the event loop.
 
 ## Key Features

@@ -2,10 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
-from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.app import create_simulation
 from src.infra import config
-from src.sim.simulation import Simulation
 from tests.unit.memory.test_semantic_memory_manager import DummyDriver
 
 
@@ -32,12 +30,7 @@ class DummyAgent:
 
 
 def setup_semantic_manager(tmp_path):
-    vector = ChromaVectorStoreManager(
-        persist_directory=tmp_path, embedding_function=lambda t: [[0.0] for _ in t]
-    )
-    driver = DummyDriver()
-    manager = SemanticMemoryManager(vector, driver)
-    return manager, vector, driver
+    return DummyDriver()
 
 
 @pytest.mark.integration
@@ -50,11 +43,20 @@ async def test_simulation_schedules_semantic_job(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(sim_module, "evaluate_policy", _allow)
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 1)
-    manager, vector, driver = setup_semantic_manager(tmp_path)
+    driver = setup_semantic_manager(tmp_path)
+    monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: driver, raising=False)
     agent = DummyAgent("a1")
-    sim = Simulation([agent], vector_store_manager=vector, semantic_manager=manager)
+    sim = create_simulation(
+        num_agents=1,
+        steps=1,
+        scenario="semantic",
+        use_vector_store=True,
+        vector_store_dir=tmp_path,
+        use_semantic_memory=True,
+        semantic_db_uri="bolt://dummy",
+    )
 
-    vector.add_memory("a1", 0, "thought", "hello")
+    sim.memory_service.vector_store.add_memory("a1", 0, "thought", "hello")
 
     await sim.run_step()
     assert driver.store  # summary written

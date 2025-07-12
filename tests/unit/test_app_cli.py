@@ -18,10 +18,25 @@ pytestmark = pytest.mark.unit
 
 
 def test_parse_args(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["prog", "--agents", "2", "--steps", "3"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--agents",
+            "2",
+            "--steps",
+            "3",
+            "--semantic-memory",
+            "--semantic-db",
+            "bolt://db",
+        ],
+    )
     args = app.parse_args()
     assert args.agents == 2
     assert args.steps == 3
+    assert args.semantic_memory is True
+    assert args.semantic_db == "bolt://db"
 
 
 def test_main_invokes_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,6 +62,10 @@ def test_main_invokes_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
         use_discord=False,
         use_vector_store=False,
         vector_store_dir="./chroma_db",
+        use_semantic_memory=False,
+        semantic_db_uri="bolt://localhost:7687",
+        semantic_user="neo4j",
+        semantic_password="test",
     )
     dummy_sim.async_run.assert_called_once_with(3)
     run_mock.assert_called_once_with(dummy_sim.async_run.return_value)
@@ -88,6 +107,10 @@ def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
         use_discord=False,
         use_vector_store=False,
         vector_store_dir="./chroma_db",
+        use_semantic_memory=False,
+        semantic_db_uri="bolt://localhost:7687",
+        semantic_user="neo4j",
+        semantic_password="test",
     )
     dummy_sim.async_run.assert_called_once_with(2)
     run_mock.assert_called_once_with(dummy_sim.async_run.return_value)
