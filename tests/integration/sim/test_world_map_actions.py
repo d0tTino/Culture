@@ -74,7 +74,8 @@ async def test_move_action_updates_position_and_ledger(
 @pytest.mark.integration
 async def test_move_blocked_by_obstacle(sim: tuple[Simulation, Ledger, DummyAgent]) -> None:
     sim_obj, ledger, agent = sim
-    sim_obj.world_map.add_obstacle(1, 0)
+    async with sim_obj.world_map.lock:
+        sim_obj.world_map.add_obstacle(1, 0)
     await process_map_action(
         sim_obj, 0, agent.agent_id, agent.state, {"action": "move", "dx": 1, "dy": 0}
     )
@@ -90,7 +91,8 @@ async def test_gather_action_success_and_failure(
     sim: tuple[Simulation, Ledger, DummyAgent],
 ) -> None:
     sim_obj, ledger, agent = sim
-    sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
+    async with sim_obj.world_map.lock:
+        sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
     await process_map_action(
         sim_obj,
         0,
@@ -134,7 +136,8 @@ async def test_build_action_success_and_failure(
     rows = ledger.conn.execute("SELECT reason FROM transactions").fetchall()
     assert rows == []
 
-    sim_obj.world_map.agent_resources[agent.agent_id] = {"wood": 1}
+    async with sim_obj.world_map.lock:
+        sim_obj.world_map.agent_resources[agent.agent_id] = {"wood": 1}
     await process_map_action(
         sim_obj,
         0,

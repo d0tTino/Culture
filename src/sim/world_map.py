@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable
 from enum import Enum
 from heapq import heappop, heappush
@@ -24,6 +25,7 @@ class WorldMap:
     """Simple grid-based world map for agent interactions."""
 
     def __init__(self, width: int = 50, height: int = 50) -> None:
+        self.lock = asyncio.Lock()
         self.width = width
         self.height = height
         self.agent_positions: dict[str, tuple[int, int]] = {}
