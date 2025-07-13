@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from importlib import metadata
 from typing import Any, Callable
@@ -78,6 +79,8 @@ async def load_plugins(
         try:
             plugin = ep.load()
             result = plugin()
+            if asyncio.iscoroutine(result):
+                result = await result
             if isinstance(result, dict) and {
                 "name",
                 "script_url",
