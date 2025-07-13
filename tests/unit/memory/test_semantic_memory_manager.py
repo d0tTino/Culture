@@ -67,3 +67,47 @@ def test_consolidation_and_retrieval(tmp_path) -> None:
 
     recent = manager.get_recent_summaries("agent", limit=1)
     assert recent == [summary]
+
+
+@pytest.mark.unit
+def test_group_memories_by_topic_zero_embeddings(tmp_path) -> None:
+    """Memories should still be grouped when embeddings are all zeros."""
+    vector = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda texts: [[0.0] for _ in texts]
+    )
+    manager = SemanticMemoryManager(vector, driver=None)
+
+    for i, text in enumerate(["cat", "dog", "bird"]):
+        vector.add_memory("agent", i, "thought", text)
+
+    groups = manager.group_memories_by_topic("agent", num_topics=2)
+
+    assert groups
+    assert sum(len(g) for g in groups.values()) == 3
+    assert len(groups) <= 2
+    # When embeddings provide no signal we fall back to TF-IDF clustering
+    assert manager.topic_centroids["agent"].shape[0] <= 2
+
+
+@pytest.mark.unit
+def test_retrieve_context_with_scores(tmp_path) -> None:
+    """Results should include relevance scores sorted in descending order."""
+
+    def embed(texts: list[str]) -> list[list[float]]:
+        return [[1.0 if "cat" in t else 0.0, 1.0 if "dog" in t else 0.0] for t in texts]
+
+    vector = ChromaVectorStoreManager(persist_directory=str(tmp_path), embedding_function=embed)
+    manager = SemanticMemoryManager(vector, driver=None)
+
+    vector.add_memory("agent", 1, "thought", "cat memory")
+    vector.add_memory("agent", 2, "thought", "dog memory")
+    vector.add_memory("agent", 3, "thought", "cat and dog")
+
+    manager.group_memories_by_topic("agent", num_topics=2)
+    results = manager.retrieve_context_with_scores("agent", "cat", k=3)
+
+    assert results
+    # "dog memory" may not be returned if it belongs to a different topic
+    assert [r["content"] for r in results][:2] == ["cat memory", "cat and dog"]
+    scores = [r["relevance_score"] for r in results]
+    assert scores == sorted(scores, reverse=True)
