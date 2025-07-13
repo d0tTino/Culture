@@ -5,6 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from src.infra import config
+from src.interfaces.dashboard_backend import emit_map_change_event
 from src.sim.world_map import ResourceToken, StructureType
 
 if TYPE_CHECKING:  # pragma: no cover - type hints only
@@ -150,6 +151,7 @@ async def process_map_action(
         lambda data=map_event_data: sim.event_kernel.emit_environment_event(data),
         vector=sim.vector,
     )
+    await emit_map_change_event(sim.world_map.to_dict())
     if sim.discord_bot:
         embed = sim.discord_bot.create_map_action_embed(
             agent_id=agent_id,

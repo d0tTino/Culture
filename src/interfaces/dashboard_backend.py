@@ -440,6 +440,13 @@ async def emit_map_action_event(
     )
 
 
+async def emit_map_change_event(world_map: dict[str, Any]) -> None:
+    """Convenience helper to enqueue world map updates."""
+    await emit_event(
+        SimulationEvent(event_type="map_change", data={"world_map": world_map})
+    )
+
+
 __all__ = [
     "WIDGET_REGISTRY",
     "EventSourceResponse",
@@ -457,6 +464,7 @@ __all__ = [
     "app",
     "emit_event",
     "emit_map_action_event",
+    "emit_map_change_event",
     "enqueue_message",
     "get_event_queue",
     "get_quests_api",
