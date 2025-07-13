@@ -151,9 +151,9 @@ Follow these steps to run the example simulation locally:
    ```bash
    cp .env.example .env
    ```
-   Edit `OLLAMA_API_BASE` if your Ollama server runs on a different URL. Set
-   `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` if you plan to use the Discord
-   bot.
+   Edit `OLLAMA_API_BASE` or `VLLM_API_BASE` if your LLM server runs on a
+   different URL. Set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` if you plan
+   to use the Discord bot.
 4. **Install or update Ollama and pull the model**
    ```bash
    curl https://ollama.ai/install.sh | sh
@@ -696,7 +696,8 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```
 6. **Configure environment variables:**
    - Copy `.env.example` to `.env` and edit as needed:
-    - `OLLAMA_API_BASE` (e.g., http://localhost:11434, or http://localhost:$VLLM_PORT for vLLM)
+   - `OLLAMA_API_BASE` (e.g., http://localhost:11434, or http://localhost:$VLLM_PORT for vLLM)
+   - `VLLM_API_BASE` (URL of the vLLM server if used)
     - `OLLAMA_REQUEST_TIMEOUT` (request timeout in seconds)
     - `VLLM_MODEL` (e.g., mistralai/Mistral-7B-Instruct-v0.2) for the vLLM backend
     - `VLLM_PORT` (e.g., 8001) for the vLLM backend

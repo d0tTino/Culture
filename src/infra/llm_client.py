@@ -61,7 +61,6 @@ from pydantic.fields import FieldInfo
 
 if TYPE_CHECKING:
     from src.agents.core.agent_state import AgentState
-import os
 
 from src.shared.decorator_utils import monitor_llm_call
 
@@ -72,7 +71,7 @@ from .config import (
 )
 from .ledger import ledger
 
-VLLM_API_BASE = os.environ.get("VLLM_API_BASE")
+VLLM_API_BASE = cast(str | None, get_config("VLLM_API_BASE"))
 USE_VLLM = bool(VLLM_API_BASE)
 
 if TYPE_CHECKING:
@@ -309,7 +308,7 @@ else:
 def get_llm_client() -> OllamaClientProtocol:
     """Return the initialized LLM client, retrying and switching backends if needed."""
     global client, VLLM_API_BASE, USE_VLLM
-    env_base = os.environ.get("VLLM_API_BASE")
+    env_base = cast(str | None, get_config("VLLM_API_BASE"))
 
     if env_base and (not USE_VLLM or env_base != VLLM_API_BASE):
         VLLM_API_BASE = env_base

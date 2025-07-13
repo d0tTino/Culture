@@ -18,6 +18,7 @@ CONFIG_OVERRIDES: dict[str, Any] = {}
 # Default values
 DEFAULT_CONFIG: dict[str, object] = {
     "OLLAMA_API_BASE": "http://localhost:11434",
+    "VLLM_API_BASE": "",
     "DEFAULT_LLM_MODEL": "mistral:latest",
     "DEFAULT_TEMPERATURE": 0.7,
     "MEMORY_THRESHOLD_L1": 0.2,
