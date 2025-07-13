@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any, cast
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
