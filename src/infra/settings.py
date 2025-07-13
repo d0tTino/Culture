@@ -11,6 +11,7 @@ class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
     OLLAMA_API_BASE: str = "http://localhost:11434"
+    VLLM_API_BASE: str = ""
     DEFAULT_LLM_MODEL: str = "mistral:latest"
     # Backwards compatibility with older config keys
     MODEL_NAME: str = "mistral:latest"
