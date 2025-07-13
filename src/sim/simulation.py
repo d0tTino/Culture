@@ -810,6 +810,13 @@ class Simulation:
             except asyncio.CancelledError:  # pragma: no cover - expected
                 pass
             self._event_listener_task = None
+        if self._event_task:
+            self._event_task.cancel()
+            try:
+                await self._event_task
+            except asyncio.CancelledError:  # pragma: no cover - expected
+                pass
+            self._event_task = None
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
@@ -931,9 +938,15 @@ class Simulation:
 
     def close(self: Self) -> None:
         """Release resources held by the simulation."""
-        if self._event_listener_task and not self._event_listener_task.done():
-            self._event_listener_task.cancel()
-            self._event_listener_task = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self.stop_event_listener())
+        else:
+            if loop.is_running():
+                loop.create_task(self.stop_event_listener())
+            else:
+                loop.run_until_complete(self.stop_event_listener())
         if hasattr(self.knowledge_board, "close"):
             try:
                 close_fn = getattr(self.knowledge_board, "close")
@@ -946,8 +959,6 @@ class Simulation:
                 self.memory_service.close()
             except (OSError, RuntimeError) as exc:  # pragma: no cover - defensive
                 logger.exception("Failed to close vector store manager: %s", exc)
-        if self._event_task:
-            self._event_task.cancel()
         if self._event_loop:
             if self._event_loop.is_running():
                 self._event_loop.call_soon_threadsafe(self._event_loop.stop)
