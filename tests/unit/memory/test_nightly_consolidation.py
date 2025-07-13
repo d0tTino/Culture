@@ -76,3 +76,24 @@ def test_consolidation_improves_retrieval_speed(tmp_path, monkeypatch) -> None:
     after = manager.retrieval_times[-1]
 
     assert after < before
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_aconsolidate_daily_memories(tmp_path) -> None:
+    """Asynchronous wrapper should schedule consolidation work."""
+    from src.agents.memory.vector_store import ChromaVectorStoreManager
+
+    manager = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda texts: [[0.0] for _ in texts]
+    )
+
+    for i in range(3):
+        manager.add_memory("agent", i + 1, "thought", f"m{i}")
+
+    await manager.aconsolidate_daily_memories("agent", 1, 3)
+
+    summaries = manager.retrieve_filtered_memories(
+        "agent", filters={"memory_type": "consolidated_summary"}, limit=None
+    )
+    assert summaries
