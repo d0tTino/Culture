@@ -114,6 +114,7 @@ class ConfigSettings(BaseSettings):
     S3_BUCKET: str = ""
     S3_PREFIX: str = ""
     SNAPSHOT_INTERVAL_STEPS: int = 100
+    QUEST_GENERATION_INTERVAL_STEPS: int = 0
     MAX_AGENT_AGE: int = 100
     AGENT_TOKEN_BUDGET: int = 10000
     GENE_MUTATION_RATE: float = 0.1
