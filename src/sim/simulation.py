@@ -38,6 +38,7 @@ from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.quests import generate_quest
 from src.sim.version_vector import VersionVector
 from src.sim.world_map import WorldMap
 
@@ -135,9 +136,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -163,6 +164,7 @@ class Simulation:
         self._last_semantic_job_step = 0
         self._last_memory_prune_step = 0
         self._last_consolidation_step = 0
+        self._last_quest_step = 0
         self._last_trace_hash = ""
 
         # --- Store Discord bot ---
@@ -183,9 +185,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -487,9 +489,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -719,6 +719,19 @@ class Simulation:
                     logger.error("Failed semantic nightly job: %s", exc)
             self._last_semantic_job_step = self.current_step
 
+        quest_interval = int(
+            config.get_config_value_with_override(
+                "QUEST_GENERATION_INTERVAL_STEPS",
+                config.QUEST_GENERATION_INTERVAL_STEPS,
+            )
+        )
+        if quest_interval > 0 and self.current_step - self._last_quest_step >= quest_interval:
+            await self.event_kernel.schedule_immediate(
+                self._generate_quest_event,
+                vector=self.vector,
+            )
+            self._last_quest_step = self.current_step
+
         self.vector.increment(self.agents[next_agent_index].get_id())
         await self.event_kernel.schedule_in(
             1,
@@ -761,6 +774,17 @@ class Simulation:
             "type": "memory_consolidation",
             "step": self.current_step,
             "start": start_step,
+        }
+        await self.event_kernel.emit_environment_event(event)
+
+    async def _generate_quest_event(self: Self) -> None:
+        quest = generate_quest("Create a new quest for the agents")
+        if quest is None:
+            return
+        event = {
+            "type": "quest_generated",
+            "step": self.current_step,
+            "quest": quest.model_dump(),
         }
         await self.event_kernel.emit_environment_event(event)
 
