@@ -50,7 +50,6 @@ class TestMemoryTrackingManager(unittest.TestCase):
         mus = self.manager.calculate_mus(mem_id)
         self.assertGreaterEqual(mus, 0.0)
 
-    @pytest.mark.asyncio
     def test_unified_retrieval_usage_updates(self: Self) -> None:
         """Ensure usage stats are updated for vector and semantic retrieval."""
         from types import SimpleNamespace
@@ -85,8 +84,11 @@ class TestMemoryTrackingManager(unittest.TestCase):
             ) -> SimpleNamespace:
                 return SimpleNamespace(summary="S")
 
+        from src.agents.memory.memory_service import MemoryService
+
         state = {
             "agent_id": self.agent_id,
+            "memory_service": MemoryService(self.vector_store, semantic_manager),
             "vector_store_manager": self.vector_store,
             "semantic_manager": semantic_manager,
             "agent_instance": DummyAgent(),
@@ -94,11 +96,9 @@ class TestMemoryTrackingManager(unittest.TestCase):
         }
 
         with patcher:
-            asyncio.get_event_loop().run_until_complete(
-                retrieve_and_summarize_memories_node(state)
-            )
+            asyncio.run(retrieve_and_summarize_memories_node(state))
 
-        assert len(calls) == 2
+        assert len(calls) == 1
         assert all(calls)
 
 

@@ -13,7 +13,7 @@ class DummyCtx:
 
 class DummyBot:
     def __init__(self, *args: object, **kwargs: object) -> None:
-        pass
+        self.tree = SimpleNamespace(command=lambda *a, **k: (lambda f: f))
 
     def command(self, *args: object, **kwargs: object):
         def decorator(func):

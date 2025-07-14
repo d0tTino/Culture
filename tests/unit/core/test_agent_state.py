@@ -5,6 +5,7 @@ and runs several steps to verify the state management is working correctly.
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import pytest
 
 from src.agents.core.agent_state import AgentState
 from src.agents.core.base_agent import Agent
+from src.infra import config
 from src.sim.simulation import Simulation
 from tests.utils.mock_llm import MockLLM
 
@@ -59,6 +61,8 @@ async def test_agent_state() -> None:
     mock_llm_cm = MockLLM(mock_responses, strict_mode=True)
     mock_llm_cm.__enter__()
     try:
+        os.environ.pop("OPA_URL", None)
+        config.load_config(validate_required=False)
         # Create 3 agents with the new AgentState model
         agents = [
             Agent(

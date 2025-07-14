@@ -465,6 +465,12 @@ Infrastructure components are used throughout the system:
 ### Infrastructure Compliance Note (2025-05-18)
 All infrastructure code in `src/infra/` is strictly compliant with Mypy (strict mode) and Ruff, with only justified ignores for `ollama.Client` return types due to third-party stub limitations. DSPy integration is robust and fully async-capable.
 
+### Migration Note (2025-05-29)
+The configuration system now provides a single `LLM_API_BASE` setting. The old
+`OLLAMA_API_BASE` and `VLLM_API_BASE` environment variables are deprecated and
+only used to populate `LLM_API_BASE` for backward compatibility. Runtime modules
+read from configuration instead of inspecting environment variables.
+
 ## 8. Simulation Environment
 
 ### Overview

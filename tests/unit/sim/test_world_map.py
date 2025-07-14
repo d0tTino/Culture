@@ -64,6 +64,7 @@ class ActionAgent:
         self,
         simulation_step: int,
         environment_perception: dict[str, object] | None = None,
+        memory_service: object | None = None,
         vector_store_manager: object | None = None,
         knowledge_board: object | None = None,
     ) -> dict[str, object]:

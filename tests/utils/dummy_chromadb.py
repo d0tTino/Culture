@@ -1,6 +1,9 @@
 import sys
 import types
 
+# Disable strict type checking for this lightweight test stub
+# mypy: ignore-errors
+
 
 def setup_dummy_chromadb() -> None:
     """Install a lightweight stub of the ``chromadb`` package into ``sys.modules``."""

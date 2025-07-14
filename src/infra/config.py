@@ -17,6 +17,7 @@ CONFIG_OVERRIDES: dict[str, Any] = {}
 
 # Default values
 DEFAULT_CONFIG: dict[str, object] = {
+    "LLM_API_BASE": "http://localhost:11434",
     "OLLAMA_API_BASE": "http://localhost:11434",
     "VLLM_API_BASE": "",
     "DEFAULT_LLM_MODEL": "mistral:latest",
@@ -231,7 +232,7 @@ BOOL_CONFIG_KEYS = [
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
 # outgoing messages.
-REQUIRED_CONFIG_KEYS = ["OLLAMA_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
+REQUIRED_CONFIG_KEYS = ["LLM_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_URL"]
 
 
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:

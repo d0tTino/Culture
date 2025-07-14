@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from src.shared.pydantic_compat import BaseSettings, SettingsConfigDict
+from src.shared.pydantic_compat import BaseSettings, SettingsConfigDict, model_validator
 
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
 
+    # Deprecated individual base URLs - still loaded for backward compatibility
     OLLAMA_API_BASE: str = "http://localhost:11434"
     VLLM_API_BASE: str = ""
+
+    # Unified LLM API endpoint used by :mod:`llm_client`
+    LLM_API_BASE: str = ""
     DEFAULT_LLM_MODEL: str = "mistral:latest"
     # Backwards compatibility with older config keys
     MODEL_NAME: str = "mistral:latest"
@@ -123,6 +127,13 @@ class ConfigSettings(BaseSettings):
         "Innovator": {"base": 1.0, "bonus_factor": 0.5},
         "Analyzer": {"base": 1.0, "bonus_factor": 0.2},
     }
+
+    @model_validator(mode="after")
+    def _set_llm_base(self) -> ConfigSettings:
+        """Populate ``LLM_API_BASE`` from deprecated settings if unset."""
+        if not self.LLM_API_BASE:
+            self.LLM_API_BASE = self.VLLM_API_BASE or self.OLLAMA_API_BASE
+        return self
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

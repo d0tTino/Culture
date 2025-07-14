@@ -21,12 +21,15 @@ def test_generate_text_vllm(monkeypatch: pytest.MonkeyPatch) -> None:
         }
         return resp
 
+    monkeypatch.setattr(llm_client, "LLM_API_BASE", "http://vllm:8001")
     monkeypatch.setattr(llm_client, "VLLM_API_BASE", "http://vllm:8001")
     monkeypatch.setattr(llm_client, "USE_VLLM", True)
-    monkeypatch.setattr(llm_client, "client", llm_client._create_vllm_client())
-    monkeypatch.setattr(config.settings, "VLLM_API_BASE", "http://vllm:8001")
+    monkeypatch.setattr(llm_client, "client", llm_client._create_vllm_client())  # type: ignore[attr-defined]
+    monkeypatch.setattr(config.settings, "LLM_API_BASE", "http://vllm:8001")  # type: ignore[attr-defined]
+    monkeypatch.setattr(config.settings, "VLLM_API_BASE", "http://vllm:8001")  # type: ignore[attr-defined]
+    monkeypatch.setitem(config._CONFIG, "LLM_API_BASE", "http://vllm:8001")
     monkeypatch.setitem(config._CONFIG, "VLLM_API_BASE", "http://vllm:8001")
-    monkeypatch.setattr(llm_client.requests, "post", fake_post)
+    monkeypatch.setattr(llm_client.requests, "post", fake_post)  # type: ignore[attr-defined]
 
     result = llm_client.generate_text("hello")
 
@@ -53,7 +56,7 @@ def test_generate_text_vllm_env_switch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VLLM_API_BASE", "http://vllm:8002")
     config.load_config(validate_required=False)
     module = importlib.reload(llm_client)
-    monkeypatch.setattr(module.requests, "post", fake_post)
+    monkeypatch.setattr(module.requests, "post", fake_post)  # type: ignore[attr-defined]
 
     result = module.generate_text("hello")
 

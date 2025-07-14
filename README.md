@@ -151,7 +151,7 @@ Follow these steps to run the example simulation locally:
    ```bash
    cp .env.example .env
    ```
-   Edit `OLLAMA_API_BASE` or `VLLM_API_BASE` if your LLM server runs on a
+   Edit `LLM_API_BASE` if your LLM server runs on a
    different URL. Set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` if you plan
    to use the Discord bot.
 4. **Install or update Ollama and pull the model**
@@ -687,7 +687,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
    scripts/start_vllm.sh
    # Point the application to the vLLM server
-   export OLLAMA_API_BASE="http://localhost:$VLLM_PORT"
+   export LLM_API_BASE="http://localhost:$VLLM_PORT"
    ```
 5. **Run Weaviate (for vector store, optional):**
    ```bash
@@ -696,8 +696,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```
 6. **Configure environment variables:**
    - Copy `.env.example` to `.env` and edit as needed:
-   - `OLLAMA_API_BASE` (e.g., http://localhost:11434, or http://localhost:$VLLM_PORT for vLLM)
-   - `VLLM_API_BASE` (URL of the vLLM server if used)
+   - `LLM_API_BASE` (e.g., http://localhost:11434 or the vLLM base URL)
     - `OLLAMA_REQUEST_TIMEOUT` (request timeout in seconds)
     - `VLLM_MODEL` (e.g., mistralai/Mistral-7B-Instruct-v0.2) for the vLLM backend
     - `VLLM_PORT` (e.g., 8001) for the vLLM backend
@@ -740,7 +739,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
 
 Running on Windows requires the WSL2 build of **Ollama** (version 0.1.34 or
 newer). Expose port `11434` to your host when launching Ollama so the Python
-services can reach it. Configure the connection with the `OLLAMA_API_BASE` and
+services can reach it. Configure the connection with the `LLM_API_BASE` and
 `OLLAMA_REQUEST_TIMEOUT` variables in your `.env` (see `.env.example`).
 GPU acceleration is only available when Ollama runs inside WSL2 or Docker.
 Install the NVIDIA drivers for WSL2 and run all Python commands from your WSL2
@@ -785,7 +784,7 @@ Metrics include `llm_latency_ms`, `llm_calls_total`, `knowledge_board_size`, and
 check the latest values with the `!stats` Discord command.
 
 For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
-When running against a local vLLM server, set `VLLM_API_BASE` to its base URL.
+When running against a local vLLM server, set `LLM_API_BASE` to its base URL.
 
 ### Starting the vLLM Server
 `scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API with sensible defaults.
@@ -798,7 +797,7 @@ VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vll
 After the server is running, point the application to it:
 
 ```bash
-export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+export LLM_API_BASE="http://localhost:$VLLM_PORT"
 ```
 
 ### Walking Vertical Slice
