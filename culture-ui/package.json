@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "preview": "vite preview",
     "type-check": "tsc -b",
+    "tsc": "tsc --noEmit",
     "prepare": "husky install"
   },
   "dependencies": {

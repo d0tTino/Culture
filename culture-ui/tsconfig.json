@@ -2,7 +2,8 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "strict": true
   },
   "files": [],
   "references": [
