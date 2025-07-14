@@ -77,5 +77,33 @@ describe('Storyboard widget', () => {
 
     expect(screen.getByText('a1: 5, 6 (mood n/a)')).toBeInTheDocument()
   })
+
+  it('renders heatmap and memory events', async () => {
+    ;(
+      globalThis as unknown as { WebSocket?: typeof WebSocket }
+    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
+
+    render(<StoryboardPage />)
+
+    const ws = MockWebSocket.instances[0]
+    act(() => {
+      ws.sendMessage(
+        '{"data":{"world_map":{"agents":{"a1":[0,0]}}}}',
+      )
+      ws.sendMessage(
+        '{"event_type":"memory_prune","data":{"step":1}}',
+      )
+    })
+
+    const heatmap = await screen.findByTestId('heatmap')
+    const firstCell = heatmap.firstChild as HTMLElement
+    await waitFor(() =>
+      expect(firstCell.style.backgroundColor).toBe('rgba(255, 0, 0, 1)'),
+    )
+
+    expect(
+      await screen.findByText(/memory_prune \(step 1\)/i),
+    ).toBeInTheDocument()
+  })
 })
 
