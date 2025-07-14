@@ -67,6 +67,42 @@ class MemoryService:
             return []
         return self.semantic_manager.get_recent_summaries(agent_id, limit)
 
+    async def retrieve_episodic_and_update_semantic(
+        self: Self, agent_id: str, query: str = "", k: int = 5
+    ) -> list[dict[str, Any]]:
+        """Retrieve episodic memories then consolidate them into semantic form."""
+        episodic = []
+        if self.vector_store:
+            episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
+        if self.semantic_manager:
+            try:
+                await self.semantic_manager.run_nightly_job(agent_id, episodic)
+            except Exception:  # pragma: no cover - defensive
+                import logging
+
+                logging.getLogger(__name__).error("Semantic consolidation failed", exc_info=True)
+        return episodic
+
+    def blend_with_recent_semantic(
+        self: Self, agent_id: str, episodic_summary: str, limit: int = 3
+    ) -> str:
+        """Blend an episodic summary with recent semantic summaries."""
+        if not self.semantic_manager:
+            return episodic_summary
+        return self.semantic_manager.blend_episodic_and_semantic(agent_id, episodic_summary, limit)
+
+    async def get_context_pipeline(
+        self: Self,
+        agent_id: str,
+        query: str = "",
+        k: int = 5,
+        semantic_limit: int = 3,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Full retrieval pipeline returning episodic memories and semantic summaries."""
+        episodic = await self.retrieve_episodic_and_update_semantic(agent_id, query, k)
+        semantic = self.get_recent_semantic_summaries(agent_id, semantic_limit)
+        return episodic, semantic
+
     async def run_semantic_job(
         self: Self,
         agent_id: str,

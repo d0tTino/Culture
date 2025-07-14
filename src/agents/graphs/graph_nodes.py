@@ -85,29 +85,17 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     if not manager or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
 
-    if hasattr(manager, "retrieve_relevant_memories"):
-        memories = await cast(MemoryService, manager).retrieve_relevant_memories(
-            state["agent_id"], query="", k=5
+    if hasattr(manager, "get_context_pipeline"):
+        memories, semantic = await cast(MemoryService, manager).get_context_pipeline(
+            state["agent_id"], query="", k=5, semantic_limit=2
         )
+        memories_content = [m.get("content", "") for m in memories] + semantic
     else:
         memories = await cast(MemoryRetriever, manager).aretrieve_relevant_memories(
             state["agent_id"], query="", k=5
         )
-    try:
-        if hasattr(manager, "run_semantic_job"):
-            await cast(MemoryService, manager).run_semantic_job(
-                state["agent_id"], episodic_memories=memories
-            )
-    except Exception:  # pragma: no cover - defensive
-        logger.error("Semantic consolidation failed", exc_info=True)
-    memories_content = [m.get("content", "") for m in memories]
-
-    semantic: list[str] = []
-    if hasattr(manager, "get_recent_semantic_summaries"):
-        semantic = cast(MemoryService, manager).get_recent_semantic_summaries(
-            state["agent_id"], limit=2
-        )
-        memories_content.extend(semantic)
+        memories_content = [m.get("content", "") for m in memories]
+        semantic = []
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
     summary_result = await agent.async_generate_l1_summary(

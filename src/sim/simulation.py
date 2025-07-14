@@ -105,6 +105,7 @@ class Simulation:
         # Background task for processing incoming events
         self._event_listener_task: asyncio.Task[None] | None = None
         self._event_task: asyncio.Task[Any] | None = None
+        self._stop_listener_task: asyncio.Task[None] | None = None
         self._event_loop: asyncio.AbstractEventLoop | None = None
         self._event_loop_thread: threading.Thread | None = None
 
@@ -134,9 +135,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -182,9 +183,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -486,7 +487,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -944,7 +947,7 @@ class Simulation:
             asyncio.run(self.stop_event_listener())
         else:
             if loop.is_running():
-                loop.create_task(self.stop_event_listener())
+                self._stop_listener_task = loop.create_task(self.stop_event_listener())
             else:
                 loop.run_until_complete(self.stop_event_listener())
         if hasattr(self.knowledge_board, "close"):
