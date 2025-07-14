@@ -1,8 +1,9 @@
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.infra import config
 from src.interfaces.discord_bot import SimulationDiscordBot
 
 
@@ -39,6 +40,11 @@ async def test_send_simulation_update_logs_error(monkeypatch: pytest.MonkeyPatch
             error_called.set()
 
         monkeypatch.setattr("src.interfaces.discord_bot.logger.error", fake_error)
+        monkeypatch.setitem(config._CONFIG, "OPA_URL", "")
+        monkeypatch.setattr(
+            "src.interfaces.discord_bot.evaluate_with_opa",
+            AsyncMock(return_value=(True, "hi")),
+        )
         result = await bot.send_simulation_update(content="hi")
         assert result is False
         assert error_called.is_set()

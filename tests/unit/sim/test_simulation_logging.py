@@ -42,6 +42,7 @@ class DummyAgent:
         self,
         simulation_step: int,
         environment_perception: dict | None = None,
+        memory_service=None,
         vector_store_manager=None,
         knowledge_board=None,
     ) -> dict:

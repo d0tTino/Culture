@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel
 
-from src.infra import llm_client
+from src.infra import config, llm_client
 
 
 class DummyModel(BaseModel):
@@ -22,8 +22,10 @@ def test_generate_structured_output_uses_base_url(monkeypatch: pytest.MonkeyPatc
         resp.json.return_value = {"response": json.dumps({"foo": "bar"})}
         return resp
 
-    monkeypatch.setattr(llm_client, "OLLAMA_API_BASE", "http://override:1234")
-    monkeypatch.setattr(llm_client.requests, "post", fake_post)
+    monkeypatch.setattr(llm_client, "LLM_API_BASE", "http://override:1234")
+    monkeypatch.setattr(llm_client, "USE_VLLM", False)
+    monkeypatch.setitem(config._CONFIG, "LLM_API_BASE", "http://override:1234")
+    monkeypatch.setattr(llm_client.requests, "post", fake_post)  # type: ignore[attr-defined]
 
     result = llm_client.generate_structured_output("prompt", DummyModel)
 

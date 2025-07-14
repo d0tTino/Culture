@@ -64,13 +64,10 @@ if TYPE_CHECKING:
 
 from src.shared.decorator_utils import monitor_llm_call
 
-from .config import (
-    OLLAMA_API_BASE,
-    OLLAMA_REQUEST_TIMEOUT,
-    get_config,
-)
+from .config import OLLAMA_REQUEST_TIMEOUT, get_config
 from .ledger import ledger
 
+LLM_API_BASE = cast(str, get_config("LLM_API_BASE"))
 VLLM_API_BASE = cast(str | None, get_config("VLLM_API_BASE"))
 USE_VLLM = bool(VLLM_API_BASE)
 
@@ -234,7 +231,7 @@ def is_ollama_available() -> bool:
     if _MOCK_ENABLED:
         return True  # When in mock mode, pretend the service is available
 
-    base = VLLM_API_BASE or OLLAMA_API_BASE
+    base = VLLM_API_BASE or LLM_API_BASE
     try:
         # Try to connect to the service with a small timeout
         response = requests.get(base, timeout=1)
@@ -245,11 +242,11 @@ def is_ollama_available() -> bool:
 
 
 # Determine which LLM backend to use and initialize the client accordingly
-if not OLLAMA_API_BASE:
-    OLLAMA_API_BASE = "http://localhost:11434"
-    logger.warning(f"OLLAMA_API_BASE not set in config, using default: {OLLAMA_API_BASE}")
+if not LLM_API_BASE:
+    LLM_API_BASE = "http://localhost:11434"
+    logger.warning("LLM_API_BASE not set in config, using default: %s", LLM_API_BASE)
 else:
-    logger.info(f"Using OLLAMA_API_BASE: {OLLAMA_API_BASE}")
+    logger.info("Using LLM_API_BASE: %s", LLM_API_BASE)
 
 
 def _create_vllm_client() -> OllamaClientProtocol:
@@ -260,7 +257,7 @@ def _create_vllm_client() -> OllamaClientProtocol:
             messages: list[LLMMessage],
             options: dict[str, Any] | None = None,
         ) -> LLMChatResponse:
-            url = f"{VLLM_API_BASE.rstrip('/')}/v1/chat/completions"
+            url = f"{LLM_API_BASE.rstrip('/')}/v1/chat/completions"
             payload: JSONDict = {
                 "model": model,
                 "messages": cast(list[JSONValue], messages),
@@ -286,39 +283,35 @@ def _create_vllm_client() -> OllamaClientProtocol:
 
 
 def _create_ollama_client() -> OllamaClientProtocol:
-    return cast(OllamaClientProtocol, ollama.Client(host=OLLAMA_API_BASE))
+    return cast(OllamaClientProtocol, ollama.Client(host=LLM_API_BASE))
 
 
 client: OllamaClientProtocol | None
 if USE_VLLM:
-    logger.info(f"Using vLLM API base: {VLLM_API_BASE}")
+    logger.info(f"Using vLLM API base: {LLM_API_BASE}")
     client = _create_vllm_client()
 else:
     try:
         client = _create_ollama_client()
-        logger.info(f"Ollama client initialized for host: {OLLAMA_API_BASE}")
+        logger.info(f"Ollama client initialized for host: {LLM_API_BASE}")
     except (APIError, RequestException) as e:
         logger.error(
-            f"Failed to initialize Ollama client for host {OLLAMA_API_BASE}: {e}",
+            f"Failed to initialize Ollama client for host {LLM_API_BASE}: {e}",
             exc_info=True,
         )
         client = None
 
 
 def get_llm_client() -> OllamaClientProtocol:
-    """Return the initialized LLM client, retrying and switching backends if needed."""
-    global client, VLLM_API_BASE, USE_VLLM
-    env_base = cast(str | None, get_config("VLLM_API_BASE"))
+    """Return the initialized LLM client, reloading configuration if needed."""
+    global client, LLM_API_BASE, VLLM_API_BASE, USE_VLLM
+    current_base = cast(str, get_config("LLM_API_BASE"))
+    current_vllm = cast(str | None, get_config("VLLM_API_BASE"))
 
-    if env_base and (not USE_VLLM or env_base != VLLM_API_BASE):
-        VLLM_API_BASE = env_base
-        USE_VLLM = True
-        logger.info("Switching to vLLM client for base %s", VLLM_API_BASE)
-        client = None
-    elif not env_base and USE_VLLM:
-        USE_VLLM = False
-        VLLM_API_BASE = None
-        logger.info("Switching to Ollama client for host %s", OLLAMA_API_BASE)
+    if current_base != LLM_API_BASE or current_vllm != VLLM_API_BASE:
+        LLM_API_BASE = current_base
+        VLLM_API_BASE = current_vllm
+        USE_VLLM = bool(current_vllm)
         client = None
 
     if client is None:
@@ -343,10 +336,6 @@ def get_llm_client() -> OllamaClientProtocol:
                 )
                 raise LLMClientInitError("Failed to initialize vLLM and Ollama clients")
             USE_VLLM = not USE_VLLM
-            if USE_VLLM:
-                VLLM_API_BASE = env_base
-            else:
-                VLLM_API_BASE = None
     return client
 
 
@@ -797,14 +786,14 @@ def generate_structured_output(
         logger.debug(f"Sending structured prompt to model '{model}':")
         logger.debug(f"---PROMPT START---\n{structured_prompt}\n---PROMPT END---")
         if USE_VLLM:
-            url = f"{VLLM_API_BASE.rstrip('/')}/v1/chat/completions"
+            url = f"{LLM_API_BASE.rstrip('/')}/v1/chat/completions"
             payload = {
                 "model": model,
                 "messages": [{"role": "user", "content": structured_prompt}],
                 "temperature": temperature,
             }
         else:
-            url = f"{OLLAMA_API_BASE.rstrip('/')}/api/generate"
+            url = f"{LLM_API_BASE.rstrip('/')}/api/generate"
             payload = {
                 "model": model,
                 "prompt": structured_prompt,
