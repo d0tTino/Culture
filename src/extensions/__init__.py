@@ -98,9 +98,13 @@ async def load_plugins(
     for ep in eps.select(group=group):
         try:
             plugin: Plugin = ep.load()
-            result: PluginResult | Awaitable[PluginResult] = plugin()
+            result: Any = plugin()
             if asyncio.iscoroutine(result):
                 result = await result
+            elif callable(result):
+                result = result()
+                if asyncio.iscoroutine(result):
+                    result = await result
             if isinstance(result, dict) and {
                 "name",
                 "script_url",
