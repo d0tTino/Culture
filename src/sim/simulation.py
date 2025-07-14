@@ -98,6 +98,8 @@ class Simulation:
         self.simulation_complete = False
         self.event_kernel = EventKernel()
         self.vector = VersionVector()
+        self.paused: bool = False
+        self.speed: float = 1.0
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
@@ -331,6 +333,19 @@ class Simulation:
         async with self._msg_lock:
             self.pending_messages_for_next_round.extend(msgs)
             self.messages_to_perceive_this_round.extend(msgs)
+
+    async def handle_control_command(self: Self, cmd: dict[str, Any]) -> None:
+        """Process a control command sent via the event queue."""
+        action = cmd.get("command")
+        if action == "pause":
+            self.paused = True
+        elif action == "resume":
+            self.paused = False
+        elif action == "set_speed":
+            try:
+                self.speed = float(cmd.get("value", 1))
+            except (TypeError, ValueError):
+                pass
 
     async def spawn_agent(
         self: Self,
@@ -779,6 +794,9 @@ class Simulation:
     async def _handle_incoming_event(self: Self, evt: SimulationEvent) -> None:
         """Route a ``SimulationEvent`` to agents as a message."""
         if not evt.data:
+            return
+        if evt.event_type == "control":
+            await self.handle_control_command(evt.data)
             return
         sender = str(evt.data.get("author", "external"))
         content = str(evt.data.get("content", ""))

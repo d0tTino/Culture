@@ -617,3 +617,29 @@ async def slash_stats(interaction: Any) -> None:
             return
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
     await interaction.response.send_message(stats_text, ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="pause")
+async def slash_pause(interaction: Any) -> None:
+    """Pause the simulation via a control command."""
+    await event_queue.put(SimulationEvent(event_type="control", data={"command": "pause"}))
+    await interaction.response.send_message("pause", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="resume")
+async def slash_resume(interaction: Any) -> None:
+    """Resume the simulation via a control command."""
+    await event_queue.put(SimulationEvent(event_type="control", data={"command": "resume"}))
+    await interaction.response.send_message("resume", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="set_speed")
+async def slash_set_speed(interaction: Any, value: float) -> None:
+    """Adjust the simulation speed via a control command."""
+    await event_queue.put(
+        SimulationEvent(event_type="control", data={"command": "set_speed", "value": value})
+    )
+    await interaction.response.send_message(f"speed {value}", ephemeral=True)
