@@ -19,13 +19,13 @@ from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
     AgentMessage,
     SimulationEvent,
-    get_event_queue,
     message_sse_queue,
 )
+from src.sim.event_bus import get_event_bus
 from src.utils.policy import allow_message, evaluate_with_opa
 
 # Backwards compatibility for tests expecting a module-level queue
-event_queue = get_event_queue()
+event_queue = get_event_bus().subscribe()
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     import discord
@@ -131,7 +131,7 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-        self.event_queue = get_event_queue()
+        self.event_queue = get_event_bus().subscribe()
         self.message_queue = message_sse_queue
         self._forward_task: asyncio.Task[Any] | None = None
         self._client_tasks: list[asyncio.Task[Any]] = []

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra.ledger import ledger
+from src.sim.event_bus import get_event_bus
 from src.sim.quests import get_quests
 
 from .widget_registry import WidgetRegistry
@@ -97,23 +98,26 @@ async def enqueue_message(msg: "AgentMessage") -> None:
     await message_sse_queue.put(msg)
 
 
-# Queue for general simulation events streamed via SSE/WebSocket. The queue is
-# lazily created so it binds to the currently running event loop, avoiding
-# cross-loop issues in tests. If called outside of a running loop, a new loop is
-# created temporarily without being set globally.
+# Queue for general simulation events streamed via SSE/WebSocket. Calls to
+# :func:`get_event_queue` return a queue bound to the current event loop and
+# subscribed to the global :class:`~src.sim.event_bus.EventBus` instance. The
+# same queue is returned on subsequent calls within the same loop to match the
+# previous behaviour.
 _event_queue: asyncio.Queue["SimulationEvent | None"] | None = None
 _event_queue_loop: asyncio.AbstractEventLoop | None = None
 
 
 def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
-    """Return the shared event queue, creating it for the active loop."""
+    """Return a shared event queue bound to the active loop."""
     global _event_queue, _event_queue_loop
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:  # pragma: no cover - no running loop
         loop = asyncio.new_event_loop()
     if _event_queue is None or _event_queue_loop is not loop:
-        _event_queue = asyncio.Queue()
+        if _event_queue is not None:
+            get_event_bus().unsubscribe(_event_queue)
+        _event_queue = get_event_bus().subscribe()
         _event_queue_loop = loop
     return _event_queue
 
@@ -343,7 +347,8 @@ except AttributeError:  # pragma: no cover - stub app may lack decorators
 @app.websocket("/ws/events")
 async def websocket_events(websocket: WebSocket) -> None:
     await websocket.accept()
-    queue = get_event_queue()
+    bus = get_event_bus()
+    queue = bus.subscribe()
     try:
         while True:
             event: SimulationEvent | None = await queue.get()
@@ -352,6 +357,8 @@ async def websocket_events(websocket: WebSocket) -> None:
             await websocket.send_text(event.json())
     except WebSocketDisconnect:
         pass
+    finally:
+        bus.unsubscribe(queue)
 
 
 async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
@@ -409,12 +416,12 @@ except AttributeError:  # pragma: no cover - stub app may lack decorators
 
 async def emit_event(event: SimulationEvent) -> None:
     """Emit a simulation event and check for breakpoints."""
-    queue = get_event_queue()
-    await queue.put(event)
+    bus = get_event_bus()
+    await bus.publish(event)
     tags = set(event.data.get("tags", [])) if event.data else set()
     if tags & BREAKPOINT_TAGS:
         SIM_STATE["paused"] = True
-        await queue.put(
+        await bus.publish(
             SimulationEvent(
                 event_type="breakpoint_hit",
                 data={
@@ -442,9 +449,7 @@ async def emit_map_action_event(
 
 async def emit_map_change_event(world_map: dict[str, Any]) -> None:
     """Convenience helper to enqueue world map updates."""
-    await emit_event(
-        SimulationEvent(event_type="map_change", data={"world_map": world_map})
-    )
+    await emit_event(SimulationEvent(event_type="map_change", data={"world_map": world_map}))
 
 
 __all__ = [
@@ -466,6 +471,7 @@ __all__ = [
     "emit_map_action_event",
     "emit_map_change_event",
     "enqueue_message",
+    "get_event_bus",
     "get_event_queue",
     "get_quests_api",
     "message_sse_queue",

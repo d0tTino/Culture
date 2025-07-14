@@ -43,6 +43,11 @@ async def evaluate_policy(action: str) -> bool:
             logger.warning("OPA policy evaluation failed: %s", exc)
             return True
 
-    data = response.json()
+    try:
+        data = response.json()
+    except Exception:  # pragma: no cover - network or decoding issue
+        logger.warning("Failed to decode OPA response: %s", response.text)
+        return True
+
     result = data.get("result", {})
     return bool(result.get("allow", True))
