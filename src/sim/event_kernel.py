@@ -14,9 +14,9 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
     emit_map_action_event,
-    get_event_queue,
 )
 
+from .event_bus import get_event_bus
 from .version_vector import VersionVector
 
 
@@ -248,7 +248,8 @@ class EventKernel:
         passes the ``content`` of any broadcast events to ``handler``. The
         loop exits when the queue yields ``None``.
         """
-        queue = get_event_queue()
+        bus = get_event_bus()
+        queue = bus.subscribe()
         try:
             while True:
                 try:
@@ -265,3 +266,5 @@ class EventKernel:
                         await handler(content)
         except asyncio.CancelledError:
             pass
+        finally:
+            bus.unsubscribe(queue)

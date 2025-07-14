@@ -12,22 +12,26 @@ from src.interfaces.dashboard_backend import (
     EventSourceResponse,
     SimulationEvent,
     app,
-    get_event_queue,
 )
+from src.sim.event_bus import get_event_bus
 
 
 async def generate_events(
     request: Request,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Yield simulation events from the shared queue."""
-    queue = get_event_queue()
-    while True:
-        if await request.is_disconnected():
-            break
-        event: SimulationEvent | None = await queue.get()
-        if event is None:
-            break
-        yield {"event": "simulation_event", "data": event.json()}
+    bus = get_event_bus()
+    queue = bus.subscribe()
+    try:
+        while True:
+            if await request.is_disconnected():
+                break
+            event: SimulationEvent | None = await queue.get()
+            if event is None:
+                break
+            yield {"event": "simulation_event", "data": event.json()}
+    finally:
+        bus.unsubscribe(queue)
 
 
 @app.get("/stream/events")

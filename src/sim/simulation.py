@@ -32,7 +32,6 @@ from src.infra.snapshot import (
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
-    get_event_queue,
 )
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
@@ -40,6 +39,8 @@ from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.version_vector import VersionVector
 from src.sim.world_map import WorldMap
+
+from .event_bus import get_event_bus
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
@@ -134,9 +135,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -182,9 +183,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -486,7 +487,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -763,7 +766,8 @@ class Simulation:
 
     async def _event_listener_loop(self: Self) -> None:
         """Continuously process events from the shared queue."""
-        queue = get_event_queue()
+        bus = get_event_bus()
+        queue = bus.subscribe()
         try:
             while True:
                 evt: SimulationEvent | None = await queue.get()
@@ -772,6 +776,8 @@ class Simulation:
                 await self._handle_incoming_event(evt)
         except asyncio.CancelledError:  # pragma: no cover - task cancelled
             pass
+        finally:
+            bus.unsubscribe(queue)
 
     async def _handle_incoming_event(self: Self, evt: SimulationEvent) -> None:
         """Route a ``SimulationEvent`` to agents as a message."""
@@ -944,7 +950,8 @@ class Simulation:
             asyncio.run(self.stop_event_listener())
         else:
             if loop.is_running():
-                loop.create_task(self.stop_event_listener())
+                task = loop.create_task(self.stop_event_listener())
+                task.add_done_callback(lambda t: None)
             else:
                 loop.run_until_complete(self.stop_event_listener())
         if hasattr(self.knowledge_board, "close"):
@@ -967,9 +974,9 @@ class Simulation:
             self._event_loop = None
             self._event_loop_thread = None
         try:
-            get_event_queue().put_nowait(None)
-        except asyncio.QueueFull:  # pragma: no cover - defensive
-            logger.exception("Failed to enqueue shutdown event")
+            get_event_bus().shutdown()
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Failed to shutdown event bus")
 
     def create_project(
         self: Self,
