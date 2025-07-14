@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable
 from importlib import metadata
-from typing import Any, Callable
+from typing import Any, Protocol, runtime_checkable
 
 import httpx
 from typing_extensions import Self
@@ -14,19 +15,38 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "BEHAVIOR_REGISTRY",
+    "AgentBehavior",
+    "Plugin",
     "load_plugins",
     "register_agent_behavior",
     "register_widget_backend",
 ]
 
 
+@runtime_checkable
+class AgentBehavior(Protocol):
+    """Callable invoked after each agent turn."""
+
+    def __call__(self, agent: Any, output: dict[str, Any]) -> None: ...
+
+
+PluginResult = dict[str, str] | None
+
+
+@runtime_checkable
+class Plugin(Protocol):
+    """Callable loaded via entry points."""
+
+    def __call__(self) -> PluginResult | Awaitable[PluginResult]: ...
+
+
 class BehaviorRegistry:
     """Registry for callables that modify agent behavior."""
 
     def __init__(self: Self) -> None:
-        self._behaviors: list[Callable[[Any, dict[str, Any]], None]] = []
+        self._behaviors: list[AgentBehavior] = []
 
-    def register(self: Self, func: Callable[[Any, dict[str, Any]], None]) -> None:
+    def register(self: Self, func: AgentBehavior) -> None:
         self._behaviors.append(func)
 
     def run(self: Self, agent: Any, output: dict[str, Any]) -> None:
@@ -37,7 +57,7 @@ class BehaviorRegistry:
 BEHAVIOR_REGISTRY = BehaviorRegistry()
 
 
-def register_agent_behavior(func: Callable[[Any, dict[str, Any]], None]) -> None:
+def register_agent_behavior(func: AgentBehavior) -> None:
     """Register a callback executed after each agent turn."""
 
     BEHAVIOR_REGISTRY.register(func)
@@ -77,10 +97,14 @@ async def load_plugins(
 
     for ep in eps.select(group=group):
         try:
-            plugin = ep.load()
-            result = plugin()
+            plugin: Plugin = ep.load()
+            result: Any = plugin()
             if asyncio.iscoroutine(result):
                 result = await result
+            elif callable(result):
+                result = result()
+                if asyncio.iscoroutine(result):
+                    result = await result
             if isinstance(result, dict) and {
                 "name",
                 "script_url",

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 
 interface SnapshotEvent {
+  event_type?: string
   data?: {
     world_map?: { agents?: Record<string, [number, number]> }
     agents?: Array<{ agent_id: string; mood?: number }>
+    step?: number
   }
 }
 
@@ -24,6 +26,10 @@ export default function Storyboard() {
   }, [])
   const [positions, setPositions] = useState<Record<string, [number, number]>>({})
   const [moods, setMoods] = useState<Record<string, number>>({})
+  const [heatmap, setHeatmap] = useState<Record<string, number>>({})
+  const [memoryEvents, setMemoryEvents] = useState<
+    Array<{ type: string; step?: number }>
+  >([])
   const [tab, setTab] = useState<'map' | 'summaries'>('map')
   const [summaries, setSummaries] = useState<string[]>([])
 
@@ -32,6 +38,14 @@ export default function Storyboard() {
   useEffect(() => {
     if (event?.data?.world_map?.agents) {
       setPositions(event.data.world_map.agents)
+      setHeatmap((cur) => {
+        const copy = { ...cur }
+        for (const [, pos] of Object.entries(event.data!.world_map!.agents!)) {
+          const key = `${Math.round(pos[0])},${Math.round(pos[1])}`
+          copy[key] = (copy[key] || 0) + 1
+        }
+        return copy
+      })
     }
     if (event?.data?.agents) {
       const m: Record<string, number> = {}
@@ -39,6 +53,11 @@ export default function Storyboard() {
         if (typeof a.mood === 'number') m[a.agent_id] = a.mood
       }
       setMoods((cur) => ({ ...cur, ...m }))
+    }
+    if (event?.event_type?.startsWith('memory')) {
+      setMemoryEvents((cur) =>
+        [{ type: event.event_type!, step: event.data?.step }, ...cur].slice(0, 20),
+      )
     }
   }, [event])
 
@@ -67,13 +86,33 @@ export default function Storyboard() {
         <button onClick={() => setTab('summaries')}>Summaries</button>
       </div>
       {tab === 'map' ? (
-        <ul data-testid="map-info">
-          {Object.entries(positions).map(([id, pos]) => (
-            <li key={id}>
-              {id}: {pos[0]}, {pos[1]} (mood {moods[id] ?? 'n/a'})
-            </li>
-          ))}
-        </ul>
+        <div>
+          <ul data-testid="map-info" className="mb-2">
+            {Object.entries(positions).map(([id, pos]) => (
+              <li key={id}>
+                {id}: {pos[0]}, {pos[1]} (mood {moods[id] ?? 'n/a'})
+              </li>
+            ))}
+          </ul>
+          <div
+            data-testid="heatmap"
+            className="grid grid-cols-10 grid-rows-10 w-40 h-40 border"
+          >
+            {Array.from({ length: 100 }).map((_, i) => {
+              const x = i % 10
+              const y = Math.floor(i / 10)
+              const count = heatmap[`${x},${y}`] || 0
+              const max = Math.max(1, ...Object.values(heatmap))
+              const alpha = count / max
+              return (
+                <div
+                  key={`${x}-${y}`}
+                  style={{ backgroundColor: `rgba(255,0,0,${alpha})` }}
+                />
+              )
+            })}
+          </div>
+        </div>
       ) : (
         <div data-testid="summaries">
           {summaries.map((s, i) => (
@@ -81,6 +120,17 @@ export default function Storyboard() {
           ))}
         </div>
       )}
+      <div
+        data-testid="memory-events"
+        className="max-h-32 overflow-y-auto mt-2 text-sm"
+      >
+        {memoryEvents.map((e, i) => (
+          <div key={i}>
+            {e.type}
+            {e.step !== undefined ? ` (step ${e.step})` : ''}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

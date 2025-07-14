@@ -37,6 +37,7 @@ from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.quests import generate_quest
 from src.sim.version_vector import VersionVector
 from src.sim.world_map import WorldMap
 
@@ -99,6 +100,8 @@ class Simulation:
         self.simulation_complete = False
         self.event_kernel = EventKernel()
         self.vector = VersionVector()
+        self.paused: bool = False
+        self.speed: float = 1.0
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
@@ -106,6 +109,7 @@ class Simulation:
         # Background task for processing incoming events
         self._event_listener_task: asyncio.Task[None] | None = None
         self._event_task: asyncio.Task[Any] | None = None
+        self._stop_listener_task: asyncio.Task[None] | None = None
         self._event_loop: asyncio.AbstractEventLoop | None = None
         self._event_loop_thread: threading.Thread | None = None
 
@@ -163,6 +167,7 @@ class Simulation:
         self._last_semantic_job_step = 0
         self._last_memory_prune_step = 0
         self._last_consolidation_step = 0
+        self._last_quest_step = 0
         self._last_trace_hash = ""
 
         # --- Store Discord bot ---
@@ -331,6 +336,19 @@ class Simulation:
         async with self._msg_lock:
             self.pending_messages_for_next_round.extend(msgs)
             self.messages_to_perceive_this_round.extend(msgs)
+
+    async def handle_control_command(self: Self, cmd: dict[str, Any]) -> None:
+        """Process a control command sent via the event queue."""
+        action = cmd.get("command")
+        if action == "pause":
+            self.paused = True
+        elif action == "resume":
+            self.paused = False
+        elif action == "set_speed":
+            try:
+                self.speed = float(cmd.get("value", 1))
+            except (TypeError, ValueError):
+                pass
 
     async def spawn_agent(
         self: Self,
@@ -719,6 +737,19 @@ class Simulation:
                     logger.error("Failed semantic nightly job: %s", exc)
             self._last_semantic_job_step = self.current_step
 
+        quest_interval = int(
+            config.get_config_value_with_override(
+                "QUEST_GENERATION_INTERVAL_STEPS",
+                config.QUEST_GENERATION_INTERVAL_STEPS,
+            )
+        )
+        if quest_interval > 0 and self.current_step - self._last_quest_step >= quest_interval:
+            await self.event_kernel.schedule_immediate(
+                self._generate_quest_event,
+                vector=self.vector,
+            )
+            self._last_quest_step = self.current_step
+
         self.vector.increment(self.agents[next_agent_index].get_id())
         await self.event_kernel.schedule_in(
             1,
@@ -764,6 +795,17 @@ class Simulation:
         }
         await self.event_kernel.emit_environment_event(event)
 
+    async def _generate_quest_event(self: Self) -> None:
+        quest = generate_quest("Create a new quest for the agents")
+        if quest is None:
+            return
+        event = {
+            "type": "quest_generated",
+            "step": self.current_step,
+            "quest": quest.model_dump(),
+        }
+        await self.event_kernel.emit_environment_event(event)
+
     async def _event_listener_loop(self: Self) -> None:
         """Continuously process events from the shared queue."""
         bus = get_event_bus()
@@ -782,6 +824,9 @@ class Simulation:
     async def _handle_incoming_event(self: Self, evt: SimulationEvent) -> None:
         """Route a ``SimulationEvent`` to agents as a message."""
         if not evt.data:
+            return
+        if evt.event_type == "control":
+            await self.handle_control_command(evt.data)
             return
         sender = str(evt.data.get("author", "external"))
         content = str(evt.data.get("content", ""))
@@ -952,6 +997,7 @@ class Simulation:
             if loop.is_running():
                 task = loop.create_task(self.stop_event_listener())
                 task.add_done_callback(lambda t: None)
+
             else:
                 loop.run_until_complete(self.stop_event_listener())
         if hasattr(self.knowledge_board, "close"):
