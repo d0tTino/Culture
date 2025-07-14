@@ -948,6 +948,7 @@ class Simulation:
         else:
             if loop.is_running():
                 self._stop_listener_task = loop.create_task(self.stop_event_listener())
+
             else:
                 loop.run_until_complete(self.stop_event_listener())
         if hasattr(self.knowledge_board, "close"):
