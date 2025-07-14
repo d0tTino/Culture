@@ -944,7 +944,7 @@ class Simulation:
             asyncio.run(self.stop_event_listener())
         else:
             if loop.is_running():
-                loop.create_task(self.stop_event_listener())
+                loop.create_task(self.stop_event_listener())  # noqa: RUF006
             else:
                 loop.run_until_complete(self.stop_event_listener())
         if hasattr(self.knowledge_board, "close"):

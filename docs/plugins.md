@@ -4,6 +4,36 @@ Culture allows third-party packages to contribute UI widgets and agent behaviors
 This document shows how to create plug-ins using the hooks exposed in
 `src/extensions`.
 
+## Reference
+
+Culture exposes a small API for plug-in authors:
+
+| Function | Description |
+| -------- | ----------- |
+| `register_widget_backend(name, script_url, backend_url="http://localhost:8000")` | Register a widget with the backend so the dashboard can load it. |
+| `register_agent_behavior(func)` | Register a callback executed after each agent turn. |
+| `load_plugins(group="culture.plugins", *, backend_url="http://localhost:8000")` | Load plug-ins declared under the given entry point group. |
+
+Two protocol classes define the expected signatures:
+
+```python
+from src.extensions import AgentBehavior, Plugin
+
+def behavior(agent: object, output: dict[str, object]) -> None:
+    ...
+
+def setup() -> dict[str, str] | None:
+    ...
+
+behavior_fn: AgentBehavior = behavior
+plugin: Plugin = setup
+```
+
+`AgentBehavior` is any callable that accepts the running agent instance and the
+dictionary returned from `Agent.run_turn`. A `Plugin` is a callable (sync or
+async) invoked by `load_plugins`; it may return a dictionary containing
+`name` and `script_url` to automatically register a widget.
+
 ## Widget Registration
 
 Use `register_widget_backend` to inform the backend about a widget:
