@@ -149,3 +149,35 @@ async def test_build_action_success_and_failure(
     assert sim_obj.world_map.buildings[(0, 0)] == StructureType.HUT.value
     rows = ledger.conn.execute("SELECT reason FROM transactions").fetchall()
     assert rows == [("build",)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_gather_then_build_updates_ledger_and_map(
+    sim: tuple[Simulation, Ledger, DummyAgent],
+) -> None:
+    sim_obj, ledger, agent = sim
+    async with sim_obj.world_map.lock:
+        sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
+    await process_map_action(
+        sim_obj,
+        0,
+        agent.agent_id,
+        agent.state,
+        {"action": "gather", "resource": ResourceToken.WOOD.value},
+    )
+
+    assert ledger.get_tokens(agent.agent_id, "wood") == 1
+
+    await process_map_action(
+        sim_obj,
+        0,
+        agent.agent_id,
+        agent.state,
+        {"action": "build", "structure": StructureType.HUT.value},
+    )
+
+    assert sim_obj.world_map.buildings[(0, 0)] == StructureType.HUT.value
+    assert ledger.get_tokens(agent.agent_id, "wood") == 0
+    rows = ledger.conn.execute("SELECT reason FROM transactions").fetchall()
+    assert rows == [("gather",), ("build",)]

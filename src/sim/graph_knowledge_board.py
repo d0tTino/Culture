@@ -16,6 +16,7 @@ except Exception:  # pragma: no cover - handle missing package
         def driver(*_a: object, **_k: object) -> None:
             raise RuntimeError("neo4j not installed")
 
+
 try:  # pragma: no cover - optional dependency
     from neo4j.exceptions import Neo4jError
 except Exception:  # pragma: no cover - handle missing package

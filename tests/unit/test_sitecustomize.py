@@ -9,7 +9,9 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
-def reload_sitecustomize(monkeypatch: pytest.MonkeyPatch, platform: str, fake_uvloop: types.SimpleNamespace | None) -> list:
+def reload_sitecustomize(
+    monkeypatch: pytest.MonkeyPatch, platform: str, fake_uvloop: types.SimpleNamespace | None
+) -> list:
     monkeypatch.setattr(sys, "platform", platform, raising=False)
     if fake_uvloop is not None:
         monkeypatch.setitem(sys.modules, "uvloop", fake_uvloop)
@@ -48,6 +50,8 @@ def test_sitecustomize_handles_missing_uvloop(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.parametrize("platform", ["win32", "darwin"])
-def test_sitecustomize_skips_uvloop_on_non_linux(monkeypatch: pytest.MonkeyPatch, platform: str) -> None:
+def test_sitecustomize_skips_uvloop_on_non_linux(
+    monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
     called = reload_sitecustomize(monkeypatch, platform, None)
     assert not called
