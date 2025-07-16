@@ -117,6 +117,7 @@ async def test_law_fails_majority_no(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not any("Law approved" in e for e in entries)
     assert not calls
 
+
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_quadratic_yes_overrides_majority(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -27,9 +27,12 @@ class DummyException(Exception):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_simulation_update_logs_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    with patch("src.interfaces.discord_bot.discord.Client", DummyClient), patch(
-        "src.interfaces.discord_bot.discord.DiscordException",
-        DummyException,
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", DummyClient),
+        patch(
+            "src.interfaces.discord_bot.discord.DiscordException",
+            DummyException,
+        ),
     ):
         bot = SimulationDiscordBot("token", 999)
         bot.is_ready = True
@@ -42,4 +45,3 @@ async def test_send_simulation_update_logs_error(monkeypatch: pytest.MonkeyPatch
         result = await bot.send_simulation_update(content="hi")
         assert result is False
         assert error_called.is_set()
-
