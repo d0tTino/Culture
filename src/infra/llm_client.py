@@ -151,7 +151,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):
@@ -403,9 +404,19 @@ def generate_text(
         return {"message": {"content": mock_response}}["message"]["content"]
 
     def call() -> LLMChatResponse:
-        local_client = get_llm_client()
+        """Invoke the LLM using ``LLMClient`` so the method can be monkeypatched
+        in tests.
+
+        Previous implementations called ``get_llm_client`` directly which
+        returned the underlying Ollama client.  Tests expecting to patch
+        ``LLMClient.chat`` would therefore bypass the patch and attempt a real
+        network request.  Instantiating ``LLMClient`` here preserves the public
+        API while allowing unit tests to mock ``LLMClient.chat`` easily.
+        """
+
+        wrapper = LLMClient(LLMClientConfig())
         messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        return local_client.chat(
+        return wrapper.chat(
             model=model,
             messages=messages,
             options={"temperature": temperature},

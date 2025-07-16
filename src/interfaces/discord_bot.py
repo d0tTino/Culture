@@ -557,6 +557,12 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+if not hasattr(bot, "tree"):
+    # Provide a minimal slash command interface when the underlying Bot
+    # implementation lacks the ``tree`` attribute (e.g. in unit tests).
+    from types import SimpleNamespace
+
+    bot.tree = SimpleNamespace(command=lambda *args, **kwargs: (lambda fn: fn))
 
 
 def get_llm_latency() -> float:
