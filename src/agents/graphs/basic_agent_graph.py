@@ -161,8 +161,13 @@ def _get_current_role(agent_state: AgentState) -> str:
 
 
 def _set_current_role(agent_state: AgentState, role: str) -> None:
+    """Set ``agent_state``'s current role preserving the original type."""
     if hasattr(agent_state, "current_role"):
-        agent_state.current_role = ensure_profile(role)
+        cur = getattr(agent_state, "current_role")
+        if isinstance(cur, str):
+            agent_state.current_role = role
+        else:
+            agent_state.current_role = ensure_profile(role)
     else:
         setattr(agent_state, "role", role)
 

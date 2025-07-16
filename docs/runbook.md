@@ -62,3 +62,16 @@ python -m pytest --cov=src --cov-report=term-missing tests/
 - **LLM timeouts**: check `OLLAMA_API_BASE` and network connectivity.
 
 See the [Quickstart for Developers](../README.md#quickstart-for-developers) for additional setup details.
+
+## Exporting Traces
+Use `scripts/export_traces.py` to convert snapshots or event logs into a JSONL dataset.
+
+```bash
+# From stored snapshots
+python scripts/export_traces.py --snapshots snapshots/ --output data/sample_traces.jsonl
+
+# From a running Redpanda broker
+ENABLE_REDPANDA=1 python scripts/export_traces.py --redpanda -o traces.jsonl
+```
+
+Each line in the output file is a JSON object representing a snapshot or event.
