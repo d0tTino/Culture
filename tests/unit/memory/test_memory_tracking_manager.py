@@ -2,7 +2,9 @@
 """Unit tests for MemoryTrackingManager."""
 
 import asyncio
+import math
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -100,6 +102,44 @@ class TestMemoryTrackingManager(unittest.TestCase):
 
         assert len(calls) == 1
         assert all(calls)
+
+    def test_mus_varies_with_retrievals_and_scores(self: Self) -> None:
+        """MUS should reflect retrieval count and relevance scores."""
+        mem_id = self.vector_store.add_memory(
+            agent_id=self.agent_id,
+            step=2,
+            event_type="thought",
+            content="Another memory",
+        )
+        self.manager.record_retrieval([mem_id], [0.5])
+        self.manager.record_retrieval([mem_id], [0.8])
+        metadata = self.vector_store.collection.get(ids=[mem_id], include=["metadatas"])
+        meta = metadata["metadatas"][0]
+        expected = (
+            0.4 * math.log(1 + meta["retrieval_count"])
+            + 0.4 * (meta["accumulated_relevance_score"] / meta["retrieval_relevance_count"])
+            + 0.2 * 1.0
+        )
+        mus = self.manager.calculate_mus(mem_id)
+        self.assertAlmostEqual(mus, expected, places=5)
+
+    def test_calculate_mus_from_metadata_dict(self: Self) -> None:
+        """Direct metadata input should return expected MUS."""
+        now = datetime.utcnow()
+        metadata = {
+            "retrieval_count": 4,
+            "accumulated_relevance_score": 2.0,
+            "retrieval_relevance_count": 2,
+            "last_retrieved_timestamp": (now - timedelta(days=2)).isoformat(),
+        }
+        expected = (
+            0.4 * math.log(1 + metadata["retrieval_count"])
+            + 0.4
+            * (metadata["accumulated_relevance_score"] / metadata["retrieval_relevance_count"])
+            + 0.2 * (1.0 / (1.0 + 2))
+        )
+        mus = self.manager.calculate_mus(metadata)
+        self.assertAlmostEqual(mus, expected, places=5)
 
 
 if __name__ == "__main__":
