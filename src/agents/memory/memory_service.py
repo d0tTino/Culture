@@ -6,6 +6,7 @@ from typing import Any
 
 from typing_extensions import Self
 
+from .multi_layer_retriever import MultiLayerRetriever
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
 
@@ -20,6 +21,7 @@ class MemoryService:
     ) -> None:
         self.vector_store = vector_store
         self.semantic_manager = semantic_manager
+        self.retriever = MultiLayerRetriever(vector_store, semantic_manager)
 
     def add_memory(
         self: Self,
@@ -39,21 +41,7 @@ class MemoryService:
     async def retrieve_relevant_memories(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        episodic: list[dict[str, Any]] = []
-        if self.vector_store:
-            episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
-
-        semantic: list[dict[str, Any]] = []
-        if self.semantic_manager:
-            import asyncio
-
-            semantic = await asyncio.to_thread(
-                self.semantic_manager.retrieve_context_with_scores, agent_id, query, k
-            )
-
-        combined = episodic + semantic
-        combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
-        return combined[:k]
+        return await self.retriever.retrieve(agent_id, query, k)
 
     def retrieve_semantic_context(
         self: Self, agent_id: str, query: str, k: int = 5
@@ -63,33 +51,18 @@ class MemoryService:
         return self.semantic_manager.retrieve_context(agent_id, query, k)
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
-        if not self.semantic_manager:
-            return []
-        return self.semantic_manager.get_recent_summaries(agent_id, limit)
+        return self.retriever.get_recent_semantic_summaries(agent_id, limit)
 
     async def retrieve_episodic_and_update_semantic(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        """Retrieve episodic memories then consolidate them into semantic form."""
-        episodic = []
-        if self.vector_store:
-            episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
-        if self.semantic_manager:
-            try:
-                await self.semantic_manager.run_nightly_job(agent_id, episodic)
-            except Exception:  # pragma: no cover - defensive
-                import logging
-
-                logging.getLogger(__name__).error("Semantic consolidation failed", exc_info=True)
-        return episodic
+        return await self.retriever.retrieve_and_update_semantic(agent_id, query, k)
 
     def blend_with_recent_semantic(
         self: Self, agent_id: str, episodic_summary: str, limit: int = 3
     ) -> str:
         """Blend an episodic summary with recent semantic summaries."""
-        if not self.semantic_manager:
-            return episodic_summary
-        return self.semantic_manager.blend_episodic_and_semantic(agent_id, episodic_summary, limit)
+        return self.retriever.blend_with_recent_semantic(agent_id, episodic_summary, limit)
 
     async def get_context_pipeline(
         self: Self,
@@ -108,9 +81,7 @@ class MemoryService:
         agent_id: str,
         episodic_memories: list[dict[str, Any]] | None = None,
     ) -> None:
-        if not self.semantic_manager:
-            return None
-        await self.semantic_manager.run_nightly_job(agent_id, episodic_memories)
+        await self.retriever.run_semantic_job(agent_id, episodic_memories)
         return None
 
     def consolidate_daily_memories(
