@@ -359,6 +359,7 @@ async def websocket_events(websocket: WebSocket) -> None:
         pass
     finally:
         bus.unsubscribe(queue)
+        await websocket.close()
 
 
 async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
@@ -409,6 +410,8 @@ try:
                 await websocket.send_text(json.dumps(result))
         except WebSocketDisconnect:
             pass
+        finally:
+            await websocket.close()
 
 except AttributeError:  # pragma: no cover - stub app may lack decorators
     pass
