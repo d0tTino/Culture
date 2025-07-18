@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
+from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 
 if TYPE_CHECKING:
@@ -19,6 +20,11 @@ else:  # pragma: no cover - optional dependency
     except Exception:
         ChromaVectorStoreManager = None
 
-__all__ = ["MemoryService", "MemoryTrackingManager", "SemanticMemoryManager"]
+__all__ = [
+    "MemoryService",
+    "MemoryTrackingManager",
+    "MultiLayerRetriever",
+    "SemanticMemoryManager",
+]
 if ChromaVectorStoreManager is not None:
     __all__.insert(0, "ChromaVectorStoreManager")
