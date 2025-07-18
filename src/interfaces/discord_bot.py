@@ -493,13 +493,32 @@ class SimulationDiscordBot:
         except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
             pass
 
+    async def _start_client_with_backoff(
+        self: Self,
+        client: Any,
+        token: str,
+        max_retries: int = 3,
+        base_delay: int = 1,
+    ) -> None:
+        """Start a Discord client with retries and exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                await client.start(token)
+                return
+            except (discord.DiscordException, OSError) as e:  # pragma: no cover - minimal
+                logger.error(
+                    f"Discord client start failed (attempt {attempt + 1}/{max_retries}): {e}"
+                )
+                await asyncio.sleep(base_delay * (2**attempt))
+        logger.error("Max Discord client start attempts exceeded")
+
     def run_bot(self: Self) -> list[asyncio.Task[Any]]:
         """Start the Discord bot and return running tasks."""
         logger.info(f"Starting Discord bot(s), connecting to channel ID: {self.channel_id}")
         tasks: list[asyncio.Task[Any]] = []
         for token, client in self.clients.items():
             setattr(client, "token", token)
-            tasks.append(asyncio.create_task(client.start(token)))
+            tasks.append(asyncio.create_task(self._start_client_with_backoff(client, token)))
         self._client_tasks = tasks
         self._forward_task = asyncio.create_task(self._forward_agent_messages())
         self.is_ready = True
@@ -562,7 +581,7 @@ if not hasattr(bot, "tree"):
     # implementation lacks the ``tree`` attribute (e.g. in unit tests).
     from types import SimpleNamespace
 
-    bot.tree = SimpleNamespace(command=lambda *args, **kwargs: (lambda fn: fn))
+    bot.tree = SimpleNamespace(command=lambda *args, **kwargs: (lambda fn: fn))  # type: ignore[assignment]
 
 
 def get_llm_latency() -> float:

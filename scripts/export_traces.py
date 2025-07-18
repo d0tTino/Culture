@@ -6,11 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Any
+from typing import Any
 
-from src.infra.snapshot import load_snapshot
 from src.infra import event_log
+from src.infra.snapshot import load_snapshot
 
 
 def iter_snapshots(directory: str | Path) -> Iterable[dict[str, Any]]:
@@ -23,7 +24,9 @@ def iter_snapshots(directory: str | Path) -> Iterable[dict[str, Any]]:
         yield load_snapshot(step, directory=directory, compress=compress)
 
 
-def iter_events(from_redpanda: bool = False, file: str | Path | None = None) -> Iterable[dict[str, Any]]:
+def iter_events(
+    from_redpanda: bool = False, file: str | Path | None = None
+) -> Iterable[dict[str, Any]]:
     """Yield events from Redpanda or a JSON file."""
     if from_redpanda:
         yield from event_log.stream_events(after_step=0, timeout=1.0)
@@ -35,8 +38,7 @@ def iter_events(from_redpanda: bool = False, file: str | Path | None = None) -> 
     with Path(file).open("r", encoding="utf-8") as fh:
         data = json.load(fh)
     events = data if isinstance(data, list) else data.get("events", [])
-    for event in events:
-        yield event
+    yield from events
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,9 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     src_group = parser.add_mutually_exclusive_group(required=True)
     src_group.add_argument("--snapshots", help="Snapshot directory to read")
     src_group.add_argument("--events", help="JSON file containing event log")
-    src_group.add_argument(
-        "--redpanda", action="store_true", help="Fetch events from Redpanda"
-    )
+    src_group.add_argument("--redpanda", action="store_true", help="Fetch events from Redpanda")
     parser.add_argument("-o", "--output", help="Output JSONL file (default: stdout)")
     args = parser.parse_args(argv)
 

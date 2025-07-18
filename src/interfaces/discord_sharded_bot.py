@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -87,13 +88,26 @@ class SimulationShardedDiscordBot:
             logger.error(f"Discord API/network error sending message: {e}")
             return False
 
+    async def _start_with_backoff(
+        self: Self,
+        max_retries: int = 3,
+        base_delay: int = 1,
+    ) -> None:
+        """Start the Discord client with retries and exponential backoff."""
+        for attempt in range(max_retries):
+            try:
+                await self.client.start(self.bot_token)
+                self.is_ready = True
+                return
+            except (discord.DiscordException, OSError) as e:  # pragma: no cover - minimal
+                logger.error(
+                    f"Error starting Discord bot (attempt {attempt + 1}/{max_retries}): {e}"
+                )
+                await asyncio.sleep(base_delay * (2**attempt))
+        logger.error("Max Discord bot start attempts exceeded")
+
     async def run_bot(self: Self) -> None:
-        try:
-            await self.client.start(self.bot_token)
-            # Mark ready after connecting when used in tests without the on_ready event
-            self.is_ready = True
-        except (discord.DiscordException, OSError) as e:  # pragma: no cover - minimal
-            logger.error(f"Error starting Discord bot: {e}")
+        await self._start_with_backoff()
 
     async def stop_bot(self: Self) -> None:
         try:
