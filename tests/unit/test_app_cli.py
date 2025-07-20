@@ -47,6 +47,7 @@ def test_main_invokes_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(app, "create_simulation", create_sim)
     run_mock = MagicMock()
     monkeypatch.setattr(app.asyncio, "run", run_mock)
+    monkeypatch.setattr(app, "load_plugins", MagicMock())
 
     monkeypatch.setattr(app, "load_checkpoint", MagicMock(return_value=(dummy_sim, None)))
     monkeypatch.setattr(app, "save_checkpoint", MagicMock())
@@ -68,7 +69,10 @@ def test_main_invokes_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
         semantic_password="test",
     )
     dummy_sim.async_run.assert_called_once_with(3)
-    run_mock.assert_called_once_with(dummy_sim.async_run.return_value)
+    assert run_mock.call_args_list == [
+        ((app.load_plugins.return_value,), {}),
+        ((dummy_sim.async_run.return_value,), {}),
+    ]
 
 
 def test_load_scenario_from_file(tmp_path) -> None:
@@ -92,6 +96,7 @@ def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
     monkeypatch.setattr(app, "create_simulation", create_sim)
     run_mock = MagicMock()
     monkeypatch.setattr(app.asyncio, "run", run_mock)
+    monkeypatch.setattr(app, "load_plugins", MagicMock())
 
     monkeypatch.setattr(app, "load_checkpoint", MagicMock(return_value=(dummy_sim, None)))
     monkeypatch.setattr(app, "save_checkpoint", MagicMock())
@@ -113,4 +118,7 @@ def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
         semantic_password="test",
     )
     dummy_sim.async_run.assert_called_once_with(2)
-    run_mock.assert_called_once_with(dummy_sim.async_run.return_value)
+    assert run_mock.call_args_list == [
+        ((app.load_plugins.return_value,), {}),
+        ((dummy_sim.async_run.return_value,), {}),
+    ]

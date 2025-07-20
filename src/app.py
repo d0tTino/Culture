@@ -8,6 +8,7 @@ from typing import Optional
 from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.extensions import load_plugins
 from src.infra.checkpoint import (
     load_checkpoint,
     restore_environment,
@@ -230,6 +231,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     setup_logging()
+    # Load optional plugins before argument parsing
+    asyncio.run(load_plugins())
     args = parse_args()
     desc, file_steps, file_agents = load_scenario(args.scenario)
     if file_steps is not None:
