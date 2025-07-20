@@ -104,6 +104,12 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
         "",
     )
     summary = getattr(summary_result, "summary", "")
+
+    if hasattr(manager, "blend_with_recent_semantic"):
+        summary = cast(MemoryService, manager).blend_with_recent_semantic(
+            state["agent_id"], summary
+        )
+
     return {"rag_summary": summary, "memory_history_list": memories}
 
 
