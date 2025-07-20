@@ -151,8 +151,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -258,7 +257,8 @@ def _create_vllm_client() -> OllamaClientProtocol:
             messages: list[LLMMessage],
             options: dict[str, Any] | None = None,
         ) -> LLMChatResponse:
-            url = f"{LLM_API_BASE.rstrip('/')}/v1/chat/completions"
+            base = VLLM_API_BASE or LLM_API_BASE
+            url = f"{base.rstrip('/')}/v1/chat/completions"
             payload: JSONDict = {
                 "model": model,
                 "messages": cast(list[JSONValue], messages),
@@ -289,7 +289,7 @@ def _create_ollama_client() -> OllamaClientProtocol:
 
 client: OllamaClientProtocol | None
 if USE_VLLM:
-    logger.info(f"Using vLLM API base: {LLM_API_BASE}")
+    logger.info(f"Using vLLM API base: {VLLM_API_BASE or LLM_API_BASE}")
     client = _create_vllm_client()
 else:
     try:
