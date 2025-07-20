@@ -1,13 +1,13 @@
 # Windows / WSL2 Setup
 
 This guide walks through running the Culture.ai simulation on Windows using WSL2.
-It covers enabling WSL2, installing Python 3.10, setting up Ollama, and running
+It covers enabling WSL2, installing Python 3.11, setting up Ollama, and running
 the vertical slice example.
 
 ## Quick Setup Checklist
 
 1. [Enable WSL2](#enable-wsl2)
-2. [Install Python 3.10](#install-python-310)
+2. [Install Python 3.11](#install-python-311)
 3. [Install Ollama (≥0.1.34)](#install-ollama-0134)
 4. [Run the Example Vertical Slice](#run-the-example-vertical-slice)
 5. [Run the Simulation](#run-the-simulation)
@@ -38,20 +38,20 @@ the vertical slice example.
    After reboot, run `wsl --shutdown` to apply the update and restart your
    distribution. You can verify GPU access inside WSL with `nvidia-smi`.
 
-## Install Python 3.10
+## Install Python 3.11
 
-Inside your WSL distribution install Python 3.10 and the virtual environment
+Inside your WSL distribution install Python 3.11 and the virtual environment
 modules:
 
 ```bash
 sudo apt update
-sudo apt install python3.10 python3.10-venv python3.10-distutils
+sudo apt install python3.11 python3.11-venv python3.11-distutils
 ```
 
 Create a virtual environment for the project:
 
 ```bash
-python3.10 -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate  # run this inside your WSL2 shell
 # Windows command prompt or PowerShell:
 venv\Scripts\activate.bat  # use .venv\Scripts\activate.bat if the folder is named `.venv`
@@ -73,7 +73,7 @@ install all test requirements:
 ```cmd
 scripts\setup_test_env.bat
 ```
-This script uses `py -3.10 -m venv` to ensure it creates the environment with Python 3.10.
+This script uses `py -3.11 -m venv` to ensure it creates the environment with Python 3.11.
 
 Copy the example environment file and customize it if needed:
 

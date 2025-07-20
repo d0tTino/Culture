@@ -62,7 +62,7 @@ Create a dynamic environment where AI agents can evolve, develop unique personal
 - **Target Application:** "Experimental AI Social Sandbox" (e.g., on Discord).
 
 #### Core Technology Stack
-- Python 3.10+
+- Python 3.11+
 - LangChain/LangGraph
 - Ollama
 - Redis

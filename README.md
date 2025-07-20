@@ -1,7 +1,7 @@
 # Culture: An AI Genesis Engine
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 **Repository:** [https://github.com/d0tTino/Culture](https://github.com/d0tTino/Culture)
 
@@ -108,7 +108,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 ## Technology Stack
 
-* **Core Language:** Python 3.10+
+* **Core Language:** Python 3.11+
 * **Agent Orchestration:** LangChain / LangGraph
 * **LLM Hosting/Access:** Ollama (primarily for local LLMs like Mistral, Llama 3.2 variants)
 * **Vector Storage:** ChromaDB
@@ -125,7 +125,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
 - Runtime dependencies now include `numpy>=2`
@@ -140,7 +140,7 @@ Follow these steps to run the example simulation locally:
    ```bash
    git clone https://github.com/d0tTino/Culture.git
    cd Culture
-   python3.10 -m venv .venv
+   python3.11 -m venv .venv
    source .venv/bin/activate  # Windows: .venv\Scripts\activate.bat
    ```
 2. **Install the dependencies**
@@ -649,7 +649,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
 ## Quickstart for Developers
 
 ### Prerequisites
-- **Python 3.10+**
+- **Python 3.11+**
 - **Ollama** (for local LLM inference): [Install Ollama](https://ollama.ai/download)
 - **Docker** (for Weaviate vector store, optional but recommended)
 
