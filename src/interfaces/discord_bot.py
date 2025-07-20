@@ -11,6 +11,7 @@ import logging
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+import httpx
 from typing_extensions import Self
 
 from src.infra import config
@@ -668,3 +669,29 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
         SimulationEvent(event_type="control", data={"command": "set_speed", "value": value})
     )
     await interaction.response.send_message(f"speed {value}", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="propose")
+async def slash_propose(interaction: Any, text: str) -> None:
+    """Propose a law via the dashboard API."""
+    agent_id = None
+    if active_bot is not None:
+        channel = getattr(interaction, "channel", None)
+        chan_id = getattr(channel, "id", None)
+        agent_id = active_bot.channel_to_agent.get(chan_id)
+    if not agent_id:
+        await interaction.response.send_message("Unknown channel", ephemeral=True)
+        return
+    ip, du = await ledger.get_balance_async(agent_id)
+    if ip <= 0 or du <= 0:
+        await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
+        return
+    payload = {"proposer_id": agent_id, "text": text}
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("http://localhost:8000/api/propose", json=payload)
+            approved = resp.json().get("approved", False)
+    except Exception:
+        approved = False
+    await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
