@@ -845,9 +845,9 @@ class Simulation:
 
     async def start_event_listener(self: Self) -> None:
         """Start background processing of ``event_queue`` events."""
-        if self._event_listener_task is None:
+        if self._event_listener_task is None or self._event_listener_task.done():
             self._event_listener_task = asyncio.create_task(self._event_listener_loop())
-        if self._event_task is None:
+        if self._event_task is None or self._event_task.done():
             self._event_task = asyncio.create_task(
                 self.event_kernel.forward_external_events(self._handle_human_command)
             )
@@ -887,9 +887,6 @@ class Simulation:
 
         events = await self.event_kernel.dispatch(max_turns)
         self.vector = self.event_kernel.vector
-
-        # Stop the event listener after each step to avoid leaked tasks in tests
-        await self.stop_event_listener()
 
         return len(events)
 

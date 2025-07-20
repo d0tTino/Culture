@@ -14,6 +14,7 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
     emit_map_action_event,
+    get_event_queue,
 )
 
 from .event_bus import get_event_bus
@@ -249,7 +250,7 @@ class EventKernel:
         loop exits when the queue yields ``None``.
         """
         bus = get_event_bus()
-        queue = bus.subscribe()
+        queue = get_event_queue()
         try:
             while True:
                 try:
