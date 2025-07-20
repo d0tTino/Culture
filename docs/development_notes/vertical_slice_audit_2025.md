@@ -38,10 +38,10 @@ The following steps reproduce a minimal Culture slice on a Windows 11 machine wi
 
    Install the NVIDIA CUDA toolkit inside WSL. The driver already bridges.
 
-2. **Python 3.10 inside WSL**
+2. **Python 3.11 inside WSL**
 
    ```bash
-   sudo apt-get install python3.10 python3.10-venv
+   sudo apt-get install python3.11 python3.11-venv
    ```
 
 3. **GPU libs**
@@ -55,7 +55,7 @@ The following steps reproduce a minimal Culture slice on a Windows 11 machine wi
    ```bash
    git clone -b dev https://github.com/d0tTino/Culture.git
    cd Culture
-   python3.10 -m venv .venv
+   python3.11 -m venv .venv
    source .venv/bin/activate
    pip install -r requirements.txt -r requirements-dev.txt
    ```
