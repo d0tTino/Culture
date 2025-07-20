@@ -162,6 +162,14 @@ class LawProposal(BaseModel):
     text: str
 
 
+class Proposal(BaseModel):
+    """Proposal with optional vote weights."""
+
+    proposer_id: str
+    text: str
+    vote_weights: dict[str, int] | None = None
+
+
 class LawsResponse(BaseModel):
     laws: list[str]
 
@@ -250,6 +258,26 @@ async def api_propose_law(proposal: LawProposal) -> Response:
             approved = await sim.propose_law(proposal.proposer_id, proposal.text)
         except Exception:  # pragma: no cover - defensive
             approved = False
+    return JSONResponse({"approved": approved})
+
+
+@app.post("/api/propose")
+async def api_propose(proposal: Proposal) -> Response:
+    """Submit a weighted law proposal to the active simulation."""
+    sim = SIM_STATE.get("simulation")
+    approved = False
+    if sim is not None:
+        proposer = next((a for a in sim.agents if a.agent_id == proposal.proposer_id), None)
+        if proposer is not None:
+            try:
+                approved = await governance.propose_law(
+                    proposer,
+                    proposal.text,
+                    sim.agents,
+                    proposal.vote_weights,
+                )
+            except Exception:  # pragma: no cover - defensive
+                approved = False
     return JSONResponse({"approved": approved})
 
 
@@ -460,6 +488,7 @@ __all__ = [
     "EventSourceResponse",
     "LawProposal",
     "LawsResponse",
+    "Proposal",
     "SimulationEvent",
     "VoteRecord",
     "VotesResponse",
@@ -467,6 +496,7 @@ __all__ = [
     "api_get_laws",
     "api_get_proposals",
     "api_get_votes",
+    "api_propose",
     "api_propose_law",
     "api_token_balances",
     "app",

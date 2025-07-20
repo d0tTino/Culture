@@ -49,14 +49,21 @@ class GovernanceService:
                     staked = 0.0
                 weights.append(math.sqrt(base_ip + staked))
         else:
+            start_balances = await asyncio.gather(
+                *[ledger.get_balance_async(a.agent_id) for a in agents],
+                return_exceptions=True,
+            )
             spend_tasks = []
             for a in agents:
                 w = int(vote_weights.get(a.agent_id, 1))
                 weights.append(float(w))
                 cost = float(w * w)
-                ip_spent += cost
                 spend_tasks.append(ledger.spend(a.agent_id, ip=cost, reason="vote"))
-            await asyncio.gather(*spend_tasks, return_exceptions=True)
+            end_balances = await asyncio.gather(*spend_tasks, return_exceptions=True)
+            for before, after in zip(start_balances, end_balances):
+                if isinstance(before, Exception) or isinstance(after, Exception):
+                    continue
+                ip_spent += max(0.0, before[0] - after[0])
 
         yes_weight = sum(w for w, v in zip(weights, votes) if v)
         no_weight = sum(w for w, v in zip(weights, votes) if not v)
