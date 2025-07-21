@@ -77,25 +77,24 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 
 
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
-    manager = cast(
-        MemoryService | MemoryRetriever | None,
-        state.get("memory_service") or state.get("vector_store_manager"),
-    )
+    service = cast(MemoryService | None, state.get("memory_service"))
+    if service is None:
+        vector = cast(MemoryRetriever | None, state.get("vector_store_manager"))
+        semantic = cast(Any, state.get("semantic_manager"))
+        if vector or semantic:
+            service = MemoryService(cast(Any, vector), cast(Any, semantic))
+        else:
+            service = None
+
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
-    if not manager or not agent:
+    if not service or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
 
-    if hasattr(manager, "get_context_pipeline"):
-        memories, semantic = await cast(MemoryService, manager).get_context_pipeline(
-            state["agent_id"], query="", k=5, semantic_limit=2
-        )
-        memories_content = [m.get("content", "") for m in memories] + semantic
-    else:
-        memories = await cast(MemoryRetriever, manager).aretrieve_relevant_memories(
-            state["agent_id"], query="", k=5
-        )
-        memories_content = [m.get("content", "") for m in memories]
-        semantic = []
+    memories, semantic = await service.get_context_pipeline(
+        state["agent_id"], query="", k=5, semantic_limit=2
+    )
+    memories_content = [m.get("content", "") for m in memories] + list(semantic)
+
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
     summary_result = await agent.async_generate_l1_summary(
@@ -105,10 +104,7 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     )
     summary = getattr(summary_result, "summary", "")
 
-    if hasattr(manager, "blend_with_recent_semantic"):
-        summary = cast(MemoryService, manager).blend_with_recent_semantic(
-            state["agent_id"], summary
-        )
+    summary = service.blend_with_recent_semantic(state["agent_id"], summary)
 
     return {"rag_summary": summary, "memory_history_list": memories}
 

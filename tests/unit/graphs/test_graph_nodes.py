@@ -52,14 +52,11 @@ async def test_retrieve_and_summarize_memories_node_no_manager() -> None:
     assert out["memory_history_list"] == []
 
 
-class DummyManager:
-    async def aretrieve_relevant_memories(
-        self, agent_id: str, query: str = "", k: int = 5
-    ) -> list[dict[str, str]]:
-        return [{"content": "m1"}, {"content": "m2"}]
-
-    def get_semantic_summaries(self, agent_id: str, limit: int = 2) -> list[str]:
-        return ["sem1"]
+class DummyService:
+    async def get_context_pipeline(
+        self, agent_id: str, query: str = "", k: int = 5, semantic_limit: int = 2
+    ) -> tuple[list[dict[str, str]], list[str]]:
+        return [{"content": "m1"}, {"content": "m2"}], ["sem1"]
 
     def blend_with_recent_semantic(
         self, agent_id: str, episodic_summary: str, limit: int = 3
@@ -79,7 +76,7 @@ class DummyAgent:
 async def test_retrieve_and_summarize_memories_node_with_manager() -> None:
     state = {
         "agent_id": "a",
-        "vector_store_manager": DummyManager(),
+        "memory_service": DummyService(),
         "agent_instance": DummyAgent(),
         "current_role": "r",
     }
