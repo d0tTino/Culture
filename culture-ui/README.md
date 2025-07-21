@@ -91,3 +91,9 @@ Memory Explorer features an agent selector input that reloads summaries whenever
 the chosen ID changes.
 
 Run the development server and navigate to `/storyboard` to see it in action.
+
+## LiveMap Widget
+
+`LiveMap` listens to `/api/map` via Server-Sent Events and renders the latest
+agent positions. Register it in your dashboard layout using the widget name
+`LiveMap`.

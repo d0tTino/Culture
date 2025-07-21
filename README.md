@@ -300,6 +300,12 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+The server also exposes `/api/map` for real-time world map updates via SSE:
+
+```bash
+curl http://localhost:8000/api/map
+```
+
 ### Discord Commands
 When running with Discord integration you can issue slash commands directly in
 your channel.

@@ -12,12 +12,14 @@ import {
   KpiCard,
   EventConsole,
   Storyboard,
+  LiveMap,
 } from './widgets'
 
 widgetRegistry.register('TimelineWidget', TimelineWidget)
 widgetRegistry.register('NetworkWeb', NetworkWeb)
 widgetRegistry.register('WorldMap', WorldMap)
 widgetRegistry.register('KpiCard', KpiCard)
+widgetRegistry.register('LiveMap', LiveMap)
 widgetRegistry.register('Breakpoints', BreakpointList)
 widgetRegistry.register('Events', EventConsole)
 widgetRegistry.register('Storyboard', Storyboard)
