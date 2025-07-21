@@ -26,16 +26,15 @@ async def process_map_action(
     """Execute a world map action for the given agent."""
     action_type = map_action.get("action")
     details: dict[str, Any] = {}
-    async with sim.world_map.lock:
-        if action_type == "move":
-            if "x" in map_action and "y" in map_action:
-                tx = int(map_action.get("x", 0))
-                ty = int(map_action.get("y", 0))
-                pos = sim.world_map.move_to(agent_id, tx, ty, vector=sim.vector.to_dict())
-            else:
-                dx = int(map_action.get("dx", 0))
-                dy = int(map_action.get("dy", 0))
-                pos = sim.world_map.move(agent_id, dx, dy, vector=sim.vector.to_dict())
+    if action_type == "move":
+        if "x" in map_action and "y" in map_action:
+            tx = int(map_action.get("x", 0))
+            ty = int(map_action.get("y", 0))
+            pos = await sim.world_map.move_to(agent_id, tx, ty, vector=sim.vector.to_dict())
+        else:
+            dx = int(map_action.get("dx", 0))
+            dy = int(map_action.get("dy", 0))
+            pos = await sim.world_map.move(agent_id, dx, dy, vector=sim.vector.to_dict())
             details = {"position": pos}
             start_ip = current_state.ip
             if config.MAP_MOVE_DU_COST > 0:
@@ -63,15 +62,15 @@ async def process_map_action(
                 )
             except Exception:  # pragma: no cover - optional
                 logger.debug("Ledger logging failed", exc_info=True)
-        elif action_type == "gather":
-            res = map_action.get("resource")
-            success = False
-            if isinstance(res, str):
-                success = sim.world_map.gather(
-                    agent_id,
-                    ResourceToken(res),
-                    vector=sim.vector.to_dict(),
-                )
+    elif action_type == "gather":
+        res = map_action.get("resource")
+        success = False
+        if isinstance(res, str):
+            success = await sim.world_map.gather(
+                agent_id,
+                ResourceToken(res),
+                vector=sim.vector.to_dict(),
+            )
             details = {"resource": res, "success": success}
             if success:
                 start_ip = current_state.ip
@@ -100,15 +99,15 @@ async def process_map_action(
                     )
                 except Exception:  # pragma: no cover - optional
                     logger.debug("Ledger logging failed", exc_info=True)
-        elif action_type == "build":
-            struct = map_action.get("structure")
-            success = False
-            if isinstance(struct, str):
-                success = sim.world_map.build(
-                    agent_id,
-                    StructureType(struct),
-                    vector=sim.vector.to_dict(),
-                )
+    elif action_type == "build":
+        struct = map_action.get("structure")
+        success = False
+        if isinstance(struct, str):
+            success = await sim.world_map.build(
+                agent_id,
+                StructureType(struct),
+                vector=sim.vector.to_dict(),
+            )
             details = {"structure": struct, "success": success}
             if success:
                 start_ip = current_state.ip

@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,9 +20,9 @@ def ledger_stub(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 def test_move_updates_vector_and_position() -> None:
     m = WorldMap(width=3, height=3)
-    m.add_agent("A")
+    asyncio.run(m.add_agent("A"))
 
-    pos = m.move("A", 1, 1)
+    pos = asyncio.run(m.move("A", 1, 1))
 
     assert pos == (1, 1)
     assert m.agent_positions["A"] == (1, 1)
@@ -33,10 +34,10 @@ def test_move_updates_vector_and_position() -> None:
 
 def test_gather_updates_resources_and_vector(ledger_stub: MagicMock) -> None:
     m = WorldMap()
-    m.add_agent("A")
-    m.add_resource(0, 0, ResourceToken.WOOD, 1)
+    asyncio.run(m.add_agent("A"))
+    asyncio.run(m.add_resource(0, 0, ResourceToken.WOOD, 1))
 
-    result = m.gather("A", ResourceToken.WOOD)
+    result = asyncio.run(m.gather("A", ResourceToken.WOOD))
 
     assert result is True
     assert m.agent_resources["A"].get("wood", 0) == 1
@@ -51,10 +52,10 @@ def test_gather_updates_resources_and_vector(ledger_stub: MagicMock) -> None:
 
 def test_build_updates_buildings_and_vector(ledger_stub: MagicMock) -> None:
     m = WorldMap()
-    m.add_agent("A")
+    asyncio.run(m.add_agent("A"))
     m.agent_resources["A"] = {"wood": 1}
 
-    result = m.build("A", StructureType.HUT)
+    result = asyncio.run(m.build("A", StructureType.HUT))
 
     assert result is True
     assert m.buildings[(0, 0)] == StructureType.HUT.value

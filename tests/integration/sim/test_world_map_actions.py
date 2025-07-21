@@ -91,8 +91,7 @@ async def test_gather_action_success_and_failure(
     sim: tuple[Simulation, Ledger, DummyAgent],
 ) -> None:
     sim_obj, ledger, agent = sim
-    async with sim_obj.world_map.lock:
-        sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
+    await sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
     await process_map_action(
         sim_obj,
         0,
@@ -136,8 +135,7 @@ async def test_build_action_success_and_failure(
     rows = ledger.conn.execute("SELECT reason FROM transactions").fetchall()
     assert rows == []
 
-    async with sim_obj.world_map.lock:
-        sim_obj.world_map.agent_resources[agent.agent_id] = {"wood": 1}
+    sim_obj.world_map.agent_resources[agent.agent_id] = {"wood": 1}
     await process_map_action(
         sim_obj,
         0,
@@ -157,8 +155,7 @@ async def test_gather_then_build_updates_ledger_and_map(
     sim: tuple[Simulation, Ledger, DummyAgent],
 ) -> None:
     sim_obj, ledger, agent = sim
-    async with sim_obj.world_map.lock:
-        sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
+    await sim_obj.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
     await process_map_action(
         sim_obj,
         0,
