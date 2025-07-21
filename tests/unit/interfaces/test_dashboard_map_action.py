@@ -45,7 +45,7 @@ async def test_map_action_sse(monkeypatch: pytest.MonkeyPatch) -> None:
     resp = await http_app.stream_events(DummyRequest())
     event = await resp.gen.__anext__()
     data = json.loads(event["data"])
-    assert data["event_type"] == "map_action"
+    assert data["type"] == "map_action"
     assert data["data"]["agent_id"] == "A"
     with pytest.raises(StopAsyncIteration):
         await resp.gen.__anext__()
@@ -61,5 +61,5 @@ async def test_map_action_websocket() -> None:
     await queue.put(None)
     await db.websocket_events(ws)
     payload = json.loads(ws.sent[0])
-    assert payload["event_type"] == "map_action"
+    assert payload["type"] == "map_action"
     assert payload["data"]["agent_id"] == "B"

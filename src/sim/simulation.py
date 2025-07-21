@@ -653,7 +653,7 @@ class Simulation:
             }
             event["trace_hash"] = compute_trace_hash(event)
         trace_hash = event["trace_hash"]
-        await emit_event(SimulationEvent(event_type="agent_action", data=event))
+        await emit_event(SimulationEvent(type="agent_action", data=event))
 
         if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
             snapshot = {
@@ -685,7 +685,7 @@ class Simulation:
             save_snapshot(self.current_step, snapshot)
             upload_snapshot(self.current_step)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
-            await emit_event(SimulationEvent(event_type="snapshot", data=snapshot_event))
+            await emit_event(SimulationEvent(type="snapshot", data=snapshot_event))
 
         # Advance to the next agent for the next turn
         self.current_agent_index = next_agent_index
@@ -823,12 +823,12 @@ class Simulation:
         """Route a ``SimulationEvent`` to agents as a message."""
         if not evt.data:
             return
-        if evt.event_type == "control":
+        if evt.type == "control":
             await self.handle_control_command(evt.data)
             return
         sender = str(evt.data.get("author", "external"))
         content = str(evt.data.get("content", ""))
-        recipient = evt.data.get("recipient_id") if evt.event_type == "direct_message" else None
+        recipient = evt.data.get("recipient_id") if evt.type == "direct_message" else None
         msg: SimulationMessage = {
             "step": self.current_step,
             "sender_id": sender,

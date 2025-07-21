@@ -69,7 +69,7 @@ async def test_discord_message_triggers_agent_reply(monkeypatch: pytest.MonkeyPa
     agent = DummyAgent("A")
     sim = sim_module.Simulation([agent])
 
-    await q_events.put(db.SimulationEvent(event_type="broadcast", data={"content": "hello"}))
+    await q_events.put(db.SimulationEvent(type="broadcast", data={"content": "hello"}))
     await asyncio.sleep(0.05)
 
     await sim.run_step(1)

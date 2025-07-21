@@ -189,7 +189,7 @@ describe('useEventSource integration with FastAPI', () => {
     render(<TestComponent />)
     await waitFor(() => {
       expect(screen.getByTestId('value').textContent).toBe(
-        JSON.stringify({ event_type: 'test', data: { value: 1 } }),
+        JSON.stringify({ type: 'test', data: { value: 1 } }),
       )
     })
   })

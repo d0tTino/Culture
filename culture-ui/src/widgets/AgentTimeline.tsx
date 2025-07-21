@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEventSource } from '../lib/useEventSource'
 
 interface SimEvent {
-  event_type?: string
+  type?: string
   data?: {
     step?: number
     world_map?: { agents?: Record<string, [number, number]> }

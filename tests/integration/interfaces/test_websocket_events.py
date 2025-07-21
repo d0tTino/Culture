@@ -48,7 +48,7 @@ async def _start_server() -> tuple[uvicorn.Server, asyncio.Task[None], int]:
 async def test_ws_events_receive_and_close(monkeypatch: pytest.MonkeyPatch) -> None:
     events: list[str] = []
     bus = DummyBus(events)
-    await bus.queue.put(db.SimulationEvent(event_type="tick", data={"step": 1}))
+    await bus.queue.put(db.SimulationEvent(type="tick", data={"step": 1}))
     await bus.queue.put(None)
     monkeypatch.setattr(db, "get_event_bus", lambda: bus)
 

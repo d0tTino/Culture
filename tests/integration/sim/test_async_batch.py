@@ -88,7 +88,7 @@ async def test_events_enqueued_during_run_step() -> None:
     queue = get_event_queue()
     evt = await asyncio.wait_for(queue.get(), 0.1)
     assert isinstance(evt, SimulationEvent)
-    assert evt.event_type == "agent_action"
+    assert evt.type == "agent_action"
     assert evt.data is not None
     assert evt.data["agent_id"] == "agent1"
     assert evt.data["step"] == 1

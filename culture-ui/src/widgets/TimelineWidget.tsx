@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useEventSource } from '../lib/useEventSource'
 
 interface SimEvent {
-  event_type: string
+  type: string
   data?: { step?: number }
 }
 

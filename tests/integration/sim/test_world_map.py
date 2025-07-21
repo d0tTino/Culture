@@ -78,8 +78,8 @@ async def test_agent_move_updates_map_and_events() -> None:
     second = await asyncio.wait_for(queue.get(), 0.1)
     assert isinstance(first, SimulationEvent)
     assert isinstance(second, SimulationEvent)
-    assert first.event_type == "agent_action"
-    assert second.event_type == "map_action"
+    assert first.type == "agent_action"
+    assert second.type == "map_action"
     assert second.data is not None
     assert second.data["agent_id"] == agent.agent_id
 

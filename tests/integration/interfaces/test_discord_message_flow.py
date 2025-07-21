@@ -90,7 +90,7 @@ async def test_event_queue_broadcast_cost(monkeypatch: pytest.MonkeyPatch, tmp_p
     queue = db.get_event_queue()
     await queue.put(
         db.SimulationEvent(
-            event_type="broadcast", data={"author": "human", "content": "/broadcast hello"}
+            type="broadcast", data={"author": "human", "content": "/broadcast hello"}
         )
     )
     await asyncio.sleep(0.1)
@@ -123,7 +123,7 @@ async def test_event_queue_kb_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     queue = db.get_event_queue()
     await queue.put(
         db.SimulationEvent(
-            event_type="broadcast", data={"author": "human", "content": "/kb important fact"}
+            type="broadcast", data={"author": "human", "content": "/kb important fact"}
         )
     )
     await asyncio.sleep(0.1)

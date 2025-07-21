@@ -238,7 +238,7 @@ class EventKernel:
                 },
             )
         else:
-            await emit_event(SimulationEvent(event_type=event["type"], data=event_with_hash))
+            await emit_event(SimulationEvent(type=event["type"], data=event_with_hash))
 
     async def forward_external_events(
         self: Self, handler: Callable[[str], Awaitable[None]]
@@ -261,7 +261,7 @@ class EventKernel:
                     raise
                 if evt is None:
                     break
-                if evt.event_type == "broadcast" and evt.data:
+                if evt.type == "broadcast" and evt.data:
                     content = evt.data.get("content")
                     if isinstance(content, str):
                         await handler(content)

@@ -91,7 +91,7 @@ describe('Storyboard widget', () => {
         '{"data":{"world_map":{"agents":{"a1":[0,0]}}}}',
       )
       ws.sendMessage(
-        '{"event_type":"memory_prune","data":{"step":1}}',
+        '{"type":"memory_prune","data":{"step":1}}',
       )
     })
 

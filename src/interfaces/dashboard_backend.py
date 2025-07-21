@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 
 # Skip self argument annotation warnings in stub classes
@@ -29,24 +31,22 @@ else:  # pragma: no cover - optional runtime dependency
     except Exception:
 
         class FastAPI:
-            def __init__(self: "FastAPI", *args: object, **kwargs: object) -> None:
+            def __init__(self: FastAPI, *args: object, **kwargs: object) -> None:
                 pass
 
-            def get(self: "FastAPI", *args: object, **kwargs: object) -> Callable[[Any], Any]:
+            def get(self: FastAPI, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
                 return dec
 
-            def post(self: "FastAPI", *args: object, **kwargs: object) -> Callable[[Any], Any]:
+            def post(self: FastAPI, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
                 return dec
 
-            def websocket(
-                self: "FastAPI", *args: object, **kwargs: object
-            ) -> Callable[[Any], Any]:
+            def websocket(self: FastAPI, *args: object, **kwargs: object) -> Callable[[Any], Any]:
                 def dec(fn: Any) -> Any:
                     return fn
 
@@ -56,7 +56,7 @@ else:  # pragma: no cover - optional runtime dependency
             pass
 
         class Response:  # pragma: no cover - minimal stub
-            def __init__(self: "Response", *args: object, **kwargs: object) -> None:
+            def __init__(self: Response, *args: object, **kwargs: object) -> None:
                 pass
 
         class WebSocket:  # pragma: no cover - minimal stub
@@ -67,7 +67,7 @@ else:  # pragma: no cover - optional runtime dependency
 
         class JSONResponse:  # pragma: no cover - minimal stub
             def __init__(
-                self: "JSONResponse", content: object, *args: object, **kwargs: object
+                self: JSONResponse, content: object, *args: object, **kwargs: object
             ) -> None:
                 self.body = json.dumps(content).encode("utf-8")
 
@@ -80,15 +80,15 @@ else:  # pragma: no cover - optional dependency
     except Exception:
 
         class EventSourceResponse:  # pragma: no cover - minimal stub
-            def __init__(self: "EventSourceResponse", *args: object, **kwargs: object) -> None:
+            def __init__(self: EventSourceResponse, *args: object, **kwargs: object) -> None:
                 self.gen = None
 
 
 # Global queue for agent messages with bounded size
-message_sse_queue: asyncio.Queue["AgentMessage"] = asyncio.Queue(maxsize=1000)
+message_sse_queue: asyncio.Queue[AgentMessage] = asyncio.Queue(maxsize=1000)
 
 
-async def enqueue_message(msg: "AgentMessage") -> None:
+async def enqueue_message(msg: AgentMessage) -> None:
     """Add a message to the SSE queue, dropping the oldest if full."""
     if message_sse_queue.full():
         try:
@@ -103,11 +103,11 @@ async def enqueue_message(msg: "AgentMessage") -> None:
 # subscribed to the global :class:`~src.sim.event_bus.EventBus` instance. The
 # same queue is returned on subsequent calls within the same loop to match the
 # previous behaviour.
-_event_queue: asyncio.Queue["SimulationEvent | None"] | None = None
+_event_queue: asyncio.Queue[SimulationEvent | None] | None = None
 _event_queue_loop: asyncio.AbstractEventLoop | None = None
 
 
-def get_event_queue() -> asyncio.Queue["SimulationEvent | None"]:
+def get_event_queue() -> asyncio.Queue[SimulationEvent | None]:
     """Return a shared event queue bound to the active loop."""
     global _event_queue, _event_queue_loop
     try:
@@ -153,7 +153,7 @@ class AgentMessage(BaseModel):
 class SimulationEvent(BaseModel):
     """Generic simulation event structure for dashboards."""
 
-    event_type: str
+    type: str
     data: dict[str, Any] | None = None
 
 
@@ -232,7 +232,7 @@ async def api_map(request: Request) -> Response:
                 event: SimulationEvent | None = await queue.get()
                 if event is None:
                     break
-                if event.event_type == "map_change":
+                if event.type == "map_change":
                     yield {"data": event.model_dump_json()}
         finally:
             bus.unsubscribe(queue)
@@ -443,7 +443,8 @@ try:
     @app.post("/control")
     async def control(request: Request) -> Response:
         try:
-            command = await request.json()
+            body = await request.body()
+            command = json.loads(body)
             if not isinstance(command, dict):
                 raise ValueError
         except Exception:
@@ -491,7 +492,7 @@ async def emit_event(event: SimulationEvent) -> None:
         SIM_STATE["paused"] = True
         await bus.publish(
             SimulationEvent(
-                event_type="breakpoint_hit",
+                type="breakpoint_hit",
                 data={
                     "tags": list(tags & BREAKPOINT_TAGS),
                     "step": event.data.get("step") if event.data else None,
@@ -509,7 +510,7 @@ async def emit_map_action_event(
     """Convenience helper to enqueue map actions."""
     await emit_event(
         SimulationEvent(
-            event_type="map_action",
+            type="map_action",
             data={"agent_id": agent_id, "step": step, "action": action, **details},
         )
     )
@@ -517,7 +518,7 @@ async def emit_map_action_event(
 
 async def emit_map_change_event(world_map: dict[str, Any]) -> None:
     """Convenience helper to enqueue world map updates."""
-    await emit_event(SimulationEvent(event_type="map_change", data={"world_map": world_map}))
+    await emit_event(SimulationEvent(type="map_change", data={"world_map": world_map}))
 
 
 __all__ = [
