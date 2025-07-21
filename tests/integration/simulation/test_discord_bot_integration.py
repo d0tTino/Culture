@@ -100,7 +100,7 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         patch.object(Simulation, "_handle_human_command", wrapped),
         patch("src.interfaces.dashboard_backend.EventSourceResponse", object),
     ):
-        bot = SimulationDiscordBot("token", 1)
+        bot = await SimulationDiscordBot.create("token", 1)
         agent = DummyAgent("A")
         sim = Simulation([agent], discord_bot=bot)
 

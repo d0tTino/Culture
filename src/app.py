@@ -106,8 +106,10 @@ def create_simulation(
         channel_id = settings.DISCORD_CHANNEL_ID
         if bot_token_raw and channel_id:
             tokens = [tok.strip() for tok in bot_token_raw.split(",") if tok.strip()]
-            bot = simulation_discord_bot_class(
-                tokens if len(tokens) > 1 else tokens[0], int(channel_id)
+            bot = asyncio.run(
+                simulation_discord_bot_class.create(
+                    tokens if len(tokens) > 1 else tokens[0], int(channel_id)
+                )
             )
             if bot.is_ready:
                 discord_bot = bot
