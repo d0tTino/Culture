@@ -1288,8 +1288,7 @@ class ChromaVectorStoreManager(MemoryStore):
                     age_days = min_age_days
             else:
                 logger.debug(
-                    f"L2 summary {doc_id} missing simulation_step_end_timestamp, "
-                    f"assuming age 0."
+                    f"L2 summary {doc_id} missing simulation_step_end_timestamp, assuming age 0."
                 )
                 age_days = min_age_days
 

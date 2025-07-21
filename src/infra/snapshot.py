@@ -116,7 +116,7 @@ def save_snapshot(
 
 
 def load_snapshot(
-    step: int,
+    step: int | str | Path,
     directory: str | Path = "snapshots",
     compress: bool | None = None,
 ) -> dict[str, Any]:
@@ -131,9 +131,15 @@ def load_snapshot(
     compress = SNAPSHOT_COMPRESS if compress is None else compress
 
     path = Path(directory)
-    json_file = path / f"snapshot_{step}.json"
-    zst_file = path / f"snapshot_{step}.json.zst"
-    file_path = zst_file if compress else json_file
+    if isinstance(step, (str, Path)) and Path(step).exists():
+        file_path = Path(step)
+        compress = file_path.suffix.endswith(".zst")
+        json_file = path / file_path.with_suffix(".json").name
+        zst_file = path / file_path.with_suffix(".json.zst").name
+    else:
+        json_file = path / f"snapshot_{step}.json"
+        zst_file = path / f"snapshot_{step}.json.zst"
+        file_path = zst_file if compress else json_file
 
     if not file_path.exists() and S3_BUCKET and boto3 is not None:
         try:

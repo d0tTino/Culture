@@ -160,6 +160,12 @@ Follow these steps to run the example simulation locally:
    ollama pull mistral:latest
    ollama serve &
    ```
+   Alternatively you can start a vLLM server:
+   ```bash
+   VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
+   scripts/start_vllm.sh
+   export LLM_API_BASE="http://localhost:$VLLM_PORT"
+   ```
 5. **Run the vertical slice demo**
    ```bash
    make local-slice

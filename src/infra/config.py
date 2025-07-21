@@ -241,15 +241,13 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     new_settings = ConfigSettings()
     if validate_required:
         raw_data = new_settings.model_dump() if _PYDANTIC_V2 else new_settings.dict()
-        missing = [key for key in REQUIRED_CONFIG_KEYS if str(raw_data.get(key, "")).strip() == ""]
-
-    if validate_required:
         missing = [k for k in REQUIRED_CONFIG_KEYS if not raw_data.get(k)]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
-    settings = new_settings
     data: dict[str, Any]
-    data = settings.model_dump() if _PYDANTIC_V2 else settings.dict()  # type: ignore[attr-defined]
+    data = new_settings.model_dump() if _PYDANTIC_V2 else new_settings.dict()  # type: ignore[attr-defined]
+    for key, value in data.items():
+        setattr(settings, key, value)
     _CONFIG.update(data)
     return data
 

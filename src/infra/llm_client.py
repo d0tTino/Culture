@@ -308,22 +308,22 @@ def get_llm_client() -> OllamaClientProtocol:
     global client, LLM_API_BASE, VLLM_API_BASE, USE_VLLM
     current_base = cast(str, get_config("LLM_API_BASE"))
     current_vllm = cast(str | None, get_config("VLLM_API_BASE"))
+    prefer_vllm = bool(current_vllm)
 
     if current_base != LLM_API_BASE or current_vllm != VLLM_API_BASE:
         LLM_API_BASE = current_base
         VLLM_API_BASE = current_vllm
-        USE_VLLM = bool(current_vllm)
         client = None
 
-    if client is None:
-        primary = _create_vllm_client if USE_VLLM else _create_ollama_client
-        secondary = _create_ollama_client if USE_VLLM else _create_vllm_client
+    if client is None or (prefer_vllm and not USE_VLLM):
+        primary = _create_vllm_client if prefer_vllm else _create_ollama_client
+        secondary = _create_ollama_client if prefer_vllm else _create_vllm_client
 
         client, err = _retry_with_backoff(primary)
         if client is None:
             logger.error(
                 "Failed to initialize %s client: %s",
-                "vLLM" if USE_VLLM else "Ollama",
+                "vLLM" if prefer_vllm else "Ollama",
                 err,
                 exc_info=True,
             )
@@ -331,12 +331,14 @@ def get_llm_client() -> OllamaClientProtocol:
             if client is None:
                 logger.error(
                     "Failed to initialize %s client: %s",
-                    "Ollama" if USE_VLLM else "vLLM",
+                    "Ollama" if prefer_vllm else "vLLM",
                     err,
                     exc_info=True,
                 )
                 raise LLMClientInitError("Failed to initialize vLLM and Ollama clients")
-            USE_VLLM = not USE_VLLM
+            USE_VLLM = not prefer_vllm
+        else:
+            USE_VLLM = prefer_vllm
     return client
 
 
