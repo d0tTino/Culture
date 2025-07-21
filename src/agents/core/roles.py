@@ -50,6 +50,18 @@ class RoleProfile(BaseModel):
     embedding: list[float]
     reputation: float = 0.0
 
+    def __eq__(self, other: object) -> bool:  # pragma: no cover - simple comparison
+        if isinstance(other, RoleProfile):
+            return (
+                self.name == other.name
+                and self.description == other.description
+                and self.embedding == other.embedding
+                and self.reputation == other.reputation
+            )
+        if isinstance(other, str):
+            return self.name == other
+        return NotImplemented
+
 
 def create_role_profile(role_name: str) -> RoleProfile:
     """Return a ``RoleProfile`` for the given role name."""

@@ -39,9 +39,11 @@ The configuration is organized into the following categories:
 - `DEFAULT_MODEL` - Default LLM model to use
 - `DEFAULT_TEMPERATURE` - Temperature setting for LLM responses
 
-### Ollama Settings
+### LLM Service Settings
 
-- `OLLAMA_API_BASE` - Base URL for Ollama API
+- `LLM_API_BASE` - Base URL for the Ollama server
+- `VLLM_API_BASE` - Base URL for the vLLM server. When set, the client
+  prefers this endpoint and falls back to Ollama.
 - `OLLAMA_REQUEST_TIMEOUT` - Timeout in seconds for Ollama requests
 
 ### Redis Settings

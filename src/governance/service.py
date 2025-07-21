@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import math
-import typing
 from collections.abc import Iterable
 from typing import cast
 
