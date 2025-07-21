@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import Iterable
+from typing import cast
 
 from typing_extensions import Self
 
@@ -63,7 +64,9 @@ class GovernanceService:
             for before, after in zip(start_balances, end_balances):
                 if isinstance(before, Exception) or isinstance(after, Exception):
                     continue
-                ip_spent += max(0.0, before[0] - after[0])
+                before_bal = cast(tuple[float, float], before)
+                after_bal = cast(tuple[float, float], after)
+                ip_spent += max(0.0, before_bal[0] - after_bal[0])
 
         yes_weight = sum(w for w, v in zip(weights, votes) if v)
         no_weight = sum(w for w, v in zip(weights, votes) if not v)

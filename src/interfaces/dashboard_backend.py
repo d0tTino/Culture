@@ -441,7 +441,14 @@ async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
 try:
 
     @app.post("/control")
-    async def control(command: dict[str, Any]) -> Response:
+    async def control(request: Request) -> Response:
+        try:
+            command = await request.json()
+            if not isinstance(command, dict):
+                raise ValueError
+        except Exception:
+            return JSONResponse({"error": "invalid"})
+
         result = await handle_control_command(command)
         return JSONResponse(result)
 
@@ -459,7 +466,9 @@ try:
                 data = await websocket.receive_text()
                 try:
                     cmd = json.loads(data)
-                except json.JSONDecodeError:
+                    if not isinstance(cmd, dict):
+                        raise ValueError
+                except (json.JSONDecodeError, ValueError):
                     await websocket.send_text(json.dumps({"error": "invalid"}))
                     continue
                 result = await handle_control_command(cmd)
@@ -525,7 +534,6 @@ __all__ = [
     "api_get_proposals",
     "api_get_votes",
     "api_map",
-
     "api_propose_law",
     "api_token_balances",
     "app",
