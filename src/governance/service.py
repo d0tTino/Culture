@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import typing
 from collections.abc import Iterable
 from typing import cast
 
@@ -66,6 +67,7 @@ class GovernanceService:
                     continue
                 before_bal = cast(tuple[float, float], before)
                 after_bal = cast(tuple[float, float], after)
+
                 ip_spent += max(0.0, before_bal[0] - after_bal[0])
 
         yes_weight = sum(w for w, v in zip(weights, votes) if v)

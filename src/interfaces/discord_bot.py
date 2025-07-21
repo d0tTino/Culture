@@ -57,8 +57,9 @@ class SimulationDiscordBot:
     ``Simulation._handle_human_command``.
     """
 
-    def __init__(
-        self: Self,
+    @classmethod
+    async def create(
+        cls: type[Self],
         bot_token: str | list[str] | None,
         channel_id: int,
         token_lookup: (
@@ -66,15 +67,8 @@ class SimulationDiscordBot:
         ) = None,
         *,
         channel_map: dict[str, int] | None = None,
-    ) -> None:
-        """
-        Initialize the Discord bot with token and target channel.
-
-        Args:
-            bot_token (str | list[str] | None): Discord bot token(s) or ``None`` to
-                load from the database.
-            channel_id (int): The ID of the Discord channel to send updates to
-        """
+    ) -> Self:
+        """Asynchronously construct a ``SimulationDiscordBot`` instance."""
         tokens: list[str] = []
         if bot_token:
             tokens = [bot_token] if isinstance(bot_token, str) else list(bot_token)
@@ -86,23 +80,34 @@ class SimulationDiscordBot:
                 except ImportError:
                     logger.exception("Failed to import token store for loading tokens")
                 else:
-
-                    async def _load() -> list[str]:
-                        return await list_tokens()
-
                     try:
-                        try:
-                            loop = asyncio.get_running_loop()
-                        except RuntimeError:
-                            tokens = asyncio.run(_load())
-                        else:
-                            new_loop = asyncio.new_event_loop()
-                            try:
-                                tokens = new_loop.run_until_complete(_load())
-                            finally:
-                                new_loop.close()
+                        tokens = await list_tokens()
                     except Exception:
                         logger.exception("Failed to load tokens from store")
+
+        if not tokens:
+            raise RuntimeError("No Discord bot tokens provided")
+
+        return cls(tokens, channel_id, token_lookup=token_lookup, channel_map=channel_map)
+
+    def __init__(
+        self: Self,
+        bot_token: str | list[str],
+        channel_id: int,
+        token_lookup: (
+            Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]] | None
+        ) = None,
+        *,
+        channel_map: dict[str, int] | None = None,
+    ) -> None:
+        """
+        Initialize the Discord bot with token and target channel.
+
+        Args:
+            bot_token (str | list[str]): Discord bot token(s).
+            channel_id (int): The ID of the Discord channel to send updates to
+        """
+        tokens = [bot_token] if isinstance(bot_token, str) else list(bot_token)
         if not tokens:
             raise RuntimeError("No Discord bot tokens provided")
         self.bot_tokens = tokens
