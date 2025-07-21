@@ -61,6 +61,11 @@ class DummyManager:
     def get_semantic_summaries(self, agent_id: str, limit: int = 2) -> list[str]:
         return ["sem1"]
 
+    def blend_with_recent_semantic(
+        self, agent_id: str, episodic_summary: str, limit: int = 3
+    ) -> str:
+        return f"{episodic_summary}\nsem1"
+
 
 class DummyAgent:
     async def async_generate_l1_summary(
@@ -79,7 +84,7 @@ async def test_retrieve_and_summarize_memories_node_with_manager() -> None:
         "current_role": "r",
     }
     out = await retrieve_and_summarize_memories_node(state)
-    assert out["rag_summary"] == "SUM"
+    assert out["rag_summary"] == "SUM\nsem1"
     assert out["memory_history_list"] == [{"content": "m1"}, {"content": "m2"}]
 
 

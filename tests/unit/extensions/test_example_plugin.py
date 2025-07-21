@@ -7,6 +7,7 @@ import pytest
 
 from examples.example_plugin import example_plugin
 from src.extensions import BEHAVIOR_REGISTRY, load_plugins
+from src.interfaces import dashboard_backend as db
 
 
 class DummyEntryPoints(list[object]):
@@ -18,12 +19,14 @@ class DummyEntryPoints(list[object]):
 @pytest.mark.asyncio
 async def test_example_plugin_load(monkeypatch: pytest.MonkeyPatch) -> None:
     BEHAVIOR_REGISTRY._behaviors.clear()
+    db.WIDGET_REGISTRY._widgets.clear()
     widgets: list[tuple[str, str, str]] = []
 
     async def register_widget_backend(
         name: str, script_url: str, backend_url: str = "http://localhost:8000"
     ) -> None:
         widgets.append((name, script_url, backend_url))
+        db.WIDGET_REGISTRY.register(name, {"script_url": script_url})
 
     ep = types.SimpleNamespace(load=lambda: example_plugin.setup, name="example_plugin")
     monkeypatch.setattr(metadata, "entry_points", lambda: DummyEntryPoints([ep]))
@@ -33,3 +36,6 @@ async def test_example_plugin_load(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert example_plugin.log_turn in BEHAVIOR_REGISTRY._behaviors
     assert widgets == [("ExampleWidget", "http://localhost:5173/example.js", "http://backend")]
+    assert db.WIDGET_REGISTRY.get("ExampleWidget") == {
+        "script_url": "http://localhost:5173/example.js"
+    }

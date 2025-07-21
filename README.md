@@ -1,7 +1,7 @@
 # Culture: An AI Genesis Engine
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 **Repository:** [https://github.com/d0tTino/Culture](https://github.com/d0tTino/Culture)
 
@@ -108,7 +108,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 ## Technology Stack
 
-* **Core Language:** Python 3.10+
+* **Core Language:** Python 3.11+
 * **Agent Orchestration:** LangChain / LangGraph
 * **LLM Hosting/Access:** Ollama (primarily for local LLMs like Mistral, Llama 3.2 variants)
 * **Vector Storage:** ChromaDB
@@ -125,7 +125,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - Ollama (for local LLM inference)
 - Required Python packages listed in `requirements.txt`
 - Runtime dependencies now include `numpy>=2`
@@ -140,7 +140,7 @@ Follow these steps to run the example simulation locally:
    ```bash
    git clone https://github.com/d0tTino/Culture.git
    cd Culture
-   python3.10 -m venv .venv
+   python3.11 -m venv .venv
    source .venv/bin/activate  # Windows: .venv\Scripts\activate.bat
    ```
 2. **Install the dependencies**
@@ -655,7 +655,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
 ## Quickstart for Developers
 
 ### Prerequisites
-- **Python 3.10+**
+- **Python 3.11+**
 - **Ollama** (for local LLM inference): [Install Ollama](https://ollama.ai/download)
 - **Docker** (for Weaviate vector store, optional but recommended)
 
@@ -823,10 +823,23 @@ This command activates `.venv` if available, installs the required packages, and
 executes `scripts/vertical_slice.sh` (or the Windows `.bat` version).
 
 ### Running Tests
-Run the full test suite (after installing development dependencies):
-```bash
-python -m pytest tests/
-```
+Run the full test suite after installing development dependencies and starting an LLM backend.
+
+1. **Launch Ollama or vLLM**
+   ```bash
+   # Ollama
+   ollama serve &
+   # or vLLM
+   scripts/start_vllm.sh
+   ```
+2. **Run linters**
+   ```bash
+   ./scripts/lint.sh --format    # Windows: scripts\lint.bat --format
+   ```
+3. **Execute tests**
+   ```bash
+   python -m pytest tests/
+   ```
 `pytest-xdist` enables parallel execution via the `-n auto` option in `pytest.ini`.
 `scripts/run_tests.py` checks for this plugin and strips `-n auto` if it isn't installed, so tests still run serially without it.
 These tests also rely on optional packages (`chromadb`, `weaviate-client`, `langgraph`) which are included in `requirements.txt` and installed in CI.
@@ -849,10 +862,15 @@ and download the file from the **Artifacts** section.
 ### Contributing
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, review, and testing.
 
-For advanced testing, parallelization, and CI details, see [docs/testing.md](docs/testing.md).
+For advanced testing, parallelization, and optional heavy suites, see [docs/testing.md](docs/testing.md).
 CI workflows are skipped when a commit only modifies documentation (`*.md` files or files under `docs/`) or contains only code comments. A dedicated `changes` job detects comment-only changes and prevents unnecessary runs.
 Outdated runs on the same branch are automatically canceled, and heavy test suites run on a self-hosted Linux runner.
 See [docs/ci_status.md](docs/ci_status.md) for tips on checking CI status with the GitHub interface or the `gh` CLI. Because this repository has no remote configured by default, you'll need to add your GitHub remote before checking statuses.
+
+### Troubleshooting
+* **LLM connection errors** – Ensure `ollama serve` or `scripts/start_vllm.sh` is running and that `LLM_API_BASE` points to the correct URL.
+* **Missing dependencies** – Reinstall with `pip install -r requirements.txt -r requirements-dev.txt`.
+* **Port conflicts** – Set `VLLM_PORT` to a free port when launching the vLLM server.
 
 ## Code Quality and Type Safety
 
