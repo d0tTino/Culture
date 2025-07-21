@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEventSource } from '../lib/useEventSource'
 
 interface BreakpointEvent {
-  event_type?: string
+  type?: string
   data?: { tags?: string[]; step?: number }
 }
 
@@ -15,7 +15,7 @@ export default function BreakpointList() {
   const event = useEventSource<BreakpointEvent>()
 
   useEffect(() => {
-    if (event?.event_type === 'breakpoint_hit') {
+    if (event?.type === 'breakpoint_hit') {
       const hit = event.data?.tags?.join(', ') ?? ''
       setToast(`Breakpoint hit: ${hit}`)
       const t = setTimeout(() => setToast(null), 3000)

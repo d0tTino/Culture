@@ -56,7 +56,7 @@ async def test_websocket_events_deliver_simulation_events(monkeypatch: pytest.Mo
     event_queue: asyncio.Queue[db.SimulationEvent | None] = asyncio.Queue()
     monkeypatch.setattr(db, "get_event_queue", lambda: event_queue)
 
-    await db.emit_event(db.SimulationEvent(event_type="update", data={"step": 3}))
+    await db.emit_event(db.SimulationEvent(type="update", data={"step": 3}))
     await event_queue.put(None)
 
     ws = DummyWebSocket()
@@ -126,8 +126,8 @@ async def test_websocket_reconnect(monkeypatch: pytest.MonkeyPatch) -> None:
     event_queue: asyncio.Queue[db.SimulationEvent | None] = asyncio.Queue()
     monkeypatch.setattr(db, "get_event_queue", lambda: event_queue)
 
-    await event_queue.put(db.SimulationEvent(event_type="one", data={"step": 1}))
-    await event_queue.put(db.SimulationEvent(event_type="two", data={"step": 2}))
+    await event_queue.put(db.SimulationEvent(type="one", data={"step": 1}))
+    await event_queue.put(db.SimulationEvent(type="two", data={"step": 2}))
     await event_queue.put(None)
 
     class DisconnectingWebSocket(DummyWebSocket):
@@ -147,4 +147,4 @@ async def test_websocket_reconnect(monkeypatch: pytest.MonkeyPatch) -> None:
 
     ws2 = DummyWebSocket()
     await db.websocket_events(ws2)
-    assert [json.loads(t)["event_type"] for t in ws2.sent] == ["two"]
+    assert [json.loads(t)["type"] for t in ws2.sent] == ["two"]

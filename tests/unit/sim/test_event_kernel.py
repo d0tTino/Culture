@@ -168,7 +168,7 @@ async def test_forward_external_events(monkeypatch: pytest.MonkeyPatch) -> None:
         received.append(text)
 
     task = asyncio.create_task(kernel.forward_external_events(handler))
-    await queue.put(SimulationEvent(event_type="broadcast", data={"content": "hi"}))
+    await queue.put(SimulationEvent(type="broadcast", data={"content": "hi"}))
     await queue.put(None)
     await task
 

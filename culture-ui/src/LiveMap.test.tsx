@@ -18,7 +18,7 @@ describe('LiveMap', () => {
 
     const es = MockEventSource.instances[0]
     act(() => {
-      es.emitMessage('{"event_type":"map_change","data":{"world_map":{"agents":{"agent-1":[1,2]}}}}')
+      es.emitMessage('{"type":"map_change","data":{"world_map":{"agents":{"agent-1":[1,2]}}}}')
     })
 
     expect(await screen.findByText('agent-1: 1, 2')).toBeInTheDocument()

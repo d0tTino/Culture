@@ -1,31 +1,34 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING
 
 from typing_extensions import Self
+
+if TYPE_CHECKING:  # pragma: no cover - for type hints only
+    from src.interfaces.dashboard_backend import SimulationEvent
 
 
 class EventBus:
     """Simple publish/subscribe event bus."""
 
     def __init__(self: Self) -> None:
-        self._queues: list[asyncio.Queue[Any | None]] = []
+        self._queues: list[asyncio.Queue[SimulationEvent | None]] = []
 
-    def subscribe(self: Self) -> asyncio.Queue[Any | None]:
+    def subscribe(self: Self) -> asyncio.Queue[SimulationEvent | None]:
         """Return a new queue subscribed to published events."""
-        q: asyncio.Queue[Any | None] = asyncio.Queue()
+        q: asyncio.Queue[SimulationEvent | None] = asyncio.Queue()
         self._queues.append(q)
         return q
 
-    def unsubscribe(self: Self, q: asyncio.Queue[Any | None]) -> None:
+    def unsubscribe(self: Self, q: asyncio.Queue[SimulationEvent | None]) -> None:
         """Remove ``q`` from the subscriber list if present."""
         try:
             self._queues.remove(q)
         except ValueError:  # pragma: no cover - defensive
             pass
 
-    async def publish(self: Self, event: Any) -> None:
+    async def publish(self: Self, event: SimulationEvent) -> None:
         """Publish ``event`` to all subscribers."""
         for q in list(self._queues):
             await q.put(event)

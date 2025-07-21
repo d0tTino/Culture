@@ -38,7 +38,7 @@ describe('BreakpointList', () => {
     const es = MockEventSource.instances[0]
     act(() => {
       es.emitMessage(
-        '{"event_type":"breakpoint_hit","data":{"tags":["nsfw"],"step":1}}',
+        '{"type":"breakpoint_hit","data":{"tags":["nsfw"],"step":1}}',
       )
     })
 

@@ -16,7 +16,7 @@ async def _clear_event_queue() -> None:
 async def test_get_event_queue_running_loop() -> None:
     await _clear_event_queue()
     q1 = db.get_event_queue()
-    await q1.put(db.SimulationEvent(event_type="a", data={}))
+    await q1.put(db.SimulationEvent(type="a", data={}))
     q2 = db.get_event_queue()
     assert q1 is q2
     _ = await q1.get()

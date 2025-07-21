@@ -24,7 +24,7 @@ describe('AgentTimeline widget', () => {
     const es = MockEventSource.instances[0]
     act(() => {
       es.emitMessage(
-        '{"event_type":"update","data":{"step":1,"world_map":{"agents":{"agent-1":[3,4]}}}}',
+        '{"type":"update","data":{"step":1,"world_map":{"agents":{"agent-1":[3,4]}}}}',
       )
     })
 

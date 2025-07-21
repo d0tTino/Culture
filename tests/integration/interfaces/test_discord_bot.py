@@ -11,8 +11,8 @@ from src.interfaces.discord_bot import SimulationDiscordBot, say, stats
 
 
 class SimulationEvent:
-    def __init__(self, event_type: str, data: dict[str, object] | None = None) -> None:
-        self.event_type = event_type
+    def __init__(self, type: str, data: dict[str, object] | None = None) -> None:
+        self.type = type
         self.data = data
 
 
@@ -183,7 +183,7 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
         msg.author = "user1"
         await on_msg(msg)
         stored = await q_events.get()
-        assert stored.event_type == "broadcast"
+        assert stored.type == "broadcast"
         assert (stored.data or {})["content"] == "hello"
 
         await q_msgs.put(AgentMessage(agent_id="agent1", content="hi", step=0))

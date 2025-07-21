@@ -77,7 +77,7 @@ async def test_simulation_emits_sse(monkeypatch: pytest.MonkeyPatch, tmp_path) -
     resp = await http_app.stream_events(DummyRequest())
     event = await resp.gen.__anext__()
     payload = json.loads(event["data"])
-    assert payload["event_type"] == "agent_action"
+    assert payload["type"] == "agent_action"
     with pytest.raises(StopAsyncIteration):
         await resp.gen.__anext__()
 

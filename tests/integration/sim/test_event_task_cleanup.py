@@ -49,7 +49,7 @@ async def test_simulation_shutdown_cleans_background_tasks(
     await sim.start_event_listener()
 
     queue = get_event_queue()
-    await queue.put(SimulationEvent(event_type="broadcast", data={"content": "hi"}))
+    await queue.put(SimulationEvent(type="broadcast", data={"content": "hi"}))
     await asyncio.sleep(0.05)
 
     sim.close()

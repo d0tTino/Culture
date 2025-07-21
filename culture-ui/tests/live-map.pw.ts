@@ -27,7 +27,7 @@ test('live map widget updates from map events', async ({ page }) => {
       .instance
     es.dispatchEvent(
       new MessageEvent('message', {
-        data: '{"event_type":"map_change","data":{"world_map":{"agents":{"agent-1":[5,6]}}}}',
+        data: '{"type":"map_change","data":{"world_map":{"agents":{"agent-1":[5,6]}}}}',
       }),
     )
   })

@@ -185,7 +185,7 @@ class SimulationDiscordBot:
                 data = {"author": str(getattr(message, "author", "")), "content": content}
                 if recipient:
                     data["recipient_id"] = recipient
-                await self.event_queue.put(SimulationEvent(event_type=evt_type, data=data))
+                await self.event_queue.put(SimulationEvent(type=evt_type, data=data))
 
     async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
         """Return the Discord client for the given agent."""
@@ -654,7 +654,7 @@ async def slash_stats(interaction: Any) -> None:
 @bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
-    await event_queue.put(SimulationEvent(event_type="control", data={"command": "pause"}))
+    await event_queue.put(SimulationEvent(type="control", data={"command": "pause"}))
     await interaction.response.send_message("pause", ephemeral=True)
 
 
@@ -662,7 +662,7 @@ async def slash_pause(interaction: Any) -> None:
 @bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
-    await event_queue.put(SimulationEvent(event_type="control", data={"command": "resume"}))
+    await event_queue.put(SimulationEvent(type="control", data={"command": "resume"}))
     await interaction.response.send_message("resume", ephemeral=True)
 
 
@@ -671,7 +671,7 @@ async def slash_resume(interaction: Any) -> None:
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
     await event_queue.put(
-        SimulationEvent(event_type="control", data={"command": "set_speed", "value": value})
+        SimulationEvent(type="control", data={"command": "set_speed", "value": value})
     )
     await interaction.response.send_message(f"speed {value}", ephemeral=True)
 

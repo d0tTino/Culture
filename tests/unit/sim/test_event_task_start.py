@@ -57,7 +57,7 @@ async def test_event_task_runs_without_running_loop(monkeypatch: pytest.MonkeyPa
     await sim.start_event_listener()
 
     queue = get_event_queue()
-    await queue.put(SimulationEvent(event_type="broadcast", data={"content": "hi"}))
+    await queue.put(SimulationEvent(type="broadcast", data={"content": "hi"}))
     await asyncio.sleep(0.05)
 
     await sim.stop_event_listener()

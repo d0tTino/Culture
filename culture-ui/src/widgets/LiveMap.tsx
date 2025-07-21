@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 interface MapEvent {
-  event_type: string
+  type: string
   data?: {
     world_map?: {
       agents?: Record<string, [number, number]>

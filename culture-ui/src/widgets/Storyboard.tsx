@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 interface SnapshotEvent {
-  event_type?: string
+  type?: string
   data?: {
     world_map?: { agents?: Record<string, [number, number]> }
     agents?: Array<{ agent_id: string; mood?: number }>
@@ -54,9 +54,9 @@ export default function Storyboard() {
       }
       setMoods((cur) => ({ ...cur, ...m }))
     }
-    if (event?.event_type?.startsWith('memory')) {
+    if (event?.type?.startsWith('memory')) {
       setMemoryEvents((cur) =>
-        [{ type: event.event_type!, step: event.data?.step }, ...cur].slice(0, 20),
+        [{ type: event.type!, step: event.data?.step }, ...cur].slice(0, 20),
       )
     }
   }, [event])
