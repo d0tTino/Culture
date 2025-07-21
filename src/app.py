@@ -9,6 +9,7 @@ from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.extensions import load_plugins
+from src.infra import config
 from src.infra.checkpoint import (
     load_checkpoint,
     restore_environment,
@@ -19,6 +20,7 @@ from src.infra.llm_client import LLMClientInitError, get_llm_client
 from src.infra.logging_config import setup_logging
 from src.infra.settings import settings
 from src.infra.warning_filters import configure_warning_filters
+from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 from src.utils.loop_helper import use_uvloop_if_available
@@ -145,7 +147,10 @@ def create_simulation(
         scenario=scenario,
         discord_bot=discord_bot,
     )
-    sim.knowledge_board = KnowledgeBoard()
+    if config.KNOWLEDGE_BOARD_BACKEND == "graph":
+        sim.knowledge_board = GraphKnowledgeBoard()
+    else:
+        sim.knowledge_board = KnowledgeBoard()
     sim.steps_to_run = steps
     return sim
 
