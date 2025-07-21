@@ -442,12 +442,13 @@ try:
 
     @app.post("/control")
     async def control(request: Request) -> Response:
+        body = await request.body()
         try:
-            body = await request.body()
             command = json.loads(body)
             if not isinstance(command, dict):
-                raise ValueError
-        except Exception:
+                raise ValueError("payload must be a JSON object")
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            logger.warning("Invalid control payload: %s", exc)
             return JSONResponse({"error": "invalid"})
 
         result = await handle_control_command(command)
@@ -468,8 +469,9 @@ try:
                 try:
                     cmd = json.loads(data)
                     if not isinstance(cmd, dict):
-                        raise ValueError
-                except (json.JSONDecodeError, ValueError):
+                        raise ValueError("payload must be a JSON object")
+                except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                    logger.warning("Invalid control payload via WS: %s", exc)
                     await websocket.send_text(json.dumps({"error": "invalid"}))
                     continue
                 result = await handle_control_command(cmd)

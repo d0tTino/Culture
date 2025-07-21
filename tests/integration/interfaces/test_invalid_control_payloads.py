@@ -6,13 +6,10 @@ from src.interfaces import dashboard_backend as db
 
 
 class DummyRequest:
-    def __init__(self, payload=None, exc=None):
+    def __init__(self, payload: bytes) -> None:
         self._payload = payload
-        self._exc = exc
 
-    async def json(self):
-        if self._exc is not None:
-            raise self._exc
+    async def body(self) -> bytes:
         return self._payload
 
 
@@ -41,7 +38,7 @@ class DummyWebSocket:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_control_invalid_json() -> None:
-    req = DummyRequest(exc=json.JSONDecodeError("x", "x", 0))
+    req = DummyRequest(b"{")
     resp = await db.control(req)
     assert json.loads(resp.body) == {"error": "invalid"}
 
@@ -49,7 +46,7 @@ async def test_control_invalid_json() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_control_invalid_structure() -> None:
-    req = DummyRequest(payload=[])
+    req = DummyRequest(json.dumps([]).encode())
     resp = await db.control(req)
     assert json.loads(resp.body) == {"error": "invalid"}
 
