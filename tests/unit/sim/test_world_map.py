@@ -11,25 +11,25 @@ pytestmark = pytest.mark.unit
 
 def test_move_within_bounds() -> None:
     m = WorldMap(width=3, height=3)
-    m.add_agent("A")
-    m.move("A", 1, 1)
+    asyncio.run(m.add_agent("A"))
+    asyncio.run(m.move("A", 1, 1))
     assert m.agent_positions["A"] == (1, 1)
 
 
 def test_gather_resource() -> None:
     m = WorldMap()
-    m.add_agent("A")
-    m.add_resource(0, 0, ResourceToken.WOOD, 1)
-    assert m.gather("A", ResourceToken.WOOD)
+    asyncio.run(m.add_agent("A"))
+    asyncio.run(m.add_resource(0, 0, ResourceToken.WOOD, 1))
+    assert asyncio.run(m.gather("A", ResourceToken.WOOD))
     assert m.agent_resources["A"]["wood"] == 1
     assert m.resources[(0, 0)].get("wood", 0) == 0
 
 
 def test_build_structure() -> None:
     m = WorldMap()
-    m.add_agent("A")
+    asyncio.run(m.add_agent("A"))
     m.agent_resources["A"] = {"wood": 1}
-    assert m.build("A", StructureType.HUT)
+    assert asyncio.run(m.build("A", StructureType.HUT))
     assert m.buildings[(0, 0)] == StructureType.HUT.value
     assert m.agent_resources["A"].get("wood", 0) == 0
 
@@ -103,7 +103,7 @@ def test_gather_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
     agent = ActionAgent({"action": "gather", "resource": ResourceToken.WOOD.value})
     sim = Simulation([agent])  # type: ignore[arg-type,list-item]
-    sim.world_map.add_resource(0, 0, ResourceToken.WOOD, 1)
+    asyncio.run(sim.world_map.add_resource(0, 0, ResourceToken.WOOD, 1))
 
     asyncio.run(sim.run_step(max_turns=2))
     sim.close()
@@ -138,64 +138,64 @@ def test_build_updates_balance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 def test_pathfinding_large_map() -> None:
     m = WorldMap(width=20, height=20)
-    m.add_agent("A")
+    asyncio.run(m.add_agent("A"))
     # create a wall of obstacles except for a gap
     for y in range(10):
         if y != 5:
             m.add_obstacle(5, y)
     # move towards the other side of the wall
     for _ in range(20):
-        m.move_to("A", 10, 0)
+        asyncio.run(m.move_to("A", 10, 0))
     x, y = m.agent_positions["A"]
     assert (x, y) == (10, 0)
 
 
 def test_gather_after_pathfinding() -> None:
     m = WorldMap(width=15, height=15)
-    m.add_agent("A")
-    m.add_resource(10, 10, ResourceToken.WOOD, 1)
+    asyncio.run(m.add_agent("A"))
+    asyncio.run(m.add_resource(10, 10, ResourceToken.WOOD, 1))
     for _ in range(20):
-        m.move_to("A", 10, 10)
+        asyncio.run(m.move_to("A", 10, 10))
     assert m.agent_positions["A"] == (10, 10)
-    assert m.gather("A", ResourceToken.WOOD)
+    assert asyncio.run(m.gather("A", ResourceToken.WOOD))
     assert m.agent_resources["A"].get("wood", 0) == 1
 
 
 def test_move_to_with_diagonal_obstacles() -> None:
     m = WorldMap(width=6, height=6)
-    m.add_agent("A")
+    asyncio.run(m.add_agent("A"))
     for i in range(1, 5):
         m.add_obstacle(i, i)
     for _ in range(15):
-        m.move_to("A", 5, 5)
+        asyncio.run(m.move_to("A", 5, 5))
     assert m.agent_positions["A"] == (5, 5)
 
 
 def test_move_out_of_bounds() -> None:
     m = WorldMap(width=3, height=3)
-    m.add_agent("A")
-    m.move("A", -1, -1)
+    asyncio.run(m.add_agent("A"))
+    asyncio.run(m.move("A", -1, -1))
     assert m.agent_positions["A"] == (0, 0)
-    m.move("A", 10, 0)
+    asyncio.run(m.move("A", 10, 0))
     assert m.agent_positions["A"] == (2, 0)
-    pos = m.move_to("A", 5, 5)
+    pos = asyncio.run(m.move_to("A", 5, 5))
     assert pos == (2, 0)
     assert m.agent_positions["A"] == (2, 0)
 
 
 def test_resource_depletion() -> None:
     m = WorldMap()
-    m.add_agent("A")
-    m.add_resource(0, 0, ResourceToken.WOOD, 1)
-    assert m.gather("A", ResourceToken.WOOD)
-    assert not m.gather("A", ResourceToken.WOOD)
+    asyncio.run(m.add_agent("A"))
+    asyncio.run(m.add_resource(0, 0, ResourceToken.WOOD, 1))
+    assert asyncio.run(m.gather("A", ResourceToken.WOOD))
+    assert not asyncio.run(m.gather("A", ResourceToken.WOOD))
     assert m.agent_resources["A"].get("wood", 0) == 1
     assert m.resources[(0, 0)].get("wood") is None
 
 
 def test_move_to_complex_obstacles() -> None:
     m = WorldMap(width=10, height=10)
-    m.add_agent("A")
+    asyncio.run(m.add_agent("A"))
     for i in range(1, 9):
         if i != 3:
             m.add_obstacle(i, 5)
@@ -203,5 +203,5 @@ def test_move_to_complex_obstacles() -> None:
         if i != 7:
             m.add_obstacle(5, i)
     for _ in range(25):
-        m.move_to("A", 9, 9)
+        asyncio.run(m.move_to("A", 9, 9))
     assert m.agent_positions["A"] == (9, 9)
