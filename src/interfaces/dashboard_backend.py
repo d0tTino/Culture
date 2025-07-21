@@ -196,10 +196,38 @@ async def stream_messages(request: Request) -> Response:
                 msg: AgentMessage = await message_sse_queue.get()
                 yield {
                     "event": "message",
-                    "data": msg.json(),
+                    "data": msg.model_dump_json(),
                 }
             except (RuntimeError, ValueError) as e:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
+
+    generator: AsyncGenerator[dict[str, Any], None] = event_generator()
+    return EventSourceResponse(generator)  # type: ignore[no-any-return]
+
+
+@app.get(
+    "/api/map",
+    response_class=EventSourceResponse,
+    response_model=None,
+)
+async def api_map(request: Request) -> Response:
+    """Stream map_change events as Server-Sent Events."""
+
+    bus = get_event_bus()
+    queue = bus.subscribe()
+
+    async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                event: SimulationEvent | None = await queue.get()
+                if event is None:
+                    break
+                if event.event_type == "map_change":
+                    yield {"data": event.model_dump_json()}
+        finally:
+            bus.unsubscribe(queue)
 
     generator: AsyncGenerator[dict[str, Any], None] = event_generator()
     return EventSourceResponse(generator)  # type: ignore[no-any-return]
@@ -354,7 +382,7 @@ async def websocket_events(websocket: WebSocket) -> None:
             event: SimulationEvent | None = await queue.get()
             if event is None:
                 break
-            await websocket.send_text(event.json())
+            await websocket.send_text(event.model_dump_json())
     except WebSocketDisconnect:
         pass
     finally:
@@ -467,6 +495,7 @@ __all__ = [
     "api_get_laws",
     "api_get_proposals",
     "api_get_votes",
+    "api_map",
     "api_propose_law",
     "api_token_balances",
     "app",
