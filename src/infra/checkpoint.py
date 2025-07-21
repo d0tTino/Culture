@@ -174,7 +174,8 @@ def load_checkpoint(
         scenario=data.get("scenario", ""),
     )
     kb_entries = data.get("knowledge_board", {}).get("entries", [])
-    if config.KNOWLEDGE_BOARD_BACKEND == "graph":
+    backend = os.getenv("KNOWLEDGE_BOARD_BACKEND", config.KNOWLEDGE_BOARD_BACKEND)
+    if backend == "graph":
         board = GraphKnowledgeBoard()
         for e in kb_entries:
             board.add_entry(e["content_full"], e["agent_id"], int(e["step"]))
