@@ -4,6 +4,7 @@ import asyncio
 import math
 import typing
 from collections.abc import Iterable
+from typing import cast
 
 from typing_extensions import Self
 
@@ -64,8 +65,9 @@ class GovernanceService:
             for before, after in zip(start_balances, end_balances):
                 if isinstance(before, Exception) or isinstance(after, Exception):
                     continue
-                before_bal = typing.cast(tuple[float, float], before)
-                after_bal = typing.cast(tuple[float, float], after)
+                before_bal = cast(tuple[float, float], before)
+                after_bal = cast(tuple[float, float], after)
+
                 ip_spent += max(0.0, before_bal[0] - after_bal[0])
 
         yes_weight = sum(w for w, v in zip(weights, votes) if v)

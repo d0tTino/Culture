@@ -54,19 +54,27 @@ def load_dashboard_backend():
     return importlib.import_module("src.interfaces.dashboard_backend")
 
 
+class DummyRequest:
+    def __init__(self, payload):
+        self.payload = payload
+
+    async def json(self):
+        return self.payload
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_control_pause_resume() -> None:
     db = load_dashboard_backend()
-    resp = await db.control({"command": "pause"})
+    resp = await db.control(DummyRequest({"command": "pause"}))
     data = json.loads(resp.body)
     assert data["paused"] is True
 
-    resp = await db.control({"command": "set_speed", "value": 2})
+    resp = await db.control(DummyRequest({"command": "set_speed", "value": 2}))
     data = json.loads(resp.body)
     assert data["speed"] == 2
 
-    resp = await db.control({"command": "resume"})
+    resp = await db.control(DummyRequest({"command": "resume"}))
     data = json.loads(resp.body)
     assert data["paused"] is False
 
@@ -88,6 +96,9 @@ class DummyWS:
     async def send_text(self, text: str) -> None:
         self.sent.append(text)
 
+    async def close(self) -> None:
+        pass
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -103,7 +114,7 @@ async def test_ws_control() -> None:
 @pytest.mark.asyncio
 async def test_set_speed_invalid_value() -> None:
     db = load_dashboard_backend()
-    await db.control({"command": "set_speed", "value": 2})
-    resp = await db.control({"command": "set_speed", "value": "bad"})
+    await db.control(DummyRequest({"command": "set_speed", "value": 2}))
+    resp = await db.control(DummyRequest({"command": "set_speed", "value": "bad"}))
     data = json.loads(resp.body)
     assert data["speed"] == 2
