@@ -1,0 +1,87 @@
+import importlib
+import json
+from pathlib import Path
+from types import SimpleNamespace
+from typing import ClassVar
+
+import pytest
+
+pytest.importorskip("fastapi")
+
+from src.governance.law_board import LawBoard
+from src.infra.ledger import Ledger
+from src.interfaces import dashboard_backend as db
+
+
+class DummyState(SimpleNamespace):
+    ip: float = 0.0
+    du: float = 0.0
+    age: int = 0
+    is_alive: bool = True
+    inheritance: float = 0.0
+    short_term_memory: ClassVar[list] = []
+    messages_sent_count: int = 0
+    last_message_step: int = 0
+    relationships: ClassVar[dict] = {}
+    current_role: str = "dummy"
+    steps_in_current_role: int = 0
+
+    def update_collective_metrics(self, ip: float, du: float) -> None:
+        pass
+
+
+class DummyAgent:
+    def __init__(self, agent_id: str) -> None:
+        self.agent_id = agent_id
+        self.state = DummyState()
+
+    def get_id(self) -> str:
+        return self.agent_id
+
+    async def run_turn(
+        self,
+        simulation_step: int,
+        environment_perception: dict | None = None,
+        vector_store_manager: object | None = None,
+        knowledge_board: object | None = None,
+    ) -> dict:
+        return {}
+
+    def update_state(self, new_state: DummyState) -> None:
+        self.state = new_state
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_vote_endpoint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    board = LawBoard(tmp_path / "laws.sqlite")
+
+    gservice = importlib.import_module("src.governance.service")
+    monkeypatch.setattr(gservice, "ledger", ledger)
+    monkeypatch.setattr(gservice, "law_board", board)
+    monkeypatch.setattr(db, "ledger", ledger)
+    monkeypatch.setattr(db, "law_board", board)
+    monkeypatch.setattr(db, "governance", gservice.governance)
+
+    async def allow(_: str) -> tuple[bool, str]:
+        return True, ""
+
+    monkeypatch.setattr(gservice, "evaluate_with_opa", allow)
+
+    async def fake_vote(agent: DummyAgent, text: str) -> bool:
+        assert agent.agent_id == "a1"
+        assert text == "law"
+        return True
+
+    monkeypatch.setattr(gservice.governance, "vote", fake_vote)
+
+    from src.sim.simulation import Simulation
+
+    agents = [DummyAgent("a1")]
+    sim = Simulation(agents=agents)
+    monkeypatch.setitem(db.SIM_STATE, "simulation", sim)
+
+    resp = await db.api_vote(db.VoteRequest(agent_id="a1", text="law", approve=True))
+    data = json.loads(resp.body)
+    assert data["vote"] is True

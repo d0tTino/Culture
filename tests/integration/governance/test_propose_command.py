@@ -43,3 +43,35 @@ async def test_slash_propose_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
     assert DummyClient.called["url"].endswith("/api/propose")
     assert DummyClient.called["json"] == {"proposer_id": "a1", "text": "hello"}
     DummyClient.called = {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_slash_propose_law_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: DummyClient())
+    monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
+    monkeypatch.setattr(bot, "active_bot", SimpleNamespace(channel_to_agent={123: "a1"}))
+
+    await bot.slash_propose_law.callback(DummyInteraction(), text="hello")
+
+    assert DummyClient.called["url"].endswith("/api/propose_law")
+    assert DummyClient.called["json"] == {"proposer_id": "a1", "text": "hello"}
+    DummyClient.called = {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_slash_vote_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: DummyClient())
+    monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
+    monkeypatch.setattr(bot, "active_bot", SimpleNamespace(channel_to_agent={123: "a1"}))
+
+    await bot.slash_vote.callback(DummyInteraction(), text="hello", approve=True)
+
+    assert DummyClient.called["url"].endswith("/api/vote")
+    assert DummyClient.called["json"] == {
+        "agent_id": "a1",
+        "text": "hello",
+        "approve": True,
+    }
+    DummyClient.called = {}
