@@ -95,6 +95,15 @@ module = [
 ]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = [
+    "src.sim.quests",
+    "src.sim.world_map_actions",
+    "src.sim.event_bus",
+    "src.sim.event_kernel",
+    "src.sim.version_vector",
+]
+
 [tool.ruff.format]
 preview = false
 
