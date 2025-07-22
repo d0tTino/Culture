@@ -114,6 +114,7 @@ class SimulationDiscordBot:
         self.channel_id = channel_id
         self.channel_map: dict[str, int] = channel_map or {}
         self.channel_to_agent: dict[int, str] = {v: k for k, v in self.channel_map.items()}
+        self.user_channels: dict[str, int] = {}
         self.is_ready = False
         global active_bot
         active_bot = self
@@ -179,7 +180,12 @@ class SimulationDiscordBot:
                 if getattr(message, "author", None) == client.user:
                     return
                 content = getattr(message, "content", "")
-                channel_id = getattr(getattr(message, "channel", None), "id", None)
+                channel = getattr(message, "channel", None)
+                channel_id = getattr(channel, "id", None)
+                user = getattr(message, "author", None)
+                user_id = getattr(user, "id", None)
+                if user_id and channel_id:
+                    self.user_channels[str(user_id)] = channel_id
                 recipient = self.channel_to_agent.get(channel_id)
                 evt_type = "direct_message" if recipient else "broadcast"
                 data = {"author": str(getattr(message, "author", "")), "content": content}
@@ -202,13 +208,16 @@ class SimulationDiscordBot:
         content: Optional[str] = None,
         embed: Optional[Any] = None,
         agent_id: Optional[str] = None,
+        *,
+        target_channel_id: Optional[int] = None,
     ) -> Optional[bool]:
         """
-        Send a simulation update message to the configured Discord channel.
+        Send a simulation update message to Discord.
 
         Args:
             content (Optional[str]): The text message content to send
             embed (Optional[Any]): The embed object to send
+            target_channel_id (Optional[int]): Explicit channel to send to
 
         Returns:
             bool: True if message was sent successfully, False otherwise
@@ -226,10 +235,10 @@ class SimulationDiscordBot:
                 return False
         try:
             client = await self._select_client(agent_id)
-            target_channel_id = self.channel_map.get(agent_id, self.channel_id)
-            channel = client.get_channel(target_channel_id)
+            chan_id = target_channel_id or self.channel_map.get(agent_id, self.channel_id)
+            channel = client.get_channel(chan_id)
             if not channel:
-                logger.warning(f"Could not find Discord channel with ID: {target_channel_id}")
+                logger.warning(f"Could not find Discord channel with ID: {chan_id}")
                 return False
             if embed:
                 if hasattr(channel, "send"):
@@ -495,7 +504,15 @@ class SimulationDiscordBot:
         try:
             while True:
                 msg: AgentMessage = await self.message_queue.get()
-                await self.send_simulation_update(content=msg.content, agent_id=msg.agent_id)
+                channel_override = None
+                recipient = msg.recipient_id
+                if recipient and recipient in self.user_channels:
+                    channel_override = self.user_channels[recipient]
+                await self.send_simulation_update(
+                    content=msg.content,
+                    agent_id=msg.agent_id,
+                    target_channel_id=channel_override,
+                )
         except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
             pass
 
@@ -674,6 +691,30 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
         SimulationEvent(type="control", data={"command": "set_speed", "value": value})
     )
     await interaction.response.send_message(f"speed {value}", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="speed")
+async def slash_speed(interaction: Any, value: float) -> None:
+    """Alias for ``set_speed``."""
+    await slash_set_speed.callback(interaction, value=value)
+
+
+@typing.no_type_check
+@bot.tree.command(name="kb")
+async def slash_kb(interaction: Any, text: str) -> None:
+    """Post an entry to the Knowledge Board."""
+    await event_queue.put(
+        SimulationEvent(
+            type="control",
+            data={
+                "command": "post_kb",
+                "text": text,
+                "author": str(getattr(interaction, "user", "human")),
+            },
+        )
+    )
+    await interaction.response.send_message("KB entry created", ephemeral=True)
 
 
 @typing.no_type_check

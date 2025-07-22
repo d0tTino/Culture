@@ -322,6 +322,21 @@ your channel.
 Sends a broadcast message to all agents.
 
 ```text
+/pause
+```
+Pauses the simulation.
+
+```text
+/resume
+```
+Resumes the simulation.
+
+```text
+/speed 2.0
+```
+Adjusts the simulation tick speed.
+
+```text
 /kb Add multi-agent architecture diagram to the KB
 ```
 Creates a new entry on the shared Knowledge Board.
