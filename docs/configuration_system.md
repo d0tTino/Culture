@@ -45,6 +45,9 @@ The configuration is organized into the following categories:
 - `VLLM_API_BASE` - Base URL for the vLLM server. When set, the client
   prefers this endpoint and falls back to Ollama.
 - `OLLAMA_REQUEST_TIMEOUT` - Timeout in seconds for Ollama requests
+- `VLLM_MODEL` - Model name used when launching `scripts/start_vllm.sh`
+- `VLLM_PORT` - Port for the vLLM server (default `8001`)
+- `VLLM_SWAP_SPACE` - Swap space in GB allocated to vLLM (default `16`)
 
 ### Redis Settings
 

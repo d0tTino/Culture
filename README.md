@@ -691,7 +691,8 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
    ```bash
    ollama pull mistral:latest
    ```
-   Alternatively, you can run the model with vLLM. Start the server with the
+   Alternatively, you can run the model with vLLM. The helper script
+   `scripts/start_vllm.sh` launches the server with sensible defaults and the
    `--swap-space` option to avoid out-of-memory errors when running more than
    ten agents:
    ```bash

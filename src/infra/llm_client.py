@@ -316,6 +316,10 @@ def get_llm_client() -> OllamaClientProtocol:
         client = None
 
     if client is None or (prefer_vllm and not USE_VLLM):
+        # When ``VLLM_API_BASE`` is provided prefer the vLLM client. If
+        # initialization fails, fall back to the Ollama client. When the
+        # variable is unset, keep the existing client to avoid unnecessary
+        # reinitialization during tests.
         primary = _create_vllm_client if prefer_vllm else _create_ollama_client
         secondary = _create_ollama_client if prefer_vllm else _create_vllm_client
 
