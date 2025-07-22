@@ -700,3 +700,57 @@ async def slash_propose(interaction: Any, text: str) -> None:
     except Exception:
         approved = False
     await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="propose_law")
+async def slash_propose_law(interaction: Any, text: str) -> None:
+    """Propose a law using the basic endpoint."""
+    agent_id = None
+    if active_bot is not None:
+        channel = getattr(interaction, "channel", None)
+        chan_id = getattr(channel, "id", None)
+        agent_id = active_bot.channel_to_agent.get(chan_id)
+    if not agent_id:
+        await interaction.response.send_message("Unknown channel", ephemeral=True)
+        return
+    ip, du = await ledger.get_balance_async(agent_id)
+    if ip <= 0 or du <= 0:
+        await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
+        return
+    payload = {"proposer_id": agent_id, "text": text}
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("http://localhost:8000/api/propose_law", json=payload)
+            approved = resp.json().get("approved", False)
+    except Exception:
+        approved = False
+    await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
+
+
+@typing.no_type_check
+@bot.tree.command(name="vote")
+async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
+    """Cast a manual vote on a proposal via the API."""
+    agent_id = None
+    if active_bot is not None:
+        channel = getattr(interaction, "channel", None)
+        chan_id = getattr(channel, "id", None)
+        agent_id = active_bot.channel_to_agent.get(chan_id)
+    if not agent_id:
+        await interaction.response.send_message("Unknown channel", ephemeral=True)
+        return
+    ip, du = await ledger.get_balance_async(agent_id)
+    if ip <= 0 or du <= 0:
+        await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
+        return
+    payload = {"agent_id": agent_id, "text": text, "approve": approve}
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("http://localhost:8000/api/vote", json=payload)
+            cast = resp.json().get("vote", False)
+    except Exception:
+        cast = False
+    await interaction.response.send_message(
+        "Vote cast" if cast else "Vote rejected", ephemeral=True
+    )

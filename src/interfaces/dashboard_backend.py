@@ -187,6 +187,14 @@ class VotesResponse(BaseModel):
     votes: list[VoteRecord]
 
 
+class VoteRequest(BaseModel):
+    """Vote payload for manual voting."""
+
+    agent_id: str
+    text: str
+    approve: bool
+
+
 app = FastAPI()
 
 
@@ -307,6 +315,22 @@ async def api_propose(proposal: Proposal) -> Response:
             except Exception:  # pragma: no cover - defensive
                 approved = False
     return JSONResponse({"approved": approved})
+
+
+@app.post("/api/vote")
+async def api_vote(vote: VoteRequest) -> Response:
+    """Submit a manual vote for a proposal."""
+    sim = SIM_STATE.get("simulation")
+    result = False
+    if sim is not None:
+        agent = next((a for a in sim.agents if a.agent_id == vote.agent_id), None)
+        if agent is not None:
+            try:
+                allowed = await governance.vote(agent, vote.text)
+                result = bool(vote.approve and allowed)
+            except Exception:  # pragma: no cover - defensive
+                result = False
+    return JSONResponse({"vote": result})
 
 
 @app.get("/api/proposals")
@@ -531,6 +555,7 @@ __all__ = [
     "Proposal",
     "SimulationEvent",
     "VoteRecord",
+    "VoteRequest",
     "VotesResponse",
     "api_auctions",
     "api_get_laws",
@@ -539,6 +564,7 @@ __all__ = [
     "api_map",
     "api_propose_law",
     "api_token_balances",
+    "api_vote",
     "app",
     "emit_event",
     "emit_map_action_event",
