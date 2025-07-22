@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -38,7 +39,7 @@ def test_analyze_perception_sentiment_node(monkeypatch: pytest.MonkeyPatch) -> N
 @pytest.mark.unit
 def test_prepare_relationship_prompt_node() -> None:
     agent_state = SimpleNamespace(relationships={"b": 0.5, "c": -0.2})
-    result = prepare_relationship_prompt_node({"state": agent_state})
+    result = prepare_relationship_prompt_node(cast(dict[str, object], {"state": agent_state}))
     assert "b: 0.5" in result["prompt_modifier"]
     assert "c: -0.2" in result["prompt_modifier"]
 
@@ -47,15 +48,19 @@ def test_prepare_relationship_prompt_node() -> None:
 @pytest.mark.unit
 async def test_retrieve_and_summarize_memories_node_no_manager() -> None:
     state = {"agent_id": "a"}
-    out = await retrieve_and_summarize_memories_node(state)
+    out = await retrieve_and_summarize_memories_node(cast(object, state))
     assert out["rag_summary"] == "(No memory retrieval)"
     assert out["memory_history_list"] == []
 
 
 class DummyService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, int, int]] = []
+
     async def get_context_pipeline(
         self, agent_id: str, query: str = "", k: int = 5, semantic_limit: int = 2
     ) -> tuple[list[dict[str, str]], list[str]]:
+        self.calls.append((agent_id, query, k, semantic_limit))
         return [{"content": "m1"}, {"content": "m2"}], ["sem1"]
 
     def blend_with_recent_semantic(
@@ -74,13 +79,15 @@ class DummyAgent:
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_retrieve_and_summarize_memories_node_with_manager() -> None:
+    service = DummyService()
     state = {
         "agent_id": "a",
-        "memory_service": DummyService(),
+        "memory_service": service,
         "agent_instance": DummyAgent(),
         "current_role": "r",
     }
-    out = await retrieve_and_summarize_memories_node(state)
+    out = await retrieve_and_summarize_memories_node(cast(object, state))
+    assert service.calls == [("a", "", 5, 2)]
     assert out["rag_summary"] == "SUM\nsem1"
     assert out["memory_history_list"] == [{"content": "m1"}, {"content": "m2"}]
 
@@ -103,7 +110,7 @@ async def test_generate_thought_and_message_node(monkeypatch: pytest.MonkeyPatch
         lambda intent, prompt, schema: dummy,
     )
 
-    out = await generate_thought_and_message_node({})
+    out = await generate_thought_and_message_node(cast(dict[str, object], {}))
     assert out == {"structured_output": dummy}
 
 
@@ -113,7 +120,7 @@ async def test_generate_thought_and_message_node(monkeypatch: pytest.MonkeyPatch
 async def test_finalize_message_agent_node_variants() -> None:
     pytest.skip("skip in CI")
     agent_state = SimpleNamespace()
-    out = await finalize_message_agent_node({"state": agent_state})
+    out = await finalize_message_agent_node(cast(dict[str, object], {"state": agent_state}))
     assert out["message_content"] is None
     assert out["action_intent"] == "idle"
 
@@ -122,7 +129,7 @@ async def test_finalize_message_agent_node_variants() -> None:
         message_recipient_id="b",
         action_intent="propose",
     )
-    out2 = await finalize_message_agent_node({"state": agent_state, "structured_output": dummy})
+    out2 = await finalize_message_agent_node(cast(dict[str, object], {"state": agent_state, "structured_output": dummy}))
     assert out2["message_content"] == "hi"
     assert out2["is_targeted"] is True
 
