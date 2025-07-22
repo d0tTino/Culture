@@ -70,7 +70,6 @@ else:  # pragma: no cover - optional runtime dependency
 
 
 from src.shared.memory_store import MemoryStore
-from src.shared.pydantic_compat import _PYDANTIC_V2
 from src.shared.typing import SimulationMessage
 
 from .agent_controller import AgentController
@@ -338,9 +337,6 @@ class Agent:
         self.role_thought_generator_program = get_role_thought_generator()
         self.relationship_updater_program = get_relationship_updater()
 
-        # Track retrieved memories across turns for debugging/analysis
-        self._memory_history: list[dict[str, Any]] = []
-
         logger.info(
             f"Agent {self.agent_id} __init__: self.action_intent_selector_program is {type(self.action_intent_selector_program)}"
         )
@@ -465,35 +461,16 @@ class Agent:
         # --- End Extract Perceived Messages ---
 
         # --- Retrieve Memory History ---
-        # Start with any memories retrieved in previous turns
-        memory_history_list: list[dict[str, Any]] = list(self._memory_history)
+        # Retrieval now happens exclusively inside ``retrieve_and_summarize_memories_node``.
+        # Start with an empty list; the graph node will populate this field.
+        memory_history_list: list[dict[str, Any]] = []
 
         active_service = memory_service or getattr(self, "memory_service", None)
         if active_service is None and vector_store_manager is not None:
             active_service = MemoryService(vector_store_manager)
 
-        if active_service is not None:
-            try:
-                retrieved_memories = await active_service.retrieve_relevant_memories(
-                    self.agent_id,
-                    query="",
-                    k=5,
-                )
-                # Persist and accumulate retrieved memories for this agent
-                self._memory_history.extend(retrieved_memories)
-                memory_history_list = list(self._memory_history)
-
-            except Exception as e:  # pragma: no cover - defensive
-                logger.error(
-                    f"Agent {self.agent_id}: failed to retrieve memories: {e}",
-                    exc_info=True,
-                )
-
         # Convert the state to dictionary for compatibility with the existing graph
-        if _PYDANTIC_V2:
-            state_dict = cast(BaseModel, self._state).model_dump()
-        else:
-            state_dict = cast(BaseModel, self._state).dict()
+        state_dict = cast(BaseModel, self._state).model_dump()
 
         # Extract agent goal - handle goals which may be in different formats:
         # 1. From the AgentState goals list (which might be empty)
@@ -513,10 +490,8 @@ class Agent:
         # Prepare the input state for this turn's graph execution
         initial_turn_state: AgentTurnState = {
             "agent_id": self.agent_id,
-            "current_state": (
-                cast(BaseModel, self._state).model_dump(exclude_none=True)
-                if _PYDANTIC_V2
-                else cast(BaseModel, self._state).dict(exclude_none=True)
+            "current_state": cast(BaseModel, self._state).model_dump(
+                exclude_none=True
             ),  # Current full state
             "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
