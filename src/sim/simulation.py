@@ -356,6 +356,30 @@ class Simulation:
                 self.speed = float(cmd.get("value", 1))
             except (TypeError, ValueError):
                 pass
+        elif action == "post_kb":
+            text = cmd.get("text")
+            author = cmd.get("author", "human")
+            if text and self.knowledge_board:
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        text,
+                        str(author),
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
+                if self.discord_bot:
+                    embed = self.discord_bot.create_knowledge_board_embed(
+                        str(author),
+                        text,
+                        self.current_step,
+                    )
+                    task = asyncio.create_task(
+                        self.discord_bot.send_simulation_update(
+                            embed=embed,
+                            agent_id=str(author),
+                        )
+                    )
+                    _ = task
 
     async def spawn_agent(
         self: Self,
