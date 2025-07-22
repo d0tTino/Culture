@@ -1,11 +1,13 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
 
 from src.infra import config
-from src.sim.quests import QUESTS
+from src.infra.ledger import Ledger
+from src.sim import quests
 from src.sim.simulation import Simulation
 from tests.integration.interfaces.test_dashboard_backend_api import load_dashboard_backend
 from tests.utils.mock_llm import MockLLM
@@ -49,9 +51,12 @@ class DummyAgent:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_periodic_quest_generation(monkeypatch: pytest.MonkeyPatch) -> None:
-    QUESTS.clear()
+async def test_periodic_quest_generation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    quests.QUESTS.clear()
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "QUEST_GENERATION_INTERVAL_STEPS", 1)
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr("src.infra.ledger.ledger", ledger)
+    monkeypatch.setattr(quests, "ledger", ledger)
     responses = {"structured_output": {"id": 1, "title": "Q1", "description": "desc"}}
     with MockLLM(responses):
 
@@ -65,15 +70,19 @@ async def test_periodic_quest_generation(monkeypatch: pytest.MonkeyPatch) -> Non
         await sim.run_step(max_turns=3)
         await sim.stop_event_listener()
 
-    assert len(QUESTS) == 1
+    assert len(ledger.get_quests()) == 1
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_get_quests_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    QUESTS.clear()
+async def test_get_quests_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    quests.QUESTS.clear()
     monkeypatch.setitem(config.CONFIG_OVERRIDES, "QUEST_GENERATION_INTERVAL_STEPS", 1)
     db = load_dashboard_backend()
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr("src.infra.ledger.ledger", ledger)
+    monkeypatch.setattr(db, "ledger", ledger)
+    monkeypatch.setattr(quests, "ledger", ledger)
     responses = {"structured_output": {"id": 2, "title": "Q2", "description": "desc"}}
     with MockLLM(responses):
 

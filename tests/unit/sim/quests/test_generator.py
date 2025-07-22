@@ -1,13 +1,19 @@
+from pathlib import Path
+
 import pytest
 
-from src.sim.quests import QUESTS, Quest, generate_quest
+from src.infra.ledger import Ledger
+from src.sim import quests
+from src.sim.quests import Quest
 from tests.utils.mock_llm import MockLLM
 
 pytestmark = pytest.mark.unit
 
 
-def test_generate_quest_adds_to_list() -> None:
-    QUESTS.clear()
+def test_generate_quest_adds_to_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    quests.QUESTS.clear()
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr(quests, "ledger", ledger)
     responses = {
         "structured_output": {
             "id": 1,
@@ -18,8 +24,9 @@ def test_generate_quest_adds_to_list() -> None:
         }
     }
     with MockLLM(responses):
-        quest = generate_quest("Create quest")
+        quest = quests.generate_quest("Create quest")
     assert quest == Quest(
         id=1, title="Quest", description="Do something", progress=0, status="pending"
     )
-    assert QUESTS == [quest]
+    assert quests.QUESTS == [quest]
+    assert ledger.get_quests()[0]["title"] == "Quest"

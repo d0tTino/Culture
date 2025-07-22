@@ -18,6 +18,11 @@ export default function Sidebar() {
           </NavLink>
         </li>
         <li>
+          <NavLink to="/quests" className={linkClass}>
+            Quests
+          </NavLink>
+        </li>
+        <li>
           <NavLink to="/agent-data" className={linkClass}>
             Agent Data
           </NavLink>

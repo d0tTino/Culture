@@ -15,7 +15,6 @@ from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra.ledger import ledger
 from src.sim.event_bus import get_event_bus
-from src.sim.quests import get_quests
 
 from .widget_registry import WidgetRegistry
 
@@ -265,7 +264,7 @@ async def get_missions() -> Response:
 @app.get("/api/quests")
 async def get_quests_api() -> Response:
     """Return the list of generated quests."""
-    quests = [q.model_dump() for q in get_quests()]
+    quests = ledger.get_quests()
     return JSONResponse({"quests": quests})
 
 

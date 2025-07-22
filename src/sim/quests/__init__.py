@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+
 from pydantic import BaseModel
 
 from src.infra import llm_client
+from src.infra.ledger import ledger
 
 
 class Quest(BaseModel):
@@ -16,6 +19,38 @@ class Quest(BaseModel):
 
 
 QUESTS: list[Quest] = []
+
+_quest_task: asyncio.Task | None = None
+
+
+async def _quest_loop(interval: float) -> None:
+    while True:
+        try:
+            generate_quest("Create a new quest for the agents")
+        except Exception:  # pragma: no cover - defensive
+            pass
+        await asyncio.sleep(interval)
+
+
+def start_quest_generation(interval: float = 60.0) -> None:
+    """Start background quest generation."""
+    global _quest_task
+    if interval <= 0:
+        return
+    if _quest_task is None or _quest_task.done():
+        _quest_task = asyncio.create_task(_quest_loop(interval))
+
+
+async def stop_quest_generation() -> None:
+    """Stop the background quest generator."""
+    global _quest_task
+    if _quest_task:
+        _quest_task.cancel()
+        try:
+            await _quest_task
+        except asyncio.CancelledError:  # pragma: no cover - expected
+            pass
+        _quest_task = None
 
 
 def generate_quest(
@@ -45,10 +80,24 @@ def generate_quest(
         except Exception:
             return None
     QUESTS.append(quest)
+    try:
+        ledger.record_quest(
+            quest.id,
+            quest.title,
+            quest.description,
+            quest.progress,
+            quest.status,
+        )
+    except Exception:
+        pass
     return quest
 
 
 def get_quests() -> list[Quest]:
     """Return the list of generated quests."""
 
-    return list(QUESTS)
+    try:
+        rows = ledger.get_quests()
+        return [Quest(**r) for r in rows]
+    except Exception:  # pragma: no cover - defensive
+        return list(QUESTS)
