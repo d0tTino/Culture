@@ -7,21 +7,8 @@ import pytest
 
 pytest.importorskip("discord")
 from src.interfaces import metrics
+from src.interfaces.dashboard_backend import AgentMessage, SimulationEvent
 from src.interfaces.discord_bot import SimulationDiscordBot, say, stats
-
-
-class SimulationEvent:
-    def __init__(self, type: str, data: dict[str, object] | None = None) -> None:
-        self.type = type
-        self.data = data
-
-
-class AgentMessage:
-    def __init__(self, agent_id: str, content: str, step: int) -> None:
-        self.agent_id = agent_id
-        self.content = content
-        self.step = step
-
 
 sent_by_token: list[str] = []
 
