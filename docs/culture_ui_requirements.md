@@ -100,3 +100,8 @@ await registerWidgetBackend({
   scriptUrl: 'http://localhost:5173/my_widget.js',
 })
 ```
+
+### Memory Snapshots API
+
+The backend exposes REST endpoints for listing available memory snapshot steps and retrieving snapshot data.
+Use `GET /api/memory_snapshots` to list the latest steps and `GET /api/memory_snapshots/{step}` to fetch a specific snapshot.

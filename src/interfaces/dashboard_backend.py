@@ -14,10 +14,13 @@ from pydantic import BaseModel
 from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra.ledger import ledger
+from src.infra.snapshot import load_snapshot
 from src.sim.event_bus import get_event_bus
 from src.sim.quests import get_quests
 
 from .widget_registry import WidgetRegistry
+
+SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "snapshots"
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +382,29 @@ async def api_auctions() -> Response:
     return JSONResponse({"auctions": auctions})
 
 
+@app.get("/api/memory_snapshots")
+async def api_memory_snapshots(limit: int = 10) -> Response:
+    """List available memory snapshot steps."""
+
+    steps = sorted(
+        int(p.stem.split("_")[1])
+        for p in SNAPSHOT_DIR.glob("snapshot_*.json*")
+        if p.stem.split("_")[1].isdigit()
+    )
+    return JSONResponse({"steps": steps[-limit:]})
+
+
+@app.get("/api/memory_snapshots/{step}")
+async def api_memory_snapshot(step: int) -> Response:
+    """Return memory snapshot data for the given step."""
+
+    try:
+        data = await asyncio.to_thread(load_snapshot, step, directory=SNAPSHOT_DIR)
+    except Exception:  # pragma: no cover - invalid or missing snapshot
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    return JSONResponse(data)
+
+
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -536,6 +562,8 @@ __all__ = [
     "api_get_laws",
     "api_get_proposals",
     "api_get_votes",
+    "api_memory_snapshot",
+    "api_memory_snapshots",
     "api_map",
     "api_propose_law",
     "api_token_balances",
