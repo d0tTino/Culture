@@ -1,0 +1,27 @@
+name: UI E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+        working-directory: culture-ui
+      - run: pnpm exec playwright install chromium
+        working-directory: culture-ui
+      - run: pnpm build
+        working-directory: culture-ui
+      - run: pnpm test:e2e
+        working-directory: culture-ui
