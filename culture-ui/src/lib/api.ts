@@ -7,9 +7,23 @@ export interface Mission {
   progress: number
 }
 
+export interface Quest {
+  id: number
+  title: string
+  description: string
+  progress: number
+  status: string
+}
+
 export async function fetchMissions(): Promise<Mission[]> {
   const res = await fetch('/api/missions')
   return (await res.json()) as Mission[]
+}
+
+export async function fetchQuests(): Promise<Quest[]> {
+  const res = await fetch('/api/quests')
+  const data = (await res.json()) as { quests: Quest[] }
+  return data.quests
 }
 
 export async function proposeLaw(

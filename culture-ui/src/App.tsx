@@ -15,6 +15,7 @@ import StoryboardPage from './pages/Storyboard'
 import AgentTimelinePage from './pages/AgentTimeline'
 import TokenBalancesPage from './pages/TokenBalances'
 import AuctionsPage from './pages/Auctions'
+import QuestsPage from './pages/Quests'
 import DockManager from './components/DockManager'
 import { createDefaultLayout } from './lib/defaultLayout'
 
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/storyboard" element={<StoryboardPage />} />
             <Route path="/balances" element={<TokenBalancesPage />} />
             <Route path="/auctions" element={<AuctionsPage />} />
+            <Route path="/quests" element={<QuestsPage />} />
           </Routes>
         </DockManager>
       </main>

@@ -108,6 +108,17 @@ class Ledger:
             )
             """
         )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quests (
+                id INTEGER PRIMARY KEY,
+                title TEXT,
+                description TEXT,
+                progress INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'pending'
+            )
+            """
+        )
         cur = self.conn.execute("PRAGMA table_info(law_proposals)")
         cols = [r[1] for r in cur.fetchall()]
         if "ip_spent" not in cols:
@@ -457,6 +468,70 @@ class Ledger:
                 "no_weight": float(r[4]),
                 "ip_spent": float(r[5]),
                 "ts": r[6],
+            }
+            for r in rows
+        ]
+
+    # -------------------------------------------------------------
+    # Quest management
+    # -------------------------------------------------------------
+
+    def record_quest(
+        self,
+        quest_id: int,
+        title: str,
+        description: str,
+        progress: int = 0,
+        status: str = "pending",
+    ) -> None:
+        """Persist a quest to the ledger."""
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO quests(id, title, description, progress, status)
+            VALUES(?,?,?,?,?)
+            """,
+            (quest_id, title, description, int(progress), status),
+        )
+        self.conn.commit()
+
+    def update_quest(
+        self,
+        quest_id: int,
+        *,
+        progress: int | None = None,
+        status: str | None = None,
+    ) -> None:
+        """Update quest progress or status."""
+        fields = []
+        params: list[object] = []
+        if progress is not None:
+            fields.append("progress=?")
+            params.append(int(progress))
+        if status is not None:
+            fields.append("status=?")
+            params.append(status)
+        params.append(quest_id)
+        if fields:
+            self.conn.execute(
+                f"UPDATE quests SET {', '.join(fields)} WHERE id=?",
+                params,
+            )
+            self.conn.commit()
+
+    def get_quests(self) -> list[dict[str, object]]:
+        """Return all stored quests."""
+        cur = self.conn.execute(
+            "SELECT id, title, description, progress, status FROM quests ORDER BY id"
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "id": int(r[0]),
+                "title": str(r[1]),
+                "description": str(r[2]),
+                "progress": int(r[3]),
+                "status": str(r[4]),
             }
             for r in rows
         ]
