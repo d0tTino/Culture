@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useEventSource } from '../lib/useEventSource'
+import Heatmap from '../components/Heatmap'
+import MemoryTimeline from '../components/MemoryTimeline'
 
 interface SnapshotEvent {
   type?: string
@@ -10,20 +13,7 @@ interface SnapshotEvent {
 }
 
 export default function Storyboard() {
-  const [event, setEvent] = useState<SnapshotEvent | null>(null)
-  useEffect(() => {
-    const ws = new WebSocket('/ws/events')
-    ws.onmessage = (ev) => {
-      try {
-        setEvent(JSON.parse(ev.data))
-      } catch {
-        /* ignore parse errors */
-      }
-    }
-    return () => {
-      ws.close()
-    }
-  }, [])
+  const event = useEventSource<SnapshotEvent>()
   const [positions, setPositions] = useState<Record<string, [number, number]>>({})
   const [moods, setMoods] = useState<Record<string, number>>({})
   const [heatmap, setHeatmap] = useState<Record<string, number>>({})
@@ -94,24 +84,7 @@ export default function Storyboard() {
               </li>
             ))}
           </ul>
-          <div
-            data-testid="heatmap"
-            className="grid grid-cols-10 grid-rows-10 w-40 h-40 border"
-          >
-            {Array.from({ length: 100 }).map((_, i) => {
-              const x = i % 10
-              const y = Math.floor(i / 10)
-              const count = heatmap[`${x},${y}`] || 0
-              const max = Math.max(1, ...Object.values(heatmap))
-              const alpha = count / max
-              return (
-                <div
-                  key={`${x}-${y}`}
-                  style={{ backgroundColor: `rgba(255,0,0,${alpha})` }}
-                />
-              )
-            })}
-          </div>
+          <Heatmap data={heatmap} />
         </div>
       ) : (
         <div data-testid="summaries">
@@ -120,17 +93,7 @@ export default function Storyboard() {
           ))}
         </div>
       )}
-      <div
-        data-testid="memory-events"
-        className="max-h-32 overflow-y-auto mt-2 text-sm"
-      >
-        {memoryEvents.map((e, i) => (
-          <div key={i}>
-            {e.type}
-            {e.step !== undefined ? ` (step ${e.step})` : ''}
-          </div>
-        ))}
-      </div>
+      <MemoryTimeline events={memoryEvents} />
     </div>
   )
 }

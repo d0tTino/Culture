@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import StoryboardPage from './pages/Storyboard'
-import { MockWebSocket, resetMockSources } from './lib/testUtils'
+import { MockEventSource, resetMockSources } from './lib/testUtils'
 import { vi } from 'vitest'
 
 afterEach(() => {
@@ -12,8 +12,8 @@ afterEach(() => {
 describe('Storyboard widget', () => {
   it('shows coordinates, mood and summaries', async () => {
     ;(
-      globalThis as unknown as { WebSocket?: typeof WebSocket }
-    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
+      globalThis as unknown as { EventSource?: typeof EventSource }
+    ).EventSource = MockEventSource as unknown as typeof EventSource
     const fetchSpy = vi.fn(() =>
       Promise.resolve({
         json: () => Promise.resolve({ summaries: ['s1'] }),
@@ -23,9 +23,9 @@ describe('Storyboard widget', () => {
 
     render(<StoryboardPage />)
 
-    const ws = MockWebSocket.instances[0]
+    const es = MockEventSource.instances[0]
     act(() => {
-      ws.sendMessage(
+      es.emitMessage(
         '{"data":{"world_map":{"agents":{"a1":[5,6]}},"agents":[{"agent_id":"a1","mood":0.2}]}}',
       )
     })
@@ -48,16 +48,16 @@ describe('Storyboard widget', () => {
 
   it('handles fetch errors gracefully', async () => {
     ;(
-      globalThis as unknown as { WebSocket?: typeof WebSocket }
-    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
+      globalThis as unknown as { EventSource?: typeof EventSource }
+    ).EventSource = MockEventSource as unknown as typeof EventSource
     const fetchSpy = vi.fn(() => Promise.reject(new Error('fail')))
     vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch)
 
     render(<StoryboardPage />)
 
-    const ws = MockWebSocket.instances[0]
+    const es = MockEventSource.instances[0]
     act(() => {
-      ws.sendMessage(
+      es.emitMessage(
         '{"data":{"world_map":{"agents":{"a1":[5,6]}}}}',
       )
     })
@@ -80,19 +80,15 @@ describe('Storyboard widget', () => {
 
   it('renders heatmap and memory events', async () => {
     ;(
-      globalThis as unknown as { WebSocket?: typeof WebSocket }
-    ).WebSocket = MockWebSocket as unknown as typeof WebSocket
+      globalThis as unknown as { EventSource?: typeof EventSource }
+    ).EventSource = MockEventSource as unknown as typeof EventSource
 
     render(<StoryboardPage />)
 
-    const ws = MockWebSocket.instances[0]
+    const es = MockEventSource.instances[0]
     act(() => {
-      ws.sendMessage(
-        '{"data":{"world_map":{"agents":{"a1":[0,0]}}}}',
-      )
-      ws.sendMessage(
-        '{"type":"memory_prune","data":{"step":1}}',
-      )
+      es.emitMessage('{"data":{"world_map":{"agents":{"a1":[0,0]}}}}')
+      es.emitMessage('{"type":"memory_prune","data":{"step":1}}')
     })
 
     const heatmap = await screen.findByTestId('heatmap')
