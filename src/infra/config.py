@@ -6,8 +6,6 @@ import importlib
 import logging
 from typing import Any
 
-from src.shared.pydantic_compat import _PYDANTIC_V2
-
 from .settings import ConfigSettings, settings
 
 logger = logging.getLogger(__name__)
@@ -240,12 +238,12 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     global settings, _CONFIG
     new_settings = ConfigSettings()
     if validate_required:
-        raw_data = new_settings.model_dump() if _PYDANTIC_V2 else new_settings.dict()
+        raw_data = new_settings.model_dump()
         missing = [k for k in REQUIRED_CONFIG_KEYS if not raw_data.get(k)]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
     data: dict[str, Any]
-    data = new_settings.model_dump() if _PYDANTIC_V2 else new_settings.dict()  # type: ignore[attr-defined]
+    data = new_settings.model_dump()
     for key, value in data.items():
         setattr(settings, key, value)
     _CONFIG.update(data)
@@ -255,7 +253,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
     if key is None:
-        return settings.model_dump() if _PYDANTIC_V2 else settings.dict()
+        return settings.model_dump()
     if key in _CONFIG and str(_CONFIG.get(key, "")).strip() != "":
         return _CONFIG[key]
     if hasattr(settings, key):
