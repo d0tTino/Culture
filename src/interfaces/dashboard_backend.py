@@ -15,6 +15,7 @@ from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra.ledger import ledger
 from src.infra.snapshot import load_snapshot
+from src.sim.context import SimulationContext
 from src.sim.event_bus import get_event_bus
 
 from .widget_registry import WidgetRegistry
@@ -23,8 +24,9 @@ SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "snapshots"
 
 logger = logging.getLogger(__name__)
 
-# JSON response body for semantic summary retrieval errors
-SEMANTIC_SUMMARIES_ERROR: Final[dict[str, str]] = {"error": "summary retrieval failed"}
+# Default simulation context used by module-level APIs
+DEFAULT_CONTEXT = SimulationContext()
+
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -89,51 +91,33 @@ else:  # pragma: no cover - optional dependency
                 self.gen = None
 
 
-# Global queue for agent messages with bounded size
-message_sse_queue: asyncio.Queue[AgentMessage] = asyncio.Queue(maxsize=1000)
+# Agent message queue stored in the simulation context
+message_sse_queue = DEFAULT_CONTEXT.message_queue
 
 
-async def enqueue_message(msg: AgentMessage) -> None:
+async def enqueue_message(msg: AgentMessage, ctx: SimulationContext = DEFAULT_CONTEXT) -> None:
     """Add a message to the SSE queue, dropping the oldest if full."""
-    if message_sse_queue.full():
+    queue = ctx.message_queue
+    if queue.full():
         try:
-            message_sse_queue.get_nowait()
+            queue.get_nowait()
         except asyncio.QueueEmpty:  # pragma: no cover - unlikely
             pass
-    await message_sse_queue.put(msg)
+    await queue.put(msg)
 
 
-# Queue for general simulation events streamed via SSE/WebSocket. Calls to
-# :func:`get_event_queue` return a queue bound to the current event loop and
-# subscribed to the global :class:`~src.sim.event_bus.EventBus` instance. The
-# same queue is returned on subsequent calls within the same loop to match the
-# previous behaviour.
-_event_queue: asyncio.Queue[SimulationEvent | None] | None = None
-_event_queue_loop: asyncio.AbstractEventLoop | None = None
+# Queue for general simulation events is managed by the context
 
 
-def get_event_queue() -> asyncio.Queue[SimulationEvent | None]:
+def get_event_queue(
+    ctx: SimulationContext = DEFAULT_CONTEXT,
+) -> asyncio.Queue[SimulationEvent | None]:
     """Return a shared event queue bound to the active loop."""
-    global _event_queue, _event_queue_loop
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:  # pragma: no cover - no running loop
-        loop = asyncio.new_event_loop()
-    if _event_queue is None or _event_queue_loop is not loop:
-        if _event_queue is not None:
-            get_event_bus().unsubscribe(_event_queue)
-        _event_queue = get_event_bus().subscribe()
-        _event_queue_loop = loop
-    return _event_queue
+    return ctx.get_event_queue()
 
 
 # Simulation control state
-SIM_STATE: dict[str, Any] = {
-    "paused": False,
-    "speed": 1.0,
-    "semantic_manager": None,
-    "simulation": None,
-}
+SIM_STATE = DEFAULT_CONTEXT.sim_state
 BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
 
 # Registry of widgets registered by the UI or plugins
@@ -285,7 +269,7 @@ async def get_quests_api() -> Response:
 @app.get("/api/agents/{agent_id}/semantic_summaries")
 async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
     """Return recent semantic summaries for an agent."""
-    manager = SIM_STATE.get("semantic_manager")
+    manager = DEFAULT_CONTEXT.sim_state.get("semantic_manager")
     if manager is not None:
         try:
             summaries = manager.get_semantic_summaries(agent_id, limit=limit)
@@ -300,7 +284,7 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
 @app.post("/api/propose_law")
 async def api_propose_law(proposal: LawProposal) -> Response:
     """Submit a law proposal to the active simulation."""
-    sim = SIM_STATE.get("simulation")
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
     approved = False
     if sim is not None:
         try:
@@ -313,7 +297,7 @@ async def api_propose_law(proposal: LawProposal) -> Response:
 @app.post("/api/propose")
 async def api_propose(proposal: Proposal) -> Response:
     """Submit a weighted law proposal to the active simulation."""
-    sim = SIM_STATE.get("simulation")
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
     approved = False
     if sim is not None:
         proposer = next((a for a in sim.agents if a.agent_id == proposal.proposer_id), None)
@@ -333,7 +317,7 @@ async def api_propose(proposal: Proposal) -> Response:
 @app.post("/api/vote")
 async def api_vote(vote: VoteRequest) -> Response:
     """Submit a manual vote for a proposal."""
-    sim = SIM_STATE.get("simulation")
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
     result = False
     if sim is not None:
         agent = next((a for a in sim.agents if a.agent_id == vote.agent_id), None)
@@ -478,16 +462,18 @@ async def websocket_events(websocket: WebSocket) -> None:
         await websocket.close()
 
 
-async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
+async def handle_control_command(
+    cmd: dict[str, Any], ctx: SimulationContext = DEFAULT_CONTEXT
+) -> dict[str, Any]:
     """Process a control command and update simulation state."""
     action = cmd.get("command")
     if action == "pause":
-        SIM_STATE["paused"] = True
+        ctx.sim_state["paused"] = True
     elif action == "resume":
-        SIM_STATE["paused"] = False
+        ctx.sim_state["paused"] = False
     elif action == "set_speed":
         try:
-            SIM_STATE["speed"] = float(cmd.get("value", 1))
+            ctx.sim_state["speed"] = float(cmd.get("value", 1))
         except (TypeError, ValueError):
             pass
     elif action == "set_breakpoints":
@@ -495,7 +481,7 @@ async def handle_control_command(cmd: dict[str, Any]) -> dict[str, Any]:
         if isinstance(tags, list):
             BREAKPOINT_TAGS.clear()
             BREAKPOINT_TAGS.update(str(t) for t in tags)
-    return {**SIM_STATE, "breakpoints": list(BREAKPOINT_TAGS)}
+    return {**ctx.sim_state, "breakpoints": list(BREAKPOINT_TAGS)}
 
 
 try:
@@ -511,7 +497,7 @@ try:
             logger.warning("Invalid control payload: %s", exc)
             return JSONResponse({"error": "invalid"})
 
-        result = await handle_control_command(command)
+        result = await handle_control_command(command, ctx=DEFAULT_CONTEXT)
         return JSONResponse(result)
 
 except AttributeError:  # pragma: no cover - stub app may lack decorators
@@ -534,7 +520,7 @@ try:
                     logger.warning("Invalid control payload via WS: %s", exc)
                     await websocket.send_text(json.dumps({"error": "invalid"}))
                     continue
-                result = await handle_control_command(cmd)
+                result = await handle_control_command(cmd, ctx=DEFAULT_CONTEXT)
                 await websocket.send_text(json.dumps(result))
         except WebSocketDisconnect:
             pass
@@ -551,7 +537,7 @@ async def emit_event(event: SimulationEvent) -> None:
     await bus.publish(event)
     tags = set(event.data.get("tags", [])) if event.data else set()
     if tags & BREAKPOINT_TAGS:
-        SIM_STATE["paused"] = True
+        DEFAULT_CONTEXT.sim_state["paused"] = True
         await bus.publish(
             SimulationEvent(
                 type="breakpoint_hit",
@@ -584,6 +570,7 @@ async def emit_map_change_event(world_map: dict[str, Any]) -> None:
 
 
 __all__ = [
+    "DEFAULT_CONTEXT",
     "WIDGET_REGISTRY",
     "EventSourceResponse",
     "LawProposal",

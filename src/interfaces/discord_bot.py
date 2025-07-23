@@ -20,15 +20,12 @@ from src.infra import config
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend, metrics
 from src.interfaces.dashboard_backend import (
+    DEFAULT_CONTEXT,
     AgentMessage,
     SimulationEvent,
-    message_sse_queue,
 )
-from src.sim.event_bus import get_event_bus
+from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
-
-# Backwards compatibility for tests expecting a module-level queue
-event_queue = get_event_bus().subscribe()
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     import discord
@@ -69,6 +66,7 @@ class SimulationDiscordBot:
         ) = None,
         *,
         channel_map: dict[str, int] | None = None,
+        context: SimulationContext | None = None,
     ) -> Self:
         """Asynchronously construct a ``SimulationDiscordBot`` instance."""
         tokens: list[str] = []
@@ -90,7 +88,14 @@ class SimulationDiscordBot:
         if not tokens:
             raise RuntimeError("No Discord bot tokens provided")
 
-        return cls(tokens, channel_id, token_lookup=token_lookup, channel_map=channel_map)
+        ctx = context or DEFAULT_CONTEXT
+        return cls(
+            tokens,
+            channel_id,
+            token_lookup=token_lookup,
+            channel_map=channel_map,
+            context=ctx,
+        )
 
     def __init__(
         self: Self,
@@ -101,6 +106,7 @@ class SimulationDiscordBot:
         ) = None,
         *,
         channel_map: dict[str, int] | None = None,
+        context: SimulationContext = DEFAULT_CONTEXT,
     ) -> None:
         """
         Initialize the Discord bot with token and target channel.
@@ -118,6 +124,7 @@ class SimulationDiscordBot:
         self.channel_to_agent: dict[int, str] = {v: k for k, v in self.channel_map.items()}
         self.user_channels: dict[str, int] = {}
         self.is_ready = False
+        self.context = context
         global active_bot
         active_bot = self
         if token_lookup is None:
@@ -140,8 +147,8 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-        self.event_queue = get_event_bus().subscribe()
-        self.message_queue = message_sse_queue
+        self.event_queue = self.context.get_event_queue()
+        self.message_queue = self.context.message_queue
         self._forward_task: asyncio.Task[Any] | None = None
         self._client_tasks: list[asyncio.Task[Any]] = []
 
@@ -668,21 +675,24 @@ async def slash_stats(interaction: Any) -> None:
 @bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
-    await event_queue.put(SimulationEvent(type="control", data={"command": "pause"}))
+    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "pause"}))
     await interaction.response.send_message("pause", ephemeral=True)
 
 
 @bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
-    await event_queue.put(SimulationEvent(type="control", data={"command": "resume"}))
+    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "resume"}))
     await interaction.response.send_message("resume", ephemeral=True)
 
 
 @bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
-    await event_queue.put(
+    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(
         SimulationEvent(type="control", data={"command": "set_speed", "value": value})
     )
     await interaction.response.send_message(f"speed {value}", ephemeral=True)
@@ -698,7 +708,8 @@ async def slash_speed(interaction: Any, value: float) -> None:
 @bot.tree.command(name="kb")
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
-    await event_queue.put(
+    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(
         SimulationEvent(
             type="control",
             data={
@@ -730,8 +741,9 @@ async def slash_propose(interaction: Any, text: str) -> None:
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post("http://localhost:8000/api/propose", json=payload)
-            content = resp.text
-            approved = json.loads(content).get("approved", False)
+            data = json.loads(resp.text)
+            approved = data.get("approved", False)
+
     except Exception:
         approved = False
     await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
@@ -752,7 +764,7 @@ async def slash_propose_law(interaction: Any, text: str) -> None:
     if ip <= 0 or du <= 0:
         await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
         return
-    sim = dashboard_backend.SIM_STATE.get("simulation")
+    sim = dashboard_backend.DEFAULT_CONTEXT.sim_state.get("simulation")
     if sim is None:
         await interaction.response.send_message("Simulation inactive", ephemeral=True)
         return
@@ -782,7 +794,7 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     if ip <= 0 or du <= 0:
         await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
         return
-    sim = dashboard_backend.SIM_STATE.get("simulation")
+    sim = dashboard_backend.DEFAULT_CONTEXT.sim_state.get("simulation")
     if sim is None:
         await interaction.response.send_message("Simulation inactive", ephemeral=True)
         return

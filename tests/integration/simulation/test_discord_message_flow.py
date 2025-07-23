@@ -16,6 +16,7 @@ sys.modules.setdefault("weaviate.classes", types.ModuleType("weaviate.classes"))
 from src.agents.core.agent_state import AgentActionIntent
 from src.interfaces import dashboard_backend as db
 from src.sim import simulation as sim_module
+from src.sim.context import SimulationContext
 
 
 class DummyAgentState:
@@ -62,9 +63,10 @@ class DummyAgent:
 @pytest.mark.asyncio
 async def test_discord_message_triggers_agent_reply(monkeypatch: pytest.MonkeyPatch) -> None:
     q_events: asyncio.Queue[db.SimulationEvent | None] = asyncio.Queue()
-
-    monkeypatch.setattr(sim_module, "event_queue", q_events)
-    monkeypatch.setattr(db, "event_queue", q_events)
+    ctx = SimulationContext()
+    ctx._event_queue = q_events
+    ctx._event_queue_loop = asyncio.get_event_loop()
+    monkeypatch.setattr(db, "DEFAULT_CONTEXT", ctx)
 
     agent = DummyAgent("A")
     sim = sim_module.Simulation([agent])
