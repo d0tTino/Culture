@@ -75,3 +75,15 @@ ENABLE_REDPANDA=1 python scripts/export_traces.py --redpanda -o traces.jsonl
 ```
 
 Each line in the output file is a JSON object representing a snapshot or event.
+
+The script accepts optional filters:
+
+- `--agent` – only include events with a matching `agent_id`
+- `--start-step`/`--end-step` – restrict the step range
+
+You can also generate a dataset with `make dataset`, overriding the input and
+output paths if needed:
+
+```bash
+make dataset SNAPSHOTS=snapshots OUTPUT=data/traces.jsonl
+```
