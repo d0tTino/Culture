@@ -4,6 +4,7 @@ import pytest
 
 from src.infra import config
 from src.interfaces.discord_bot import SimulationDiscordBot
+from src.sim.context import SimulationContext
 
 
 class DummyChannel:
@@ -37,7 +38,7 @@ async def test_opa_blocks_message(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.interfaces.discord_bot.discord.Thread", DummyChannel),
         patch("src.interfaces.discord_bot.discord.DiscordException", Exception),
     ):
-        bot = await SimulationDiscordBot.create("token", 1)
+        bot = await SimulationDiscordBot.create("token", 1, context=SimulationContext())
         bot.is_ready = True
         channel = DummyChannel()
         bot.client.get_channel = MagicMock(return_value=channel)
@@ -63,7 +64,7 @@ async def test_opa_modifies_message(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.interfaces.discord_bot.discord.Thread", DummyChannel),
         patch("src.interfaces.discord_bot.discord.DiscordException", Exception),
     ):
-        bot = await SimulationDiscordBot.create("token", 1)
+        bot = await SimulationDiscordBot.create("token", 1, context=SimulationContext())
         bot.is_ready = True
         channel = DummyChannel()
         bot.client.get_channel = MagicMock(return_value=channel)

@@ -6,6 +6,7 @@ import pytest
 
 from src.interfaces import dashboard_backend as db
 from src.interfaces.discord_bot import SimulationDiscordBot
+from src.sim.context import SimulationContext
 from src.sim.simulation import Simulation
 
 
@@ -100,7 +101,7 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         patch.object(Simulation, "_handle_human_command", wrapped),
         patch("src.interfaces.dashboard_backend.EventSourceResponse", object),
     ):
-        bot = await SimulationDiscordBot.create("token", 1)
+        bot = await SimulationDiscordBot.create("token", 1, context=SimulationContext())
         agent = DummyAgent("A")
         sim = Simulation([agent], discord_bot=bot)
 

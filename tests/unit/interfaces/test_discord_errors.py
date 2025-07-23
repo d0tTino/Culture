@@ -5,6 +5,7 @@ import pytest
 
 from src.infra import config
 from src.interfaces.discord_bot import SimulationDiscordBot
+from src.sim.context import SimulationContext
 
 
 class DummyChannel:
@@ -35,7 +36,7 @@ async def test_send_simulation_update_logs_error(monkeypatch: pytest.MonkeyPatch
             DummyException,
         ),
     ):
-        bot = await SimulationDiscordBot.create("token", 999)
+        bot = await SimulationDiscordBot.create("token", 999, context=SimulationContext())
         bot.is_ready = True
         error_called = asyncio.Event()
 
@@ -72,7 +73,7 @@ async def test_run_bot_retries_on_start_failure(monkeypatch: pytest.MonkeyPatch)
         patch("src.interfaces.discord_bot.discord.DiscordException", DummyException),
         patch("asyncio.sleep", sleep_mock),
     ):
-        bot = await SimulationDiscordBot.create("token", 123)
+        bot = await SimulationDiscordBot.create("token", 123, context=SimulationContext())
         tasks = bot.run_bot()
         await asyncio.gather(*tasks[:-1])
         await bot.stop_bot()
@@ -104,7 +105,7 @@ async def test_stop_bot_cancels_pending_tasks(monkeypatch: pytest.MonkeyPatch) -
         patch("src.interfaces.discord_bot.discord.Client", HangingClient),
         patch("src.interfaces.discord_bot.discord.DiscordException", DummyException),
     ):
-        bot = await SimulationDiscordBot.create("token", 123)
+        bot = await SimulationDiscordBot.create("token", 123, context=SimulationContext())
         bot.message_queue = asyncio.Queue()
         tasks = bot.run_bot()
         await asyncio.sleep(0)
