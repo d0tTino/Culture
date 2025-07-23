@@ -99,7 +99,7 @@ async def generate_quest(
     else:
         # Defensive: unexpected return type
         try:
-            quest = Quest.model_validate(result)  # type: ignore[arg-type]
+            quest = Quest.model_validate(result)
         except Exception:
             return None
     QUESTS.append(quest)

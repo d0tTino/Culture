@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Final
+from typing import TYPE_CHECKING, Any, Callable, Final, cast
 
 from pydantic import BaseModel
 
@@ -223,7 +223,7 @@ async def stream_messages(request: Request) -> Response:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
 
     generator: AsyncGenerator[dict[str, Any], None] = event_generator()
-    return EventSourceResponse(generator)  # type: ignore[no-any-return]
+    return cast(Response, EventSourceResponse(generator))
 
 
 @app.get(
@@ -251,7 +251,7 @@ async def api_map(request: Request) -> Response:
             bus.unsubscribe(queue)
 
     generator: AsyncGenerator[dict[str, Any], None] = event_generator()
-    return EventSourceResponse(generator)  # type: ignore[no-any-return]
+    return cast(Response, EventSourceResponse(generator))
 
 
 @app.get("/health")
