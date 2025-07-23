@@ -10,7 +10,7 @@ from src.agents.core.base_agent import Agent
 from src.agents.memory.memory_service import MemoryService
 from src.infra.llm_client import (
     analyze_sentiment,
-    generate_structured_output,
+    async_generate_structured_output,
 )
 from src.shared.typing import SimulationMessage
 
@@ -104,7 +104,7 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     return {"rag_summary": summary, "memory_history_list": memories}
 
 
-def generate_structured_output_from_intent(
+async def generate_structured_output_from_intent(
     intent: str,
     prompt: str,
     schema: type[AgentActionOutput],
@@ -112,7 +112,7 @@ def generate_structured_output_from_intent(
 ) -> AgentActionOutput | None:
     """Compatibility wrapper used by older tests."""
 
-    return generate_structured_output(prompt, schema, **kwargs)
+    return await async_generate_structured_output(prompt, schema, **kwargs)
 
 
 async def generate_thought_and_message_node(
@@ -155,14 +155,14 @@ async def generate_thought_and_message_node(
         action_intent = getattr(result, "chosen_action_intent", "idle")
 
     try:
-        structured = generate_structured_output_from_intent(
+        structured = await generate_structured_output_from_intent(
             action_intent,
             "prompt",
             AgentActionOutput,
             agent_state=state.get("state"),
         )
     except TypeError:
-        structured = generate_structured_output_from_intent(
+        structured = await generate_structured_output_from_intent(
             action_intent,
             "prompt",
             AgentActionOutput,

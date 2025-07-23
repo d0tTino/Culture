@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import logging
+import sys
 import time
-from collections.abc import Iterable
+import uuid
+from collections.abc import Awaitable, Iterable
 from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, cast
 
+import httpx
+
+from src.interfaces import metrics
 from src.shared.typing import (
     JSONDict,
     JSONValue,
@@ -62,7 +68,7 @@ from pydantic.fields import FieldInfo
 if TYPE_CHECKING:
     from src.agents.core.agent_state import AgentState
 
-from src.shared.decorator_utils import monitor_llm_call
+from src.shared.decorator_utils import llm_perf_logger, monitor_llm_call
 
 from .config import OLLAMA_REQUEST_TIMEOUT, get_config
 from .ledger import ledger
@@ -141,6 +147,121 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
         return result
 
     return wrapper
+
+
+def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+    """Async version of :func:`charge_du_cost`."""
+
+    @functools.wraps(func)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        state = cast("AgentState | None", kwargs.get("agent_state"))
+        result = await func(*args, **kwargs)
+        if state is not None:
+            try:
+                try:
+                    base_price, token_price = ledger.calculate_gas_price(state.agent_id)
+                except AttributeError:
+                    base_price = float(get_config("GAS_PRICE_PER_CALL"))
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
+                tokens = 1
+                if isinstance(result, dict):
+                    usage = result.get("usage")
+                    if isinstance(usage, dict):
+                        tokens = int(usage.get("prompt_tokens", 0)) + int(
+                            usage.get("completion_tokens", 0)
+                        )
+                cost = base_price + token_price * tokens
+                if state.du < cost:
+                    logger.warning(
+                        "Insufficient DU for agent %s: cost=%s, available=%s",
+                        state.agent_id,
+                        cost,
+                        state.du,
+                    )
+                else:
+                    state.du -= cost
+                    try:
+                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"Failed to deduct DU cost: {e}")
+        return result
+
+    return wrapper
+
+
+def async_monitor_llm_call(
+    model_param: str = "model", context: str | None = None
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+    """Async equivalent of :func:`monitor_llm_call`."""
+
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+        @functools.wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            request_id = str(uuid.uuid4())[:8]
+            start_time = time.perf_counter()
+            model = kwargs.get(model_param, "unknown_model")
+            metrics_data: dict[str, Any] = {
+                "request_id": request_id,
+                "function": func.__name__,
+                "model": model,
+                "timestamp": time.time(),
+                "context": context,
+                "success": False,
+                "duration_ms": None,
+                "error_type": None,
+                "error_message": None,
+                "status_code": None,
+            }
+            try:
+                result = await func(*args, **kwargs)
+                if result is None:
+                    metrics_data["success"] = False
+                    exc_type, exc_value, _ = sys.exc_info()
+                    if exc_type and exc_value:
+                        metrics_data["error_type"] = exc_type.__name__
+                        metrics_data["error_message"] = str(exc_value)
+                        if hasattr(exc_value, "status_code"):
+                            metrics_data["status_code"] = exc_value.status_code
+                        if hasattr(exc_value, "response") and hasattr(exc_value.response, "text"):
+                            metrics_data["error_message"] = exc_value.response.text
+                    else:
+                        metrics_data["error_type"] = "UnknownError"
+                        metrics_data["error_message"] = (
+                            "Function returned None, indicating an error"
+                        )
+                else:
+                    metrics_data["success"] = True
+                    if hasattr(result, "usage"):
+                        metrics_data["prompt_tokens"] = getattr(
+                            result.usage, "prompt_tokens", None
+                        )
+                        metrics_data["completion_tokens"] = getattr(
+                            result.usage, "completion_tokens", None
+                        )
+                return result
+            except Exception as e:
+                metrics_data["success"] = False
+                metrics_data["error_type"] = type(e).__name__
+                metrics_data["error_message"] = str(e)
+                if hasattr(e, "status_code"):
+                    metrics_data["status_code"] = e.status_code
+                if hasattr(e, "response") and hasattr(e.response, "text"):
+                    metrics_data["error_message"] = e.response.text
+                raise
+            finally:
+                end_time = time.perf_counter()
+                metrics_data["duration_ms"] = round((end_time - start_time) * 1000, 2)
+                metrics.LLM_CALLS_TOTAL.inc()
+                if not metrics_data.get("success", False):
+                    metrics.LLM_ERRORS_TOTAL.inc()
+                metrics.LLM_LATENCY_MS.set(metrics_data["duration_ms"])
+                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
+
+        return wrapper
+
+    return decorator
 
 
 class OllamaClientProtocol(Protocol):
@@ -644,9 +765,9 @@ def analyze_sentiment(
         return None  # Or 0.0 if float is always expected
 
 
-@charge_du_cost
-@monitor_llm_call(model_param="model", context="structured_output")
-def generate_structured_output(
+@async_charge_du_cost
+@async_monitor_llm_call(model_param="model", context="structured_output")
+async def async_generate_structured_output(
     prompt: str,
     response_model: type[BaseModel],
     model: str = "mistral:latest",
@@ -818,7 +939,8 @@ def generate_structured_output(
                 "stream": False,
                 "options": {"temperature": temperature, "top_p": 0.95, "num_predict": 400},
             }
-        response = requests.post(url, json=payload, timeout=timeout_value)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
         result = cast(JSONDict, response.json())
         if USE_VLLM:
@@ -847,6 +969,31 @@ def generate_structured_output(
         logger.error(f"Error in generate_structured_output: {e}")
 
         return None
+
+
+@charge_du_cost
+@monitor_llm_call(model_param="model", context="structured_output")
+def generate_structured_output(
+    prompt: str,
+    response_model: type[BaseModel],
+    model: str = "mistral:latest",
+    temperature: float = 0.2,
+    timeout: int | None = None,
+    *,
+    agent_state: Any | None = None,
+) -> BaseModel | None:
+    """Synchronous wrapper around :func:`async_generate_structured_output`."""
+
+    return asyncio.run(
+        async_generate_structured_output(
+            prompt,
+            response_model,
+            model=model,
+            temperature=temperature,
+            timeout=timeout,
+            agent_state=agent_state,
+        )
+    )
 
 
 def get_default_llm_client() -> OllamaClientProtocol:
