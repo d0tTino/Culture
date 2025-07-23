@@ -43,6 +43,11 @@ export default function Sidebar() {
           </NavLink>
         </li>
         <li>
+          <NavLink to="/map-state" className={linkClass}>
+            Map State
+          </NavLink>
+        </li>
+        <li>
           <NavLink to="/timeline" className={linkClass}>
             Timeline Widget
           </NavLink>
@@ -55,6 +60,11 @@ export default function Sidebar() {
         <li>
           <NavLink to="/memory" className={linkClass}>
             Memory Explorer
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/agent-memories" className={linkClass}>
+            Agent Memories
           </NavLink>
         </li>
         <li>

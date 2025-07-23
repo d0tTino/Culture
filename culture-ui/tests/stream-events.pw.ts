@@ -48,10 +48,19 @@ test('stream events update pages', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Memory Explorer' })).toBeVisible()
 
   // confirm SSE connected to correct endpoint
-  expect(await page.evaluate(() => (window as any).EventSource.instance.url)).toBe('/stream/events')
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as unknown as { EventSource: { instance: { url: string } } }
+        ).EventSource.instance.url,
+    )
+  ).toBe('/stream/events')
 
   await page.evaluate(() => {
-    const es = (window as any).EventSource.instance
+    const es = (
+      window as unknown as { EventSource: { instance: EventTarget } }
+    ).EventSource.instance
     es.dispatchEvent(
       new MessageEvent('message', {
         data: '{"type":"breakpoint_hit","data":{"tags":["nsfw"]}}',
@@ -65,7 +74,9 @@ test('stream events update pages', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Storyboard' })).toBeVisible()
 
   await page.evaluate(() => {
-    const ws = (window as any).WebSocket.instance
+    const ws = (
+      window as unknown as { WebSocket: { instance: WebSocket } }
+    ).WebSocket.instance
     ws.dispatchEvent(
       new MessageEvent('message', {
         data: '{"data":{"world_map":{"agents":{"agent-1":[1,2]}}}}',

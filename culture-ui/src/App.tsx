@@ -5,6 +5,8 @@ import Home from './pages/Home'
 import MissionOverview from './pages/MissionOverview'
 import AgentDataOverview from './pages/AgentDataOverview'
 import LiveMapPage from './pages/LiveMap'
+import MapStatePage from './pages/MapState'
+import AgentMemoriesPage from './pages/AgentMemories'
 import NetworkWebPage from './pages/NetworkWeb'
 import WorldMapPage from './pages/WorldMap'
 import LawProposalPage from './pages/LawProposal'
@@ -34,6 +36,8 @@ export default function App() {
             <Route path="/agent-data" element={<AgentDataOverview />} />
             <Route path="/memory" element={<MemoryExplorer />} />
             <Route path="/live-map" element={<LiveMapPage />} />
+            <Route path="/map-state" element={<MapStatePage />} />
+            <Route path="/agent-memories" element={<AgentMemoriesPage />} />
             <Route path="/network-web" element={<NetworkWebPage />} />
             <Route path="/world-map" element={<WorldMapPage />} />
             <Route path="/timeline" element={<TimelineWidgetPage />} />
