@@ -36,7 +36,11 @@ class DummyClient:
 async def test_slash_propose_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: DummyClient())
     monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
-    monkeypatch.setattr(bot, "active_bot", SimpleNamespace(channel_to_agent={123: "a1"}))
+    monkeypatch.setitem(
+        bot.DEFAULT_CONTEXT.sim_state,
+        "discord_bot",
+        SimpleNamespace(channel_to_agent={123: "a1"}, context=bot.DEFAULT_CONTEXT),
+    )
 
     await bot.slash_propose.callback(DummyInteraction(), text="hello")
 
@@ -63,7 +67,11 @@ async def test_slash_propose_law_uses_service(monkeypatch: pytest.MonkeyPatch) -
         return True
 
     monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
-    monkeypatch.setattr(bot, "active_bot", SimpleNamespace(channel_to_agent={123: "a1"}))
+    monkeypatch.setitem(
+        bot.DEFAULT_CONTEXT.sim_state,
+        "discord_bot",
+        SimpleNamespace(channel_to_agent={123: "a1"}, context=bot.DEFAULT_CONTEXT),
+    )
     monkeypatch.setitem(
         bot.dashboard_backend.SIM_STATE,
         "simulation",
@@ -95,7 +103,11 @@ async def test_slash_vote_uses_service(monkeypatch: pytest.MonkeyPatch) -> None:
         return True
 
     monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
-    monkeypatch.setattr(bot, "active_bot", SimpleNamespace(channel_to_agent={123: "a1"}))
+    monkeypatch.setitem(
+        bot.DEFAULT_CONTEXT.sim_state,
+        "discord_bot",
+        SimpleNamespace(channel_to_agent={123: "a1"}, context=bot.DEFAULT_CONTEXT),
+    )
     monkeypatch.setitem(
         bot.dashboard_backend.SIM_STATE,
         "simulation",

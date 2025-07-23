@@ -10,7 +10,8 @@ import asyncio
 import json
 import logging
 import typing
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, cast
+from collections.abc import Awaitable
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import httpx
 from typing_extensions import Self
@@ -41,8 +42,6 @@ else:  # pragma: no cover - runtime import with fallback
         commands = MagicMock()
 
 logger = logging.getLogger(__name__)
-
-active_bot: "SimulationDiscordBot | None" = None
 
 
 class SimulationDiscordBot:
@@ -125,8 +124,7 @@ class SimulationDiscordBot:
         self.user_channels: dict[str, int] = {}
         self.is_ready = False
         self.context = context
-        global active_bot
-        active_bot = self
+        self.context.sim_state["discord_bot"] = self
         if token_lookup is None:
             db_url = str(config.get_config("DISCORD_TOKENS_DB_URL") or "")
             if db_url:
@@ -597,6 +595,7 @@ class SimulationDiscordBot:
                     pass
                 self._forward_task = None
             self.is_ready = False
+            self.context.sim_state["discord_bot"] = None
             logger.info("Discord bot stopped")
         except (discord.DiscordException, OSError) as e:
             logger.error(f"Error stopping Discord bot: {e}")
@@ -624,6 +623,11 @@ def get_kb_size() -> int:
     return metrics.get_kb_size()
 
 
+def get_active_bot(ctx: SimulationContext = DEFAULT_CONTEXT) -> "SimulationDiscordBot | None":
+    """Return the active bot stored in the given context."""
+    return cast("SimulationDiscordBot | None", ctx.sim_state.get("discord_bot"))
+
+
 @bot.command(name="say")
 async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
@@ -641,10 +645,11 @@ async def stats(ctx: Any) -> None:
 async def slash_status(interaction: Any) -> None:
     """Return IP/DU balance for the mapped agent."""
     agent_id = None
-    if active_bot is not None:
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
         channel = getattr(interaction, "channel", None)
         chan_id = getattr(channel, "id", None)
-        agent_id = active_bot.channel_to_agent.get(chan_id)
+        agent_id = bot_instance.channel_to_agent.get(chan_id)
     if agent_id:
         ip, du = await ledger.get_balance_async(agent_id)
         if ip <= 0 or du <= 0:
@@ -659,10 +664,11 @@ async def slash_status(interaction: Any) -> None:
 async def slash_stats(interaction: Any) -> None:
     """Return runtime metrics if the agent has resources."""
     agent_id = None
-    if active_bot is not None:
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
         channel = getattr(interaction, "channel", None)
         chan_id = getattr(channel, "id", None)
-        agent_id = active_bot.channel_to_agent.get(chan_id)
+        agent_id = bot_instance.channel_to_agent.get(chan_id)
     if agent_id:
         ip, du = await ledger.get_balance_async(agent_id)
         if ip <= 0 or du <= 0:
@@ -675,7 +681,8 @@ async def slash_stats(interaction: Any) -> None:
 @bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
-    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
     await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "pause"}))
     await interaction.response.send_message("pause", ephemeral=True)
 
@@ -683,7 +690,8 @@ async def slash_pause(interaction: Any) -> None:
 @bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
-    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
     await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "resume"}))
     await interaction.response.send_message("resume", ephemeral=True)
 
@@ -691,7 +699,8 @@ async def slash_resume(interaction: Any) -> None:
 @bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
-    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
     await ctx.get_event_queue().put(
         SimulationEvent(type="control", data={"command": "set_speed", "value": value})
     )
@@ -708,7 +717,8 @@ async def slash_speed(interaction: Any, value: float) -> None:
 @bot.tree.command(name="kb")
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
-    ctx = active_bot.context if active_bot is not None else DEFAULT_CONTEXT
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
     await ctx.get_event_queue().put(
         SimulationEvent(
             type="control",
@@ -726,10 +736,11 @@ async def slash_kb(interaction: Any, text: str) -> None:
 async def slash_propose(interaction: Any, text: str) -> None:
     """Propose a law via the dashboard API."""
     agent_id = None
-    if active_bot is not None:
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
         channel = getattr(interaction, "channel", None)
         chan_id = getattr(channel, "id", None)
-        agent_id = active_bot.channel_to_agent.get(chan_id)
+        agent_id = bot_instance.channel_to_agent.get(chan_id)
     if not agent_id:
         await interaction.response.send_message("Unknown channel", ephemeral=True)
         return
@@ -753,10 +764,11 @@ async def slash_propose(interaction: Any, text: str) -> None:
 async def slash_propose_law(interaction: Any, text: str) -> None:
     """Propose a law using the governance service."""
     agent_id = None
-    if active_bot is not None:
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
         channel = getattr(interaction, "channel", None)
         chan_id = getattr(channel, "id", None)
-        agent_id = active_bot.channel_to_agent.get(chan_id)
+        agent_id = bot_instance.channel_to_agent.get(chan_id)
     if not agent_id:
         await interaction.response.send_message("Unknown channel", ephemeral=True)
         return
@@ -783,10 +795,11 @@ async def slash_propose_law(interaction: Any, text: str) -> None:
 async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     """Cast a manual vote on a proposal via the governance service."""
     agent_id = None
-    if active_bot is not None:
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
         channel = getattr(interaction, "channel", None)
         chan_id = getattr(channel, "id", None)
-        agent_id = active_bot.channel_to_agent.get(chan_id)
+        agent_id = bot_instance.channel_to_agent.get(chan_id)
     if not agent_id:
         await interaction.response.send_message("Unknown channel", ephemeral=True)
         return

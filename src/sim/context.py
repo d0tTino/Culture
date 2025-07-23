@@ -17,6 +17,7 @@ class SimulationContext:
             "speed": 1.0,
             "semantic_manager": None,
             "simulation": None,
+            "discord_bot": None,
         }
     )
     message_queue: asyncio.Queue[Any] = field(default_factory=lambda: asyncio.Queue(maxsize=1000))
