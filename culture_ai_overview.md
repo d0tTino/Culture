@@ -33,6 +33,11 @@ Create a dynamic environment where AI agents can evolve, develop unique personal
 - Python 3.11+
 - DSPy, Ollama, Weaviate, Docker, Pytest, Ruff & MyPy
 
+Culture can also leverage vLLM for local model serving. See
+[README.md](README.md#starting-the-vllm-server) and
+[docs/runbook.md](docs/runbook.md#starting-the-vllm-server) for instructions on
+launching `scripts/start_vllm.sh` and switching from Ollama.
+
 ### Current Focus (Mid-May 2025)
 - Refining agent architecture and state
 - Developing/testing DSPy programs for cognition

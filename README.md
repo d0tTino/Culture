@@ -822,11 +822,17 @@ Metrics include `llm_latency_ms`, `llm_calls_total`, `knowledge_board_size`, and
 check the latest values with the `!stats` Discord command.
 
 For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
-When running against a local vLLM server, set `LLM_API_BASE` to its base URL.
+When running against a local vLLM server, set `VLLM_API_BASE` or `LLM_API_BASE` to its base URL.
 
 ### Starting the vLLM Server
 `scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API with sensible defaults.
-Run it from the project root, optionally overriding the model or port:
+Set the following environment variables to customize the launch:
+
+- `VLLM_MODEL` – Hugging Face model name (defaults to `mistralai/Mistral-7B-Instruct-v0.2`)
+- `VLLM_PORT` – port for the server (default `8001`)
+- `VLLM_SWAP_SPACE` – swap space in GB (default `16`)
+
+Run the script from the project root, overriding values as needed:
 
 ```bash
 VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
@@ -835,7 +841,8 @@ VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vll
 After the server is running, point the application to it:
 
 ```bash
-export LLM_API_BASE="http://localhost:$VLLM_PORT"
+export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
 ```
 
 ### Walking Vertical Slice

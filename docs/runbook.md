@@ -12,16 +12,8 @@ This runbook outlines routine operations for working with Culture.ai.
    ```bash
    ollama pull mistral:latest
    ```
-   Alternatively, start a vLLM server with swap space enabled to avoid
-   out-of-memory errors when running many agents. The helper script
-   `start_vllm.sh` launches the server and you can point the application to it:
-   ```bash
-   # Optionally override the model or port used by vLLM (defaults to port 8001)
-   VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
-   scripts/start_vllm.sh
-   export VLLM_API_BASE="http://localhost:$VLLM_PORT"
-   # When set, the application uses the vLLM OpenAI-compatible endpoint
-   ```
+   To use vLLM instead, follow the
+   [Starting the vLLM Server](#starting-the-vllm-server) section below.
 4. (Optional) Start the vector store:
    ```bash
    docker compose up -d
@@ -49,6 +41,25 @@ This runbook outlines routine operations for working with Culture.ai.
    ```bash
    zstd -d snapshot_100.json.zst -o snapshot_100.json
    ```
+
+## Starting the vLLM Server
+`scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API. Set these
+environment variables as needed:
+
+- `VLLM_MODEL` – model name to load (defaults to `mistralai/Mistral-7B-Instruct-v0.2`)
+- `VLLM_PORT` – server port (default `8001`)
+- `VLLM_SWAP_SPACE` – swap space in GB (default `16`)
+
+Example:
+
+```bash
+VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
+export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
+```
+
+When `VLLM_API_BASE` is configured, the application prefers the vLLM endpoint over
+Ollama.
 
 ## Running Tests
 Run the full suite with coverage:
