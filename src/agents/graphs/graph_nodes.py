@@ -79,12 +79,7 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
     service = cast(MemoryService | None, state.get("memory_service"))
     if service is None:
-        vector = cast(MemoryRetriever | None, state.get("vector_store_manager"))
-        semantic = cast(Any, state.get("semantic_manager"))
-        if vector or semantic:
-            service = MemoryService(cast(Any, vector), cast(Any, semantic))
-        else:
-            service = None
+        return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
 
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
     if not service or not agent:
