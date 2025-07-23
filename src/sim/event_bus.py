@@ -41,6 +41,9 @@ class EventBus:
             except asyncio.QueueFull:  # pragma: no cover - defensive
                 pass
         self._queues.clear()
+        global _event_bus, _event_bus_loop
+        _event_bus = None
+        _event_bus_loop = None
 
 
 _event_bus: EventBus | None = None
