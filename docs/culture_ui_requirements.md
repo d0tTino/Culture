@@ -105,3 +105,19 @@ await registerWidgetBackend({
 
 The backend exposes REST endpoints for listing available memory snapshot steps and retrieving snapshot data.
 Use `GET /api/memory_snapshots` to list the latest steps and `GET /api/memory_snapshots/{step}` to fetch a specific snapshot.
+
+## Setup
+
+Install dependencies and run the development server:
+
+```bash
+pnpm install
+pnpm --filter culture-ui dev
+```
+
+To execute the Playwright end-to-end tests:
+
+```bash
+pnpm --filter culture-ui build
+pnpm --filter culture-ui test:e2e
+```

@@ -341,6 +341,16 @@ Adjusts the simulation tick speed.
 ```
 Creates a new entry on the shared Knowledge Board.
 
+```text
+/propose_law Agents must document major decisions
+```
+Proposes a new law and triggers an on-chain vote.
+
+```text
+/vote "Agents must document major decisions" true
+```
+Casts a yes/no vote on the given proposal.
+
 See `/status` and `/stats` for ephemeral information about agent resources and
 latency.
 

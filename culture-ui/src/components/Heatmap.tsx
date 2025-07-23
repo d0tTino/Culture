@@ -1,4 +1,3 @@
-import React from 'react'
 
 export interface HeatmapProps {
   data: Record<string, number>
