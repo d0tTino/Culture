@@ -401,7 +401,7 @@ UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture
 ## Extensions and Plug-ins
 
 Culture exposes simple hooks for registering dashboard widgets and agent behaviors.
-See [docs/plugins.md](docs/plugins.md) for details.
+See [docs/plugins.md](docs/plugins.md) for details. The plug-in quickstart is in [docs/plugin_guide.md](docs/plugin_guide.md).
 
 ## Project Structure
 
