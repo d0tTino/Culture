@@ -1,12 +1,16 @@
 import asyncio
 import socket
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 import pytest
+
+httpx_ws = pytest.importorskip("httpx_ws")
 import uvicorn
 import websockets
+
+from src.sim import event_bus
 
 pytest.importorskip("fastapi")
 import fastapi
@@ -54,7 +58,12 @@ class SimpleESR:
     def __init__(self, gen: AsyncGenerator[dict[str, str], None]) -> None:
         self.gen = gen
 
-    async def __call__(self, scope: dict, receive: callable, send: callable) -> None:
+    async def __call__(
+        self,
+        scope: dict[str, Any],
+        receive: Callable[..., Any],
+        send: Callable[[dict[str, Any]], Any],
+    ) -> None:
         await send(
             {
                 "type": "http.response.start",
@@ -148,3 +157,53 @@ async def test_ws_events_async_client(monkeypatch: pytest.MonkeyPatch) -> None:
     assert event.data["agent_id"] == "agent1"
     server.should_exit = True
     await task
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_stream_events_emit_event_async_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    bus = event_bus.EventBus()
+    monkeypatch.setattr(http_app, "get_event_bus", lambda: bus)
+    monkeypatch.setattr(db, "get_event_bus", lambda: bus)
+
+    transport = httpx.ASGITransport(app=http_app.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+
+        async def _read() -> str | None:
+            async with client.stream("GET", "/stream/events") as resp:
+                data_line = None
+                async for line in resp.aiter_lines():
+                    if line.startswith("data: "):
+                        data_line = line.removeprefix("data: ")
+                        break
+                return data_line
+
+        read_task = asyncio.create_task(_read())
+        await asyncio.sleep(0.05)
+        await db.emit_event(db.SimulationEvent(type="tick", data={"step": 1}))
+        bus.shutdown()
+        data_line = await read_task
+
+    assert data_line is not None
+    event = db.SimulationEvent.model_validate_json(data_line)
+    assert event.data is not None
+    assert event.data["step"] == 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_ws_events_emit_event_async_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    bus = event_bus.EventBus()
+    monkeypatch.setattr(http_app, "get_event_bus", lambda: bus)
+    monkeypatch.setattr(db, "get_event_bus", lambda: bus)
+
+    transport = httpx_ws.transport.ASGIWebSocketTransport(app=http_app.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx_ws.aconnect_ws("ws://test/ws/events", client) as ws:
+            await db.emit_event(db.SimulationEvent(type="tick", data={"step": 2}))
+            bus.shutdown()
+            data = await ws.receive_text()
+
+    event = db.SimulationEvent.model_validate_json(data)
+    assert event.data is not None
+    assert event.data["step"] == 2
