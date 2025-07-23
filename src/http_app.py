@@ -13,6 +13,8 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     app,
 )
+
+__all__ = ["app", "generate_events", "main", "parse_args"]
 from src.sim.event_bus import get_event_bus
 
 
