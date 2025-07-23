@@ -48,7 +48,7 @@ def load_scenario(value: str) -> tuple[str, int | None, int | None]:
     path = Path(value)
     if path.is_file():
         try:  # Try full YAML parsing if PyYAML is available
-            import yaml  # type: ignore
+            import yaml
 
             content = yaml.safe_load(path.read_text())
         except Exception:  # pragma: no cover - fallback

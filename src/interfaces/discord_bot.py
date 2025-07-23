@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import typing
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, cast
 
 import httpx
 from typing_extensions import Self
@@ -155,7 +155,7 @@ class SimulationDiscordBot:
         # Set up event handlers for all clients
         for _token, client in self.clients.items():
 
-            @client.event  # type: ignore[misc]
+            @client.event
             async def on_ready(client: Any = client) -> None:
                 """Event handler that fires when the bot connects to Discord."""
                 self.is_ready = True
@@ -184,7 +184,7 @@ class SimulationDiscordBot:
                 else:
                     logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
-            @client.event  # type: ignore[misc]
+            @client.event
             async def on_message(message: Any, client: Any = client) -> None:
                 if getattr(message, "author", None) == client.user:
                     return
@@ -624,14 +624,12 @@ def get_kb_size() -> int:
     return metrics.get_kb_size()
 
 
-@typing.no_type_check
 @bot.command(name="say")
 async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
     await ctx.send(f"Simulated message received: {message}")
 
 
-@typing.no_type_check
 @bot.command(name="stats")
 async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
@@ -639,7 +637,6 @@ async def stats(ctx: Any) -> None:
     await ctx.send(stats_text)
 
 
-@typing.no_type_check
 @bot.tree.command(name="status")
 async def slash_status(interaction: Any) -> None:
     """Return IP/DU balance for the mapped agent."""
@@ -658,7 +655,6 @@ async def slash_status(interaction: Any) -> None:
         await interaction.response.send_message("Unknown channel", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="stats")
 async def slash_stats(interaction: Any) -> None:
     """Return runtime metrics if the agent has resources."""
@@ -676,7 +672,6 @@ async def slash_stats(interaction: Any) -> None:
     await interaction.response.send_message(stats_text, ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
@@ -685,7 +680,6 @@ async def slash_pause(interaction: Any) -> None:
     await interaction.response.send_message("pause", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
@@ -694,7 +688,6 @@ async def slash_resume(interaction: Any) -> None:
     await interaction.response.send_message("resume", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
@@ -705,14 +698,13 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
     await interaction.response.send_message(f"speed {value}", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="speed")
 async def slash_speed(interaction: Any, value: float) -> None:
     """Alias for ``set_speed``."""
-    await slash_set_speed.callback(interaction, value=value)
+    callback = cast(Callable[[Any, float], Awaitable[None]], slash_set_speed.callback)
+    await callback(interaction, value)
 
 
-@typing.no_type_check
 @bot.tree.command(name="kb")
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
@@ -730,7 +722,6 @@ async def slash_kb(interaction: Any, text: str) -> None:
     await interaction.response.send_message("KB entry created", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="propose")
 async def slash_propose(interaction: Any, text: str) -> None:
     """Propose a law via the dashboard API."""
@@ -752,12 +743,12 @@ async def slash_propose(interaction: Any, text: str) -> None:
             resp = await client.post("http://localhost:8000/api/propose", json=payload)
             data = json.loads(resp.text)
             approved = data.get("approved", False)
+
     except Exception:
         approved = False
     await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="propose_law")
 async def slash_propose_law(interaction: Any, text: str) -> None:
     """Propose a law using the governance service."""
@@ -788,7 +779,6 @@ async def slash_propose_law(interaction: Any, text: str) -> None:
     await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
 
 
-@typing.no_type_check
 @bot.tree.command(name="vote")
 async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     """Cast a manual vote on a proposal via the governance service."""

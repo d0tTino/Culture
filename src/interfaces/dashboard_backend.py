@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Final, cast
 
 from pydantic import BaseModel
 
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Default simulation context used by module-level APIs
 DEFAULT_CONTEXT = SimulationContext()
+
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -206,15 +207,15 @@ async def stream_messages(request: Request) -> Response:
                 yield {"event": "error", "data": json.dumps({"error": str(e)})}
 
     generator: AsyncGenerator[dict[str, Any], None] = event_generator()
-    return EventSourceResponse(generator)  # type: ignore[no-any-return]
+    return cast(Response, EventSourceResponse(generator))
 
 
 @app.get(
-    "/api/map",
+    "/api/map/stream",
     response_class=EventSourceResponse,
     response_model=None,
 )
-async def api_map(request: Request) -> Response:
+async def stream_map(request: Request) -> Response:
     """Stream map_change events as Server-Sent Events."""
 
     bus = get_event_bus()
@@ -234,7 +235,15 @@ async def api_map(request: Request) -> Response:
             bus.unsubscribe(queue)
 
     generator: AsyncGenerator[dict[str, Any], None] = event_generator()
-    return EventSourceResponse(generator)  # type: ignore[no-any-return]
+    return cast(Response, EventSourceResponse(generator))
+
+
+@app.get("/api/map")
+async def api_map() -> Response:
+    """Return the latest world map state."""
+    sim = SIM_STATE.get("simulation")
+    world_map = sim.world_map.to_dict() if sim is not None else {}
+    return JSONResponse({"world_map": world_map})
 
 
 @app.get("/health")
@@ -266,7 +275,7 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
             summaries = manager.get_semantic_summaries(agent_id, limit=limit)
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("Failed to get semantic summaries for %s", agent_id, exc_info=exc)
-            return JSONResponse({"error": "summary retrieval failed"}, status_code=500)
+            return JSONResponse(SEMANTIC_SUMMARIES_ERROR, status_code=500)
     else:
         summaries = []
     return JSONResponse({"summaries": summaries})
@@ -591,4 +600,5 @@ __all__ = [
     "get_quests_api",
     "message_sse_queue",
     "register_widget",
+    "stream_map",
 ]
