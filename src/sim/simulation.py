@@ -825,7 +825,7 @@ class Simulation:
         await self.event_kernel.emit_environment_event(event)
 
     async def _generate_quest_event(self: Self) -> None:
-        quest = generate_quest("Create a new quest for the agents")
+        quest = await generate_quest("Create a new quest for the agents")
         if quest is None:
             return
         event = {

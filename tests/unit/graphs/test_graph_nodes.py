@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -107,7 +108,7 @@ async def test_generate_thought_and_message_node(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(
         "src.agents.graphs.graph_nodes.generate_structured_output_from_intent",
-        lambda intent, prompt, schema: dummy,
+        AsyncMock(return_value=dummy),
     )
 
     out = await generate_thought_and_message_node(cast(dict[str, object], {}))
@@ -129,7 +130,9 @@ async def test_finalize_message_agent_node_variants() -> None:
         message_recipient_id="b",
         action_intent="propose",
     )
-    out2 = await finalize_message_agent_node(cast(dict[str, object], {"state": agent_state, "structured_output": dummy}))
+    out2 = await finalize_message_agent_node(
+        cast(dict[str, object], {"state": agent_state, "structured_output": dummy})
+    )
     assert out2["message_content"] == "hi"
     assert out2["is_targeted"] is True
 

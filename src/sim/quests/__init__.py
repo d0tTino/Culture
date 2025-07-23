@@ -20,13 +20,13 @@ class Quest(BaseModel):
 
 QUESTS: list[Quest] = []
 
-_quest_task: asyncio.Task | None = None
+_quest_task: asyncio.Task[None] | None = None
 
 
 async def _quest_loop(interval: float) -> None:
     while True:
         try:
-            generate_quest("Create a new quest for the agents")
+            await generate_quest("Create a new quest for the agents")
         except Exception:  # pragma: no cover - defensive
             pass
         await asyncio.sleep(interval)
@@ -53,7 +53,7 @@ async def stop_quest_generation() -> None:
         _quest_task = None
 
 
-def generate_quest(
+async def generate_quest(
     prompt: str,
     *,
     model: str = "mistral:latest",
@@ -61,7 +61,7 @@ def generate_quest(
 ) -> Quest | None:
     """Generate a quest using the LLM client and store it."""
 
-    result = llm_client.generate_structured_output(
+    result = await llm_client.async_generate_structured_output(
         prompt,
         Quest,
         model=model,

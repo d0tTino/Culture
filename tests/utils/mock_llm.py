@@ -7,7 +7,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, Optional, cast
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +91,10 @@ def MockLLM(
         patch(
             "src.infra.llm_client.generate_structured_output",
             side_effect=mock_generate_structured_output,
+        ),
+        patch(
+            "src.infra.llm_client.async_generate_structured_output",
+            AsyncMock(side_effect=mock_generate_structured_output),
         ),
         patch("src.infra.llm_client.generate_response", side_effect=mock_generate_response),
         patch("src.infra.llm_client.client.chat", side_effect=mock_ollama_chat),
