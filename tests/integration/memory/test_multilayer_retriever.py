@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("chromadb")
 
-from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
+from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from tests.unit.memory.test_semantic_memory_manager import DummyDriver
@@ -20,19 +20,22 @@ async def test_multilayer_retrieval_combines_layers(chroma_test_dir: Path) -> No
     )
     driver = DummyDriver()
     semantic = SemanticMemoryManager(vector, driver)
-    retriever = MultiLayerRetriever(vector, semantic)
+    service = MemoryService(vector, semantic)
 
     vector.add_memory("agent", 1, "thought", "cat", memory_type="raw")
     vector.add_memory("agent", 2, "thought", "dog", memory_type="raw")
 
-    await retriever.retrieve_and_update_semantic("agent", k=2)
+    await service.retrieve_episodic_and_update_semantic("agent", k=2)
 
     vector.add_memory("agent", 3, "thought", "bird", memory_type="raw")
     semantic.group_memories_by_topic("agent", num_topics=2)
 
     episodic_only = await vector.aretrieve_relevant_memories("agent", "cat", k=5)
-    combined = await retriever.retrieve("agent", "cat", k=5)
-    assert len(combined) >= len(episodic_only)
+    episodic, semantic_res = await service.get_context_pipeline(
+        "agent", query="cat", k=5, semantic_limit=5
+    )
+    combined_len = len(episodic) + len(semantic_res)
+    assert combined_len >= len(episodic_only)
 
 
 @pytest.mark.integration
@@ -45,13 +48,13 @@ async def test_blend_with_recent_semantic(chroma_test_dir: Path) -> None:
     )
     driver = DummyDriver()
     semantic = SemanticMemoryManager(vector, driver)
-    retriever = MultiLayerRetriever(vector, semantic)
+    service = MemoryService(vector, semantic)
 
     vector.add_memory("agent", 1, "thought", "cat", memory_type="raw")
     vector.add_memory("agent", 2, "thought", "dog", memory_type="raw")
 
-    await retriever.run_semantic_job("agent")
+    await service.run_semantic_job("agent")
 
-    blended = retriever.blend_with_recent_semantic("agent", "bird", limit=1)
+    blended = service.blend_with_recent_semantic("agent", "bird", limit=1)
     assert "bird" in blended
     assert "cat" in blended or "dog" in blended

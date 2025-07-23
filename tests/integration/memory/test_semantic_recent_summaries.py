@@ -4,6 +4,7 @@ import pytest
 
 pytest.importorskip("chromadb")
 
+from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from tests.unit.memory.test_semantic_memory_manager import DummyDriver
@@ -20,6 +21,7 @@ async def test_nightly_job_and_retrieval(chroma_test_dir: Path) -> None:
     )
     driver = DummyDriver()
     manager = SemanticMemoryManager(vector, driver)
+    service = MemoryService(vector, manager)
 
     vector.add_memory("agent", 1, "thought", "first")
     vector.add_memory("agent", 2, "thought", "second")
@@ -27,7 +29,7 @@ async def test_nightly_job_and_retrieval(chroma_test_dir: Path) -> None:
     await manager.run_nightly_job("agent")
 
     assert driver.store[0]["agent"] == "agent"
-    recent = manager.get_recent_summaries("agent", limit=1)
+    recent = service.get_recent_semantic_summaries("agent", limit=1)
     assert recent == ["first\nsecond"]
-    blended = manager.blend_episodic_and_semantic("agent", "third", limit=1)
+    blended = service.blend_with_recent_semantic("agent", "third", limit=1)
     assert "third" in blended and "first" in blended
