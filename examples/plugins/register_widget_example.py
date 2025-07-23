@@ -1,11 +1,13 @@
 """Example plug-in registering a custom widget with the Culture UI."""
 
+import asyncio
+
 from src.extensions import register_widget_backend
 
 
-def main() -> None:
+async def main() -> None:
     """Register a widget named ``ExampleWidget`` using the backend API."""
-    register_widget_backend(
+    await register_widget_backend(
         name="ExampleWidget",
         script_url="http://localhost:5173/example.js",
     )
@@ -13,4 +15,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover - example script
-    main()
+    asyncio.run(main())

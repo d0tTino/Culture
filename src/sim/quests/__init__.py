@@ -33,7 +33,14 @@ async def _quest_loop(interval: float) -> None:
 
 
 def start_quest_generation(interval: float = 60.0) -> None:
-    """Start background quest generation."""
+    """Start periodic quest generation in the background.
+
+    Parameters
+    ----------
+    interval:
+        Number of seconds between quest generations. If ``interval`` is
+        less than or equal to zero the generator is not started.
+    """
     global _quest_task
     if interval <= 0:
         return
@@ -42,7 +49,7 @@ def start_quest_generation(interval: float = 60.0) -> None:
 
 
 async def stop_quest_generation() -> None:
-    """Stop the background quest generator."""
+    """Stop the running background quest generator task."""
     global _quest_task
     if _quest_task:
         _quest_task.cancel()
@@ -59,7 +66,23 @@ async def generate_quest(
     model: str = "mistral:latest",
     temperature: float = 0.2,
 ) -> Quest | None:
-    """Generate a quest using the LLM client and store it."""
+    """Generate a quest using the LLM client and persist it.
+
+    Parameters
+    ----------
+    prompt:
+        Natural language instruction describing the quest to create.
+    model:
+        Name of the model used to generate the quest.
+    temperature:
+        Sampling temperature for the model.
+
+    Returns
+    -------
+    Quest | None
+        The generated :class:`Quest` instance or ``None`` if generation
+        fails.
+    """
 
     result = await llm_client.async_generate_structured_output(
         prompt,
@@ -94,7 +117,11 @@ async def generate_quest(
 
 
 def get_quests() -> list[Quest]:
-    """Return the list of generated quests."""
+    """Return the list of generated quests.
+
+    Quests are loaded from the ledger if possible. If ledger access fails,
+    the in-memory list of quests is returned instead.
+    """
 
     try:
         rows = ledger.get_quests()

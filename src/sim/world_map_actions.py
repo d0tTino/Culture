@@ -24,7 +24,27 @@ async def process_map_action(
     current_state: AgentState,
     map_action: dict[str, Any],
 ) -> None:
-    """Execute a world map action for the given agent."""
+    """Handle a map action for an agent and update the simulation state.
+
+    Supported actions include ``move``, ``gather`` and ``build``. The
+    function applies the requested action to the ``world_map`` and updates
+    the agent's ``current_state`` accordingly. A dashboard event is emitted
+    and the agent's updated state is persisted.
+
+    Parameters
+    ----------
+    sim:
+        The active :class:`~src.sim.simulation.Simulation` instance.
+    agent_index:
+        Index of the agent within ``sim.agents`` whose state should be
+        updated.
+    agent_id:
+        Unique identifier for the agent performing the action.
+    current_state:
+        The mutable state of the agent prior to applying the action.
+    map_action:
+        Dictionary describing the requested action and its parameters.
+    """
     action_type = map_action.get("action")
     details: dict[str, Any] = {}
     if action_type == "move":
