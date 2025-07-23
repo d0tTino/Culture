@@ -18,6 +18,12 @@ class DummyManager:
         return self.summaries[:limit]
 
 
+class DummyResponse:
+    def __init__(self, content: object, status_code: int = 200, **_: object) -> None:
+        self.body = json.dumps(content).encode("utf-8")
+        self.status_code = status_code
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_semantic_summaries_with_manager(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -48,4 +54,15 @@ async def test_get_semantic_summaries_error(monkeypatch: pytest.MonkeyPatch) -> 
 
     resp = await db.get_semantic_summaries("agent")
     data = json.loads(resp.body)
-    assert data["error"] == "summary retrieval failed"
+    assert data == db.SEMANTIC_SUMMARIES_ERROR
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_semantic_summaries_error_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = DummyManager(raise_exc=True)
+    monkeypatch.setitem(db.SIM_STATE, "semantic_manager", manager)
+    monkeypatch.setattr(db, "JSONResponse", DummyResponse)
+
+    resp = await db.get_semantic_summaries("agent")
+    assert resp.status_code == 500

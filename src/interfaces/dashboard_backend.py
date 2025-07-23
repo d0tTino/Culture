@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Final
 
 from pydantic import BaseModel
 
@@ -22,6 +22,9 @@ from .widget_registry import WidgetRegistry
 SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "snapshots"
 
 logger = logging.getLogger(__name__)
+
+# JSON response body for semantic summary retrieval errors
+SEMANTIC_SUMMARIES_ERROR: Final[dict[str, str]] = {"error": "summary retrieval failed"}
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -280,7 +283,7 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
             summaries = manager.get_semantic_summaries(agent_id, limit=limit)
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("Failed to get semantic summaries for %s", agent_id, exc_info=exc)
-            return JSONResponse({"error": "summary retrieval failed"}, status_code=500)
+            return JSONResponse(SEMANTIC_SUMMARIES_ERROR, status_code=500)
     else:
         summaries = []
     return JSONResponse({"summaries": summaries})
