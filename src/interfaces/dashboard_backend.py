@@ -227,11 +227,11 @@ async def stream_messages(request: Request) -> Response:
 
 
 @app.get(
-    "/api/map",
+    "/api/map/stream",
     response_class=EventSourceResponse,
     response_model=None,
 )
-async def api_map(request: Request) -> Response:
+async def stream_map(request: Request) -> Response:
     """Stream map_change events as Server-Sent Events."""
 
     bus = get_event_bus()
@@ -252,6 +252,14 @@ async def api_map(request: Request) -> Response:
 
     generator: AsyncGenerator[dict[str, Any], None] = event_generator()
     return EventSourceResponse(generator)  # type: ignore[no-any-return]
+
+
+@app.get("/api/map")
+async def api_map() -> Response:
+    """Return the latest world map state."""
+    sim = SIM_STATE.get("simulation")
+    world_map = sim.world_map.to_dict() if sim is not None else {}
+    return JSONResponse({"world_map": world_map})
 
 
 @app.get("/health")
@@ -589,9 +597,9 @@ __all__ = [
     "api_get_laws",
     "api_get_proposals",
     "api_get_votes",
+    "api_map",
     "api_memory_snapshot",
     "api_memory_snapshots",
-    "api_map",
     "api_propose_law",
     "api_token_balances",
     "api_vote",
@@ -605,4 +613,5 @@ __all__ = [
     "get_quests_api",
     "message_sse_queue",
     "register_widget",
+    "stream_map",
 ]
