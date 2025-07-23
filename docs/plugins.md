@@ -169,3 +169,20 @@ from src.extensions import load_plugins
 
 await load_plugins()
 ```
+
+## Installing the Sample Plug-in
+
+For a minimal demonstration look at `examples/plugins/sample_plugin`. Install it
+in editable mode:
+
+```bash
+pip install -e examples/plugins/sample_plugin
+```
+
+Load the plug-in at startup so Culture can register its hooks:
+
+```python
+from src.extensions import load_plugins
+
+await load_plugins()
+```
