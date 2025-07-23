@@ -169,6 +169,10 @@ delete_collection() # Drop the entire class/collection
 
 The `SemanticMemoryManager` (`src/agents/memory/semantic_memory_manager.py`) consolidates episodic memories into higher-level summaries stored in a Neo4j database. This allows agents to recall key themes and topics beyond what fits in the vector store. The manager groups memories by topic and provides retrieval APIs used alongside episodic memory search.
 
+#### MultiLayerRetriever
+
+The `MultiLayerRetriever` class (`src/agents/memory/multi_layer_retriever.py`) coordinates access to both the episodic vector store and the semantic memory database. It accepts a `ChromaVectorStoreManager` instance for episodic retrieval and a `SemanticMemoryManager` for semantic summaries. During retrieval, it merges results from `aretrieve_relevant_memories()` with those from `retrieve_context_with_scores()` and sorts by relevance. Methods like `blend_with_recent_semantic()` mix new episodic summaries with recent semantic context, while `run_semantic_job()` updates long-term summaries asynchronously. This layering ensures agents see immediate experiences alongside consolidated themes.
+
 #### Memory Hierarchy
 
 The memory system implements a hierarchical organization:
