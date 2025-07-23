@@ -7,5 +7,6 @@ export { default as EventConsole } from './EventConsole'
 export { default as Storyboard } from './Storyboard'
 export { default as AgentTimeline } from './AgentTimeline'
 export { default as LiveMap } from './LiveMap'
+export { default as MapGrid } from './MapGrid'
 
 
