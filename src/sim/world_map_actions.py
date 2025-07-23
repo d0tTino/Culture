@@ -5,6 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from src.infra import config
+from src.infra.ledger import log_reward, run_auction
 from src.interfaces.dashboard_backend import emit_map_change_event
 from src.sim.world_map import ResourceToken, StructureType
 
@@ -38,30 +39,18 @@ async def process_map_action(
             details = {"position": pos}
             start_ip = current_state.ip
             if config.MAP_MOVE_DU_COST > 0:
-                try:
-                    from src.infra.ledger import ledger
-
-                    aid = ledger.open_auction("move")
-                    ledger.place_bid(aid, agent_id, config.MAP_MOVE_DU_COST)
-                    ledger.resolve_auction(aid)
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger auction failed", exc_info=True)
+                run_auction("move", agent_id, config.MAP_MOVE_DU_COST)
                 current_state.du -= config.MAP_MOVE_DU_COST
             start_du = current_state.du
             current_state.ip -= config.MAP_MOVE_IP_COST
             current_state.ip += config.MAP_MOVE_IP_REWARD
             current_state.du += config.MAP_MOVE_DU_REWARD
-            try:
-                from src.infra.ledger import ledger
-
-                ledger.log_change(
-                    agent_id,
-                    current_state.ip - start_ip,
-                    current_state.du - start_du,
-                    "move",
-                )
-            except Exception:  # pragma: no cover - optional
-                logger.debug("Ledger logging failed", exc_info=True)
+            log_reward(
+                agent_id,
+                current_state.ip - start_ip,
+                current_state.du - start_du,
+                "move",
+            )
     elif action_type == "gather":
         res = map_action.get("resource")
         success = False
@@ -75,30 +64,18 @@ async def process_map_action(
             if success:
                 start_ip = current_state.ip
                 if config.MAP_GATHER_DU_COST > 0:
-                    try:
-                        from src.infra.ledger import ledger
-
-                        aid = ledger.open_auction("gather")
-                        ledger.place_bid(aid, agent_id, config.MAP_GATHER_DU_COST)
-                        ledger.resolve_auction(aid)
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger auction failed", exc_info=True)
+                    run_auction("gather", agent_id, config.MAP_GATHER_DU_COST)
                     current_state.du -= config.MAP_GATHER_DU_COST
                 start_du = current_state.du
                 current_state.ip -= config.MAP_GATHER_IP_COST
                 current_state.ip += config.MAP_GATHER_IP_REWARD
                 current_state.du += config.MAP_GATHER_DU_REWARD
-                try:
-                    from src.infra.ledger import ledger
-
-                    ledger.log_change(
-                        agent_id,
-                        current_state.ip - start_ip,
-                        current_state.du - start_du,
-                        "gather",
-                    )
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                log_reward(
+                    agent_id,
+                    current_state.ip - start_ip,
+                    current_state.du - start_du,
+                    "gather",
+                )
     elif action_type == "build":
         struct = map_action.get("structure")
         success = False
@@ -112,30 +89,18 @@ async def process_map_action(
             if success:
                 start_ip = current_state.ip
                 if config.MAP_BUILD_DU_COST > 0:
-                    try:
-                        from src.infra.ledger import ledger
-
-                        aid = ledger.open_auction("build")
-                        ledger.place_bid(aid, agent_id, config.MAP_BUILD_DU_COST)
-                        ledger.resolve_auction(aid)
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger auction failed", exc_info=True)
+                    run_auction("build", agent_id, config.MAP_BUILD_DU_COST)
                     current_state.du -= config.MAP_BUILD_DU_COST
                 start_du = current_state.du
                 current_state.ip -= config.MAP_BUILD_IP_COST
                 current_state.ip += config.MAP_BUILD_IP_REWARD
                 current_state.du += config.MAP_BUILD_DU_REWARD
-                try:
-                    from src.infra.ledger import ledger
-
-                    ledger.log_change(
-                        agent_id,
-                        current_state.ip - start_ip,
-                        current_state.du - start_du,
-                        "build",
-                    )
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                log_reward(
+                    agent_id,
+                    current_state.ip - start_ip,
+                    current_state.du - start_du,
+                    "build",
+                )
         else:
             details = {}
 

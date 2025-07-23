@@ -13,6 +13,7 @@ class DummyNeo4j:
 
 sys.modules.setdefault("neo4j", DummyNeo4j())
 
+from src.infra import config
 from src.infra.ledger import Ledger
 from src.sim.simulation import Simulation
 from src.sim.world_map import ResourceToken, StructureType
@@ -68,6 +69,27 @@ async def test_move_action_updates_position_and_ledger(
     assert sim_obj.world_map.agent_positions[agent.agent_id] == (1, 0)
     rows = ledger.conn.execute("SELECT reason FROM transactions").fetchall()
     assert rows == [("move",)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_move_action_with_du_cost_triggers_auction(
+    sim: tuple[Simulation, Ledger, DummyAgent],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sim_obj, ledger, agent = sim
+    monkeypatch.setattr(config, "MAP_MOVE_DU_COST", 1.0)
+
+    await process_map_action(
+        sim_obj,
+        0,
+        agent.agent_id,
+        agent.state,
+        {"action": "move", "dx": 1, "dy": 0},
+    )
+
+    rows = ledger.conn.execute("SELECT reason FROM transactions").fetchall()
+    assert rows == [("stake",), ("move",)]
 
 
 @pytest.mark.asyncio

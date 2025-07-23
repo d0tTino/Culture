@@ -666,7 +666,30 @@ class Ledger:
 
 ledger = Ledger()
 
+
+def run_auction(item: str, agent_id: str, amount: float) -> None:
+    """Safely run an auction for ``item`` with a single bid from ``agent_id``."""
+    if amount <= 0:
+        return
+    try:  # pragma: no cover - optional
+        aid = ledger.open_auction(item)
+        ledger.place_bid(aid, agent_id, amount)
+        ledger.resolve_auction(aid)
+    except Exception:  # pragma: no cover - optional
+        logging.getLogger(__name__).debug("Ledger auction failed", exc_info=True)
+
+
+def log_reward(agent_id: str, delta_ip: float, delta_du: float, reason: str) -> None:
+    """Safely log a reward or penalty to the ledger."""
+    try:  # pragma: no cover - optional
+        ledger.log_change(agent_id, delta_ip, delta_du, reason)
+    except Exception:  # pragma: no cover - optional
+        logging.getLogger(__name__).debug("Ledger logging failed", exc_info=True)
+
+
 __all__ = [
     "Ledger",
     "ledger",
+    "log_reward",
+    "run_auction",
 ]
