@@ -101,6 +101,58 @@ from src.extensions import load_plugins
 await load_plugins()
 ```
 
+## Step-by-Step Tutorial
+
+The following guide walks through creating, installing, and verifying a simple
+plug-in that registers both an agent behavior and a UI widget.
+
+1. **Create a package** with an entry point:
+
+   ```text
+   my_plugin/
+       __init__.py
+       pyproject.toml
+   ```
+
+2. **Implement the plug-in** in `my_plugin/__init__.py`:
+
+   ```python
+   from typing import Any
+   from src.extensions import PluginResult, register_agent_behavior
+
+   def greet(agent: Any, output: dict[str, Any]) -> None:
+       print(f"[MY_PLUGIN] {output}")
+
+   def setup() -> PluginResult:
+       register_agent_behavior(greet)
+       return {
+           "name": "MyWidget",
+           "script_url": "http://localhost:5173/my_widget.js",
+       }
+   ```
+
+3. **Declare the entry point** in `pyproject.toml`:
+
+   ```toml
+   [project.entry-points."culture.plugins"]
+   my_plugin = "my_plugin:setup"
+   ```
+
+4. **Install your plug-in** in editable mode and load it:
+
+   ```bash
+   pip install -e path/to/my_plugin
+   ```
+
+   ```python
+   from src.extensions import load_plugins
+   await load_plugins()
+   ```
+
+5. **Verify installation** by running Culture and observing the `[MY_PLUGIN]`
+   log message. The dashboard should also list `MyWidget` if the widget URL is
+   reachable.
+
 
 ## Installing the Example Plug-in
 
