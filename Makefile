@@ -12,6 +12,9 @@ ACTIVATE := .venv/bin/activate
 VERTICAL_SLICE := ./scripts/vertical_slice.sh
 endif
 
+SNAPSHOTS ?= snapshots
+OUTPUT ?= data/traces.jsonl
+
 .PHONY: local-slice
 local-slice:
 	@if [ -f "$(ACTIVATE)" ]; then \
@@ -21,4 +24,8 @@ local-slice:
 	        touch .venv/.deps_installed; \
 	    fi; \
 	fi; \
-	$(VERTICAL_SLICE)
+        $(VERTICAL_SLICE)
+
+.PHONY: dataset
+dataset:
+	python scripts/export_traces.py --snapshots $(SNAPSHOTS) --output $(OUTPUT)

@@ -48,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     src_group.add_argument("--events", help="JSON file containing event log")
     src_group.add_argument("--redpanda", action="store_true", help="Fetch events from Redpanda")
     parser.add_argument("-o", "--output", help="Output JSONL file (default: stdout)")
+    parser.add_argument("--agent", help="Only include events for this agent_id")
+    parser.add_argument("--start-step", type=int, help="First step to include (inclusive)")
+    parser.add_argument("--end-step", type=int, help="Last step to include (inclusive)")
     args = parser.parse_args(argv)
 
     if args.snapshots:
@@ -59,6 +62,14 @@ def main(argv: list[str] | None = None) -> int:
 
     out = open(args.output, "w", encoding="utf-8") if args.output else sys.stdout
     for item in iterator:
+        step = item.get("step")
+        if step is not None:
+            if args.start_step is not None and step < args.start_step:
+                continue
+            if args.end_step is not None and step > args.end_step:
+                continue
+        if args.agent and item.get("agent_id") != args.agent:
+            continue
         out.write(json.dumps(item))
         out.write("\n")
     if args.output:
