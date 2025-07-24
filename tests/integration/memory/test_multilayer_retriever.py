@@ -58,3 +58,38 @@ async def test_blend_with_recent_semantic(chroma_test_dir: Path) -> None:
     blended = service.blend_with_recent_semantic("agent", "bird", limit=1)
     assert "bird" in blended
     assert "cat" in blended or "dog" in blended
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.memory
+@pytest.mark.usefixtures("chroma_test_dir")
+async def test_hit_rate_with_semantic_summary(chroma_test_dir: Path) -> None:
+    vector = ChromaVectorStoreManager(
+        persist_directory=chroma_test_dir,
+        embedding_function=lambda t: [
+            [1.0 if "cat" in x else 0.0, 1.0 if "dog" in x else 0.0] for x in t
+        ],
+    )
+    driver = DummyDriver()
+    semantic = SemanticMemoryManager(vector, driver)
+    service = MemoryService(vector, semantic)
+
+    for i in range(8):
+        vector.add_memory("agent", i, "thought", f"cat memory {i}", memory_type="raw")
+    for i in range(2):
+        vector.add_memory("agent", 8 + i, "thought", f"dog memory {i}", memory_type="raw")
+
+    await service.run_semantic_job("agent")
+    semantic.group_memories_by_topic("agent", num_topics=2)
+
+    episodic, summaries = await service.get_context_pipeline(
+        "agent", query="cat", k=5, semantic_limit=1
+    )
+
+    total = len(episodic) + len(summaries)
+    relevant = sum("cat" in m.get("content", "") for m in episodic)
+    relevant += sum("cat" in s for s in summaries)
+    hit_rate = relevant / total if total else 0.0
+
+    assert hit_rate > 0.7
