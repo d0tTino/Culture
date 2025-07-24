@@ -98,3 +98,13 @@ output paths if needed:
 ```bash
 make dataset SNAPSHOTS=snapshots OUTPUT=data/traces.jsonl
 ```
+
+### Creating a JSONL Dataset
+Generate a dataset from saved snapshots using `export_traces.py`. This example
+writes the output to `data/traces.jsonl`:
+
+```bash
+python scripts/export_traces.py --snapshots snapshots/ --output data/traces.jsonl
+```
+
+Each line of `data/traces.jsonl` contains a single JSON object.
