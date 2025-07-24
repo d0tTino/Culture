@@ -16,10 +16,9 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 import httpx
 from typing_extensions import Self
 
-from src.governance.service import governance
 from src.infra import config
 from src.infra.ledger import ledger
-from src.interfaces import dashboard_backend, metrics
+from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
     DEFAULT_CONTEXT,
     AgentMessage,
@@ -748,7 +747,7 @@ async def slash_propose(interaction: Any, text: str) -> None:
     if ip <= 0 or du <= 0:
         await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
         return
-    payload = {"proposer_id": agent_id, "text": text}
+    payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post("http://localhost:8000/api/propose", json=payload)
@@ -761,8 +760,8 @@ async def slash_propose(interaction: Any, text: str) -> None:
 
 
 @bot.tree.command(name="propose_law")
-async def slash_propose_law(interaction: Any, text: str) -> None:
-    """Propose a law using the governance service."""
+async def slash_propose_law(interaction: Any, text: str, weights: str | None = None) -> None:
+    """Propose a law via the dashboard API."""
     agent_id = None
     bot_instance = get_active_bot()
     if bot_instance is not None:
@@ -776,16 +775,17 @@ async def slash_propose_law(interaction: Any, text: str) -> None:
     if ip <= 0 or du <= 0:
         await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
         return
-    sim = dashboard_backend.DEFAULT_CONTEXT.sim_state.get("simulation")
-    if sim is None:
-        await interaction.response.send_message("Simulation inactive", ephemeral=True)
-        return
-    proposer = next((a for a in sim.agents if a.agent_id == agent_id), None)
-    if proposer is None:
-        await interaction.response.send_message("Unknown agent", ephemeral=True)
-        return
+    payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
+    if weights:
+        try:
+            payload["vote_weights"] = json.loads(weights)
+        except Exception:
+            payload["vote_weights"] = None
     try:
-        approved = await governance.propose_law(proposer, text, sim.agents)
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("http://localhost:8000/api/propose_law", json=payload)
+            data = json.loads(resp.text)
+            approved = data.get("approved", False)
     except Exception:
         approved = False
     await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
@@ -807,17 +807,12 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     if ip <= 0 or du <= 0:
         await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
         return
-    sim = dashboard_backend.DEFAULT_CONTEXT.sim_state.get("simulation")
-    if sim is None:
-        await interaction.response.send_message("Simulation inactive", ephemeral=True)
-        return
-    agent = next((a for a in sim.agents if a.agent_id == agent_id), None)
-    if agent is None:
-        await interaction.response.send_message("Unknown agent", ephemeral=True)
-        return
+    payload = {"agent_id": agent_id, "text": text, "approve": approve}
     try:
-        allowed = await governance.vote(agent, text)
-        cast = bool(approve and allowed)
+        async with httpx.AsyncClient() as client:
+            resp = await client.post("http://localhost:8000/api/vote", json=payload)
+            data = json.loads(resp.text)
+            cast = data.get("vote", False)
     except Exception:
         cast = False
     await interaction.response.send_message(

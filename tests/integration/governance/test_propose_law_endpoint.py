@@ -93,3 +93,57 @@ async def test_propose_law_endpoint(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     proposals = ledger.get_law_proposals()
     assert proposals[0]["approved"] is True
     assert proposals[0]["ip_spent"] == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_propose_law_endpoint_weighted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    board = LawBoard(tmp_path / "laws.sqlite")
+
+    gservice = importlib.import_module("src.governance.service")
+    monkeypatch.setattr(gservice, "ledger", ledger)
+    monkeypatch.setattr(gservice, "law_board", board)
+    monkeypatch.setattr(db, "ledger", ledger)
+    monkeypatch.setattr(db, "law_board", board)
+    monkeypatch.setattr(db, "governance", gservice.governance)
+
+    async def allow(_: str) -> tuple[bool, str]:
+        return True, ""
+
+    monkeypatch.setattr(gservice, "evaluate_with_opa", allow)
+
+    votes = [True, True, False]
+
+    async def fake_vote(_agent: DummyAgent, _text: str) -> bool:
+        return votes.pop(0)
+
+    monkeypatch.setattr(gservice.governance, "vote", fake_vote)
+
+    from src.sim.simulation import Simulation
+
+    agents = [DummyAgent("a1"), DummyAgent("a2"), DummyAgent("a3")]
+    sim = Simulation(agents=agents)
+    monkeypatch.setitem(db.SIM_STATE, "simulation", sim)
+
+    for a in agents:
+        ledger.log_change(a.agent_id, 5.0, 0.0, "fund")
+
+    weights = {"a1": 3, "a2": 1, "a3": 1}
+
+    resp = await db.api_propose_law(
+        db.LawProposal(proposer_id="a1", text="law", vote_weights=weights)
+    )
+    data = json.loads(resp.body)
+    assert data["approved"] is True
+
+    assert ledger.get_balance("a1")[0] == pytest.approx(0.0)
+    assert ledger.get_balance("a2")[0] == pytest.approx(4.0)
+    assert ledger.get_balance("a3")[0] == pytest.approx(4.0)
+
+    proposals = ledger.get_law_proposals()
+    assert proposals[0]["ip_spent"] == pytest.approx(7.0)
+    assert proposals[0]["yes_weight"] == pytest.approx(4.0)
+    assert proposals[0]["no_weight"] == pytest.approx(1.0)

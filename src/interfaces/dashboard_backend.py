@@ -152,6 +152,7 @@ class SimulationEvent(BaseModel):
 class LawProposal(BaseModel):
     proposer_id: str
     text: str
+    vote_weights: dict[str, int] | None = None
 
 
 class Proposal(BaseModel):
@@ -300,12 +301,16 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
 
 @app.post("/api/propose_law")
 async def api_propose_law(proposal: LawProposal) -> Response:
-    """Submit a law proposal to the active simulation."""
+    """Submit a (weighted) law proposal to the active simulation."""
     sim = DEFAULT_CONTEXT.sim_state.get("simulation")
     approved = False
     if sim is not None:
         try:
-            approved = await sim.propose_law(proposal.proposer_id, proposal.text)
+            approved = await sim.propose_law(
+                proposal.proposer_id,
+                proposal.text,
+                proposal.vote_weights,
+            )
         except Exception:  # pragma: no cover - defensive
             approved = False
     return JSONResponse({"approved": approved})

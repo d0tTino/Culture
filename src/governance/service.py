@@ -33,6 +33,7 @@ class GovernanceService:
 
         When ``vote_weights`` is provided, each agent may cast multiple votes.
         The cost in influence points (IP) for casting ``n`` votes is ``n^2``.
+        ``ip_spent`` records the total IP deducted for this proposal.
         """
         allowed, _ = await evaluate_with_opa(text)
         if not allowed:
@@ -58,7 +59,7 @@ class GovernanceService:
             for a in agents:
                 w = int(vote_weights.get(a.agent_id, 1))
                 weights.append(float(w))
-                cost = float(w * w)
+                cost = float(w**2)
                 spend_tasks.append(ledger.spend(a.agent_id, ip=cost, reason="vote"))
             end_balances = await asyncio.gather(*spend_tasks, return_exceptions=True)
             for before, after in zip(start_balances, end_balances):
