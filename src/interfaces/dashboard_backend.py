@@ -24,6 +24,9 @@ SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "snapshots"
 
 logger = logging.getLogger(__name__)
 
+# JSON response body for semantic summary retrieval errors
+SEMANTIC_SUMMARIES_ERROR: Final[dict[str, str]] = {"error": "summary retrieval failed"}
+
 # Default simulation context used by module-level APIs
 DEFAULT_CONTEXT = SimulationContext()
 
