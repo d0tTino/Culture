@@ -6,6 +6,7 @@ from typing import Any
 
 from typing_extensions import Self
 
+from .level3_summary_manager import Level3SummaryManager
 from .multi_layer_retriever import MultiLayerRetriever
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
@@ -18,9 +19,11 @@ class MemoryService:
         self: Self,
         vector_store: ChromaVectorStoreManager | None = None,
         semantic_manager: SemanticMemoryManager | None = None,
+        level3_manager: Level3SummaryManager | None = None,
     ) -> None:
         self.vector_store = vector_store
         self.semantic_manager = semantic_manager
+        self.level3_manager = level3_manager
         self.retriever = MultiLayerRetriever(vector_store, semantic_manager)
 
     def add_memory(
@@ -122,6 +125,17 @@ class MemoryService:
             l1_min_age_days,
             l2_min_age_days,
         )
+
+    def consolidate_long_term(self: Self, agent_id: str, start_step: int, end_step: int) -> None:
+        if not self.level3_manager:
+            return None
+        self.level3_manager.consolidate_summaries(agent_id, start_step, end_step)
+        return None
+
+    def get_long_term_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
+        if not self.level3_manager:
+            return []
+        return self.level3_manager.get_summaries(agent_id, limit)
 
     def close(self: Self) -> None:
         if self.vector_store and hasattr(self.vector_store, "close"):

@@ -4,6 +4,7 @@ The Culture.ai agent memory system uses a hierarchical structure:
 
 - **L1 Summaries:** Short-term, step/session-level memories. Pruned frequently using both age and MUS (Memory Utility Score).
 - **L2 Summaries:** Long-term, chapter-level summaries synthesized from L1s. Pruned less frequently, with higher MUS threshold.
+- **L3 Summaries:** Very long-term "arc" summaries generated from multiple L2 summaries.
 
 ## MUS Pruning
 
@@ -44,6 +45,14 @@ The system consists of two levels of memory consolidation:
 - Generates a comprehensive "chapter summary" from these level 1 summaries
 - Stores the chapter summary with appropriate metadata in both the agent's memory and vector store
 - Tracks periods covered using `last_level_2_consolidation_step` in the agent state
+
+### Level 3 Memory Consolidation
+
+- Runs roughly every 50 steps
+- Gathers recent L2 chapter summaries using `Level3SummaryManager`
+- Produces an "arc summary" capturing longer trends
+- Stored in the vector store with `memory_type` `arc_summary`
+- Accessible via `MemoryService.get_long_term_summaries()`
 
 ## Vector Store Integration
 
@@ -86,8 +95,7 @@ python -m pytest tests/integration/memory
 
 Potential improvements for the hierarchical memory system:
 
-1. Level 3 consolidation for "narrative arc" summaries spanning the entire simulation
-2. Topic-based memory clustering to organize memories by theme rather than just time
-3. Cross-agent memory sharing for collective intelligence
-4. Emotional tagging of memories to prioritize emotionally significant experiences
-5. Memory decay mechanisms to model forgetting of less important details 
+1. Topic-based memory clustering to organize memories by theme rather than just time
+2. Cross-agent memory sharing for collective intelligence
+3. Emotional tagging of memories to prioritize emotionally significant experiences
+4. Memory decay mechanisms to model forgetting of less important details
