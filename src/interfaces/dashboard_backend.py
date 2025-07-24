@@ -243,10 +243,24 @@ async def stream_map(request: Request) -> Response:
 
 @app.get("/api/map")
 async def api_map() -> Response:
-    """Return the latest world map state."""
+    """Return the latest world map state with agent mood and summaries."""
     sim = SIM_STATE.get("simulation")
     world_map = sim.world_map.to_dict() if sim is not None else {}
-    return JSONResponse({"world_map": world_map})
+    agents: dict[str, dict[str, Any]] = {}
+    if sim is not None:
+        memory_service = getattr(sim, "memory_service", None)
+        for ag in sim.agents:
+            mood = getattr(ag.state, "mood_value", None)
+            summary = ""
+            if memory_service is not None:
+                try:
+                    summaries = memory_service.get_recent_semantic_summaries(ag.agent_id, limit=1)
+                    if summaries:
+                        summary = summaries[0]
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception("Failed to load summary for %s", ag.agent_id)
+            agents[ag.agent_id] = {"mood": mood, "summary": summary}
+    return JSONResponse({"world_map": world_map, "agents": agents})
 
 
 @app.get("/health")
