@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from scripts.export_traces import export_latest
 from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
@@ -233,6 +234,12 @@ def parse_args() -> argparse.Namespace:
         default="agent_1",
         help="Agent ID submitting the proposal.",
     )
+    parser.add_argument(
+        "--export-dataset",
+        type=str,
+        metavar="PATH",
+        help="Write a JSONL dataset from the latest snapshots after the run.",
+    )
     return parser.parse_args()
 
 
@@ -292,6 +299,9 @@ def main() -> None:
 
     if args.checkpoint:
         save_checkpoint(sim, args.checkpoint)
+
+    if args.export_dataset:
+        export_latest(output=args.export_dataset)
 
 
 if __name__ == "__main__":

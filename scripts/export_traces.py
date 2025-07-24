@@ -14,6 +14,30 @@ from src.infra import event_log
 from src.infra.snapshot import load_snapshot
 
 
+def export_latest(directory: str | Path = "snapshots", output: str | Path = "data/traces.jsonl") -> Path:
+    """Write a dataset from the newest snapshots in ``directory``.
+
+    The snapshots are sorted by step number and all available files are exported
+    to ``output`` in JSON Lines format.
+    """
+
+    path = Path(directory)
+    files = sorted(path.glob("snapshot_*.json*"), key=lambda p: int(p.stem.split("_")[1]))
+    if not files:
+        raise FileNotFoundError(f"No snapshots found in {directory}")
+
+    out_path = Path(output)
+    with out_path.open("w", encoding="utf-8") as out:
+        for file in files:
+            step = int(file.stem.split("_")[1])
+            compress = file.suffix == ".zst"
+            snap = load_snapshot(step, directory=directory, compress=compress)
+            out.write(json.dumps(snap))
+            out.write("\n")
+
+    return out_path
+
+
 def iter_snapshots(directory: str | Path) -> Iterable[dict[str, Any]]:
     """Yield snapshots from ``directory`` in step order."""
     path = Path(directory)
