@@ -1075,8 +1075,10 @@ class Simulation:
 
         return _get_project_details(self)
 
-    async def propose_law(self: Self, proposer_id: str, text: str) -> bool:
-        """Allow an agent to propose a law and trigger a vote."""
+    async def propose_law(
+        self: Self, proposer_id: str, text: str, vote_weights: dict[str, int] | None = None
+    ) -> bool:
+        """Allow an agent to propose a law and trigger a weighted vote."""
         from src.governance.service import governance
 
         proposer = next((a for a in self.agents if a.agent_id == proposer_id), None)
@@ -1092,7 +1094,12 @@ class Simulation:
                     self.vector.to_dict(),
                 )
 
-        approved = await governance.propose_law(proposer, text, self.agents)
+        approved = await governance.propose_law(
+            proposer,
+            text,
+            self.agents,
+            vote_weights,
+        )
         if approved and self.knowledge_board:
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
