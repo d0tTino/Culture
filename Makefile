@@ -28,4 +28,7 @@ local-slice:
 
 .PHONY: dataset
 dataset:
-	python scripts/export_traces.py --snapshots $(SNAPSHOTS) --output $(OUTPUT)
+       python - <<EOF
+from scripts.export_traces import export_latest
+export_latest(directory="$(SNAPSHOTS)", output="$(OUTPUT)")
+EOF

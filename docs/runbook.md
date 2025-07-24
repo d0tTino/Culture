@@ -98,6 +98,10 @@ output paths if needed:
 ```bash
 make dataset SNAPSHOTS=snapshots OUTPUT=data/traces.jsonl
 ```
+The `make dataset` target uses this helper to export the most recent snapshots.
+
+Run the simulation with `--export-dataset <file>` to automatically write a
+dataset from the latest snapshots when the run finishes.
 
 ### Creating a JSONL Dataset
 Generate a dataset from saved snapshots using `export_traces.py`. This example

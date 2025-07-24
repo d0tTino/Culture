@@ -122,3 +122,31 @@ def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
         ((app.load_plugins.return_value,), {}),
         ((dummy_sim.async_run.return_value,), {}),
     ]
+
+
+def test_main_exports_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["prog", "--export-dataset", "out.jsonl"],
+    )
+
+    dummy_sim = SimpleNamespace(async_run=MagicMock(return_value="coro"))
+
+    create_sim = MagicMock(return_value=dummy_sim)
+    monkeypatch.setattr(app, "create_simulation", create_sim)
+    run_mock = MagicMock()
+    monkeypatch.setattr(app.asyncio, "run", run_mock)
+    monkeypatch.setattr(app, "load_plugins", MagicMock())
+
+    monkeypatch.setattr(app, "load_checkpoint", MagicMock(return_value=(dummy_sim, None)))
+    monkeypatch.setattr(app, "save_checkpoint", MagicMock())
+    monkeypatch.setattr(app, "restore_rng_state", MagicMock())
+    monkeypatch.setattr(app, "restore_environment", MagicMock())
+
+    export_mock = MagicMock()
+    monkeypatch.setattr(app, "export_latest", export_mock)
+
+    app.main()
+
+    export_mock.assert_called_once_with(output="out.jsonl")
