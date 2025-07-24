@@ -319,6 +319,20 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                 f"Agent {agent_id}: Error during L1 memory consolidation: {e}", exc_info=True
             )  # Added exc_info
 
+    service = state.get("memory_service")
+    l3_interval = int(
+        config.get_config_value_with_override("LEVEL3_CONSOLIDATION_INTERVAL_STEPS", 50)
+    )
+    if service and l3_interval > 0 and sim_step % l3_interval == 0:
+        try:
+            cast(MemoryService, service).consolidate_long_term(
+                agent_id,
+                max(0, sim_step - l3_interval + 1),
+                sim_step,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Level3 consolidation failed: %s", exc, exc_info=True)
+
     updated_state_dict = dict(state)
     updated_state_dict["state"] = agent_state_obj
     if hasattr(agent_state_obj, "du"):

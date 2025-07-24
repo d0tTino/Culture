@@ -61,6 +61,9 @@ class DummyRequest:
     async def json(self):
         return self.payload
 
+    async def body(self) -> bytes:
+        return json.dumps(self.payload).encode()
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

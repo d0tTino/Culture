@@ -7,6 +7,7 @@ including persistence, retrieval, and memory utility operations.
 
 from typing import TYPE_CHECKING
 
+from src.agents.memory.level3_summary_manager import Level3SummaryManager
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
@@ -21,6 +22,7 @@ else:  # pragma: no cover - optional dependency
         ChromaVectorStoreManager = None
 
 __all__ = [
+    "Level3SummaryManager",
     "MemoryService",
     "MemoryTrackingManager",
     "MultiLayerRetriever",

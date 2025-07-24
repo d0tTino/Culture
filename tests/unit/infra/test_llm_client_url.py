@@ -15,7 +15,7 @@ class DummyModel(BaseModel):
 def test_generate_structured_output_uses_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, str] = {}
 
-    def fake_post(url: str, *args: object, **kwargs: object) -> MagicMock:
+    async def fake_post(self: object, url: str, *args: object, **kwargs: object) -> MagicMock:
         captured["url"] = url
         resp = MagicMock()
         resp.raise_for_status.return_value = None
@@ -25,7 +25,7 @@ def test_generate_structured_output_uses_base_url(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(llm_client, "LLM_API_BASE", "http://override:1234")
     monkeypatch.setattr(llm_client, "USE_VLLM", False)
     monkeypatch.setitem(config._CONFIG, "LLM_API_BASE", "http://override:1234")
-    monkeypatch.setattr(llm_client.requests, "post", fake_post)  # type: ignore[attr-defined]
+    monkeypatch.setattr(llm_client.httpx.AsyncClient, "post", fake_post)
 
     result = llm_client.generate_structured_output("prompt", DummyModel)
 
