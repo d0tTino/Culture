@@ -94,6 +94,7 @@ Run the development server and navigate to `/storyboard` to see it in action.
 
 ## LiveMap Widget
 
-`LiveMap` listens to `/api/map` via Server-Sent Events and renders the latest
-agent positions. Register it in your dashboard layout using the widget name
+`LiveMap` listens to `/api/map/stream` via Server-Sent Events and renders the
+latest agent positions. The widget also displays each agent's mood and a recent
+one-line summary. Register it in your dashboard layout using the widget name
 `LiveMap`.
