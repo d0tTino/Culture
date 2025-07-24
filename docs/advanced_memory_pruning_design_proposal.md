@@ -326,6 +326,27 @@ The first phase of the advanced memory pruning strategy has been implemented. Th
 
 Phase 2 will build on these usage statistics to implement the actual pruning mechanisms based on the calculated Memory Utility Score.
 
+## Episodic \u2192 Semantic Retrieval Pipeline
+
+Culture agents blend recent episodic memories with long-term semantic summaries during retrieval. The `MemoryService.get_context_pipeline()` method orchestrates this flow:
+
+1. **retrieve_episodic_and_update_semantic()** pulls the most relevant episodic memories from Chroma and passes them to the semantic manager so it can update higher level summaries.
+2. **get_recent_semantic_summaries()** returns the latest semantic summaries from the Neo4j database.
+3. The method returns `(episodic, semantic)` which can be provided directly to the language model.
+4. Helpers such as `blend_with_recent_semantic()` can mix an episodic summary with the most recent semantic context when generating a response.
+
+This pipeline ensures each turn has immediate context alongside consolidated themes.
+
+### Example: Inspecting Memory Usage
+
+After running a simulation you can analyze memory statistics with:
+
+```bash
+python scripts/analyze_memory_usage.py --agent_id AGENT_ID --chroma_dir ./chroma_db
+```
+
+The script lists memories sorted by retrieval count and prints the computed Memory Utility Score (MUS). This helps tune pruning thresholds and verify that important memories are retained.
+
 ## Final Implementation Details (as of v1.2)
 
 - **MUS Calculation:**
