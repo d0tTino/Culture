@@ -46,3 +46,15 @@ await load_plugins()
 ```
 
 Culture will execute the `setup` function and register any declared widgets or behaviors. See [plugins.md](plugins.md) for a more detailed reference.
+
+## 4. Scaffold a plug-in automatically
+
+Use `scripts/create_plugin.py` to generate a minimal package:
+
+```bash
+python scripts/create_plugin.py my_plugin
+```
+
+This creates a new `my_plugin` directory containing a ready-to-install package
+with entry-point metadata. Install it in editable mode and load it as shown
+above.
