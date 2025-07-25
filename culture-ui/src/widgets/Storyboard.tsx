@@ -16,12 +16,43 @@ export default function Storyboard() {
   const event = useEventSource<SnapshotEvent>()
   const [positions, setPositions] = useState<Record<string, [number, number]>>({})
   const [moods, setMoods] = useState<Record<string, number>>({})
+  const [retrievals, setRetrievals] = useState<Record<string, number>>({})
   const [heatmap, setHeatmap] = useState<Record<string, number>>({})
   const [memoryEvents, setMemoryEvents] = useState<
     Array<{ type: string; step?: number }>
   >([])
   const [tab, setTab] = useState<'map' | 'summaries'>('map')
   const [summaries, setSummaries] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/agent_stats')
+        const json = (await res.json()) as {
+          agents?: Record<string, { mood?: number; retrieval_count?: number }>
+        }
+        if (json.agents && !cancelled) {
+          const counts: Record<string, number> = {}
+          for (const [id, info] of Object.entries(json.agents)) {
+            if (typeof info.retrieval_count === 'number') {
+              counts[id] = info.retrieval_count
+            }
+            if (typeof info.mood === 'number') {
+              setMoods((cur) => ({ ...cur, [id]: info.mood! }))
+            }
+          }
+          setRetrievals(counts)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [event])
 
   const agentId = Object.keys(positions)[0] || Object.keys(moods)[0] || 'agent-1'
 
@@ -80,7 +111,8 @@ export default function Storyboard() {
           <ul data-testid="map-info" className="mb-2">
             {Object.entries(positions).map(([id, pos]) => (
               <li key={id}>
-                {id}: {pos[0]}, {pos[1]} (mood {moods[id] ?? 'n/a'})
+                {id}: {pos[0]}, {pos[1]} (mood {moods[id] ?? 'n/a'}, retrievals{' '}
+                {retrievals[id] ?? 0})
               </li>
             ))}
           </ul>

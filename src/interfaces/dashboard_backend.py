@@ -264,6 +264,46 @@ async def api_map() -> Response:
     return JSONResponse({"world_map": world_map, "agents": agents})
 
 
+@app.get("/api/agent_stats")
+async def api_agent_stats() -> Response:
+    """Return retrieval counts and mood for each agent."""
+    sim = SIM_STATE.get("simulation")
+    stats: dict[str, dict[str, Any]] = {}
+    retrieval_counts: dict[str, int] = {}
+    if sim is not None:
+        store = getattr(getattr(sim, "memory_service", None), "vector_store", None)
+
+        if store is not None:
+
+            def _load() -> dict[str, int]:
+                counts: dict[str, int] = {}
+                try:
+                    results = store.collection.get(include=["metadatas"])
+                    metadatas = results.get("metadatas") or []
+                    for meta in metadatas:
+                        if not meta:
+                            continue
+                        agent_id = meta.get("agent_id")
+                        if agent_id is None:
+                            continue
+                        counts[agent_id] = counts.get(agent_id, 0) + int(
+                            meta.get("retrieval_count", 0)
+                        )
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception("Failed to gather retrieval stats")
+                return counts
+
+            retrieval_counts = await asyncio.to_thread(_load)
+
+        for ag in sim.agents:
+            mood = getattr(ag.state, "mood_value", None)
+            stats[ag.agent_id] = {
+                "mood": mood,
+                "retrieval_count": retrieval_counts.get(ag.agent_id, 0),
+            }
+    return JSONResponse({"agents": stats})
+
+
 @app.get("/health")
 async def health() -> Response:
     return JSONResponse({"status": "ok"})
@@ -607,6 +647,7 @@ __all__ = [
     "api_get_proposals",
     "api_get_votes",
     "api_map",
+    "api_agent_stats",
     "api_memory_snapshot",
     "api_memory_snapshots",
     "api_propose_law",
