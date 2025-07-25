@@ -30,10 +30,12 @@ class SimulationContext:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-        if self._event_queue is None or self._event_queue_loop is not loop:
-            if self._event_queue is not None:
-                bus.unsubscribe(self._event_queue)
+            loop = None
+        if self._event_queue is None:
+            self._event_queue = bus.subscribe()
+            self._event_queue_loop = loop
+        elif loop is not None and self._event_queue_loop is not loop:
+            bus.unsubscribe(self._event_queue)
             self._event_queue = bus.subscribe()
             self._event_queue_loop = loop
         return self._event_queue

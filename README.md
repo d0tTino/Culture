@@ -178,12 +178,14 @@ Follow these steps to run the example simulation locally:
    memories in ChromaDB.
 6. **Start the optional dashboard**
    ```bash
-   python -m src.http_app
-   ```
+ python -m src.http_app
+  ```
 7. **Connect Discord (optional)**
    ```bash
-   python -m src.app --discord --steps 3
+   scripts/start_discord_slice.sh
    ```
+   This script loads environment variables from `.env` and launches the vertical
+   slice with Discord enabled so you can chat with the agents immediately.
 
 ## Installation
 
@@ -871,6 +873,13 @@ python -m examples.walking_vertical_slice
 This spins up three agents for a few steps using your local Ollama instance and
 persists their memories to ChromaDB. See
 [docs/walking_vertical_slice.md](docs/walking_vertical_slice.md) for details.
+
+To quickly try Discord interaction, run:
+```bash
+scripts/start_discord_slice.sh
+```
+This loads environment variables from `.env` and starts the same demo with
+`--discord` enabled.
 
 You can also launch the demo using Make:
 ```bash

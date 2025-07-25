@@ -24,6 +24,10 @@ This example demonstrates a minimal end-to-end run of the Culture.ai simulation 
    ```bash
    scripts/vertical_slice.sh  # Windows: scripts\vertical_slice.bat
    ```
+4. To try the same demo with Discord integration enabled, run:
+   ```bash
+   scripts/start_discord_slice.sh
+   ```
 
 The demo now spins up **three** agents for three steps. Memories are persisted to ChromaDB and displayed on the Knowledge Board. All LLM calls go through your local Ollama instance; no mocking is applied.
 

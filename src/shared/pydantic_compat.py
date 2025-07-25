@@ -43,12 +43,12 @@ try:
         SettingsConfigDict as _SettingsConfigDict,
     )
 except Exception:  # pragma: no cover - optional dependency
-    from pydantic import BaseModel as _PydanticBaseSettings
+    from pydantic import BaseModel as _PydanticBaseSettings  # type: ignore[assignment]
 
     class _FallbackSettingsConfigDict(dict[str, Any]):
         pass
 
-    _SettingsConfigDict = _FallbackSettingsConfigDict
+    _SettingsConfigDict = _FallbackSettingsConfigDict  # type: ignore[assignment]
 
-BaseSettings = cast(Any, _PydanticBaseSettings)
-SettingsConfigDict = cast(Any, _SettingsConfigDict)
+BaseSettings = cast(Any, _PydanticBaseSettings)  # type: ignore[assignment]
+SettingsConfigDict = cast(Any, _SettingsConfigDict)  # type: ignore[assignment]
