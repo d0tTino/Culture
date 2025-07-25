@@ -13,6 +13,7 @@
 - [Running Tests](#running-tests)
 - [culture-ui Frontend](#culture-ui-frontend)
 - [Extensions and Plug-ins](#extensions-and-plug-ins)
+- [Roadmap](#roadmap)
 
 ## Vision: The Crucible of Emergent AI
 
@@ -589,7 +590,15 @@ Test logs are stored in the `data/logs/` directory.
 * **Iterative Development:** Building complex features incrementally with continuous testing and refinement.
 * **Focus on Emergence:** Designing systems that allow for, rather than explicitly script, complex agent behaviors and societal patterns.
 * **Open Experimentation:** The platform is intended to be flexible for trying out different AI models, agent architectures, and simulation parameters.
-* **Resource Consciousness:** While ambitious, there's an underlying awareness of resource constraints, driving interest in efficient LLMs and memory management techniques.
+
+* **Resource Consciousness:** While ambitious, there's an underlying
+  awareness of resource constraints, driving interest in efficient LLMs and
+  memory management techniques.
+
+## Roadmap
+
+See [docs/community_roadmap.md](docs/community_roadmap.md) for an overview of
+the current milestones and ways plug-in authors can participate.
 
 ## Roadmap & Future Work
 
