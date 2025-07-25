@@ -12,6 +12,7 @@ Culture exposes a small API for plug-in authors:
 | -------- | ----------- |
 | `register_widget_backend(name, script_url, backend_url="http://localhost:8000")` | Register a widget with the backend so the dashboard can load it. |
 | `register_agent_behavior(func)` | Register a callback executed after each agent turn. |
+| `register_map_action(name, handler)` | Register a custom world map action handler. |
 | `load_plugins(group="culture.plugins", *, backend_url="http://localhost:8000")` | Load plug-ins declared under the given entry point group. |
 
 Two protocol classes define the expected signatures:
@@ -66,6 +67,25 @@ register_agent_behavior(log_turn)
 Each callback receives the agent instance and the dictionary returned from
 `Agent.run_turn`. Multiple behaviors can be registered and will be invoked in the
 order added.
+
+## Map Action Hooks
+
+Custom world map actions let plug-ins modify the simulation when an agent issues
+an unknown action. Use `register_map_action` to associate a handler with an
+action name:
+
+```python
+from src.extensions import register_map_action
+
+def dance_action(sim, idx, agent_id, state, action):
+    state.has_danced = True
+    return {"result": "danced"}
+
+register_map_action("dance", dance_action)
+```
+
+When an agent outputs `{"action": "dance"}` the handler is invoked and its
+returned dictionary is included in the emitted map event.
 
 ## Loading Plug-ins via Entry Points
 

@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from src.extensions import MAP_ACTION_REGISTRY
 from src.infra import config
 from src.infra.ledger import log_reward, run_auction
 from src.interfaces.dashboard_backend import emit_map_change_event
@@ -123,6 +124,18 @@ async def process_map_action(
                 )
         else:
             details = {}
+    else:
+        custom = await MAP_ACTION_REGISTRY.run(
+            action_type,
+            sim,
+            agent_index,
+            agent_id,
+            current_state,
+            map_action,
+        )
+        if custom is None:
+            return
+        details = custom or {}
 
     map_event_data = {
         "type": "map_action",
