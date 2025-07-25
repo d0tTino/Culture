@@ -908,6 +908,13 @@ CI enforces `--cov-fail-under=90` for overall coverage.
 CI also uploads `coverage.xml` as a GitHub Actions artifact. Open the workflow run
 and download the file from the **Artifacts** section.
 
+### Generating a Dataset
+Use `scripts/export_traces.py` to convert snapshots or event logs into a JSONL dataset.
+```bash
+python scripts/export_traces.py --snapshots snapshots/ --output data/traces.jsonl
+```
+This process is covered by `tests/integration/tools/test_export_traces.py`.
+
 ### Project Structure (Key Directories)
 - `src/` — Main source code (agents, graphs, memory, infra, simulation)
 - `tests/` — Unit and integration tests
