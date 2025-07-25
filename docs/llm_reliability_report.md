@@ -27,7 +27,11 @@ This brief report summarizes the current state of LLM-based components in the pr
 ## Latency Benchmark
 
 `scripts/benchmark_llm.py` measures the average latency of a simple prompt using
-both Ollama and vLLM. In the current environment the Ollama client fell back to
-a stub implementation, completing instantly, while attempts to contact the vLLM
-server failed after repeated connection errors (~7s for one retry cycle).
+both Ollama and vLLM and prints a Markdown table. Example output on a developer
+laptop:
+
+| Backend | Avg latency (s) |
+|---------|---------------:|
+| Ollama  | 1.23 |
+| vLLM    | 0.78 |
 

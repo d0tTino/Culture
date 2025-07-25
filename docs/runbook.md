@@ -12,8 +12,11 @@ This runbook outlines routine operations for working with Culture.ai.
    ```bash
    ollama pull mistral:latest
    ```
-   To use vLLM instead, follow the
+   To use vLLM instead, first install the package and then follow the
    [Starting the vLLM Server](#starting-the-vllm-server) section below.
+   ```bash
+   pip install vllm  # install the vLLM server
+   ```
 4. (Optional) Start the vector store:
    ```bash
    docker compose up -d
@@ -43,6 +46,10 @@ This runbook outlines routine operations for working with Culture.ai.
    ```
 
 ## Starting the vLLM Server
+Install vLLM if it is not already available:
+```bash
+pip install vllm
+```
 `scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API. Set these
 environment variables as needed:
 
@@ -58,8 +65,9 @@ export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
 ```
 
-When `VLLM_API_BASE` is configured, the application prefers the vLLM endpoint over
-Ollama.
+When `VLLM_API_BASE` (or `LLM_API_BASE` pointing to the same URL) is configured,
+the application prefers the vLLM endpoint over Ollama. Unset this variable to
+switch back to Ollama.
 
 ## Running Tests
 Run the full suite with coverage:
