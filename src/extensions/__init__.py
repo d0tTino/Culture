@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable
 from importlib import metadata
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import httpx
 from typing_extensions import Self
@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "BEHAVIOR_REGISTRY",
+    "MAP_ACTION_REGISTRY",
     "AgentBehavior",
     "Plugin",
     "load_plugins",
     "register_agent_behavior",
+    "register_map_action",
     "register_widget_backend",
 ]
 
@@ -27,7 +29,7 @@ __all__ = [
 class AgentBehavior(Protocol):
     """Callable invoked after each agent turn."""
 
-    def __call__(self, agent: Any, output: dict[str, Any]) -> None: ...
+    def __call__(self: Self, agent: Any, output: dict[str, Any]) -> None: ...
 
 
 PluginResult = dict[str, str] | None
@@ -37,7 +39,7 @@ PluginResult = dict[str, str] | None
 class Plugin(Protocol):
     """Callable loaded via entry points."""
 
-    def __call__(self) -> PluginResult | Awaitable[PluginResult]: ...
+    def __call__(self: Self) -> PluginResult | Awaitable[PluginResult]: ...
 
 
 class BehaviorRegistry:
@@ -57,10 +59,66 @@ class BehaviorRegistry:
 BEHAVIOR_REGISTRY = BehaviorRegistry()
 
 
+@runtime_checkable
+class MapActionHandler(Protocol):
+    """Callable that processes a custom map action."""
+
+    def __call__(
+        self: Self,
+        sim: Any,
+        agent_index: int,
+        agent_id: str,
+        current_state: Any,
+        map_action: dict[str, Any],
+    ) -> Awaitable[dict[str, Any] | None] | dict[str, Any] | None: ...
+
+
+class MapActionRegistry:
+    """Registry for custom world map actions."""
+
+    def __init__(self: Self) -> None:
+        self._actions: dict[str, MapActionHandler] = {}
+
+    def register(self: Self, name: str, handler: MapActionHandler) -> None:
+        self._actions[name] = handler
+
+    async def run(
+        self: Self,
+        name: str,
+        sim: Any,
+        agent_index: int,
+        agent_id: str,
+        current_state: Any,
+        map_action: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        func = self._actions.get(name)
+        if func is None:
+            return None
+        result: Awaitable[dict[str, Any] | None] | dict[str, Any] | None = func(
+            sim,
+            agent_index,
+            agent_id,
+            current_state,
+            map_action,
+        )
+        if asyncio.iscoroutine(result):
+            return cast(dict[str, Any] | None, await result)
+        return cast(dict[str, Any] | None, result)
+
+
+MAP_ACTION_REGISTRY = MapActionRegistry()
+
+
 def register_agent_behavior(func: AgentBehavior) -> None:
     """Register a callback executed after each agent turn."""
 
     BEHAVIOR_REGISTRY.register(func)
+
+
+def register_map_action(name: str, handler: MapActionHandler) -> None:
+    """Register a custom world map action handler."""
+
+    MAP_ACTION_REGISTRY.register(name, handler)
 
 
 async def register_widget_backend(
