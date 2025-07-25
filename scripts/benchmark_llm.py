@@ -79,8 +79,10 @@ def benchmark(prompt: str, model: str, runs: int, vllm_base: str) -> None:
     def avg(values: list[float]) -> float:
         return sum(values) / len(values)
 
-    print(f"Ollama avg latency: {avg(ollama_times):.2f}s over {runs} runs")
-    print(f"vLLM  avg latency: {avg(vllm_times):.2f}s over {runs} runs")
+    print("| Backend | Avg latency (s) |")
+    print("|---------|---------------:|")
+    print(f"| Ollama | {avg(ollama_times):.2f} |")
+    print(f"| vLLM | {avg(vllm_times):.2f} |")
 
 
 def main() -> None:

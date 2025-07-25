@@ -154,18 +154,21 @@ Follow these steps to run the example simulation locally:
    Edit `LLM_API_BASE` if your LLM server runs on a
    different URL. Set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` if you plan
    to use the Discord bot.
-4. **Install or update Ollama and pull the model**
-   ```bash
-   curl https://ollama.ai/install.sh | sh
-   ollama pull mistral:latest
-   ollama serve &
-   ```
-   Alternatively you can start a vLLM server:
-   ```bash
-   VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
-   scripts/start_vllm.sh
-   export LLM_API_BASE="http://localhost:$VLLM_PORT"
-   ```
+4. **Install an LLM backend**
+  ```bash
+  # Ollama (default backend)
+  curl https://ollama.ai/install.sh | sh
+  ollama pull mistral:latest
+  ollama serve &
+  # Or install vLLM
+  pip install vllm
+  ```
+  Alternatively you can start a vLLM server:
+  ```bash
+  VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
+  scripts/start_vllm.sh
+  export LLM_API_BASE="http://localhost:$VLLM_PORT"
+  ```
 5. **Run the vertical slice demo**
    ```bash
    make local-slice
@@ -822,10 +825,14 @@ Metrics include `llm_latency_ms`, `llm_calls_total`, `knowledge_board_size`, and
 check the latest values with the `!stats` Discord command.
 
 For routine operations and troubleshooting, see [docs/runbook.md](docs/runbook.md).
-When running against a local vLLM server, set `VLLM_API_BASE` or `LLM_API_BASE` to its base URL.
+When running against a local vLLM server, set `VLLM_API_BASE` or `LLM_API_BASE` to its base URL. Unset this variable or point `LLM_API_BASE` back to Ollama to switch back.
 
 ### Starting the vLLM Server
 `scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API with sensible defaults.
+Install the package first if it isn't already available:
+```bash
+pip install vllm
+```
 Set the following environment variables to customize the launch:
 
 - `VLLM_MODEL` – Hugging Face model name (defaults to `mistralai/Mistral-7B-Instruct-v0.2`)
@@ -844,6 +851,8 @@ After the server is running, point the application to it:
 export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
 ```
+Unset `VLLM_API_BASE` to switch back to Ollama, or set `LLM_API_BASE` to your
+Ollama URL.
 
 ### Walking Vertical Slice
 To verify your local setup with actual LLM calls, run the minimal demo script:
