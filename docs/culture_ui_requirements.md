@@ -106,6 +106,22 @@ await registerWidgetBackend({
 The backend exposes REST endpoints for listing available memory snapshot steps and retrieving snapshot data.
 Use `GET /api/memory_snapshots` to list the latest steps and `GET /api/memory_snapshots/{step}` to fetch a specific snapshot.
 
+### Agent Stats API
+
+The Storyboard widget displays the current mood and memory retrieval count for each agent.
+These values are retrieved from a new endpoint:
+
+```http
+GET /api/agent_stats
+```
+
+The response structure is:
+
+```json
+{ "agents": { "agent-1": { "mood": 0.2, "retrieval_count": 42 } } }
+```
+
+
 ## Setup
 
 Install dependencies and run the development server:
