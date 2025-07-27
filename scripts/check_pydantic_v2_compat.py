@@ -21,9 +21,7 @@ DEPRECATED_DECORATORS = {
 
 
 def tracked_python_files() -> list[Path]:
-    proc = subprocess.run(
-        ["git", "ls-files", "*.py"], capture_output=True, text=True, check=True
-    )
+    proc = subprocess.run(["git", "ls-files", "*.py"], capture_output=True, text=True, check=True)
     return [Path(p) for p in proc.stdout.splitlines()]
 
 

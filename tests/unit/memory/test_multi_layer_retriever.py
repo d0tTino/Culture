@@ -18,18 +18,14 @@ def _dummy_chroma() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_retrieve_merges_and_sorts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+async def test_retrieve_merges_and_sorts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     vector = ChromaVectorStoreManager(
         persist_directory=str(tmp_path), embedding_function=lambda t: [[0.0] for _ in t]
     )
     semantic = SemanticMemoryManager(vector, driver=None)
     retriever = MultiLayerRetriever(vector, semantic)
 
-    async def fake_episodic(
-        agent_id: str, query: str, k: int
-    ) -> list[dict[str, Any]]:
+    async def fake_episodic(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
         return [
             {"content": "e1", "relevance_score": 0.5},
             {"content": "e2", "relevance_score": 0.2},
@@ -62,9 +58,7 @@ async def test_retrieve_and_update_calls_semantic_job(
 
     episodic = [{"content": "e"}]
 
-    async def fake_episodic(
-        agent_id: str, query: str, k: int
-    ) -> list[dict[str, str]]:
+    async def fake_episodic(agent_id: str, query: str, k: int) -> list[dict[str, str]]:
         return episodic
 
     calls: list[tuple[str, list[dict[str, str]]]] = []

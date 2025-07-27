@@ -104,10 +104,7 @@ def main(argv: list[str]) -> int:
 
     if missing_optional:
         joined = ", ".join(missing_optional)
-        msg = (
-            f"WARNING: missing optional packages: {joined}. "
-            "Skipping tests that require them."
-        )
+        msg = f"WARNING: missing optional packages: {joined}. " "Skipping tests that require them."
         print(msg)
 
     cfg = ConfigParser()

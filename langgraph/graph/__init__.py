@@ -4,6 +4,7 @@ from typing import Any, Callable
 END = "END"
 START = "START"
 
+
 class StateGraph:
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.nodes: dict[str, Callable[[dict[str, Any]], Any]] = {}

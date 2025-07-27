@@ -33,7 +33,7 @@ TEMPLATE_INIT = textwrap.dedent(
 )
 
 TEMPLATE_PYPROJECT = textwrap.dedent(
-    '''
+    """
     [build-system]
     requires = ["setuptools>=61.0"]
     build-backend = "setuptools.build_meta"
@@ -47,7 +47,7 @@ TEMPLATE_PYPROJECT = textwrap.dedent(
 
     [project.entry-points."culture.plugins"]
     {package} = "{package}:setup"
-    '''
+    """
 )
 
 README = "# {package}\n\nScaffolded Culture plug-in.\n"

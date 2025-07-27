@@ -14,7 +14,9 @@ from src.infra import event_log
 from src.infra.snapshot import load_snapshot
 
 
-def export_latest(directory: str | Path = "snapshots", output: str | Path = "data/traces.jsonl") -> Path:
+def export_latest(
+    directory: str | Path = "snapshots", output: str | Path = "data/traces.jsonl"
+) -> Path:
     """Write a dataset from the newest snapshots in ``directory``.
 
     The snapshots are sorted by step number and all available files are exported

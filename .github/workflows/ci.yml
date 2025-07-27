@@ -112,6 +112,16 @@ jobs:
         shell: bash
         run: bash scripts/check_requirements.sh
 
+      - name: Run lint (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash scripts/lint.sh
+
+      - name: Run lint (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: cmd
+        run: scripts\lint.bat
+
 
       # Cache pre-commit environment for faster runs
 
@@ -133,10 +143,17 @@ jobs:
         run: mypy --strict --config-file pyproject.toml
 
 
-      - name: Run Tests & Coverage
+      - name: Run Tests & Coverage (Linux)
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           pytest -q -n auto --durations=10 --maxfail=1 --disable-warnings --cov=src --cov-report=xml --cov-fail-under=90
+
+      - name: Run Tests & Coverage (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          python -m pytest -q -n auto --durations=10 --maxfail=1 --disable-warnings --cov=src --cov-report=xml --cov-fail-under=90
 
       - name: Run Integration Tests
         if: matrix.os == 'ubuntu-latest'
