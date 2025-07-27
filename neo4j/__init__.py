@@ -10,4 +10,3 @@ class GraphDatabase:
     @staticmethod
     def driver(*_a: Any, **_k: Any) -> Driver:
         raise RuntimeError("neo4j driver unavailable")
-
