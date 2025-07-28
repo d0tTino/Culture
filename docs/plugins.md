@@ -206,3 +206,21 @@ from src.extensions import load_plugins
 
 await load_plugins()
 ```
+
+## Installing the Memory Widget Plug-in
+
+The `examples/plugins/memory_widget` package registers a widget named
+`MemoryWidget` that displays recent semantic summaries. Its script is served from
+`https://localhost:5173/memory_widget.js`. Install the package in editable mode:
+
+```bash
+pip install -e examples/plugins/memory_widget
+```
+
+Load the plug-in so Culture can register the widget:
+
+```python
+from src.extensions import load_plugins
+
+await load_plugins()
+```

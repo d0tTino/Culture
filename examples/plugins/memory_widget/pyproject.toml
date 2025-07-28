@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memory-widget"
+version = "0.1.0"
+description = "Culture plug-in providing a memory widget"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.entry-points."culture.plugins"]
+memory_widget = "memory_widget:setup"
