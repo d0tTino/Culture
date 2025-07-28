@@ -393,6 +393,9 @@ Launch the UI in development mode with:
 pnpm --filter culture-ui dev
 ```
 
+Once the server is running, visit `http://localhost:5173/memory` to explore agent
+memories using the **Memory Explorer** page.
+
 Prettier formatting is configured via `.prettierrc`. Format UI code with:
 
 ```bash
@@ -407,7 +410,13 @@ UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture
 ## Extensions and Plug-ins
 
 Culture exposes simple hooks for registering dashboard widgets and agent behaviors.
-See [docs/plugins.md](docs/plugins.md) for details. The plug-in quickstart is in [docs/plugin_guide.md](docs/plugin_guide.md).
+Use `scripts/create_plugin.py <name>` to scaffold a minimal plug-in package:
+
+```bash
+python scripts/create_plugin.py my_plugin
+```
+
+See [docs/plugins.md](docs/plugins.md) for details and [docs/plugin_guide.md](docs/plugin_guide.md) for a full walkthrough.
 
 ## Project Structure
 
