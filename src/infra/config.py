@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
+from pathlib import Path
 from typing import Any
+
+from src.shared.pydantic_compat import BaseSettings
 
 from .settings import ConfigSettings, settings
 
@@ -238,14 +242,36 @@ REQUIRED_CONFIG_KEYS = ["LLM_API_BASE", "REDPANDA_BROKER", "MODEL_NAME", "OPA_UR
 def load_config(*, validate_required: bool = True) -> dict[str, Any]:
     """Reload configuration from environment variables."""
     global settings, _CONFIG
-    new_settings = ConfigSettings()
+
+    # ``pydantic-settings`` is optional. When it's missing, ``BaseSettings``
+    # falls back to :class:`pydantic.BaseModel` which does not automatically
+    # read environment variables. In that case we manually populate the model
+    # using ``os.environ`` so tests and utilities behave consistently.
+    if "pydantic_settings" in BaseSettings.__module__:
+        new_settings = ConfigSettings()
+    else:  # pragma: no cover - fallback when dependency is absent
+        env_data: dict[str, Any] = {}
+        env_path = Path(os.getenv("ENV_FILE", ".env"))
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    env_data[k.strip()] = v.strip()
+        for field in ConfigSettings.__annotations__:
+            if field in os.environ:
+                env_data[field] = os.environ[field]
+            elif field not in env_data and field in DEFAULT_CONFIG:
+                if field != "LLM_API_BASE":
+                    env_data[field] = DEFAULT_CONFIG[field]
+        new_settings = ConfigSettings(**env_data)
+
     if validate_required:
         raw_data = new_settings.model_dump()
         missing = [k for k in REQUIRED_CONFIG_KEYS if not raw_data.get(k)]
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
-    data: dict[str, Any]
-    data = new_settings.model_dump()
+
+    data: dict[str, Any] = new_settings.model_dump()
     for key, value in data.items():
         setattr(settings, key, value)
     _CONFIG.update(data)
