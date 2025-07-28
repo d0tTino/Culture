@@ -50,7 +50,9 @@ class DummyAgent:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_weighted_votes_deduct_ip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_weighted_vote_records_spend(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     ledger = Ledger(tmp_path / "ledger.sqlite")
     ledger._hooks = [ledger._db_hook]  # keep DB hook only for thread safety
     orig_spend = ledger.spend
@@ -74,29 +76,29 @@ async def test_weighted_votes_deduct_ip(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     monkeypatch.setattr(gservice, "evaluate_with_opa", allow)
 
-    votes = [True, False, False]
+    vote_order = [True, False]
 
     async def fake_vote(_agent: DummyAgent, _text: str) -> bool:
-        return votes.pop(0)
+        return vote_order.pop(0)
 
     monkeypatch.setattr(gservice.governance, "vote", fake_vote)
 
-    for a in ("a1", "a2", "a3"):
-        await ledger.reward(a, ip=10.0, reason="fund")
+    # seed the ledger with different IP balances for each agent
+    await ledger.reward("a1", ip=12.0, reason="fund")
+    await ledger.reward("a2", ip=5.0, reason="fund")
 
-    agents = [DummyAgent("a1"), DummyAgent("a2"), DummyAgent("a3")]
-    weights = {"a1": 3, "a2": 1, "a3": 1}
+    agents = [DummyAgent("a1"), DummyAgent("a2")]
+    weights = {"a1": 2, "a2": 1}
 
     approved = await gservice.governance.propose_law(
         agents[0], "law", agents, vote_weights=weights
     )
     assert approved is True
 
-    assert ledger.get_balance("a1")[0] == pytest.approx(1.0)
-    assert ledger.get_balance("a2")[0] == pytest.approx(9.0)
-    assert ledger.get_balance("a3")[0] == pytest.approx(9.0)
+    assert ledger.get_balance("a1")[0] == pytest.approx(8.0)
+    assert ledger.get_balance("a2")[0] == pytest.approx(4.0)
 
     proposals = ledger.get_law_proposals()
-    assert proposals[0]["yes_weight"] == pytest.approx(3.0)
-    assert proposals[0]["no_weight"] == pytest.approx(2.0)
-    assert proposals[0]["ip_spent"] == pytest.approx(11.0)
+    assert proposals[0]["ip_spent"] == pytest.approx(5.0)
+    assert proposals[0]["yes_weight"] == pytest.approx(2.0)
+    assert proposals[0]["no_weight"] == pytest.approx(1.0)
