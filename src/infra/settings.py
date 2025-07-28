@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import ClassVar
 
 from src.shared.pydantic_compat import BaseSettings, SettingsConfigDict, model_validator
@@ -9,6 +11,21 @@ from src.shared.pydantic_compat import BaseSettings, SettingsConfigDict, model_v
 
 class ConfigSettings(BaseSettings):
     """Configuration loaded from environment variables and ``.env`` file."""
+
+    def __init__(self, **data: object) -> None:
+        if "pydantic_settings" not in BaseSettings.__module__:
+            env_data: dict[str, str] = {}
+            env_path = Path(data.pop("env_file", ".env"))
+            if env_path.exists():
+                for line in env_path.read_text().splitlines():
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        env_data[k.strip()] = v.strip()
+            for field in self.__class__.__annotations__:
+                if field in os.environ:
+                    env_data[field] = os.environ[field]
+            data = {**env_data, **data}
+        super().__init__(**data)
 
     # Deprecated individual base URLs - still loaded for backward compatibility
     OLLAMA_API_BASE: str = "http://localhost:11434"

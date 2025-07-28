@@ -5,6 +5,8 @@ import types
 import httpx
 import pytest
 
+pytest.importorskip("fastapi")
+
 from src.extensions import register_widget_backend
 
 

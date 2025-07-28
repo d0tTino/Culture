@@ -354,11 +354,17 @@ async def api_propose_law(proposal: LawProposal) -> Response:
     approved = False
     if sim is not None:
         try:
-            approved = await sim.propose_law(
-                proposal.proposer_id,
-                proposal.text,
-                proposal.vote_weights,
-            )
+            if proposal.vote_weights is None:
+                approved = await sim.propose_law(
+                    proposal.proposer_id,
+                    proposal.text,
+                )
+            else:
+                approved = await sim.propose_law(
+                    proposal.proposer_id,
+                    proposal.text,
+                    proposal.vote_weights,
+                )
         except Exception:  # pragma: no cover - defensive
             approved = False
     return JSONResponse({"approved": approved})

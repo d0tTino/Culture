@@ -132,7 +132,7 @@ def main(argv: list[str]) -> int:
             cfg["pytest"].pop("asyncio_mode")
             modified = True
 
-    cmd = [sys.executable, "-m", "pytest"]
+    cmd = [sys.executable, "-m", "pytest", f"--rootdir={ROOT}"]
     if not has_asyncio:
         cmd.extend(["-m", "not asyncio"])  # skip async tests when plugin absent
 
@@ -148,7 +148,9 @@ def main(argv: list[str]) -> int:
         cmd.append(f"--ignore={path}")
 
     cmd.extend(strip_xdist_flags(argv) if not has_xdist else argv)
-    return subprocess.call(cmd)
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return subprocess.call(cmd, env=env)
 
 
 if __name__ == "__main__":

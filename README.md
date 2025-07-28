@@ -137,6 +137,12 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 Follow these steps to run the example simulation locally:
 
+> **Five-minute setup**
+> ```bash
+> scripts/quickstart.sh
+> ```
+> This command starts a local LLM backend, runs the vertical slice demo, and opens the UI.
+
 1. **Clone the repository and create a virtual environment**
    ```bash
    git clone https://github.com/d0tTino/Culture.git
