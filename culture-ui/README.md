@@ -67,6 +67,10 @@ pnpm --filter culture-ui build
 pnpm --filter culture-ui test:e2e
 ```
 
+Use `pnpm` to execute tests so that the bundled Playwright version matches the
+installed `@playwright/test` dependency. Running `npx playwright` may install a
+different version and cause failures.
+
 ## Workspace integration
 
 `culture-ui` is defined in `pnpm-workspace.yaml`. Running `pnpm install` at the root installs both backend and UI dependencies. Use `--filter culture-ui` to run scripts only for the UI when needed.
