@@ -176,8 +176,16 @@ class VoteRecord(BaseModel):
     ts: Any
 
 
+class ProposalRecord(VoteRecord):
+    ip_spent: float
+
+
 class VotesResponse(BaseModel):
     votes: list[VoteRecord]
+
+
+class ProposalsResponse(BaseModel):
+    proposals: list[ProposalRecord]
 
 
 class VoteRequest(BaseModel):
@@ -392,7 +400,7 @@ async def api_vote(vote: VoteRequest) -> Response:
     return JSONResponse({"vote": result})
 
 
-@app.get("/api/proposals")
+@app.get("/api/proposals", response_model=ProposalsResponse)
 async def api_get_proposals(limit: int = 10) -> Response:
     """Return stored law proposals."""
     proposals = governance.get_proposals(limit)
@@ -638,6 +646,8 @@ __all__ = [
     "LawProposal",
     "LawsResponse",
     "Proposal",
+    "ProposalRecord",
+    "ProposalsResponse",
     "SimulationEvent",
     "VoteRecord",
     "VoteRequest",
