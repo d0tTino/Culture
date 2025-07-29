@@ -413,6 +413,13 @@ async def api_get_proposals(limit: int = 10) -> Response:
     return JSONResponse({"proposals": proposals})
 
 
+@app.get("/api/recent_proposals", response_model=ProposalsResponse)
+async def api_recent_proposals(limit: int = 5) -> Response:
+    """Return the most recent law proposals."""
+    proposals = governance.get_proposals(limit)
+    return JSONResponse({"proposals": proposals})
+
+
 @app.get("/api/laws", response_model=LawsResponse)
 async def api_get_laws() -> Response:
     """Return passed laws from the law board."""
@@ -667,6 +674,7 @@ __all__ = [
     "api_memory_snapshot",
     "api_memory_snapshots",
     "api_propose_law",
+    "api_recent_proposals",
     "api_token_balances",
     "api_vote",
     "app",
