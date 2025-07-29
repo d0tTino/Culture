@@ -378,6 +378,35 @@ class Ledger:
             return float(row[0]), float(row[1])
         return 0.0, 0.0
 
+    def get_transactions(self, agent_id: str, limit: int | None = None) -> list[dict[str, object]]:
+        """Return recent transactions for ``agent_id``."""
+        cur = self.conn.cursor()
+        query = (
+            "SELECT delta_ip, delta_du, reason, gas_price_per_call, gas_price_per_token, ts "
+            "FROM transactions WHERE agent_id=? ORDER BY id DESC"
+        )
+        rows = cur.execute(
+            query + (" LIMIT ?" if limit else ""),
+            [agent_id] + ([int(limit)] if limit is not None else []),
+        ).fetchall()
+        return [
+            {
+                "delta_ip": float(r[0]),
+                "delta_du": float(r[1]),
+                "reason": str(r[2]),
+                "gas_price_per_call": float(r[3]),
+                "gas_price_per_token": float(r[4]),
+                "ts": r[5],
+            }
+            for r in rows
+        ]
+
+    async def get_transactions_async(
+        self, agent_id: str, limit: int | None = None
+    ) -> list[dict[str, object]]:
+        """Asynchronous wrapper around :meth:`get_transactions`."""
+        return await asyncio.to_thread(self.get_transactions, agent_id, limit)
+
     def add_tokens(self, agent_id: str, token: str, amount: int) -> None:
         if amount <= 0:
             return

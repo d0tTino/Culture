@@ -85,6 +85,13 @@ async def reward(req: RewardRequest) -> JSONResponse:
     return JSONResponse({"ip": ip, "du": du})
 
 
+@app.get("/transactions/{agent_id}")
+async def get_transactions(agent_id: str, limit: int = 10) -> JSONResponse:
+    """Return recent transactions for the given agent."""
+    txns = await ledger.get_transactions_async(agent_id, limit)
+    return JSONResponse(txns)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the ledger service.")
     parser.add_argument("--version", action="store_true", help="Show version and exit")
@@ -105,4 +112,4 @@ def main(argv: list[str] | None = None) -> None:
     uvicorn.run(app, host=host, port=port)
 
 
-__all__ = ["app", "get_balance", "reward", "spend"]
+__all__ = ["app", "get_balance", "get_transactions", "reward", "spend"]
