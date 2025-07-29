@@ -174,21 +174,58 @@ plug-in that registers both an agent behavior and a UI widget.
    reachable.
 
 
-## Installing the Example Plug-in
+## Example: Building the ExampleWidget Plug-in
 
-An example package is included in `examples/example_plugin`. Install it in editable mode:
+The `examples/example_plugin` directory contains a small package that registers
+a widget and an agent behavior. The steps below mirror its structure so you can
+create a similar plug-in from scratch.
 
-```bash
-pip install -e examples/example_plugin
-```
+1. **Create the package layout**:
 
-After installation call `load_plugins()` so Culture can register its hooks:
+   ```text
+   examples/example_plugin/
+       example_plugin/
+           __init__.py
+       pyproject.toml
+   ```
 
-```python
-from src.extensions import load_plugins
+2. **Implement the plug-in** in `example_plugin/__init__.py`:
 
-await load_plugins()
-```
+   ```python
+   from typing import Any
+   from src.extensions import PluginResult, register_agent_behavior
+
+   def log_turn(agent: Any, output: dict[str, Any]) -> None:
+       print(f"[EXAMPLE_PLUGIN] {getattr(agent, 'agent_id', 'unknown')}: {output}")
+
+   def setup() -> PluginResult:
+       register_agent_behavior(log_turn)
+       return {
+           "name": "ExampleWidget",
+           "script_url": "http://localhost:5173/example.js",
+       }
+   ```
+
+3. **Declare the entry point** in `pyproject.toml`:
+
+   ```toml
+   [project.entry-points."culture.plugins"]
+   example_plugin = "example_plugin:setup"
+   ```
+
+4. **Install the package** in editable mode:
+
+   ```bash
+   pip install -e examples/example_plugin
+   ```
+
+5. **Load the plug-in at startup** so Culture can register the widget:
+
+   ```python
+   from src.extensions import load_plugins
+
+   await load_plugins()
+   ```
 
 ## Installing the Sample Plug-in
 
