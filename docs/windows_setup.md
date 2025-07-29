@@ -169,6 +169,19 @@ pytest tests/integration/agents/test_vertical_slice_real_llm.py -m integration
 
 This test is skipped automatically if Ollama is not running.
 
+## Running Tests on Windows
+
+The project runs its unit tests on a `windows-latest` runner in CI. You can
+replicate that environment locally by following the matrix configuration in
+`\.github/workflows/tests.yml`:
+
+```bash
+py -3.11 -m pip install -r requirements.txt -r requirements-dev.txt
+pytest -m "unit" -q
+```
+
+Running tests from **WSL** or **Git Bash** usually avoids path separator issues.
+
 ## Run the Simulation
 
 Once Ollama is running and your `.env` is configured, launch the main application:
@@ -183,7 +196,8 @@ To enable deterministic replay of simulations, follow [docs/redpanda_setup.md](r
 
 ## Known Quirks and Limitations
 
-- **`uvloop`**: The project uses `uvloop` for enhanced asyncio performance on POSIX-compliant systems (Linux, macOS). On Windows, it gracefully falls back to the standard `asyncio` event loop. Performance may differ slightly, but all functionality remains the same.
+- **`uvloop`**: The project uses `uvloop` for enhanced asyncio performance on POSIX-compliant systems. On Windows it automatically falls back to the standard event loop. If you see "uvloop not available" warnings, this is expected.
+- **Path separators**: Some tests assume forward slashes (`/`). Running them from **WSL** or **Git Bash** avoids issues with backslashes. When editing code, prefer `pathlib.Path` to build file paths.
 - **PyTorch**: If you are using features that require PyTorch (a dependency of `dspy-ai`), you may need to install the CPU-specific version if you do not have a compatible NVIDIA GPU. You can do this by adding `--index-url https://download.pytorch.org/whl/cpu` to your `pip install` commands. The project's extra-index-url for CUDA is defined in `requirements.in` but may not be suitable for all Windows environments.
 
 This document is a work-in-progress. If you encounter other Windows-specific issues, please document them here.
