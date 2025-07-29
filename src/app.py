@@ -10,21 +10,29 @@ from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.extensions import load_plugins
-from src.infra import config
+from src.infra import config, event_log
 from src.infra.checkpoint import (
     load_checkpoint,
-    restore_environment,
-    restore_rng_state,
     save_checkpoint,
+)
+from src.infra.checkpoint import (
+    restore_environment as _restore_environment,
+)
+from src.infra.checkpoint import (
+    restore_rng_state as _restore_rng_state,
 )
 from src.infra.llm_client import LLMClientInitError, get_llm_client
 from src.infra.logging_config import setup_logging
 from src.infra.settings import settings
+from src.infra.snapshot import load_snapshot
 from src.infra.warning_filters import configure_warning_filters
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 from src.utils.loop_helper import use_uvloop_if_available
+
+restore_rng_state = _restore_rng_state
+restore_environment = _restore_environment
 
 
 def _simple_yaml(path: Path) -> dict[str, object]:
@@ -218,10 +226,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--replay",
-        action="store_true",
-        help=(
-            "Restore RNG and environment state from the checkpoint to reproduce agent decisions"
-        ),
+        type=str,
+        metavar="SNAPSHOT",
+        help="Replay a previous run from the given snapshot using the event log.",
     )
     parser.add_argument(
         "--proposal",
@@ -266,11 +273,18 @@ def main() -> None:
         log_suppressed=args.log_suppressed_warnings,
     )
 
+    if args.replay:
+        snapshot = load_snapshot(args.replay)
+        sim = Simulation.from_snapshot(snapshot)
+        for event in event_log.stream_events(after_step=sim.current_step):
+            sim.apply_event(event)
+        return
+
     sim: Simulation
     meta: dict[str, object] | None = None
     if args.checkpoint and Path(args.checkpoint).exists():
         logging.info("Loading simulation from checkpoint %s", args.checkpoint)
-        sim, meta = load_checkpoint(args.checkpoint, replay=args.replay)
+        sim, meta = load_checkpoint(args.checkpoint)
         sim.steps_to_run = args.steps
     else:
         sim = create_simulation(
@@ -285,12 +299,6 @@ def main() -> None:
             semantic_user=args.semantic_user,
             semantic_password=args.semantic_password,
         )
-
-    if args.replay and meta:
-        if meta.get("rng_state") is not None:
-            restore_rng_state(meta["rng_state"])
-        if meta.get("environment") is not None:
-            restore_environment(meta["environment"])
 
     if args.proposal:
         asyncio.run(sim.forward_proposal(args.proposer_id, args.proposal))
