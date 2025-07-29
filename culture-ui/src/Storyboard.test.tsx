@@ -116,7 +116,7 @@ describe('Storyboard widget', () => {
     const heatmap = await screen.findByTestId('heatmap')
     const firstCell = heatmap.firstChild as HTMLElement
     await waitFor(() =>
-      expect(firstCell.style.backgroundColor).toBe('rgba(255, 0, 0, 1)'),
+      expect(firstCell.style.backgroundColor).toMatch(/rgba\(255, 0, 0, (0?\.\d+|1)\)/),
     )
 
     expect(

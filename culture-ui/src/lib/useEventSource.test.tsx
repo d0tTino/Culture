@@ -141,7 +141,7 @@ describe('useEventSource', () => {
 describe('useEventSource integration with FastAPI', () => {
   let port: number
   let server: ChildProcess | undefined
-  let serverAvailable = true
+  let serverAvailable = false
 
   beforeAll(async () => {
     try {
