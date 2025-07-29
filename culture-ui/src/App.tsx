@@ -10,6 +10,7 @@ import AgentMemoriesPage from './pages/AgentMemories'
 import NetworkWebPage from './pages/NetworkWeb'
 import WorldMapPage from './pages/WorldMap'
 import LawProposalPage from './pages/LawProposal'
+import ProposalsPage from './pages/Proposals'
 import TimelineWidgetPage from './pages/TimelineWidget'
 import MemoryExplorer from './pages/MemoryExplorer'
 import KpiCardPage from './pages/KpiCard'
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/timeline" element={<TimelineWidgetPage />} />
             <Route path="/agent-timeline" element={<AgentTimelinePage />} />
             <Route path="/propose-law" element={<LawProposalPage />} />
+            <Route path="/proposals" element={<ProposalsPage />} />
             <Route path="/kpi-card" element={<KpiCardPage />} />
             <Route path="/storyboard" element={<StoryboardPage />} />
             <Route path="/balances" element={<TokenBalancesPage />} />

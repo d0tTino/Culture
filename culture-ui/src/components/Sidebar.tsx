@@ -58,6 +58,11 @@ export default function Sidebar() {
           </NavLink>
         </li>
         <li>
+          <NavLink to="/proposals" className={linkClass}>
+            Proposals
+          </NavLink>
+        </li>
+        <li>
           <NavLink to="/memory" className={linkClass}>
             Memory Explorer
           </NavLink>

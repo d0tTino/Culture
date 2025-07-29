@@ -81,6 +81,7 @@ The UI includes pages for monitoring active missions and reviewing agent data:
 
 - **Mission Overview** – shows current missions with status and progress for each agent.
 - **Agent Data Overview** – lists observations, messages and other data gathered by agents.
+- **Proposals** – view recent law proposals and vote results (navigate to `/proposals`).
 
 Screenshots will be added to this README as these pages mature.
 
