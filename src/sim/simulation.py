@@ -6,6 +6,7 @@ import random
 import threading
 import time
 from collections.abc import Awaitable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from pydantic import ValidationError
@@ -996,6 +997,58 @@ class Simulation:
                         f" event {expected_hash} != file {snapshot.get('trace_hash')}"
                     )
                 self._last_trace_hash = snapshot.get("trace_hash", "")
+
+    @classmethod
+    def from_snapshot(cls: type[Self], snapshot: dict[str, Any]) -> Self:
+        """Create a ``Simulation`` instance from a snapshot dictionary."""
+        agents_data = snapshot.get("agents", [])
+        agents = [Agent(agent_id=a.get("agent_id", str(i))) for i, a in enumerate(agents_data)]
+        sim = cls(agents=agents, scenario="")
+        sim.current_step = int(snapshot.get("step", 0))
+        sim.collective_ip = float(snapshot.get("collective_ip", 0.0))
+        sim.collective_du = float(snapshot.get("collective_du", 0.0))
+        sim._last_trace_hash = snapshot.get("trace_hash", "")
+
+        for a_data in agents_data:
+            aid = a_data.get("agent_id")
+            for ag in sim.agents:
+                if ag.agent_id == aid:
+                    ag.state.ip = float(a_data.get("ip", 0.0))
+                    ag.state.du = float(a_data.get("du", 0.0))
+                    ag.state.mood_level = float(a_data.get("mood", 0.0))
+                    break
+
+        kb = snapshot.get("knowledge_board", {})
+        for entry in kb.get("entries", []):
+            sim.knowledge_board.add_entry(
+                entry.get("content_full", ""),
+                entry.get("agent_id", "unknown"),
+                int(entry.get("step", 0)),
+                kb.get("vector"),
+            )
+        if isinstance(kb.get("vector"), dict):
+            sim.knowledge_board.vector.clock.update(kb["vector"])
+
+        wm = snapshot.get("world_map", {})
+        if wm:
+            sim.world_map.width = int(wm.get("width", sim.world_map.width))
+            sim.world_map.height = int(wm.get("height", sim.world_map.height))
+            agents_pos = {k: tuple(v) for k, v in wm.get("agents", {}).items()}
+            sim.world_map.agent_positions = agents_pos
+            if isinstance(wm.get("vector"), dict):
+                sim.world_map.vector.clock.update(wm["vector"])
+        return sim
+
+    @classmethod
+    def replay_from_snapshot(cls: type[Self], snapshot_path: str | Path) -> Self:
+        """Load a snapshot and replay events from the event log."""
+        snap = load_snapshot(snapshot_path)
+        sim = cls.from_snapshot(snap)
+        from src.infra import event_log
+
+        for event in event_log.stream_events(after_step=sim.current_step):
+            sim.apply_event(event)
+        return sim
 
     async def run_turns_concurrent(self: Self, agents: list["Agent"]) -> list[dict[str, Any]]:
         """Run a batch of agent turns concurrently.
