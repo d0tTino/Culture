@@ -958,6 +958,7 @@ See [docs/ci_status.md](docs/ci_status.md) for tips on checking CI status with t
 ### Troubleshooting
 * **LLM connection errors** – Ensure `ollama serve` or `scripts/start_vllm.sh` is running and that `LLM_API_BASE` points to the correct URL.
 * **Missing dependencies** – Reinstall with `pip install -r requirements.txt -r requirements-dev.txt`.
+* **Check optional packages** – Run `python scripts/check_optional_deps.py` to see which optional dependencies (e.g., `chromadb`, `fastapi`, `asyncpg`) are missing before running tests.
 * **Port conflicts** – Set `VLLM_PORT` to a free port when launching the vLLM server.
 
 ## Code Quality and Type Safety
