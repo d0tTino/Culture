@@ -204,6 +204,42 @@ if "fastapi" not in sys.modules:
             def __init__(self, *args: object, **kwargs: object) -> None:
                 pass
 
+            async def __call__(
+                self, scope: object, receive: Callable[..., object], send: Callable[..., object]
+            ) -> None:  # pragma: no cover - simple stub
+                path = scope.get("path", "")
+                if path == "/api/register_widget":
+                    body = b""
+                    while True:
+                        message = await receive()
+                        body += message.get("body", b"")
+                        if not message.get("more_body", False):
+                            break
+                    try:
+                        data = json.loads(body.decode() or "{}")
+                    except json.JSONDecodeError:
+                        data = {}
+                    from src.interfaces import dashboard_backend as db
+
+                    if data:
+                        db.WIDGET_REGISTRY.register(
+                            data.get("name", ""), {"script_url": data.get("script_url", "")}
+                        )
+                    widgets = [
+                        {"name": n, **info} for n, info in db.WIDGET_REGISTRY._widgets.items()
+                    ]
+                    await send({"type": "http.response.start", "status": 200, "headers": []})
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": json.dumps({"widgets": widgets}).encode(),
+                            "more_body": False,
+                        }
+                    )
+                else:
+                    await send({"type": "http.response.start", "status": 404, "headers": []})
+                    await send({"type": "http.response.body", "body": b"", "more_body": False})
+
             def get(self, *args: object, **kwargs: object):
                 def decorator(fn: Callable[..., object]) -> Callable[..., object]:
                     return fn
