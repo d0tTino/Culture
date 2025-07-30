@@ -27,3 +27,19 @@ def test_l3_consolidation_and_retrieval(tmp_path) -> None:
 
     retrieved = service.get_long_term_summaries("agent", limit=1)
     assert retrieved == [summary]
+
+
+@pytest.mark.unit
+def test_get_summaries_returns_arc(tmp_path):
+    vector = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda t: [[0.0] for _ in t]
+    )
+    l3 = Level3SummaryManager(vector)
+
+    vector.add_memory("agent", 1, "thought", "c1", memory_type="chapter_summary")
+    vector.add_memory("agent", 2, "thought", "c2", memory_type="chapter_summary")
+
+    l3.consolidate_summaries("agent", 1, 2)
+
+    summaries = l3.get_summaries("agent")
+    assert any("c1" in s and "c2" in s for s in summaries)
