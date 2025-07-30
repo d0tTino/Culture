@@ -273,6 +273,8 @@ def main() -> None:
         log_suppressed=args.log_suppressed_warnings,
     )
 
+    sim: Simulation
+    meta: dict[str, object] | None = None
     if args.replay:
         snapshot = load_snapshot(args.replay)
         sim = Simulation.from_snapshot(snapshot)
@@ -280,8 +282,6 @@ def main() -> None:
             sim.apply_event(event)
         return
 
-    sim: Simulation
-    meta: dict[str, object] | None = None
     if args.checkpoint and Path(args.checkpoint).exists():
         logging.info("Loading simulation from checkpoint %s", args.checkpoint)
         sim, meta = load_checkpoint(args.checkpoint)
