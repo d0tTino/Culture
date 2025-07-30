@@ -120,3 +120,17 @@ python scripts/export_traces.py --snapshots snapshots/ --output data/traces.json
 ```
 
 Each line of `data/traces.jsonl` contains a single JSON object.
+
+### Dataset Export
+Follow these steps to manually export a dataset using `scripts/export_traces.py`:
+1. Decide which source to use:
+   - `--snapshots <DIR>` reads snapshots from a directory.
+   - `--events <FILE>` loads a saved event log.
+   - `--redpanda` pulls events from a running Redpanda broker.
+2. Choose an output path with `-o`/`--output`.
+3. Optionally filter the results with `--agent`, `--start-step`, or `--end-step`.
+4. Run the script. For example:
+
+   ```bash
+   python scripts/export_traces.py --snapshots snapshots/ --output data/traces.jsonl
+   ```
