@@ -7,16 +7,16 @@ export interface WidgetInfo extends WidgetMeta {
 }
 
 export interface WidgetRegistry {
-  register(name: string, component: React.ComponentType, meta?: WidgetMeta): void
-  get(name: string): React.ComponentType | undefined
+  register<P = unknown>(name: string, component: React.ComponentType<P>, meta?: WidgetMeta): void
+  get(name: string): React.ComponentType<unknown> | undefined
   list(): string[]
 }
 
 class Registry implements WidgetRegistry {
-  private widgets = new Map<string, React.ComponentType>()
+  private widgets = new Map<string, React.ComponentType<unknown>>()
 
-  register(name: string, component: React.ComponentType, meta?: WidgetMeta) {
-    this.widgets.set(name, component)
+  register<P = unknown>(name: string, component: React.ComponentType<P>, meta?: WidgetMeta) {
+    this.widgets.set(name, component as React.ComponentType<unknown>)
     try {
       void fetch('/api/widgets', {
         method: 'POST',
