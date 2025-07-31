@@ -194,6 +194,17 @@ Follow these steps to run the example simulation locally:
    This script loads environment variables from `.env` and launches the vertical
    slice with Discord enabled so you can chat with the agents immediately.
 
+### Quick Start
+
+Run the vertical slice with Discord enabled using the default settings:
+
+```bash
+./scripts/vertical_slice.sh --discord
+```
+
+This command reads your `.env` file, activates any available virtual environment,
+and starts the demo so you can talk with the agents right away.
+
 ## Installation
 
 1. Clone the repository:
