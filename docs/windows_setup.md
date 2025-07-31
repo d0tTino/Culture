@@ -9,7 +9,7 @@ the vertical slice example.
 1. [Enable WSL2](#enable-wsl2)
 2. [Install Python 3.11](#install-python-311)
 3. [Install Ollama (≥0.1.34)](#install-ollama-0134)
-4. [Run the Example Vertical Slice](#run-the-example-vertical-slice)
+4. [Run the Example Vertical Slice](#run-the-example-vertical-slice) \(use `scripts\\vertical_slice.bat` on Windows\)
 5. [Run the Simulation](#run-the-simulation)
 
 > **GPU Requirements**
@@ -117,7 +117,7 @@ ollama serve &
 ```
 
 Alternatively you can run the model with **vLLM**. Start the server from WSL or any
-shell where Python is available:
+shell where Python is available. You can also launch it directly on Windows:
 
 ```cmd
 scripts\start_vllm.bat
