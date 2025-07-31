@@ -14,6 +14,7 @@
 - [culture-ui Frontend](#culture-ui-frontend)
 - [Extensions and Plug-ins](#extensions-and-plug-ins)
 - [Roadmap](#roadmap)
+- [Exporting Simulation Traces](#exporting-simulation-traces)
 
 ## Vision: The Crucible of Emergent AI
 
@@ -932,12 +933,12 @@ CI enforces `--cov-fail-under=90` for overall coverage.
 CI also uploads `coverage.xml` as a GitHub Actions artifact. Open the workflow run
 and download the file from the **Artifacts** section.
 
-### Generating a Dataset
+### Exporting Simulation Traces
 Use `scripts/export_traces.py` to convert snapshots or event logs into a JSONL dataset.
 ```bash
 python scripts/export_traces.py --snapshots snapshots/ --output data/traces.jsonl
 ```
-This process is covered by `tests/integration/tools/test_export_traces.py`.
+The integration test [tests/integration/tools/test_export_traces.py](tests/integration/tools/test_export_traces.py) validates this export process.
 
 ### Project Structure (Key Directories)
 - `src/` — Main source code (agents, graphs, memory, infra, simulation)
