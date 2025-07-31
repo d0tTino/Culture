@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip("sklearn")
+
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager

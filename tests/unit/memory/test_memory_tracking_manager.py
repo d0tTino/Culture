@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("sklearn")
 from typing_extensions import Self
 
 from src.agents.memory.memory_tracking_manager import MemoryTrackingManager

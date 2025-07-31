@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("sklearn")
 pytest.importorskip("chromadb")
 
 from src.agents.memory.memory_service import MemoryService

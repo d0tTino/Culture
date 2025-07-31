@@ -3,6 +3,8 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip("sklearn")
+
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
