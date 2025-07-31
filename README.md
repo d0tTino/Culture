@@ -402,6 +402,7 @@ pnpm --filter culture-ui dev
 
 Once the server is running, visit `http://localhost:5173/memory` to explore agent
 memories using the **Memory Explorer** page.
+Visit `/storyboard` to view the live Storyboard showing agent actions.
 
 Prettier formatting is configured via `.prettierrc`. Format UI code with:
 
