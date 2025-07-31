@@ -412,6 +412,7 @@ A Husky pre-commit hook runs `pnpm lint` and `pnpm type-check` automatically.
 
 See [culture-ui/README.md](culture-ui/README.md) for additional details.
 UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture_ui_requirements.md).
+Steps for launching the Memory Explorer are in [docs/memory_explorer.md](docs/memory_explorer.md).
 
 ## Extensions and Plug-ins
 
