@@ -124,4 +124,5 @@ Prometheus metrics exported by the simulation include:
 - `llm_latency_ms` – latency of the last LLM call
 - `llm_errors_total` – failed LLM calls
 - `knowledge_board_size` – total Knowledge Board entries
+- `event_bus_queue_size` – number of queues subscribed to the event bus
 

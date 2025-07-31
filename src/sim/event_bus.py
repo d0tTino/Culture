@@ -5,6 +5,13 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import Self
 
+from src.interfaces import metrics
+
+EVENT_BUS_QUEUE_SIZE = metrics.Gauge(
+    "event_bus_queue_size",
+    "Number of queues subscribed to the EventBus",
+)
+
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
     from src.interfaces.dashboard_backend import SimulationEvent
 
@@ -14,17 +21,20 @@ class EventBus:
 
     def __init__(self: Self) -> None:
         self._queues: list[asyncio.Queue[SimulationEvent | None]] = []
+        EVENT_BUS_QUEUE_SIZE.set(0)
 
     def subscribe(self: Self) -> asyncio.Queue[SimulationEvent | None]:
         """Return a new queue subscribed to published events."""
         q: asyncio.Queue[SimulationEvent | None] = asyncio.Queue()
         self._queues.append(q)
+        EVENT_BUS_QUEUE_SIZE.set(len(self._queues))
         return q
 
     def unsubscribe(self: Self, q: asyncio.Queue[SimulationEvent | None]) -> None:
         """Remove ``q`` from the subscriber list if present."""
         try:
             self._queues.remove(q)
+            EVENT_BUS_QUEUE_SIZE.set(len(self._queues))
         except ValueError:  # pragma: no cover - defensive
             pass
 
@@ -32,6 +42,7 @@ class EventBus:
         """Publish ``event`` to all subscribers."""
         for q in list(self._queues):
             await q.put(event)
+        EVENT_BUS_QUEUE_SIZE.set(len(self._queues))
 
     def shutdown(self: Self) -> None:
         """Send ``None`` to all subscribers and clear them."""
@@ -41,6 +52,7 @@ class EventBus:
             except asyncio.QueueFull:  # pragma: no cover - defensive
                 pass
         self._queues.clear()
+        EVENT_BUS_QUEUE_SIZE.set(0)
         global _event_bus, _event_bus_loop
         _event_bus = None
         _event_bus_loop = None
