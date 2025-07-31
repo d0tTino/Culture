@@ -76,3 +76,20 @@ def get_gas_price_per_call() -> float:
 def get_gas_price_per_token() -> float:
     """Return the latest gas price charged per generated token."""
     return float(GAS_PRICE_PER_TOKEN._value.get())
+
+
+__all__ = [
+    "GAS_PRICE_PER_CALL",
+    "GAS_PRICE_PER_TOKEN",
+    "KNOWLEDGE_BOARD_SIZE",
+    "LLM_CALLS_TOTAL",
+    "LLM_ERRORS_TOTAL",
+    "LLM_LATENCY_MS",
+    "Counter",
+    "Gauge",
+    "get_gas_price_per_call",
+    "get_gas_price_per_token",
+    "get_kb_size",
+    "get_llm_latency",
+    "start_http_server",
+]
