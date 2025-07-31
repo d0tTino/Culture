@@ -20,7 +20,10 @@ and explore how AI personalities evolve.
 ## Call for Plug-in Authors
 
 Culture.ai welcomes plug-in developers to extend the system with custom
-widgets, agent behaviors, or integration layers. See the guides in
-[docs/plugins.md](plugins.md) and [docs/plugin_guide.md](plugin_guide.md).
+widgets, agent behaviors, or integration layers. See
+[docs/plugins.md](plugins.md) for the reference API and browse the
+[example plug-in directory](../examples/example_plugin) for a working
+sample. The step-by-step guide in
+[docs/plugin_guide.md](plugin_guide.md) explains how to build your own.
 This is an ideal time to share tools or visualizations that support the
 emergent society milestone.
