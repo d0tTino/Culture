@@ -75,14 +75,14 @@ async def test_multilayer_retriever_in_sim(
     # Patch retrieval functions for deterministic results
     async def fake_episodic(agent_id: str, query: str, k: int) -> list[dict]:
         return [
-            {"content": "e1", "relevance_score": 0.5},
-            {"content": "e2", "relevance_score": 0.2},
+            {"content": "e1", "relevance_score": 0.5, "memory_type": "episodic"},
+            {"content": "e2", "relevance_score": 0.2, "memory_type": "episodic"},
         ]
 
     def fake_semantic(agent_id: str, query: str, k: int) -> list[dict]:
         return [
-            {"content": "s1", "relevance_score": 0.9},
-            {"content": "s2", "relevance_score": 0.6},
+            {"content": "s1", "relevance_score": 0.9, "memory_type": "semantic"},
+            {"content": "s2", "relevance_score": 0.6, "memory_type": "semantic"},
         ]
 
     monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_episodic)
@@ -99,4 +99,7 @@ async def test_multilayer_retriever_in_sim(
 
     results = await service.retriever.retrieve("agent_1", "q", k=4)
     assert [r["content"] for r in results] == ["s1", "s2", "e1", "e2"]
+    assert [r["memory_type"] for r in results] == ["semantic", "semantic", "episodic", "episodic"]
+    scores = [r["relevance_score"] for r in results]
+    assert scores == sorted(scores, reverse=True)
     assert summary_calls == ["agent_1"]
