@@ -51,7 +51,7 @@ Install vLLM if it is not already available:
 pip install vllm
 ```
 `scripts/start_vllm.sh` launches the vLLM OpenAI-compatible API. Set these
-environment variables as needed:
+environment variables before running it:
 
 - `VLLM_MODEL` – model name to load (defaults to `mistralai/Mistral-7B-Instruct-v0.2`)
 - `VLLM_PORT` – server port (default `8001`)
@@ -65,7 +65,7 @@ export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
 ```
 
-Run `scripts/benchmark_llm.py` to sanity-check the server before launching a simulation.
+Run `scripts/benchmark_llm.py` after the server starts to sanity-check the endpoint.
 
 When `VLLM_API_BASE` (or `LLM_API_BASE` pointing to the same URL) is configured, the application prefers the vLLM endpoint over Ollama. Unset this variable to switch back to Ollama.
 

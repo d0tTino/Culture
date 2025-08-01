@@ -180,17 +180,17 @@ Follow these steps to run the example simulation locally:
   ```
 
 ### Start vLLM
-Set these environment variables to customize the vLLM server:
+Launch a local vLLM server with `scripts/start_vllm.sh`. Configure it with these environment variables:
 
 ```bash
-VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" \
-VLLM_PORT=8001 \
-VLLM_SWAP_SPACE=16 \
+VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2"  # model name
+VLLM_PORT=8001                                    # port for the API
+VLLM_SWAP_SPACE=16                                # swap space in GB
 scripts/start_vllm.sh
 export VLLM_API_BASE="http://localhost:$VLLM_PORT"
-export LLM_API_BASE="$VLLM_API_BASE"
+export LLM_API_BASE="$VLLM_API_BASE"            # preferred endpoint
 ```
-Run `scripts/benchmark_llm.py` to check that the server responds before starting a simulation.
+Run `scripts/benchmark_llm.py` after the server starts to verify that requests succeed.
 
 5. **Run the vertical slice demo**
    ```bash
