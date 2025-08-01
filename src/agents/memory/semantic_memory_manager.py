@@ -7,8 +7,52 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
-from sklearn.cluster import KMeans
-from sklearn.feature_extraction.text import TfidfVectorizer
+
+try:  # Import optional scikit-learn dependencies
+    from sklearn.cluster import KMeans as _KMeans
+    from sklearn.feature_extraction.text import TfidfVectorizer as _TfidfVectorizer
+
+    SKLEARN_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency missing
+    _KMeans = None
+    _TfidfVectorizer = None
+    SKLEARN_AVAILABLE = False
+
+if _KMeans is None:
+    logging.getLogger(__name__).warning("scikit-learn not installed; using basic clustering stubs")
+
+    class KMeans:
+        """Lightweight stand-in for :class:`sklearn.cluster.KMeans`."""
+
+        def __init__(
+            self, n_clusters: int = 8, n_init: int = 10, random_state: int | None = None
+        ) -> None:
+            self.n_clusters = n_clusters
+            self.cluster_centers_: NDArray[np.float64] = np.zeros((n_clusters, 1), dtype=float)
+
+        def fit_predict(self, X: Any) -> NDArray[np.int64]:
+            n_samples = len(X)
+            shape = getattr(X, "shape", (n_samples, 1))
+            dim = shape[1] if isinstance(shape, tuple) and len(shape) > 1 else 1
+            self.cluster_centers_ = np.zeros((self.n_clusters, dim), dtype=float)
+            return np.arange(n_samples) % self.n_clusters
+
+    class TfidfVectorizer:
+        """Simplified TF-IDF vectorizer returning empty features."""
+
+        def __init__(self, stop_words: str | None = None) -> None:
+            self.stop_words = stop_words
+
+        class _Matrix(np.ndarray[Any, np.dtype[np.float64]]):
+            nnz: int
+
+        def fit_transform(self, texts: list[str]) -> _Matrix:
+            arr = np.zeros((len(texts), 1), dtype=float).view(self._Matrix)
+            arr.nnz = 0
+            return arr
+else:  # scikit-learn available
+    KMeans = _KMeans
+    TfidfVectorizer = _TfidfVectorizer
 
 if TYPE_CHECKING:
     from neo4j import Driver
@@ -25,7 +69,11 @@ logger = logging.getLogger(__name__)
 
 
 class SemanticMemoryManager:
-    """Manage consolidation and semantic grouping of memories."""
+    """Manage consolidation and semantic grouping of memories.
+
+    When scikit-learn is not installed, clustering falls back to simplified
+    heuristics with reduced accuracy.
+    """
 
     def __init__(
         self: Self, vector_store: ChromaVectorStoreManager, driver: Driver | None
@@ -56,7 +104,11 @@ class SemanticMemoryManager:
     def group_memories_by_topic(
         self: Self, agent_id: str, num_topics: int = 5, threshold: float = 0.7
     ) -> dict[int, list[dict[str, Any]]]:
-        """Group memories into topics using embeddings or simple keywords."""
+        """Group memories into topics using embeddings or simple keywords.
+
+        This operation relies on scikit-learn when available. Without it,
+        grouping falls back to a basic heuristic.
+        """
         memories = self.vector_store.retrieve_filtered_memories(agent_id, limit=None)
         if not memories:
             return {}
@@ -75,12 +127,15 @@ class SemanticMemoryManager:
             tfidf_matrix = vectorizer.fit_transform(texts)
 
             if tfidf_matrix.nnz == 0:
-                labels = np.arange(len(texts)) % n_clusters
-                centroids = np.zeros((n_clusters, 1), dtype=float)
+                labels: NDArray[np.int64] = np.arange(len(texts)) % n_clusters
+                centroids: NDArray[np.float64] = np.zeros((n_clusters, 1), dtype=float)
             else:
                 km = KMeans(n_clusters=n_clusters, n_init=1, random_state=0)
-                labels = km.fit_predict(tfidf_matrix)
-                centroids = km.cluster_centers_.astype(float)
+                labels = np.asarray(km.fit_predict(tfidf_matrix), dtype=int)
+                labels = labels.astype(np.int64, copy=False)
+                centroids = np.asarray(km.cluster_centers_, dtype=float).astype(
+                    np.float64, copy=False
+                )
 
             groups = defaultdict(list)
             for label, mem in zip(labels, memories):
