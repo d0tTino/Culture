@@ -3,14 +3,14 @@ from typing import Any
 
 import pytest
 
-from src.interfaces import metrics
-
-pytest.importorskip("sklearn")
-
+from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.interfaces import metrics
 from tests.utils.dummy_chromadb import setup_dummy_chromadb
+
+pytest.importorskip("sklearn")
 
 pytestmark = pytest.mark.unit
 
@@ -92,15 +92,42 @@ async def test_metrics_increment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
         return []
 
     monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_success)
-    before = metrics.MEMORY_RETRIEVALS_TOTAL._value.get()
+    before = metrics.get_memory_retrievals()
     await retriever.retrieve("agent", "q")
-    assert metrics.MEMORY_RETRIEVALS_TOTAL._value.get() == before + 1
+    assert metrics.get_memory_retrievals() == before + 1
 
     async def fake_fail(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_fail)
-    err_before = metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL._value.get()
+    err_before = metrics.get_memory_retrieval_errors()
     with pytest.raises(RuntimeError):
         await retriever.retrieve("agent", "q")
-    assert metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL._value.get() == err_before + 1
+    assert metrics.get_memory_retrieval_errors() == err_before + 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_service_metrics_increment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    vector = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda t: [[0.0] for _ in t]
+    )
+    semantic = SemanticMemoryManager(vector, driver=None)
+    service = MemoryService(vector_store=vector, semantic_manager=semantic)
+
+    async def fake_success(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
+        return []
+
+    monkeypatch.setattr(service.retriever, "retrieve_and_update_semantic", fake_success)
+    before = metrics.get_memory_retrievals()
+    await service.retrieve_episodic_and_update_semantic("agent", "q")
+    assert metrics.get_memory_retrievals() == before + 1
+
+    async def fake_fail(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(service.retriever, "retrieve_and_update_semantic", fake_fail)
+    err_before = metrics.get_memory_retrieval_errors()
+    with pytest.raises(RuntimeError):
+        await service.retrieve_episodic_and_update_semantic("agent", "q")
+    assert metrics.get_memory_retrieval_errors() == err_before + 1

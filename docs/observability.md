@@ -45,7 +45,14 @@ curl -X POST -H "Content-Type: application/json" \
 
 The imported dashboard includes panels for CPU usage, Knowledge Board size, active agent count, and the LLM query rate (QPS).
 
-To monitor memory retrievals, add a new panel in Grafana using the `memory_retrievals_total` and `memory_retrieval_errors_total` counters. For example, graph `rate(memory_retrievals_total[1m])` to see retrieval throughput.
+### Memory Retrieval Metrics
+
+Two counters track memory lookup activity:
+
+- `memory_retrievals_total` – counts successful memory lookups.
+- `memory_retrieval_errors_total` – counts memory retrieval failures.
+
+Add a new panel in Grafana using these counters. For example, graph `rate(memory_retrievals_total[1m])` to view retrieval throughput.
 
 Additional Prometheus metrics include:
 

@@ -74,7 +74,13 @@ class MemoryService:
     async def retrieve_episodic_and_update_semantic(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        return await self.retriever.retrieve_and_update_semantic(agent_id, query, k)
+        try:
+            result = await self.retriever.retrieve_and_update_semantic(agent_id, query, k)
+            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+            return result
+        except Exception:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+            raise
 
     def blend_with_recent_semantic(
         self: Self, agent_id: str, episodic_summary: str, limit: int = 3

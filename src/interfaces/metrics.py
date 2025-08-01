@@ -88,6 +88,16 @@ def get_gas_price_per_token() -> float:
     return float(GAS_PRICE_PER_TOKEN._value.get())
 
 
+def get_memory_retrievals() -> int:
+    """Return the total successful memory retrievals."""
+    return int(MEMORY_RETRIEVALS_TOTAL._value.get())
+
+
+def get_memory_retrieval_errors() -> int:
+    """Return the total failed memory retrievals."""
+    return int(MEMORY_RETRIEVAL_ERRORS_TOTAL._value.get())
+
+
 __all__ = [
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
@@ -103,5 +113,7 @@ __all__ = [
     "get_gas_price_per_token",
     "get_kb_size",
     "get_llm_latency",
+    "get_memory_retrieval_errors",
+    "get_memory_retrievals",
     "start_http_server",
 ]
