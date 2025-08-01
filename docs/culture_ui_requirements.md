@@ -122,6 +122,30 @@ The response structure is:
 ```
 
 
+### Stream Events and WebSocket Fallback
+
+The dashboard receives live updates from `/stream/events`. The preferred method uses **Server-Sent Events (SSE)**, but the UI must fall back to WebSocket when SSE isn't available.
+
+```ts
+function subscribe() {
+  const sse = new EventSource('/stream/events');
+  sse.onmessage = (ev) => {
+    const payload = JSON.parse(ev.data);
+    console.log('event', payload);
+  };
+  sse.onerror = () => {
+    sse.close();
+    const ws = new WebSocket('ws://localhost:8000/ws/events');
+    ws.onmessage = (ev) => {
+      const payload = JSON.parse(ev.data);
+      console.log('event', payload);
+    };
+  };
+}
+```
+
+This ensures live event delivery even when browsers or proxies block SSE.
+
 ## Setup
 
 Install dependencies and run the development server:

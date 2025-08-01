@@ -415,6 +415,7 @@ Once the server is running, visit `http://localhost:5173/memory` to explore agen
 memories using the **Memory Explorer** page.
 Visit `/storyboard` to view the live Storyboard showing agent actions.
 
+Real-time updates are streamed from `/stream/events` using Server-Sent Events with a WebSocket fallback. See [Stream Events and WebSocket Fallback](docs/culture_ui_requirements.md#stream-events-and-websocket-fallback) for a minimal subscriber example.
 Prettier formatting is configured via `.prettierrc`. Format UI code with:
 
 ```bash
