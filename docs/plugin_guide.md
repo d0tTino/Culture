@@ -58,3 +58,11 @@ python scripts/create_plugin.py my_plugin
 This creates a new `my_plugin` directory containing a ready-to-install package
 with entry-point metadata. Install it in editable mode and load it as shown
 above, then reload your Culture server to activate the plug-in.
+
+For a complete demonstration, see the sample files included with the
+repository:
+
+- `examples/example_plugin/plugin.py` shows a plug-in that registers a widget
+  and agent behavior.
+- `examples/example_plugin/static/example.js` contains the minimal widget
+  script referenced by the plug-in's `setup()` function.
