@@ -50,6 +50,7 @@ if _KMeans is None:
             arr = np.zeros((len(texts), 1), dtype=float).view(self._Matrix)
             arr.nnz = 0
             return arr
+
 else:  # scikit-learn available
     KMeans = _KMeans
     TfidfVectorizer = _TfidfVectorizer
