@@ -71,8 +71,15 @@ class MultiLayerRetriever:
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         if not self.semantic_manager:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
             return []
-        return self.semantic_manager.get_recent_summaries(agent_id, limit)
+        try:
+            result = self.semantic_manager.get_recent_summaries(agent_id, limit)
+            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+            return result
+        except Exception:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+            raise
 
     def blend_with_recent_semantic(
         self: Self, agent_id: str, episodic_summary: str, limit: int = 3
