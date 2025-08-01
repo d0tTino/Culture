@@ -11,6 +11,7 @@
 - [Setup](#installation)
 - [Windows / WSL2 Setup Checklist](docs/windows_setup.md#quick-setup-checklist)
 - [Running Tests](#running-tests)
+- [Start vLLM](#start-vllm)
 - [culture-ui Frontend](#culture-ui-frontend)
 - [Extensions and Plug-ins](#extensions-and-plug-ins)
 - [Roadmap](#roadmap)
@@ -177,6 +178,20 @@ Follow these steps to run the example simulation locally:
   scripts/start_vllm.sh
   export LLM_API_BASE="http://localhost:$VLLM_PORT"
   ```
+
+### Start vLLM
+Set these environment variables to customize the vLLM server:
+
+```bash
+VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" \
+VLLM_PORT=8001 \
+VLLM_SWAP_SPACE=16 \
+scripts/start_vllm.sh
+export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+export LLM_API_BASE="$VLLM_API_BASE"
+```
+Run `scripts/benchmark_llm.py` to check that the server responds before starting a simulation.
+
 5. **Run the vertical slice demo**
    ```bash
    make local-slice

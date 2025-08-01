@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Launch a quick demo with the UI and LLM backend.
+# Manual instructions: see README.md#start-vllm or docs/runbook.md#start-vllm.
+# After the server starts you can run scripts/benchmark_llm.py as a sanity check.
 set -euo pipefail
 
 # Load environment variables

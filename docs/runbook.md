@@ -45,7 +45,7 @@ This runbook outlines routine operations for working with Culture.ai.
    zstd -d snapshot_100.json.zst -o snapshot_100.json
    ```
 
-## Starting the vLLM Server
+## Start vLLM
 Install vLLM if it is not already available:
 ```bash
 pip install vllm
@@ -65,9 +65,9 @@ export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
 ```
 
-When `VLLM_API_BASE` (or `LLM_API_BASE` pointing to the same URL) is configured,
-the application prefers the vLLM endpoint over Ollama. Unset this variable to
-switch back to Ollama.
+Run `scripts/benchmark_llm.py` to sanity-check the server before launching a simulation.
+
+When `VLLM_API_BASE` (or `LLM_API_BASE` pointing to the same URL) is configured, the application prefers the vLLM endpoint over Ollama. Unset this variable to switch back to Ollama.
 
 ## Running Tests
 Run the full suite with coverage:
