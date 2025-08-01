@@ -174,23 +174,21 @@ Follow these steps to run the example simulation locally:
   ```
   Alternatively you can start a vLLM server:
   ```bash
-  VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 \
-  scripts/start_vllm.sh
-  export LLM_API_BASE="http://localhost:$VLLM_PORT"
+  VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
+  export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+  export LLM_API_BASE="$VLLM_API_BASE"
   ```
 
 ### Start vLLM
-Launch a local vLLM server with `scripts/start_vllm.sh`. Configure it with these environment variables:
+Launch the OpenAI-compatible API and point the application to it:
 
 ```bash
-VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2"  # model name
-VLLM_PORT=8001                                    # port for the API
-VLLM_SWAP_SPACE=16                                # swap space in GB
-scripts/start_vllm.sh
+VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
 export VLLM_API_BASE="http://localhost:$VLLM_PORT"
-export LLM_API_BASE="$VLLM_API_BASE"            # preferred endpoint
+export LLM_API_BASE="$VLLM_API_BASE"   # overrides Ollama when set
 ```
-Run `scripts/benchmark_llm.py` after the server starts to verify that requests succeed.
+
+Requests now use vLLM instead of Ollama. See [docs/runbook.md](docs/runbook.md#start-vllm) for additional details. Run `scripts/benchmark_llm.py` to verify the endpoint.
 
 5. **Run the vertical slice demo**
    ```bash
