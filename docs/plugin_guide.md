@@ -22,6 +22,10 @@ def setup() -> PluginResult:
     }
 ```
 
+For a concrete example, see the sample plug-in provided with this repository:
+`examples/example_plugin/plugin.py` registers a widget and agent behavior and
+loads `examples/example_plugin/static/example.js` as its front-end script.
+
 ## 2. Declare the entry point
 
 Expose the plug-in via `pyproject.toml` so Culture can discover it:
