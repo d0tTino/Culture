@@ -47,6 +47,16 @@ KNOWLEDGE_BOARD_SIZE = Gauge(
     "knowledge_board_size", "Number of entries currently on the Knowledge Board"
 )
 
+# Memory retrieval metrics
+MEMORY_RETRIEVALS_TOTAL = Counter(
+    "memory_retrievals_total",
+    "Total number of successful memory retrievals",
+)
+MEMORY_RETRIEVAL_ERRORS_TOTAL = Counter(
+    "memory_retrieval_errors_total",
+    "Total number of failed memory retrievals",
+)
+
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
@@ -85,6 +95,8 @@ __all__ = [
     "LLM_CALLS_TOTAL",
     "LLM_ERRORS_TOTAL",
     "LLM_LATENCY_MS",
+    "MEMORY_RETRIEVALS_TOTAL",
+    "MEMORY_RETRIEVAL_ERRORS_TOTAL",
     "Counter",
     "Gauge",
     "get_gas_price_per_call",

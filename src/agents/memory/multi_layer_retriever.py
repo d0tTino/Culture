@@ -6,6 +6,8 @@ from typing import Any
 
 from typing_extensions import Self
 
+from src.interfaces import metrics
+
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
 
@@ -24,36 +26,48 @@ class MultiLayerRetriever:
     async def retrieve(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        episodic: list[dict[str, Any]] = []
-        if self.vector_store:
-            episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
+        try:
+            episodic: list[dict[str, Any]] = []
+            if self.vector_store:
+                episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
 
-        semantic: list[dict[str, Any]] = []
-        if self.semantic_manager:
-            import asyncio
+            semantic: list[dict[str, Any]] = []
+            if self.semantic_manager:
+                import asyncio
 
-            semantic = await asyncio.to_thread(
-                self.semantic_manager.retrieve_context_with_scores, agent_id, query, k
-            )
+                semantic = await asyncio.to_thread(
+                    self.semantic_manager.retrieve_context_with_scores, agent_id, query, k
+                )
 
-        combined = episodic + semantic
-        combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
-        return combined[:k]
+            combined = episodic + semantic
+            combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
+            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+            return combined[:k]
+        except Exception:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+            raise
 
     async def retrieve_and_update_semantic(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        episodic = []
-        if self.vector_store:
-            episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
-        if self.semantic_manager:
-            try:
-                await self.semantic_manager.run_nightly_job(agent_id, episodic)
-            except Exception:  # pragma: no cover - defensive
-                import logging
+        try:
+            episodic = []
+            if self.vector_store:
+                episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
+            if self.semantic_manager:
+                try:
+                    await self.semantic_manager.run_nightly_job(agent_id, episodic)
+                except Exception:  # pragma: no cover - defensive
+                    import logging
 
-                logging.getLogger(__name__).error("Semantic consolidation failed", exc_info=True)
-        return episodic
+                    logging.getLogger(__name__).error(
+                        "Semantic consolidation failed", exc_info=True
+                    )
+            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+            return episodic
+        except Exception:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+            raise
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         if not self.semantic_manager:
