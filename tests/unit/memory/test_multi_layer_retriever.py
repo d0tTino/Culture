@@ -3,6 +3,8 @@ from typing import Any
 
 import pytest
 
+from src.interfaces import metrics
+
 pytest.importorskip("sklearn")
 
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
@@ -75,3 +77,30 @@ async def test_retrieve_and_update_calls_semantic_job(
 
     assert results == episodic
     assert calls == [("agent", episodic)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_metrics_increment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    vector = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda t: [[0.0] for _ in t]
+    )
+    semantic = SemanticMemoryManager(vector, driver=None)
+    retriever = MultiLayerRetriever(vector, semantic)
+
+    async def fake_success(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
+        return []
+
+    monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_success)
+    before = metrics.MEMORY_RETRIEVALS_TOTAL._value.get()
+    await retriever.retrieve("agent", "q")
+    assert metrics.MEMORY_RETRIEVALS_TOTAL._value.get() == before + 1
+
+    async def fake_fail(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_fail)
+    err_before = metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL._value.get()
+    with pytest.raises(RuntimeError):
+        await retriever.retrieve("agent", "q")
+    assert metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL._value.get() == err_before + 1

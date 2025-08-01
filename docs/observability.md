@@ -45,9 +45,13 @@ curl -X POST -H "Content-Type: application/json" \
 
 The imported dashboard includes panels for CPU usage, Knowledge Board size, active agent count, and the LLM query rate (QPS).
 
+To monitor memory retrievals, add a new panel in Grafana using the `memory_retrievals_total` and `memory_retrieval_errors_total` counters. For example, graph `rate(memory_retrievals_total[1m])` to see retrieval throughput.
+
 Additional Prometheus metrics include:
 
 - `llm_errors_total` – counts failed LLM calls captured by the monitoring decorator.
+- `memory_retrievals_total` – counts successful memory lookups.
+- `memory_retrieval_errors_total` – counts memory retrieval failures.
 
 ## 4. Running Grafana Locally
 
@@ -125,4 +129,6 @@ Prometheus metrics exported by the simulation include:
 - `llm_errors_total` – failed LLM calls
 - `knowledge_board_size` – total Knowledge Board entries
 - `event_bus_queue_size` – number of queues subscribed to the event bus
+- `memory_retrievals_total` – successful memory retrievals
+- `memory_retrieval_errors_total` – failed memory retrievals
 

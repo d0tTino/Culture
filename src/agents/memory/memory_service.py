@@ -6,6 +6,8 @@ from typing import Any
 
 from typing_extensions import Self
 
+from src.interfaces import metrics
+
 from .level3_summary_manager import Level3SummaryManager
 from .multi_layer_retriever import MultiLayerRetriever
 from .semantic_memory_manager import SemanticMemoryManager
@@ -44,14 +46,27 @@ class MemoryService:
     async def retrieve_relevant_memories(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        return await self.retriever.retrieve(agent_id, query, k)
+        try:
+            result = await self.retriever.retrieve(agent_id, query, k)
+            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+            return result
+        except Exception:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+            raise
 
     def retrieve_semantic_context(
         self: Self, agent_id: str, query: str, k: int = 5
     ) -> list[dict[str, Any]]:
         if not self.semantic_manager:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
             return []
-        return self.semantic_manager.retrieve_context(agent_id, query, k)
+        try:
+            result = self.semantic_manager.retrieve_context(agent_id, query, k)
+            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+            return result
+        except Exception:
+            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+            raise
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         return self.retriever.get_recent_semantic_summaries(agent_id, limit)
