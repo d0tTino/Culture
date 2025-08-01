@@ -122,7 +122,7 @@ The response structure is:
 ```
 
 
-### Stream Events and WebSocket Fallback
+### `/stream/events` and WebSocket Fallback
 
 The dashboard receives live updates from `/stream/events`. The preferred method uses **Server-Sent Events (SSE)**, but the UI must fall back to WebSocket when SSE isn't available.
 
