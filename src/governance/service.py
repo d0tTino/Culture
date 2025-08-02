@@ -14,6 +14,15 @@ from src.utils.policy import evaluate_with_opa
 from .law_board import law_board
 
 
+def quadratic_vote_weight(ip_balance: float, staked_ip: float = 0.0) -> float:
+    """Return the quadratic voting weight from available influence points.
+
+    The weight is computed as ``sqrt(ip_balance + staked_ip)``. Any negative
+    totals are treated as ``0`` to avoid ``ValueError`` from ``sqrt``.
+    """
+    return math.sqrt(max(0.0, ip_balance + staked_ip))
+
+
 class GovernanceService:
     """Service coordinating law proposals and voting."""
 
@@ -49,7 +58,7 @@ class GovernanceService:
                     staked = ledger.get_staked_ip(a.agent_id)
                 except Exception:
                     staked = 0.0
-                weights.append(math.sqrt(base_ip + staked))
+                weights.append(quadratic_vote_weight(base_ip, staked))
         else:
             start_balances = await asyncio.gather(
                 *[ledger.get_balance_async(a.agent_id) for a in agents],
@@ -98,4 +107,4 @@ class GovernanceService:
 
 governance = GovernanceService()
 
-__all__ = ["GovernanceService", "governance"]
+__all__ = ["GovernanceService", "governance", "quadratic_vote_weight"]
