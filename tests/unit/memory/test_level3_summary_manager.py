@@ -43,3 +43,24 @@ def test_get_summaries_returns_arc(tmp_path):
 
     summaries = l3.get_summaries("agent")
     assert any("c1" in s and "c2" in s for s in summaries)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_context_pipeline_with_l3(tmp_path) -> None:
+    vector = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda t: [[0.0] for _ in t]
+    )
+    l3 = Level3SummaryManager(vector)
+    service = MemoryService(vector_store=vector, semantic_manager=None, level3_manager=l3)
+
+    vector.add_memory("agent", 1, "thought", "c1", memory_type="chapter_summary")
+    vector.add_memory("agent", 2, "thought", "c2", memory_type="chapter_summary")
+    vector.add_memory("agent", 3, "thought", "episodic", memory_type="raw")
+
+    l3.consolidate_summaries("agent", 1, 2)
+
+    result = await service.get_context_pipeline("agent", long_term_limit=1)
+    assert len(result) == 3
+    _, _, l3_list = result
+    assert l3_list == service.get_long_term_summaries("agent", limit=1)
