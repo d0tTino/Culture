@@ -186,6 +186,13 @@ class SimulationDiscordBot:
                 if getattr(message, "author", None) == client.user:
                     return
                 content = getattr(message, "content", "")
+                if not allow_message(content):
+                    logger.debug("Message blocked by policy")
+                    return
+                allowed, content = await evaluate_with_opa(content)
+                if not allowed:
+                    logger.debug("Message blocked by OPA policy")
+                    return
                 channel = getattr(message, "channel", None)
                 channel_id = getattr(channel, "id", None)
                 user = getattr(message, "author", None)
