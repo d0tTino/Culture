@@ -695,7 +695,7 @@ def analyze_sentiment(
             except ValueError:
                 logger.warning(f"Invalid mock sentiment value: {val}")
                 return 0.0
-        return float(val) if isinstance(val, (int, float)) else 0.0
+        return float(val) if isinstance(val, int | float) else 0.0
 
     if not text:
         return None

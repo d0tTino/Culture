@@ -131,7 +131,7 @@ def load_snapshot(
     compress = SNAPSHOT_COMPRESS if compress is None else compress
 
     path = Path(directory)
-    if isinstance(step, (str, Path)) and Path(step).exists():
+    if isinstance(step, str | Path) and Path(step).exists():
         file_path = Path(step)
         compress = file_path.suffix.endswith(".zst")
         json_file = path / file_path.with_suffix(".json").name

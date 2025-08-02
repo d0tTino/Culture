@@ -70,3 +70,17 @@ repository:
   and agent behavior.
 - `examples/example_plugin/static/example.js` contains the minimal widget
   script referenced by the plug-in's `setup()` function.
+- `examples/plugins/minimal_plugin` provides a tiny plug-in that registers a
+  widget and an agent behavior. Install it with:
+
+```bash
+pip install -e examples/plugins/minimal_plugin
+```
+
+Load the plug-in at startup so Culture can register the hooks:
+
+```python
+from src.extensions import load_plugins
+
+await load_plugins()
+```
