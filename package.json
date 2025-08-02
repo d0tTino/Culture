@@ -8,6 +8,9 @@
       "@parcel/watcher",
       "@tailwindcss/oxide"
     ]
+  },
+  "culture.plugins": {
+    "minimal_plugin": "minimal_plugin:setup"
   }
 }
 

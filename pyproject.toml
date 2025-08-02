@@ -111,4 +111,10 @@ preview = false
 #[tool.ruff.lint.per-file-ignores] # This line and the following are removed as they are now under [tool.ruff.per-file-ignores]
 #"src/agents/dspy_programs/*_examples.py" = ["E501"]
 #"src/agents/dspy_programs/*_summary_examples.py" = ["E501"]
-#"tests/unit/dspy_programs/test_role_specific_summary_generator.py" = ["E501"] 
+#"tests/unit/dspy_programs/test_role_specific_summary_generator.py" = ["E501"]
+
+[project]
+name = "culture"
+
+[project.entry-points."culture.plugins"]
+minimal_plugin = "minimal_plugin:setup"

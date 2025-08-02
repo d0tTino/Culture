@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import TypedDict, Union
+from typing import TypedDict
 
 # Basic JSON-compatible types used throughout the codebase
-JSONValue = Union[str, int, float, bool, None, dict[str, "JSONValue"], list["JSONValue"]]
+JSONValue = str | int | float | bool | None | dict[str, "JSONValue"] | list["JSONValue"]
 
 # Simple alias for a JSON-compatible dictionary
 JSONDict = dict[str, JSONValue]
