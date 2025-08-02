@@ -94,10 +94,16 @@ class MemoryService:
         query: str = "",
         k: int = 5,
         semantic_limit: int = 3,
-    ) -> tuple[list[dict[str, Any]], list[str]]:
-        """Full retrieval pipeline returning episodic memories and semantic summaries."""
+        long_term_limit: int | None = None,
+    ) -> (
+        tuple[list[dict[str, Any]], list[str]] | tuple[list[dict[str, Any]], list[str], list[str]]
+    ):
+        """Return episodic, semantic, and optionally long-term summaries."""
         episodic = await self.retrieve_episodic_and_update_semantic(agent_id, query, k)
         semantic = self.get_recent_semantic_summaries(agent_id, semantic_limit)
+        if long_term_limit:
+            long_term = self.get_long_term_summaries(agent_id, long_term_limit)
+            return episodic, semantic, long_term
         return episodic, semantic
 
     async def run_semantic_job(
