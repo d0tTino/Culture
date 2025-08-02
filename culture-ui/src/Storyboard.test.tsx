@@ -17,7 +17,13 @@ describe('Storyboard widget', () => {
     const fetchSpy = vi.fn((url: string) => {
       if (url === '/api/agent_stats') {
         return Promise.resolve({
-          json: () => Promise.resolve({ agents: { a1: { mood: 0.2, retrieval_count: 3 } } }),
+          json: () =>
+            Promise.resolve({ agents: { a1: { mood: 0.2, retrieval_count: 3 } } }),
+        }) as unknown as Response
+      }
+      if (url === '/api/agents/a1/state') {
+        return Promise.resolve({
+          json: () => Promise.resolve({ state: { ip: 5 } }),
         }) as unknown as Response
       }
       return Promise.resolve({
@@ -36,7 +42,7 @@ describe('Storyboard widget', () => {
     })
 
     expect(
-      await screen.findByText('a1: 5, 6 (mood 0.2, retrievals 3)')
+      await screen.findByText('a1: 5, 6 (mood 0.2, ip 5, retrievals 3)')
     ).toBeInTheDocument()
 
     act(() => {
@@ -46,13 +52,14 @@ describe('Storyboard widget', () => {
     expect(await screen.findByText('s1')).toBeInTheDocument()
     expect(fetchSpy).toHaveBeenCalledWith('/api/agents/a1/semantic_summaries')
     expect(fetchSpy).toHaveBeenCalledWith('/api/agent_stats')
+    expect(fetchSpy).toHaveBeenCalledWith('/api/agents/a1/state')
 
     act(() => {
       screen.getByRole('button', { name: /map/i }).click()
     })
 
     expect(
-      screen.getByText('a1: 5, 6 (mood 0.2, retrievals 3)')
+      screen.getByText('a1: 5, 6 (mood 0.2, ip 5, retrievals 3)')
     ).toBeInTheDocument()
   })
 
@@ -73,7 +80,7 @@ describe('Storyboard widget', () => {
     })
 
     expect(
-      await screen.findByText('a1: 5, 6 (mood n/a, retrievals 0)')
+      await screen.findByText('a1: 5, 6 (mood n/a, ip n/a, retrievals 0)')
     ).toBeInTheDocument()
 
     act(() => {
@@ -88,7 +95,7 @@ describe('Storyboard widget', () => {
     })
 
     expect(
-      screen.getByText('a1: 5, 6 (mood n/a, retrievals 0)')
+      screen.getByText('a1: 5, 6 (mood n/a, ip n/a, retrievals 0)')
     ).toBeInTheDocument()
   })
 

@@ -17,6 +17,7 @@ export default function Storyboard() {
   const [positions, setPositions] = useState<Record<string, [number, number]>>({})
   const [moods, setMoods] = useState<Record<string, number>>({})
   const [retrievals, setRetrievals] = useState<Record<string, number>>({})
+  const [agentStates, setAgentStates] = useState<Record<string, unknown>>({})
   const [heatmap, setHeatmap] = useState<Record<string, number>>({})
   const [memoryEvents, setMemoryEvents] = useState<
     Array<{ type: string; step?: number }>
@@ -34,15 +35,25 @@ export default function Storyboard() {
         }
         if (json.agents && !cancelled) {
           const counts: Record<string, number> = {}
-          for (const [id, info] of Object.entries(json.agents)) {
-            if (typeof info.retrieval_count === 'number') {
-              counts[id] = info.retrieval_count
-            }
-            if (typeof info.mood === 'number') {
-              setMoods((cur) => ({ ...cur, [id]: info.mood! }))
-            }
-          }
+          const states: Record<string, unknown> = {}
+          await Promise.all(
+            Object.entries(json.agents).map(async ([id, info]) => {
+              if (typeof info.retrieval_count === 'number') {
+                counts[id] = info.retrieval_count
+              }
+              if (typeof info.mood === 'number') {
+                setMoods((cur) => ({ ...cur, [id]: info.mood! }))
+              }
+              try {
+                const sres = await fetch(`/api/agents/${id}/state`)
+                states[id] = await sres.json()
+              } catch {
+                /* ignore */
+              }
+            }),
+          )
           setRetrievals(counts)
+          setAgentStates((cur) => ({ ...cur, ...states }))
         }
       } catch {
         /* ignore */
@@ -111,8 +122,8 @@ export default function Storyboard() {
           <ul data-testid="map-info" className="mb-2">
             {Object.entries(positions).map(([id, pos]) => (
               <li key={id}>
-                {id}: {pos[0]}, {pos[1]} (mood {moods[id] ?? 'n/a'}, retrievals{' '}
-                {retrievals[id] ?? 0})
+                {id}: {pos[0]}, {pos[1]} (mood {moods[id] ?? 'n/a'}, ip{' '}
+                {agentStates[id]?.state?.ip ?? 'n/a'}, retrievals {retrievals[id] ?? 0})
               </li>
             ))}
           </ul>
