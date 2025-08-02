@@ -57,6 +57,9 @@ MEMORY_RETRIEVAL_ERRORS_TOTAL = Counter(
     "Total number of failed memory retrievals",
 )
 
+# Retrieval Augmented Generation (RAG) metrics
+RAG_HIT_RATE = Gauge("rag_hit_rate", "Hit rate for RAG memory retrieval")
+
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
@@ -98,6 +101,11 @@ def get_memory_retrieval_errors() -> int:
     return int(MEMORY_RETRIEVAL_ERRORS_TOTAL._value.get())
 
 
+def get_rag_hit_rate() -> float:
+    """Return the current RAG hit rate."""
+    return float(RAG_HIT_RATE._value.get())
+
+
 __all__ = [
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
@@ -107,6 +115,7 @@ __all__ = [
     "LLM_LATENCY_MS",
     "MEMORY_RETRIEVALS_TOTAL",
     "MEMORY_RETRIEVAL_ERRORS_TOTAL",
+    "RAG_HIT_RATE",
     "Counter",
     "Gauge",
     "get_gas_price_per_call",
@@ -115,5 +124,6 @@ __all__ = [
     "get_llm_latency",
     "get_memory_retrieval_errors",
     "get_memory_retrievals",
+    "get_rag_hit_rate",
     "start_http_server",
 ]
