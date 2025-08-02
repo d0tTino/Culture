@@ -67,6 +67,16 @@ pnpm --filter culture-ui build
 pnpm --filter culture-ui test:e2e
 ```
 
+Run the entire Playwright suite or target a single file:
+
+```bash
+# all tests
+pnpm --filter culture-ui test:e2e
+
+# specific test
+pnpm --filter culture-ui test:e2e tests/memory-explorer.pw.ts
+```
+
 Use `pnpm` to execute tests so that the bundled Playwright version matches the
 installed `@playwright/test` dependency. Running `npx playwright` may install a
 different version and cause failures.
