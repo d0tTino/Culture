@@ -18,11 +18,21 @@ The core voting logic lives in ``src.governance.service`` where
 ``GovernanceService`` exposes methods for proposing laws, weighting votes via
 the ledger, and retrieving previous proposals.
 
+The default weight for an agent is computed with a quadratic formula:
+
+```
+weight = sqrt(ip_balance + staked_ip)
+```
+
+For instance, an agent with ``9`` IP and ``7`` IP staked contributes
+``sqrt(16) = 4`` votes.
+
 ## Weighted Votes
 
 Additional votes can be submitted by passing `--vote-weights` with a comma
 separated list of `agent_id=weight` pairs. Each extra vote costs its square in
-IP. For example, to give `agent_1` three votes and `agent_2` a single vote:
+IP, following the formula ``cost = votes^2``. For example, casting three votes
+spends ``3^2 = 9`` IP. To give `agent_1` three votes and `agent_2` a single vote:
 
 ```bash
 python src/app.py \
