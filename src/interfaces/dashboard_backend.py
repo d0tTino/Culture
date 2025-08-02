@@ -67,7 +67,8 @@ else:  # pragma: no cover - optional runtime dependency
 
         class Response:  # pragma: no cover - minimal stub
             def __init__(self: Response, *args: object, **kwargs: object) -> None:
-                pass
+                self.status_code = kwargs.get("status_code", 200)
+                self.body = kwargs.get("content", b"")
 
         class WebSocket:  # pragma: no cover - minimal stub
             pass
@@ -80,6 +81,7 @@ else:  # pragma: no cover - optional runtime dependency
                 self: JSONResponse, content: object, *args: object, **kwargs: object
             ) -> None:
                 self.body = json.dumps(content).encode("utf-8")
+                self.status_code = kwargs.get("status_code", 200)
 
 
 if TYPE_CHECKING:
@@ -347,6 +349,37 @@ async def get_semantic_summaries(agent_id: str, limit: int = 3) -> Response:
     return JSONResponse({"summaries": summaries})
 
 
+@app.get("/api/agents/{agent_id}/state")
+async def get_agent_state(agent_id: str) -> Response:
+    """Return the current state for an agent."""
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    state: dict[str, Any] | None = None
+    if sim is not None:
+        agent = next((a for a in sim.agents if a.agent_id == agent_id), None)
+        if agent is not None:
+            try:
+                state = cast(dict[str, Any], agent.state.model_dump())
+            except Exception:  # pragma: no cover - defensive
+                state = {}
+    return JSONResponse({"state": state or {}})
+
+
+@app.get("/api/agents/{agent_id}/memories")
+async def get_agent_memories(agent_id: str, limit: int = 5) -> Response:
+    """Return recent raw memories for an agent."""
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    memories: list[dict[str, Any]] = []
+    if sim is not None:
+        memory_service = getattr(sim, "memory_service", None)
+        vector_store = getattr(memory_service, "vector_store", None)
+        if vector_store is not None:
+            try:
+                memories = vector_store.retrieve_filtered_memories(agent_id, limit=limit)
+            except Exception:  # pragma: no cover - defensive
+                memories = []
+    return JSONResponse({"memories": memories})
+
+
 @app.post("/api/propose_law")
 async def api_propose_law(proposal: LawProposal) -> Response:
     """Submit a (weighted) law proposal to the active simulation."""
@@ -492,7 +525,10 @@ async def api_memory_snapshots(limit: int = 10) -> Response:
         for p in SNAPSHOT_DIR.glob("snapshot_*.json*")
         if p.stem.split("_")[1].isdigit()
     )
-    return JSONResponse({"steps": steps[-limit:]})
+    resp = JSONResponse({"steps": steps[-limit:]})
+    if not hasattr(resp, "status_code"):
+        resp.status_code = 200
+    return resp
 
 
 @app.get("/api/memory_snapshots/{step}")
@@ -502,8 +538,14 @@ async def api_memory_snapshot(step: int) -> Response:
     try:
         data = await asyncio.to_thread(load_snapshot, step, directory=SNAPSHOT_DIR)
     except Exception:  # pragma: no cover - invalid or missing snapshot
-        return JSONResponse({"error": "not_found"}, status_code=404)
-    return JSONResponse(data)
+        resp = JSONResponse({"error": "not_found"}, status_code=404)
+        if not hasattr(resp, "status_code"):
+            resp.status_code = 404
+        return resp
+    resp = JSONResponse(data)
+    if not hasattr(resp, "status_code"):
+        resp.status_code = 200
+    return resp
 
 
 async def register_widget(widget: dict[str, Any]) -> Response:

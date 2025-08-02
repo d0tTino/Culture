@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 export default function MemoryExplorer() {
   const [agentId, setAgentId] = useState('agent-1')
   const [summaries, setSummaries] = useState<string[]>([])
+  const [memories, setMemories] = useState<string[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -13,6 +14,28 @@ export default function MemoryExplorer() {
         const res = await fetch(`/api/agents/${agentId}/semantic_summaries`)
         const json = await res.json()
         if (!cancelled) setSummaries(json.summaries || [])
+      } catch {
+        /* ignore */
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [agentId])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(`/api/agents/${agentId}/memories`)
+        const json = await res.json()
+        if (!cancelled) {
+          const items = (json.memories || []).map(
+            (m: { content?: string }) => m.content || String(m),
+          )
+          setMemories(items)
+        }
       } catch {
         /* ignore */
       }
@@ -42,6 +65,11 @@ export default function MemoryExplorer() {
       <div data-testid="summaries">
         {summaries.map((s, i) => (
           <div key={i}>{s}</div>
+        ))}
+      </div>
+      <div data-testid="memories">
+        {memories.map((m, i) => (
+          <div key={i}>{m}</div>
         ))}
       </div>
     </div>
