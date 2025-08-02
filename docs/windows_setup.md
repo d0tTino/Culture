@@ -7,10 +7,14 @@ the vertical slice example.
 ## Quick Setup Checklist
 
 1. [Enable WSL2](#enable-wsl2)
-2. [Install Python 3.11](#install-python-311)
-3. [Install Ollama (≥0.1.34)](#install-ollama-0134)
-4. [Run the Example Vertical Slice](#run-the-example-vertical-slice) \(use `scripts\\vertical_slice.bat` on Windows\)
-5. [Run the Simulation](#run-the-simulation)
+2. [Install CUDA Drivers](#install-nvidia-cuda-drivers-for-wsl2) *(optional for GPU support)*
+3. [Install Python 3.11](#install-python-311)
+4. [Install Ollama (≥0.1.34)](#install-ollama-0134)
+5. [Run the Example Vertical Slice](#run-the-example-vertical-slice) \(use `scripts\\vertical_slice.bat` on Windows\)
+6. [Run the Simulation](#run-the-simulation)
+
+These commands have been validated on Windows 11 and on the
+`windows-latest` runner used in continuous integration.
 
 > **GPU Requirements**
 > To utilize GPU acceleration you must run the simulation inside WSL2 with the
@@ -21,22 +25,46 @@ the vertical slice example.
 
 ## Enable WSL2
 
-1. Open **PowerShell** as Administrator and run:
+1. Verify that **virtualization** is enabled in your BIOS/UEFI. You can check
+   under *Task Manager → Performance → CPU* where the **Virtualization** field
+   should read `Enabled`.
+2. Enable the required optional Windows features (skip if `wsl --install`
+   already did this):
+   ```powershell
+   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+   ```
+   Reboot if prompted.
+3. Open **PowerShell** as Administrator and run:
    ```powershell
    wsl --install
    ```
    This installs the WSL features and Ubuntu by default. Reboot if prompted.
-2. Ensure WSL 2 is the default version:
+4. Ensure WSL 2 is the default version:
    ```powershell
    wsl --set-default-version 2
    ```
-3. Update WSL and install GPU support:
+5. Update WSL and install GPU support:
    ```powershell
    wsl --update
    ```
    Restart Windows when prompted to enable the latest kernel and GPU features.
    After reboot, run `wsl --shutdown` to apply the update and restart your
    distribution. You can verify GPU access inside WSL with `nvidia-smi`.
+
+## Install NVIDIA CUDA Drivers for WSL2
+
+If you plan to run the simulation with GPU acceleration, install the NVIDIA
+CUDA driver that exposes your Windows GPU to WSL2. Download the latest package
+from the [CUDA on WSL page](https://developer.nvidia.com/cuda/wsl/download) and
+run the installer from Windows. After the installation completes run:
+
+```powershell
+wsl --update
+```
+
+Restart Windows once more and then verify inside WSL that the GPU is detected
+with `nvidia-smi`.
 
 ## Install Python 3.11
 
@@ -144,8 +172,8 @@ This script mirrors `scripts/start_vllm.sh` and honors the `VLLM_MODEL`,
    ```bash
    python -m examples.walking_vertical_slice
    ```
-   On Windows you can instead run the convenience script from a command
-   prompt or PowerShell window:
+   On Windows open a **Command Prompt** or **PowerShell** window,
+   change to the repository root, and run the convenience script:
    ```cmd
    scripts\vertical_slice.bat
    ```

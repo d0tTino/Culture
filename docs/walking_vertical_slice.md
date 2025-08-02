@@ -1,6 +1,6 @@
 # Walking Vertical Slice
 
-This example demonstrates a minimal end-to-end run of the Culture.ai simulation using a real LLM via Ollama. It is useful for verifying your local setup.
+This example demonstrates a minimal end-to-end run of the Culture.ai simulation using a real LLM via Ollama. It is useful for verifying your local setup. Windows users should first follow the [Windows / WSL2 Setup](windows_setup.md) guide to configure WSL2, CUDA drivers and other prerequisites.
 
 ## Prerequisites
 - Python environment with project dependencies installed. Run
