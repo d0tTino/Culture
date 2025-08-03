@@ -326,6 +326,10 @@ Start the optional HTTP dashboard backend (for streaming events via SSE):
 python -m src.http_app
 ```
 
+Set `DASHBOARD_API_TOKEN` to require an access token for state-changing (POST,
+PUT, PATCH, DELETE) endpoints. Clients must include
+`Authorization: Bearer <token>` when calling those APIs.
+
 You can then consume events using any SSE-capable client. Here's a minimal
 example using `httpx`:
 

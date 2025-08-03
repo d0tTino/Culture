@@ -5,7 +5,7 @@ import asyncio
 # Skip self argument annotation warnings in stub classes
 import json
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Final, cast
 
@@ -29,6 +29,14 @@ SEMANTIC_SUMMARIES_ERROR: Final[dict[str, str]] = {"error": "summary retrieval f
 
 # Default simulation context used by module-level APIs
 DEFAULT_CONTEXT = SimulationContext()
+
+API_TOKEN: str | None = None
+
+
+def configure_api_token(token: str | None) -> None:
+    """Configure the token required for state-changing requests."""
+    global API_TOKEN
+    API_TOKEN = token
 
 
 if TYPE_CHECKING:
@@ -62,8 +70,20 @@ else:  # pragma: no cover - optional runtime dependency
 
                 return dec
 
+            def middleware(self: FastAPI, *args: object, **kwargs: object) -> Callable[[Any], Any]:
+                def dec(fn: Any) -> Any:
+                    return fn
+
+                return dec
+
         class Request:  # pragma: no cover - minimal stub
-            pass
+            def __init__(
+                self: Request,
+                headers: dict[str, str] | None = None,
+                method: str = "GET",
+            ) -> None:
+                self.headers = headers or {}
+                self.method = method
 
         class Response:  # pragma: no cover - minimal stub
             def __init__(self: Response, *args: object, **kwargs: object) -> None:
@@ -199,6 +219,17 @@ class VoteRequest(BaseModel):
 
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def require_token(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    if API_TOKEN and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        auth = request.headers.get("Authorization")
+        if auth != f"Bearer {API_TOKEN}":
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 @app.get(
