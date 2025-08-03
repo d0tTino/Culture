@@ -193,6 +193,7 @@ class SimulationDiscordBot:
                 if not allowed:
                     logger.debug("Message blocked by OPA policy")
                     return
+                metrics.HUMAN_MESSAGES_TOTAL.inc()
                 channel = getattr(message, "channel", None)
                 channel_id = getattr(channel, "id", None)
                 user = getattr(message, "author", None)
