@@ -1,9 +1,7 @@
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
-
-pytest.importorskip("requests")
-import requests
 
 
 @pytest.mark.unit
@@ -16,8 +14,8 @@ def test_generate_text_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # Patch the chat method on the LLMClient class to simulate a network error
     monkeypatch.setattr(
-        "src.infra.llm_client.LLMClient.chat",
-        MagicMock(side_effect=requests.exceptions.RequestException("boom")),
+        "src.infra.llm_client.LLMClient.chat_sync",
+        MagicMock(side_effect=httpx.HTTPError("boom")),
     )
     # The generate_text function should catch the exception and return None
     from src.infra.llm_client import generate_text

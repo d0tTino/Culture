@@ -13,8 +13,12 @@ from collections.abc import Awaitable, Iterable
 from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, cast
 
 import httpx
+from httpx import HTTPError, TimeoutException
+from pydantic import BaseModel, ValidationError
+from pydantic.fields import FieldInfo
 
 from src.interfaces import metrics
+from src.shared.decorator_utils import llm_perf_logger, monitor_llm_call
 from src.shared.typing import (
     JSONDict,
     JSONValue,
@@ -25,53 +29,25 @@ from src.shared.typing import (
     StructuredOutputMock,
 )
 
+from .config import OLLAMA_REQUEST_TIMEOUT, get_config
+from .ledger import ledger
+
 try:
     import ollama
 except ImportError:  # pragma: no cover - optional dependency
     logging.getLogger(__name__).warning(
         "ollama package not installed; using MagicMock stub for ollama"
     )
-    import sys
     from unittest.mock import MagicMock
 
     ollama = MagicMock()
     sys.modules.setdefault("ollama", ollama)
-if TYPE_CHECKING:
-    import requests
-    from requests.exceptions import RequestException, Timeout
-else:
-    try:  # pragma: no cover - optional dependency
-        import requests
-        from requests.exceptions import RequestException, Timeout
-    except ImportError:  # pragma: no cover - fallback when requests missing
-        logging.getLogger(__name__).warning("requests package not installed; using MagicMock stub")
-        from unittest.mock import MagicMock
 
-        requests = MagicMock()
-
-        class RequestException(Exception):
-            """Fallback RequestException when requests is unavailable."""
-
-            pass
-
-        class Timeout(RequestException):
-            """Fallback Timeout when requests is unavailable."""
-
-            pass
-
-
-from typing import TYPE_CHECKING
-
-from pydantic import BaseModel, ValidationError
-from pydantic.fields import FieldInfo
+RequestException = HTTPError
+Timeout = TimeoutException
 
 if TYPE_CHECKING:
     from src.agents.core.agent_state import AgentState
-
-from src.shared.decorator_utils import llm_perf_logger, monitor_llm_call
-
-from .config import OLLAMA_REQUEST_TIMEOUT, get_config
-from .ledger import ledger
 
 LLM_API_BASE = cast(str, get_config("LLM_API_BASE"))
 VLLM_API_BASE = cast(str | None, get_config("VLLM_API_BASE"))
@@ -292,8 +268,8 @@ class LLMClient:
         except LLMClientInitError:
             raise
 
-    @monitor_llm_call(model_param="model", context="ollama_chat")
-    def chat(
+    @async_monitor_llm_call(model_param="model", context="ollama_chat")
+    async def chat(
         self: LLMClient,
         model: str,
         messages: list[LLMMessage],
@@ -301,7 +277,27 @@ class LLMClient:
     ) -> LLMChatResponse:
         if not self._client:
             raise RuntimeError("Ollama client not initialized")
-        return self._client.chat(model=model, messages=messages, options=options)
+        if hasattr(self._client, "async_chat"):
+            return cast(
+                LLMChatResponse,
+                await cast(Any, self._client.async_chat)(
+                    model=model, messages=messages, options=options
+                ),
+            )
+        return cast(
+            LLMChatResponse,
+            await asyncio.to_thread(
+                self._client.chat, model=model, messages=messages, options=options
+            ),
+        )
+
+    def chat_sync(
+        self: LLMClient,
+        model: str,
+        messages: list[LLMMessage],
+        options: dict[str, Any] | None = None,
+    ) -> LLMChatResponse:
+        return asyncio.run(self.chat(model=model, messages=messages, options=options))
 
 
 # Mock implementation variables and functions
@@ -353,10 +349,14 @@ def is_ollama_available() -> bool:
         return True  # When in mock mode, pretend the service is available
 
     base = VLLM_API_BASE or LLM_API_BASE
+
+    async def _check() -> bool:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(base, timeout=1)
+            return bool(getattr(resp, "status_code", 0) == 200)
+
     try:
-        # Try to connect to the service with a small timeout
-        response = requests.get(base, timeout=1)
-        return bool(getattr(response, "status_code", 0) == 200)
+        return asyncio.run(_check())
     except RequestException as e:
         logger.debug(f"LLM service at {base} is not available: {e}")
         return False
@@ -372,8 +372,8 @@ else:
 
 def _create_vllm_client() -> OllamaClientProtocol:
     class _Client:
-        def chat(
-            self,
+        async def async_chat(
+            self: _Client,
             model: str,
             messages: list[LLMMessage],
             options: dict[str, Any] | None = None,
@@ -391,15 +391,24 @@ def _create_vllm_client() -> OllamaClientProtocol:
                     payload["top_p"] = options["top_p"]
                 if "num_predict" in options:
                     payload["max_tokens"] = options["num_predict"]
-            resp = requests.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
             resp.raise_for_status()
-            data = cast(JSONDict, resp.json())
+            data = cast(JSONDict, json.loads(resp.text))
             choices = cast(list[JSONDict], data.get("choices", []))
             message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
             return {
                 "message": cast(LLMMessage, message),
                 "usage": cast(JSONDict, data.get("usage", {})),
             }
+
+        def chat(
+            self: _Client,
+            model: str,
+            messages: list[LLMMessage],
+            options: dict[str, Any] | None = None,
+        ) -> LLMChatResponse:
+            return asyncio.run(self.async_chat(model=model, messages=messages, options=options))
 
     return _Client()
 
@@ -543,7 +552,7 @@ def generate_text(
 
         wrapper = LLMClient(LLMClientConfig())
         messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        return wrapper.chat(
+        return wrapper.chat_sync(
             model=model,
             messages=messages,
             options={"temperature": temperature},
@@ -609,7 +618,7 @@ def summarize_memory_context(
         )
 
     try:
-        ollama_client = get_llm_client()
+        ollama_client = cast(Any, get_llm_client())
     except LLMClientInitError as exc:
         logger.warning(
             "Attempted to summarize memories but %s",
@@ -636,7 +645,7 @@ def summarize_memory_context(
         )
 
         chat_messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        response = ollama_client.chat(
+        response = ollama_client.chat_sync(
             model=model,
             messages=chat_messages,
             options={"temperature": temperature},
@@ -700,7 +709,7 @@ def analyze_sentiment(
     if not text:
         return None
     try:
-        ollama_client = get_llm_client()
+        ollama_client = cast(Any, get_llm_client())
     except LLMClientInitError as exc:
         logger.error(f"Sentiment analysis failed to init client: {exc}")
         return None
@@ -714,10 +723,13 @@ def analyze_sentiment(
     logger.debug(f"LLM_CLIENT_ANALYZE_SENTIMENT --- Constructed prompt: '''{prompt}'''")
 
     def call() -> LLMChatResponse:
-        return ollama_client.chat(
-            model=model,
-            messages=messages,
-            options={"temperature": 0.1},  # Low temperature for classification
+        return cast(
+            LLMChatResponse,
+            ollama_client.chat_sync(
+                model=model,
+                messages=messages,
+                options={"temperature": 0.1},  # Low temperature for classification
+            ),
         )
 
     response, error = _retry_with_backoff(call)
@@ -885,7 +897,7 @@ async def async_generate_structured_output(
             return None
     # Get the Ollama client instance
     try:
-        ollama_client = get_llm_client()
+        ollama_client = cast(Any, get_llm_client())
     except LLMClientInitError as exc:
         logger.warning("Attempted to generate structured output but %s", exc)
         return None
@@ -895,7 +907,7 @@ async def async_generate_structured_output(
     if hasattr(response_model, "model_json_schema"):
         schema_json = json.dumps(response_model.model_json_schema(), indent=2)
     else:
-        schema_json = json.dumps(response_model.schema(), indent=2)
+        schema_json = json.dumps(response_model.model_json_schema(), indent=2)
     example: JSONDict = {}
     example_fields = getattr(response_model, "model_fields", None)
     if example_fields is None:
@@ -942,7 +954,7 @@ async def async_generate_structured_output(
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
-        result = cast(JSONDict, response.json())
+        result = cast(JSONDict, json.loads(response.text))
         if USE_VLLM:
             choices = cast(list[JSONDict], result.get("choices", []))
             first_choice = choices[0] if choices else {}
