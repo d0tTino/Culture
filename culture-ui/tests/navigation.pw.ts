@@ -36,8 +36,14 @@ test('navigate between pages and receive SSE update', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Memory Explorer' })).toBeVisible()
 
   await page.evaluate(() => {
-    const es = (window as unknown as { EventSource: { instance: EventTarget } }).EventSource
-      .instance
-    es.dispatchEvent(new MessageEvent('message', { data: '{"check":1}' }))
+    const w = window as unknown as { EventSource: { instance?: EventTarget } }
+    if (!w.EventSource.instance) {
+      // ensure a mock EventSource exists so we can dispatch events
+      // @ts-expect-error override built-in
+      new w.EventSource('/stream')
+    }
+    w.EventSource.instance!.dispatchEvent(
+      new MessageEvent('message', { data: '{"check":1}' }),
+    )
   })
 })
