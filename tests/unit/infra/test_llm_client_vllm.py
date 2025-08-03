@@ -13,17 +13,19 @@ from src.shared import decorator_utils
 def test_generate_text_vllm(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, str] = {}
 
+    resp_text = json.dumps(
+        {
+            "choices": [{"message": {"content": "hi"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+    )
+
     async def fake_post(*args: object, **kwargs: object) -> MagicMock:
         url = args[1] if len(args) > 1 else args[0]
         captured["url"] = url
         resp = MagicMock()
         resp.raise_for_status.return_value = None
-        resp.text = json.dumps(
-            {
-                "choices": [{"message": {"content": "hi"}}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-            }
-        )
+        resp.text = resp_text
         return resp
 
     monkeypatch.setattr(llm_client, "LLM_API_BASE", "http://ollama:1234")
@@ -53,17 +55,19 @@ def test_generate_text_vllm_env_switch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Setting ``VLLM_API_BASE`` should make the client use the vLLM endpoint."""
     captured: dict[str, str] = {}
 
+    resp_text = json.dumps(
+        {
+            "choices": [{"message": {"content": "hi"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+    )
+
     async def fake_post(*args: object, **kwargs: object) -> MagicMock:
         url = args[1] if len(args) > 1 else args[0]
         captured["url"] = url
         resp = MagicMock()
         resp.raise_for_status.return_value = None
-        resp.text = json.dumps(
-            {
-                "choices": [{"message": {"content": "hi"}}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-            }
-        )
+        resp.text = resp_text
         return resp
 
     monkeypatch.setenv("VLLM_API_BASE", "http://vllm:8002")
@@ -96,17 +100,19 @@ def test_vllm_client_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """When ``VLLM_API_BASE`` is unset, fallback to ``LLM_API_BASE``."""
     captured: dict[str, str] = {}
 
+    resp_text = json.dumps(
+        {
+            "choices": [{"message": {"content": "hi"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+    )
+
     async def fake_post(*args: object, **kwargs: object) -> MagicMock:
         url = args[1] if len(args) > 1 else args[0]
         captured["url"] = url
         resp = MagicMock()
         resp.raise_for_status.return_value = None
-        resp.text = json.dumps(
-            {
-                "choices": [{"message": {"content": "hi"}}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-            }
-        )
+        resp.text = resp_text
         return resp
 
     monkeypatch.setattr(llm_client, "LLM_API_BASE", "http://ollama:1234")

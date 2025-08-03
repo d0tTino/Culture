@@ -188,7 +188,15 @@ export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"   # overrides Ollama when set
 ```
 
-Requests now use vLLM instead of Ollama. See [docs/runbook.md](docs/runbook.md#start-vllm) for additional details. Run `scripts/benchmark_llm.py` to verify the endpoint.
+Requests now use vLLM instead of Ollama. See [docs/runbook.md](docs/runbook.md#start-vllm) for additional details.
+
+To compare latency between Ollama and vLLM, use the benchmarking helper:
+
+```bash
+python scripts/benchmark_llm.py "Hello" --runs 3 --model mistral:latest --vllm_base "http://localhost:$VLLM_PORT"
+```
+
+The script prints a table with average response times for each backend.
 
 5. **Run the vertical slice demo**
    ```bash

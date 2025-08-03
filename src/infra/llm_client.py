@@ -277,12 +277,11 @@ class LLMClient:
     ) -> LLMChatResponse:
         if not self._client:
             raise RuntimeError("Ollama client not initialized")
-        if hasattr(self._client, "async_chat"):
+        async_chat = getattr(self._client, "async_chat", None)
+        if async_chat and asyncio.iscoroutinefunction(async_chat):
             return cast(
                 LLMChatResponse,
-                await cast(Any, self._client.async_chat)(
-                    model=model, messages=messages, options=options
-                ),
+                await cast(Any, async_chat)(model=model, messages=messages, options=options),
             )
         return cast(
             LLMChatResponse,
@@ -417,20 +416,7 @@ def _create_ollama_client() -> OllamaClientProtocol:
     return cast(OllamaClientProtocol, ollama.Client(host=LLM_API_BASE))
 
 
-client: OllamaClientProtocol | None
-if USE_VLLM:
-    logger.info(f"Using vLLM API base: {VLLM_API_BASE or LLM_API_BASE}")
-    client = _create_vllm_client()
-else:
-    try:
-        client = _create_ollama_client()
-        logger.info(f"Ollama client initialized for host: {LLM_API_BASE}")
-    except (APIError, RequestException) as e:
-        logger.error(
-            f"Failed to initialize Ollama client for host {LLM_API_BASE}: {e}",
-            exc_info=True,
-        )
-        client = None
+client: OllamaClientProtocol | None = None
 
 
 def get_llm_client() -> OllamaClientProtocol:
@@ -438,41 +424,32 @@ def get_llm_client() -> OllamaClientProtocol:
     global client, LLM_API_BASE, VLLM_API_BASE, USE_VLLM
     current_base = cast(str, get_config("LLM_API_BASE"))
     current_vllm = cast(str | None, get_config("VLLM_API_BASE"))
-    prefer_vllm = bool(current_vllm)
 
     if current_base != LLM_API_BASE or current_vllm != VLLM_API_BASE:
         LLM_API_BASE = current_base
         VLLM_API_BASE = current_vllm
         client = None
 
-    if client is None or (prefer_vllm and not USE_VLLM):
-        # When ``VLLM_API_BASE`` is provided prefer the vLLM client. If
-        # initialization fails, fall back to the Ollama client. When the
-        # variable is unset, keep the existing client to avoid unnecessary
-        # reinitialization during tests.
-        primary = _create_vllm_client if prefer_vllm else _create_ollama_client
-        secondary = _create_ollama_client if prefer_vllm else _create_vllm_client
-
-        client, err = _retry_with_backoff(primary)
+    if client is None:
+        client, err = _retry_with_backoff(_create_vllm_client)
         if client is None:
             logger.error(
-                "Failed to initialize %s client: %s",
-                "vLLM" if prefer_vllm else "Ollama",
+                "Failed to initialize vLLM client: %s",
                 err,
                 exc_info=True,
             )
-            client, err = _retry_with_backoff(secondary)
+            client, err = _retry_with_backoff(_create_ollama_client)
             if client is None:
                 logger.error(
-                    "Failed to initialize %s client: %s",
-                    "Ollama" if prefer_vllm else "vLLM",
+                    "Failed to initialize Ollama client: %s",
                     err,
                     exc_info=True,
                 )
                 raise LLMClientInitError("Failed to initialize vLLM and Ollama clients")
-            USE_VLLM = not prefer_vllm
+            USE_VLLM = False
         else:
-            USE_VLLM = prefer_vllm
+            logger.info(f"Using vLLM API base: {VLLM_API_BASE or LLM_API_BASE}")
+            USE_VLLM = True
     return client
 
 
@@ -954,7 +931,10 @@ async def async_generate_structured_output(
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
-        result = cast(JSONDict, json.loads(response.text))
+        try:
+            result = cast(JSONDict, response.json())
+        except Exception:
+            result = cast(JSONDict, json.loads(response.text))
         if USE_VLLM:
             choices = cast(list[JSONDict], result.get("choices", []))
             first_choice = choices[0] if choices else {}
