@@ -411,6 +411,32 @@ async def get_agent_memories(agent_id: str, limit: int = 5) -> Response:
     return JSONResponse({"memories": memories})
 
 
+@app.get("/api/memory/{agent_id}")
+async def api_memory(agent_id: str, limit: int = 5) -> Response:
+    """Return semantic and episodic memories for an agent."""
+    semantic: list[str] = []
+    episodic: list[dict[str, Any]] = []
+
+    manager = DEFAULT_CONTEXT.sim_state.get("semantic_manager")
+    if manager is not None:
+        try:
+            semantic = manager.get_semantic_summaries(agent_id, limit=limit)
+        except Exception:  # pragma: no cover - defensive
+            semantic = []
+
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    if sim is not None:
+        memory_service = getattr(sim, "memory_service", None)
+        vector_store = getattr(memory_service, "vector_store", None)
+        if vector_store is not None:
+            try:
+                episodic = vector_store.retrieve_filtered_memories(agent_id, limit=limit)
+            except Exception:  # pragma: no cover - defensive
+                episodic = []
+
+    return JSONResponse({"semantic": semantic, "episodic": episodic})
+
+
 @app.post("/api/propose_law")
 async def api_propose_law(proposal: LawProposal) -> Response:
     """Submit a (weighted) law proposal to the active simulation."""
@@ -744,6 +770,7 @@ __all__ = [
     "api_get_proposals",
     "api_get_votes",
     "api_map",
+    "api_memory",
     "api_memory_snapshot",
     "api_memory_snapshots",
     "api_propose_law",

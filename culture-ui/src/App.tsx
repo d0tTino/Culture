@@ -12,7 +12,7 @@ import WorldMapPage from './pages/WorldMap'
 import LawProposalPage from './pages/LawProposal'
 import ProposalsPage from './pages/Proposals'
 import TimelineWidgetPage from './pages/TimelineWidget'
-import MemoryExplorer from './pages/MemoryExplorer'
+import MemoryExplorerPage from './pages/MemoryExplorer'
 import KpiCardPage from './pages/KpiCard'
 import StoryboardPage from './pages/Storyboard'
 import AgentTimelinePage from './pages/AgentTimeline'
@@ -35,7 +35,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/missions" element={<MissionOverview />} />
             <Route path="/agent-data" element={<AgentDataOverview />} />
-            <Route path="/memory" element={<MemoryExplorer />} />
+            <Route path="/memory" element={<MemoryExplorerPage />} />
             <Route path="/live-map" element={<LiveMapPage />} />
             <Route path="/map-state" element={<MapStatePage />} />
             <Route path="/agent-memories" element={<AgentMemoriesPage />} />
