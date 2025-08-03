@@ -60,6 +60,12 @@ MEMORY_RETRIEVAL_ERRORS_TOTAL = Counter(
 # Retrieval Augmented Generation (RAG) metrics
 RAG_HIT_RATE = Gauge("rag_hit_rate", "Hit rate for RAG memory retrieval")
 
+# Human interaction metrics
+HUMAN_MESSAGES_TOTAL = Counter(
+    "human_messages_total",
+    "Total number of human messages received",
+)
+
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
@@ -106,9 +112,15 @@ def get_rag_hit_rate() -> float:
     return float(RAG_HIT_RATE._value.get())
 
 
+def get_human_messages() -> int:
+    """Return the total human messages received."""
+    return int(HUMAN_MESSAGES_TOTAL._value.get())
+
+
 __all__ = [
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
+    "HUMAN_MESSAGES_TOTAL",
     "KNOWLEDGE_BOARD_SIZE",
     "LLM_CALLS_TOTAL",
     "LLM_ERRORS_TOTAL",
@@ -120,6 +132,7 @@ __all__ = [
     "Gauge",
     "get_gas_price_per_call",
     "get_gas_price_per_token",
+    "get_human_messages",
     "get_kb_size",
     "get_llm_latency",
     "get_memory_retrieval_errors",
