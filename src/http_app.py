@@ -6,16 +6,18 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import uvicorn
-from fastapi import Request
+from fastapi import Request, Response
 
-from src.interfaces.dashboard_backend import (
-    EventSourceResponse,
-    SimulationEvent,
-    app,
-)
+from src.interfaces import dashboard_backend as db
+from src.sim.event_bus import get_event_bus
+
+db.configure_api_token(os.getenv("DASHBOARD_API_TOKEN"))
+
+EventSourceResponse = db.EventSourceResponse
+SimulationEvent = db.SimulationEvent
+app = db.app
 
 __all__ = ["app", "generate_events", "main", "parse_args"]
-from src.sim.event_bus import get_event_bus
 
 
 async def generate_events(
@@ -31,13 +33,13 @@ async def generate_events(
             event: SimulationEvent | None = await queue.get()
             if event is None:
                 break
-            yield {"event": "simulation_event", "data": event.json()}
+            yield {"event": "simulation_event", "data": event.model_dump_json()}
     finally:
         bus.unsubscribe(queue)
 
 
 @app.get("/stream/events")
-async def stream_events(request: Request) -> EventSourceResponse:
+async def stream_events(request: Request) -> Response:
     """Return an SSE stream of simulation events."""
     return EventSourceResponse(generate_events(request))
 
