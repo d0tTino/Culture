@@ -12,12 +12,18 @@ interface SnapshotEvent {
   }
 }
 
+interface AgentState {
+  state?: {
+    ip?: string
+  }
+}
+
 export default function Storyboard() {
   const event = useEventSource<SnapshotEvent>()
   const [positions, setPositions] = useState<Record<string, [number, number]>>({})
   const [moods, setMoods] = useState<Record<string, number>>({})
   const [retrievals, setRetrievals] = useState<Record<string, number>>({})
-  const [agentStates, setAgentStates] = useState<Record<string, unknown>>({})
+  const [agentStates, setAgentStates] = useState<Record<string, AgentState>>({})
   const [heatmap, setHeatmap] = useState<Record<string, number>>({})
   const [memoryEvents, setMemoryEvents] = useState<
     Array<{ type: string; step?: number }>
@@ -35,7 +41,7 @@ export default function Storyboard() {
         }
         if (json.agents && !cancelled) {
           const counts: Record<string, number> = {}
-          const states: Record<string, unknown> = {}
+          const states: Record<string, AgentState> = {}
           await Promise.all(
             Object.entries(json.agents).map(async ([id, info]) => {
               if (typeof info.retrieval_count === 'number') {
@@ -46,7 +52,7 @@ export default function Storyboard() {
               }
               try {
                 const sres = await fetch(`/api/agents/${id}/state`)
-                states[id] = await sres.json()
+                states[id] = (await sres.json()) as AgentState
               } catch {
                 /* ignore */
               }
