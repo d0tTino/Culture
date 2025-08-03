@@ -224,6 +224,7 @@ class SimulationDiscordBot:
         agent_id: Optional[str] = None,
         *,
         target_channel_id: Optional[int] = None,
+        recipient: Optional[str] = None,
     ) -> Optional[bool]:
         """
         Send a simulation update message to Discord.
@@ -232,6 +233,7 @@ class SimulationDiscordBot:
             content (Optional[str]): The text message content to send
             embed (Optional[Any]): The embed object to send
             target_channel_id (Optional[int]): Explicit channel to send to
+            recipient (Optional[str]): User ID to reply to
 
         Returns:
             bool: True if message was sent successfully, False otherwise
@@ -249,7 +251,11 @@ class SimulationDiscordBot:
                 return False
         try:
             client = await self._select_client(agent_id)
-            chan_id = target_channel_id or self.channel_map.get(agent_id, self.channel_id)
+            chan_id = target_channel_id
+            if chan_id is None and recipient:
+                chan_id = self.user_channels.get(recipient)
+            if chan_id is None:
+                chan_id = self.channel_map.get(agent_id, self.channel_id)
             channel = client.get_channel(chan_id)
             if not channel:
                 logger.warning(f"Could not find Discord channel with ID: {chan_id}")
@@ -518,14 +524,10 @@ class SimulationDiscordBot:
         try:
             while True:
                 msg: AgentMessage = await self.message_queue.get()
-                channel_override = None
-                recipient = msg.recipient_id
-                if recipient and recipient in self.user_channels:
-                    channel_override = self.user_channels[recipient]
                 await self.send_simulation_update(
                     content=msg.content,
                     agent_id=msg.agent_id,
-                    target_channel_id=channel_override,
+                    recipient=msg.recipient_id,
                 )
         except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
             pass
