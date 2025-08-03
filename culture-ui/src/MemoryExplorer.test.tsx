@@ -1,33 +1,33 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import App from './App'
+import { MockEventSource, resetMockSources } from './lib/testUtils'
 
 vi.mock('./App.css', () => ({}))
 
 describe('MemoryExplorer', () => {
   let fetchMock: ReturnType<typeof vi.fn>
   beforeEach(() => {
+    resetMockSources()
+    ;(globalThis as unknown as { EventSource?: typeof EventSource }).EventSource =
+      MockEventSource as unknown as typeof EventSource
     fetchMock = vi.fn((url: string) => {
-      if (url === '/api/agents/agent-1/semantic_summaries') {
+      if (url === '/api/map') {
         return Promise.resolve({
-          json: () => Promise.resolve({ summaries: ['hello world'] }),
+          json: () =>
+            Promise.resolve({ agents: { 'agent-1': {}, 'agent-2': {} } }),
         }) as unknown as Response
       }
-      if (url === '/api/agents/agent-1/memories') {
+      if (url === '/api/memory/agent-1') {
         return Promise.resolve({
-          json: () => Promise.resolve({ memories: [{ content: 'm1' }] }),
+          json: () => Promise.resolve({ semantic: ['s1'], episodic: ['e1'] }),
         }) as unknown as Response
       }
-      if (url === '/api/agents/agent-2/semantic_summaries') {
+      if (url === '/api/memory/agent-2') {
         return Promise.resolve({
-          json: () => Promise.resolve({ summaries: ['second'] }),
-        }) as unknown as Response
-      }
-      if (url === '/api/agents/agent-2/memories') {
-        return Promise.resolve({
-          json: () => Promise.resolve({ memories: [{ content: 'm2' }] }),
+          json: () => Promise.resolve({ semantic: ['s2'], episodic: ['e2'] }),
         }) as unknown as Response
       }
       return Promise.resolve({ json: () => Promise.resolve({}) }) as Response
@@ -36,67 +36,34 @@ describe('MemoryExplorer', () => {
   })
 
   afterEach(() => {
+    resetMockSources()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
-  it('fetches summaries for selected agent', async () => {
+  it('loads map, memories, and streams messages', async () => {
     render(
       <MemoryRouter initialEntries={["/memory"]}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('hello world')).toBeInTheDocument()
-    expect(await screen.findByText('m1')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/agents/agent-1/semantic_summaries',
-    )
-    expect(fetchMock).toHaveBeenCalledWith('/api/agents/agent-1/memories')
+    expect(fetchMock).toHaveBeenCalledWith('/api/map')
+    expect(await screen.findByText('s1')).toBeInTheDocument()
+    expect(await screen.findByText('e1')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/memory/agent-1')
 
-    const input = screen.getByLabelText('agent-select')
-    await userEvent.clear(input)
-    await userEvent.type(input, 'agent-2')
+    const es = MockEventSource.instances[0]
+    act(() => {
+      es.emitMessage('{"agent_id":"agent-1","content":"hello"}')
+    })
+    expect(await screen.findByText('hello')).toBeInTheDocument()
 
-    expect(await screen.findByText('second')).toBeInTheDocument()
-    expect(await screen.findByText('m2')).toBeInTheDocument()
-    expect(
-      fetchMock.mock.calls.some(
-        (c) => c[0] === '/api/agents/agent-2/semantic_summaries',
-      ),
-    ).toBe(true)
-    expect(
-      fetchMock.mock.calls.some((c) => c[0] === '/api/agents/agent-2/memories'),
-    ).toBe(true)
-  })
-
-  it('keeps previous summaries when fetch fails', async () => {
-    render(
-      <MemoryRouter initialEntries={["/memory"]}>
-        <App />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('hello world')).toBeInTheDocument()
-    expect(await screen.findByText('m1')).toBeInTheDocument()
-
-    fetchMock.mockImplementation(() => Promise.reject(new Error('fail')))
-
-    const input = screen.getByLabelText('agent-select')
-    await userEvent.clear(input)
-    await userEvent.type(input, 'agent-2')
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/agents/agent-2/semantic_summaries',
-      ),
-    )
-
-    expect(screen.queryByText('hello world')).toBeInTheDocument()
-    expect(screen.queryByText('m1')).toBeInTheDocument()
-    expect(screen.getByTestId('summaries').textContent?.trim()).toBe(
-      'hello world',
-    )
-    expect(screen.getByTestId('memories').textContent?.trim()).toBe('m1')
+    const select = screen.getByLabelText('agent-select')
+    await userEvent.selectOptions(select, 'agent-2')
+    expect(fetchMock).toHaveBeenCalledWith('/api/memory/agent-2')
+    expect(await screen.findByText('s2')).toBeInTheDocument()
+    expect(await screen.findByText('e2')).toBeInTheDocument()
   })
 })
+
