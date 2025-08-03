@@ -11,7 +11,7 @@ def mock_llm_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock_chat = MagicMock()
     # Replace the chat method on the class prototype.
     # This ensures that any instance created will use the mock method.
-    monkeypatch.setattr(llm_client_mod.LLMClient, "chat", mock_chat)
+    monkeypatch.setattr(llm_client_mod.LLMClient, "chat_sync", mock_chat)
     return mock_chat
 
 
@@ -23,7 +23,7 @@ def test_llm_client_chat_success(mock_llm_client: MagicMock) -> None:
     client = llm_client_mod.LLMClient(llm_client_mod.LLMClientConfig())
 
     # Act
-    client.chat(model="mistral:latest", messages=[])
+    client.chat_sync(model="mistral:latest", messages=[])
 
     # Assert
     # The decorator should have been called, and the metric incremented.
@@ -41,7 +41,7 @@ def test_llm_client_chat_error(mock_llm_client: MagicMock) -> None:
 
     # Act & Assert
     with pytest.raises(llm_client_mod._RequestException):
-        client.chat(model="mistral:latest", messages=[])
+        client.chat_sync(model="mistral:latest", messages=[])
 
     # The decorator should have caught the exception and incremented the error metric.
     pass
