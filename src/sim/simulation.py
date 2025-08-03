@@ -303,14 +303,16 @@ class Simulation:
             ip_cost = float(
                 config.get_config("IP_COST_BROADCAST_MESSAGE")
                 or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                or 0.0
             )
             du_cost = float(
                 config.get_config("DU_COST_BROADCAST_ACTION")
                 or config.get_config("DU_COST_PER_ACTION")
+                or 0.0
             )
         else:
-            ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE"))
-            du_cost = float(config.get_config("DU_COST_PER_ACTION"))
+            ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
+            du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
 
         if state.ip < ip_cost or state.du < du_cost:
             logger.info(
@@ -407,7 +409,7 @@ class Simulation:
     ) -> None:
         """Add a new agent to the simulation, inheriting genes with mutation."""
         if mutation_rate is None:
-            mutation_rate = float(config.get_config("GENE_MUTATION_RATE"))
+            mutation_rate = float(config.get_config("GENE_MUTATION_RATE") or 0.0)
 
         agent.state.ip += inheritance
 
