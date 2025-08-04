@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import typing
@@ -38,7 +39,12 @@ async def evaluate_with_opa(content: str) -> tuple[bool, str]:
             logging.getLogger(__name__).warning("OPA evaluation failed: %s", e)
             return True, content
 
-    data = response.json()
+    try:
+        data = json.loads(response.text)
+    except Exception:  # pragma: no cover - invalid responses
+        logging.getLogger(__name__).warning("OPA returned non-JSON response: %s", response.text)
+        return True, content
+
     result = typing.cast(dict[str, typing.Any], data.get("result", {}))
     allow = typing.cast(bool, result.get("allow", True))
     new_content = typing.cast(str, result.get("content", content))

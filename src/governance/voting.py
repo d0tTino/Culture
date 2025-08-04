@@ -19,4 +19,5 @@ async def propose_law(
     vote_weights: dict[str, int] | None = None,
 ) -> bool:
     """Delegate to :class:`GovernanceService`."""
-    return await governance.propose_law(proposer, text, agents, vote_weights)
+    result = await governance.propose_law(proposer, text, agents, vote_weights)
+    return bool(result.get("approved"))

@@ -87,10 +87,8 @@ async def test_propose_law_records_ip_spent(
     agents = [DummyAgent("a1"), DummyAgent("a2"), DummyAgent("a3")]
     weights = {"a1": 2, "a2": 1, "a3": 1}
 
-    approved = await gservice.governance.propose_law(
-        agents[0], "law", agents, vote_weights=weights
-    )
-    assert approved is True
+    result = await gservice.governance.propose_law(agents[0], "law", agents, vote_weights=weights)
+    assert result["approved"] is True
 
     assert ledger.get_balance("a1")[0] == pytest.approx(6.0)
     assert ledger.get_balance("a2")[0] == pytest.approx(9.0)
