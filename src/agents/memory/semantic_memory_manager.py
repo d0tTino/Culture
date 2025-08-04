@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -25,12 +25,15 @@ if _KMeans is None:
         """Lightweight stand-in for :class:`sklearn.cluster.KMeans`."""
 
         def __init__(
-            self, n_clusters: int = 8, n_init: int = 10, random_state: int | None = None
+            self: KMeans,
+            n_clusters: int = 8,
+            n_init: int = 10,
+            random_state: int | None = None,
         ) -> None:
             self.n_clusters = n_clusters
             self.cluster_centers_: NDArray[np.float64] = np.zeros((n_clusters, 1), dtype=float)
 
-        def fit_predict(self, X: Any) -> NDArray[np.int64]:
+        def fit_predict(self: KMeans, X: Any) -> NDArray[np.int64]:
             n_samples = len(X)
             shape = getattr(X, "shape", (n_samples, 1))
             dim = shape[1] if isinstance(shape, tuple) and len(shape) > 1 else 1
@@ -40,14 +43,17 @@ if _KMeans is None:
     class TfidfVectorizer:
         """Simplified TF-IDF vectorizer returning empty features."""
 
-        def __init__(self, stop_words: str | None = None) -> None:
+        def __init__(self: TfidfVectorizer, stop_words: str | None = None) -> None:
             self.stop_words = stop_words
 
         class _Matrix(np.ndarray[Any, np.dtype[np.float64]]):
             nnz: int
 
-        def fit_transform(self, texts: list[str]) -> _Matrix:
-            arr = np.zeros((len(texts), 1), dtype=float).view(self._Matrix)
+        def fit_transform(self: TfidfVectorizer, texts: list[str]) -> _Matrix:
+            arr = cast(
+                TfidfVectorizer._Matrix,
+                np.zeros((len(texts), 1), dtype=float).view(TfidfVectorizer._Matrix),
+            )
             arr.nnz = 0
             return arr
 

@@ -37,12 +37,14 @@ class GovernanceService:
         text: str,
         agents: Iterable[Agent],
         vote_weights: dict[str, int] | None = None,
-    ) -> bool:
-        """Propose ``text`` to ``agents`` and persist the result.
+    ) -> dict[str, float | bool]:
+        """Propose ``text`` to ``agents`` and persist the vote outcome.
 
         When ``vote_weights`` is provided, each agent may cast multiple votes.
         The cost in influence points (IP) for casting ``n`` votes is ``n^2``.
-        ``ip_spent`` records the total IP deducted for this proposal.
+        ``ip_spent`` records the total IP deducted for this proposal. The
+        returned mapping contains the approval result along with the weighted
+        tallies and total IP spent.
         """
         allowed, _ = await evaluate_with_opa(text)
         if not allowed:
@@ -84,18 +86,24 @@ class GovernanceService:
         approved = yes_weight > no_weight
         if approved:
             law_board.add_law(text)
+        outcome = {
+            "approved": approved,
+            "yes_weight": yes_weight,
+            "no_weight": no_weight,
+            "ip_spent": ip_spent,
+        }
         try:
             ledger.record_law_proposal(
                 proposer.agent_id,
                 text,
-                approved,
-                yes_weight,
-                no_weight,
-                ip_spent,
+                outcome["approved"],
+                outcome["yes_weight"],
+                outcome["no_weight"],
+                outcome["ip_spent"],
             )
         except Exception:
             pass
-        return approved
+        return outcome
 
     def get_proposals(self: Self, limit: int | None = None) -> list[dict[str, object]]:
         """Return stored law proposals."""

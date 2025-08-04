@@ -760,7 +760,7 @@ async def slash_propose(interaction: Any, text: str) -> None:
     payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post("http://localhost:8000/api/propose", json=payload)
+            resp = await client.post("http://localhost:8000/api/governance/propose", json=payload)
             data = json.loads(resp.text)
             approved = data.get("approved", False)
 

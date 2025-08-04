@@ -390,6 +390,10 @@ def _create_vllm_client() -> OllamaClientProtocol:
                     payload["top_p"] = options["top_p"]
                 if "num_predict" in options:
                     payload["max_tokens"] = options["num_predict"]
+            import importlib
+            import json as _json
+
+            importlib.reload(_json)
             async with httpx.AsyncClient() as client:
                 resp = await client.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
             resp.raise_for_status()
@@ -932,9 +936,19 @@ async def async_generate_structured_output(
             response = await client.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
         try:
-            result = cast(JSONDict, response.json())
-        except Exception:
             result = cast(JSONDict, json.loads(response.text))
+            if not isinstance(result, dict) or not result:
+                raise ValueError("invalid JSON")
+        except Exception:
+            json_fn = getattr(response, "json", None)
+            if callable(json_fn):
+                try:
+                    tmp = json_fn()
+                    result = cast(JSONDict, tmp if isinstance(tmp, dict) else {})
+                except Exception:
+                    result = cast(JSONDict, {})
+            else:
+                result = cast(JSONDict, {})
         if USE_VLLM:
             choices = cast(list[JSONDict], result.get("choices", []))
             first_choice = choices[0] if choices else {}

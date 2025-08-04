@@ -90,10 +90,8 @@ async def test_weighted_vote_records_spend(
     agents = [DummyAgent("a1"), DummyAgent("a2")]
     weights = {"a1": 2, "a2": 1}
 
-    approved = await gservice.governance.propose_law(
-        agents[0], "law", agents, vote_weights=weights
-    )
-    assert approved is True
+    result = await gservice.governance.propose_law(agents[0], "law", agents, vote_weights=weights)
+    assert result["approved"] is True
 
     assert ledger.get_balance("a1")[0] == pytest.approx(8.0)
     assert ledger.get_balance("a2")[0] == pytest.approx(4.0)
@@ -144,10 +142,8 @@ async def test_weighted_vote_overdraw(monkeypatch: pytest.MonkeyPatch, tmp_path:
     agents = [DummyAgent("a1"), DummyAgent("a2")]
     weights = {"a1": 3, "a2": 1}
 
-    approved = await gservice.governance.propose_law(
-        agents[0], "law", agents, vote_weights=weights
-    )
-    assert approved is True
+    result = await gservice.governance.propose_law(agents[0], "law", agents, vote_weights=weights)
+    assert result["approved"] is True
 
     # IP cannot go negative, so both balances hit zero
     assert ledger.get_balance("a1")[0] == pytest.approx(0.0)
@@ -192,8 +188,8 @@ async def test_quadratic_weighting(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     agents[0].state.ip = 16.0
     agents[1].state.ip = 1.0
 
-    approved = await gservice.governance.propose_law(agents[0], "law", agents)
-    assert approved is True
+    result = await gservice.governance.propose_law(agents[0], "law", agents)
+    assert result["approved"] is True
 
     # no IP is spent when vote_weights is None
     assert ledger.get_balance("a1")[0] == pytest.approx(16.0)

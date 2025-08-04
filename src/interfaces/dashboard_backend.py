@@ -221,15 +221,26 @@ class VoteRequest(BaseModel):
 app = FastAPI()
 
 
-@app.middleware("http")
-async def require_token(
+async def _require_token(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
+    """Enforce bearer token for mutating requests when configured."""
     if API_TOKEN and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         auth = request.headers.get("Authorization")
         if auth != f"Bearer {API_TOKEN}":
             return JSONResponse({"error": "unauthorized"}, status_code=401)
     return await call_next(request)
+
+
+if hasattr(app, "middleware"):
+    app.middleware("http")(_require_token)
+else:  # pragma: no cover - support older FastAPI versions
+    try:  # pragma: no cover - optional dependency
+        from starlette.middleware.base import BaseHTTPMiddleware
+
+        app.add_middleware(BaseHTTPMiddleware, dispatch=_require_token)  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("API token enforcement disabled: middleware unsupported")
 
 
 @app.get(
@@ -469,15 +480,41 @@ async def api_propose(proposal: Proposal) -> Response:
         proposer = next((a for a in sim.agents if a.agent_id == proposal.proposer_id), None)
         if proposer is not None:
             try:
-                approved = await governance.propose_law(
+                result = await governance.propose_law(
+                    proposer,
+                    proposal.text,
+                    sim.agents,
+                    proposal.vote_weights,
+                )
+                approved = bool(result.get("approved"))
+            except Exception:  # pragma: no cover - defensive
+                approved = False
+    return JSONResponse({"approved": approved})
+
+
+@app.post("/api/governance/propose")
+async def api_governance_propose(proposal: Proposal) -> Response:
+    """Submit a proposal via the governance service and return the outcome."""
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    result: dict[str, float | bool] = {
+        "approved": False,
+        "yes_weight": 0.0,
+        "no_weight": 0.0,
+        "ip_spent": 0.0,
+    }
+    if sim is not None:
+        proposer = next((a for a in sim.agents if a.agent_id == proposal.proposer_id), None)
+        if proposer is not None:
+            try:
+                result = await governance.propose_law(
                     proposer,
                     proposal.text,
                     sim.agents,
                     proposal.vote_weights,
                 )
             except Exception:  # pragma: no cover - defensive
-                approved = False
-    return JSONResponse({"approved": approved})
+                result["approved"] = False
+    return JSONResponse(result)
 
 
 @app.post("/api/vote")
