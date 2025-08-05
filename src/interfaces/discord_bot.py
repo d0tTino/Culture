@@ -121,6 +121,9 @@ class SimulationDiscordBot:
         self.channel_map: dict[str, int] = channel_map or {}
         self.channel_to_agent: dict[int, str] = {v: k for k, v in self.channel_map.items()}
         self.user_channels: dict[str, int] = {}
+        self.user_agents: dict[str, str] = {}
+        self.last_agent_id: str | None = None
+        self.last_channel_id: int | None = None
         self.is_ready = False
         self.context = context
         self.context.sim_state["discord_bot"] = self
@@ -201,8 +204,40 @@ class SimulationDiscordBot:
                 if user_id and channel_id:
                     self.user_channels[str(user_id)] = channel_id
                 recipient = self.channel_to_agent.get(channel_id)
+                if user_id:
+                    if recipient:
+                        self.user_agents[str(user_id)] = recipient
+                    agent_id = self.user_agents.get(str(user_id))
+                else:
+                    agent_id = None
+                if not agent_id:
+                    if hasattr(channel, "send"):
+                        await channel.send("Unknown agent mapping")
+                    return
+                broadcast = content.startswith("/broadcast ")
+                if broadcast:
+                    ip_cost = float(
+                        config.get_config("IP_COST_BROADCAST_MESSAGE")
+                        or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                        or 0.0
+                    )
+                    du_cost = float(
+                        config.get_config("DU_COST_BROADCAST_ACTION")
+                        or config.get_config("DU_COST_PER_ACTION")
+                        or 0.0
+                    )
+                else:
+                    ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
+                    du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
+                ip_bal, du_bal = await ledger.get_balance_async(agent_id)
+                if ip_bal < ip_cost or du_bal < du_cost:
+                    if hasattr(channel, "send"):
+                        await channel.send("Insufficient IP/DU")
+                    return
+                self.last_agent_id = agent_id
+                self.last_channel_id = channel_id
                 evt_type = "direct_message" if recipient else "broadcast"
-                data = {"author": str(getattr(message, "author", "")), "content": content}
+                data = {"author": agent_id, "content": content}
                 if recipient:
                     data["recipient_id"] = recipient
                 await self.event_queue.put(SimulationEvent(type=evt_type, data=data))

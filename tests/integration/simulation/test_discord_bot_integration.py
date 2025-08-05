@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -101,7 +101,9 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         patch.object(Simulation, "_handle_human_command", wrapped),
         patch("src.interfaces.dashboard_backend.EventSourceResponse", object),
     ):
-        bot = await SimulationDiscordBot.create("token", 1, context=SimulationContext())
+        bot = await SimulationDiscordBot.create(
+            "token", 1, channel_map={"A": 1}, context=SimulationContext()
+        )
         agent = DummyAgent("A")
         sim = Simulation([agent], discord_bot=bot)
 
@@ -111,7 +113,8 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         on_msg = bot.client._events["on_message"]
         msg = MagicMock()
         msg.content = "hello"
-        msg.author = "user1"
+        msg.author = SimpleNamespace(id="user1")
+        msg.channel = SimpleNamespace(id=1, send=AsyncMock())
         await on_msg(msg)
         await asyncio.sleep(0.05)
 

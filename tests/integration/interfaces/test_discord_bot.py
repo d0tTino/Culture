@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -108,8 +109,12 @@ async def test_multi_token_message_forwarding() -> None:
     with (
         patch("src.interfaces.discord_bot.discord.Client", Client),
         patch("src.interfaces.dashboard_backend.get_event_queue", lambda: q_events),
+        patch(
+            "src.interfaces.discord_bot.ledger.get_balance_async",
+            AsyncMock(return_value=(1.0, 1.0)),
+        ),
     ):
-        bot = await SimulationDiscordBot.create(tokens, 999, context=ctx)
+        bot = await SimulationDiscordBot.create(tokens, 999, channel_map={"A": 999}, context=ctx)
         tasks = bot.run_bot()
         await asyncio.gather(*tasks[:-1])
 
@@ -118,7 +123,8 @@ async def test_multi_token_message_forwarding() -> None:
             on_msg = bot.clients[token]._events["on_message"]
             msg = MagicMock()
             msg.content = f"hello-{token}"
-            msg.author = f"user_{token}"
+            msg.author = SimpleNamespace(id=f"user_{token}")
+            msg.channel = SimpleNamespace(id=999, send=AsyncMock())
             await on_msg(msg)
             stored = await q_events.get()
             assert (stored.data or {}).get("content") == f"hello-{token}"
@@ -163,9 +169,15 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda: q_events,
         ),
         patch("src.interfaces.discord_bot.message_sse_queue", q_msgs),
+        patch(
+            "src.interfaces.discord_bot.ledger.get_balance_async",
+            AsyncMock(return_value=(1.0, 1.0)),
+        ),
         patch("src.interfaces.dashboard_backend.EventSourceResponse", object),
     ):
-        bot = await SimulationDiscordBot.create("token", 123, context=SimulationContext())
+        bot = await SimulationDiscordBot.create(
+            "token", 123, channel_map={"A": 123}, context=SimulationContext()
+        )
         assert "on_message" in bot.client._events
         tasks = bot.run_bot()
         await asyncio.gather(*tasks[:-1])
@@ -173,7 +185,8 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
         on_msg = bot.client._events["on_message"]
         msg = MagicMock()
         msg.content = "hello"
-        msg.author = "user1"
+        msg.author = SimpleNamespace(id="user1")
+        msg.channel = SimpleNamespace(id=123, send=AsyncMock())
         await on_msg(msg)
         stored = await q_events.get()
         assert stored.type == "broadcast"
@@ -199,14 +212,21 @@ async def test_on_message_updates_agent_state(monkeypatch: pytest.MonkeyPatch) -
     ctx._event_queue = q_events
     ctx._event_queue_loop = asyncio.get_event_loop()
     ctx.message_queue = q_msgs
-    with patch("src.interfaces.discord_bot.discord.Client", Client):
-        bot = await SimulationDiscordBot.create("token", 456, context=ctx)
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", Client),
+        patch(
+            "src.interfaces.discord_bot.ledger.get_balance_async",
+            AsyncMock(return_value=(1.0, 1.0)),
+        ),
+    ):
+        bot = await SimulationDiscordBot.create("token", 456, channel_map={"A": 456}, context=ctx)
         tasks = bot.run_bot()
         await asyncio.gather(*tasks[:-1])
         on_msg = bot.client._events["on_message"]
         msg = MagicMock()
         msg.content = "hello world"
-        msg.author = "userA"
+        msg.author = SimpleNamespace(id="userA")
+        msg.channel = SimpleNamespace(id=456, send=AsyncMock())
         await on_msg(msg)
         event = await q_events.get()
         agent_state = {"messages": []}
