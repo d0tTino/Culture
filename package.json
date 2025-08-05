@@ -1,7 +1,8 @@
 {
   "private": true,
   "scripts": {
-    "lint": "pre-commit run -a"
+    "lint": "pre-commit run -a",
+    "dashboard": "uvicorn src.interfaces.dashboard_backend:app --reload"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

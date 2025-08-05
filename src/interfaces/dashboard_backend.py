@@ -294,6 +294,95 @@ async def stream_map(request: Request) -> Response:
     return cast(Response, EventSourceResponse(generator))
 
 
+@app.get(
+    "/stream/agents",
+    response_class=EventSourceResponse,
+    response_model=None,
+)
+async def stream_agents(request: Request) -> Response:
+    """Stream agent state, mood, and top memories."""
+
+    async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
+        while True:
+            if await request.is_disconnected():
+                break
+            sim = SIM_STATE.get("simulation")
+            agents: list[dict[str, Any]] = []
+            if sim is not None:
+                memory_service = getattr(sim, "memory_service", None)
+                for ag in sim.agents:
+                    try:
+                        state = cast(dict[str, Any], ag.state.model_dump())
+                    except Exception:  # pragma: no cover - defensive
+                        state = {}
+                    mood = getattr(ag.state, "mood_value", None)
+                    memories: list[str] = []
+                    if memory_service is not None:
+                        try:
+                            memories = memory_service.get_recent_semantic_summaries(
+                                ag.agent_id, limit=3
+                            )
+                        except Exception:  # pragma: no cover - defensive
+                            memories = []
+                    agents.append(
+                        {
+                            "agent_id": ag.agent_id,
+                            "state": state,
+                            "mood": mood,
+                            "memories": memories,
+                        }
+                    )
+            yield {"data": json.dumps({"agents": agents})}
+            await asyncio.sleep(1)
+
+    generator: AsyncGenerator[dict[str, Any], None] = event_generator()
+    return cast(Response, EventSourceResponse(generator))
+
+
+try:
+
+    @app.websocket("/ws/agents")
+    async def ws_agents(websocket: WebSocket) -> None:
+        await websocket.accept()
+        try:
+            while True:
+                sim = SIM_STATE.get("simulation")
+                agents: list[dict[str, Any]] = []
+                if sim is not None:
+                    memory_service = getattr(sim, "memory_service", None)
+                    for ag in sim.agents:
+                        try:
+                            state = cast(dict[str, Any], ag.state.model_dump())
+                        except Exception:  # pragma: no cover - defensive
+                            state = {}
+                        mood = getattr(ag.state, "mood_value", None)
+                        memories: list[str] = []
+                        if memory_service is not None:
+                            try:
+                                memories = memory_service.get_recent_semantic_summaries(
+                                    ag.agent_id, limit=3
+                                )
+                            except Exception:  # pragma: no cover - defensive
+                                memories = []
+                        agents.append(
+                            {
+                                "agent_id": ag.agent_id,
+                                "state": state,
+                                "mood": mood,
+                                "memories": memories,
+                            }
+                        )
+                await websocket.send_text(json.dumps({"agents": agents}))
+                await asyncio.sleep(1)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await websocket.close()
+
+except AttributeError:  # pragma: no cover - stub app may lack decorators
+    pass
+
+
 @app.get("/api/map")
 async def api_map() -> Response:
     """Return the latest world map state with agent mood and summaries."""
@@ -824,5 +913,6 @@ __all__ = [
     "get_quests_api",
     "message_sse_queue",
     "register_widget",
+    "stream_agents",
     "stream_map",
 ]
