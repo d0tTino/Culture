@@ -400,6 +400,14 @@ Proposes a new law and triggers an on-chain vote.
 ```
 Casts a yes/no vote on the given proposal.
 
+#### Usage and Gating Rules
+
+- Chat in a specific agent's channel to become associated with that agent.
+- Each message consumes Influence Points (IP) and Decision Units (DU) from the
+  mapped agent according to the simulation's ledger settings.
+- Messages are rejected with an "Insufficient IP/DU" notice if the ledger shows
+  the agent lacks the required resources.
+
 See `/status` and `/stats` for ephemeral information about agent resources and
 latency.
 

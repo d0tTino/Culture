@@ -147,9 +147,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -196,9 +196,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -297,7 +297,12 @@ class Simulation:
             broadcast = True
             text = text[len("/broadcast ") :].strip()
 
-        target = self.agents[self.current_agent_index]
+        agent_id = None
+        if self.discord_bot and self.discord_bot.last_agent_id:
+            agent_id = self.discord_bot.last_agent_id
+        target = next((a for a in self.agents if a.agent_id == agent_id), None)
+        if target is None:
+            target = self.agents[self.current_agent_index]
         state = target.state
         if broadcast:
             ip_cost = float(
@@ -320,6 +325,12 @@ class Simulation:
                 "broadcast" if broadcast else "command",
                 target.agent_id,
             )
+            if self.discord_bot:
+                await self.discord_bot.send_simulation_update(
+                    "Insufficient IP/DU",
+                    agent_id=target.agent_id,
+                    target_channel_id=self.discord_bot.last_channel_id,
+                )
             return
 
         state.ip -= ip_cost
@@ -555,7 +566,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
