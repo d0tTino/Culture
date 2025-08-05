@@ -12,6 +12,7 @@ from src.infra.llm_client import (
     analyze_sentiment,
     async_generate_structured_output,
 )
+from src.interfaces import metrics
 from src.shared.typing import SimulationMessage
 
 from .basic_agent_types import AgentActionOutput, AgentTurnState
@@ -85,8 +86,13 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     if not service or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
 
+    k = 5
+    semantic_limit = 2
     memories, semantic = await service.get_context_pipeline(
-        state["agent_id"], query="", k=5, semantic_limit=2
+        state["agent_id"], query="", k=k, semantic_limit=semantic_limit
+    )
+    metrics.RAG_HIT_RATE.set(
+        (len(memories) + len(semantic)) / (k + semantic_limit) if (k + semantic_limit) else 0
     )
     memories_content = [m.get("content", "") for m in memories] + list(semantic)
 
