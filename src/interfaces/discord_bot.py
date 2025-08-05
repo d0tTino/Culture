@@ -212,7 +212,11 @@ class SimulationDiscordBot:
                     agent_id = None
                 if not agent_id:
                     if hasattr(channel, "send"):
-                        await channel.send("Unknown agent mapping")
+                        send = getattr(channel, "send")
+                        if asyncio.iscoroutinefunction(send):
+                            await send("Unknown agent mapping")
+                        else:
+                            send("Unknown agent mapping")
                     return
                 broadcast = content.startswith("/broadcast ")
                 if broadcast:

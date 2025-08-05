@@ -49,9 +49,9 @@ Timeout = TimeoutException
 if TYPE_CHECKING:
     from src.agents.core.agent_state import AgentState
 
-LLM_API_BASE = cast(str, get_config("LLM_API_BASE"))
+LLM_API_BASE = cast(str | None, get_config("LLM_API_BASE"))
 VLLM_API_BASE = cast(str | None, get_config("VLLM_API_BASE"))
-USE_VLLM = bool(VLLM_API_BASE)
+USE_VLLM = True
 
 if TYPE_CHECKING:
     from litellm.exceptions import APIError
@@ -345,7 +345,7 @@ def is_ollama_available() -> bool:
         bool: True if the service is reachable, False otherwise.
     """
     if _MOCK_ENABLED:
-        return True  # When in mock mode, pretend the service is available
+        return False  # In mock mode, no real service is available
 
     base = VLLM_API_BASE or LLM_API_BASE
 
@@ -362,6 +362,11 @@ def is_ollama_available() -> bool:
 
 
 # Determine which LLM backend to use and initialize the client accordingly
+if not VLLM_API_BASE:
+    VLLM_API_BASE = "http://localhost:8000"
+    logger.warning("VLLM_API_BASE not set in config, using default: %s", VLLM_API_BASE)
+else:
+    logger.info("Using VLLM_API_BASE: %s", VLLM_API_BASE)
 if not LLM_API_BASE:
     LLM_API_BASE = "http://localhost:11434"
     logger.warning("LLM_API_BASE not set in config, using default: %s", LLM_API_BASE)
@@ -413,6 +418,14 @@ def _create_vllm_client() -> OllamaClientProtocol:
         ) -> LLMChatResponse:
             return asyncio.run(self.async_chat(model=model, messages=messages, options=options))
 
+        def chat_sync(
+            self: _Client,
+            model: str,
+            messages: list[LLMMessage],
+            options: dict[str, Any] | None = None,
+        ) -> LLMChatResponse:
+            return self.chat(model=model, messages=messages, options=options)
+
     return _Client()
 
 
@@ -426,7 +439,7 @@ client: OllamaClientProtocol | None = None
 def get_llm_client() -> OllamaClientProtocol:
     """Return the initialized LLM client, reloading configuration if needed."""
     global client, LLM_API_BASE, VLLM_API_BASE, USE_VLLM
-    current_base = cast(str, get_config("LLM_API_BASE"))
+    current_base = cast(str | None, get_config("LLM_API_BASE")) or "http://localhost:11434"
     current_vllm = cast(str | None, get_config("VLLM_API_BASE"))
 
     if current_base != LLM_API_BASE or current_vllm != VLLM_API_BASE:
@@ -876,12 +889,6 @@ async def async_generate_structured_output(
         except (ValidationError, json.JSONDecodeError, TypeError) as e:
             logger.error(f"Error generating mock structured output: {e}")
             return None
-    # Get the Ollama client instance
-    try:
-        ollama_client = cast(Any, get_llm_client())
-    except LLMClientInitError as exc:
-        logger.warning("Attempted to generate structured output but %s", exc)
-        return None
     # Ensure response_model is a subclass of BaseModel for type safety
     if not issubclass(response_model, BaseModel):
         raise TypeError("response_model must be a subclass of BaseModel")
