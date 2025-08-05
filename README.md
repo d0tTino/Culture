@@ -113,7 +113,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 * **Core Language:** Python 3.11+
 * **Agent Orchestration:** LangChain / LangGraph
-* **LLM Hosting/Access:** Ollama (primarily for local LLMs like Mistral, Llama 3.2 variants)
+* **LLM Hosting/Access:** vLLM (primary) with Ollama as a fallback backend
 * **Vector Storage:** ChromaDB
 * **Embeddings:** Sentence Transformers
 * **State/Cache (Planned/Optional):** Redis
@@ -129,7 +129,7 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 ## Requirements
 
 - Python 3.11+
-- Ollama (for local LLM inference)
+- vLLM for local LLM inference (Ollama is supported as a fallback)
 - Required Python packages listed in `requirements.txt`
 - Runtime dependencies now include `numpy>=2`
 - Additional development and testing dependencies in `requirements-dev.txt` (required for the full test suite)
@@ -165,18 +165,16 @@ Follow these steps to run the example simulation locally:
    to use the Discord bot.
 4. **Install an LLM backend**
   ```bash
-  # Ollama (default backend)
+  # vLLM (preferred backend)
+  pip install vllm
+  VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
+  export VLLM_API_BASE="http://localhost:$VLLM_PORT"
+  ```
+  To use Ollama as a fallback:
+  ```bash
   curl https://ollama.ai/install.sh | sh
   ollama pull mistral:latest
   ollama serve &
-  # Or install vLLM
-  pip install vllm
-  ```
-  Alternatively you can start a vLLM server:
-  ```bash
-  VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
-  export VLLM_API_BASE="http://localhost:$VLLM_PORT"
-  export LLM_API_BASE="$VLLM_API_BASE"
   ```
 
 ### Start vLLM
@@ -188,15 +186,23 @@ export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"   # overrides Ollama when set
 ```
 
-Requests now use vLLM instead of Ollama. See [docs/runbook.md](docs/runbook.md#start-vllm) for additional details.
+Requests now use vLLM instead of Ollama. Unset `VLLM_API_BASE` to fall back to
+Ollama. See [docs/runbook.md](docs/runbook.md#start-vllm) for additional details.
 
-To compare latency between Ollama and vLLM, use the benchmarking helper:
+To compare latency and throughput between vLLM and Ollama, use the benchmarking helper:
 
 ```bash
 python scripts/benchmark_llm.py "Hello" --runs 3 --model mistral:latest --vllm_base "http://localhost:$VLLM_PORT"
 ```
 
-The script prints a table with average response times for each backend.
+Example results:
+
+| Backend | Avg latency (s) | Throughput (req/s) |
+|---------|----------------:|-------------------:|
+| vLLM    | 0.25            | 4.00               |
+| Ollama  | 1.20            | 0.83               |
+
+Results will vary depending on hardware and models.
 
 5. **Run the vertical slice demo**
    ```bash

@@ -80,30 +80,82 @@ def MockLLM(
         logger.info("MockLLM: Intercepted DSPy predict call")
         return {"output": responses.get("dspy_output", "Default DSPy response")}
 
-    # Apply all mocks
-    with (
-        patch("src.infra.llm_client.generate_text", side_effect=mock_generate_text),
-        patch("src.infra.llm_client.analyze_sentiment", side_effect=mock_analyze_sentiment),
-        patch(
-            "src.infra.llm_client.summarize_memory_context",
-            side_effect=mock_summarize_memory_context,
-        ),
-        patch(
-            "src.infra.llm_client.generate_structured_output",
-            side_effect=mock_generate_structured_output,
-        ),
-        patch(
-            "src.infra.llm_client.async_generate_structured_output",
-            AsyncMock(side_effect=mock_generate_structured_output),
-        ),
-        patch("src.infra.llm_client.generate_response", side_effect=mock_generate_response),
-        patch("src.infra.llm_client.client.chat", side_effect=mock_ollama_chat),
-        patch("src.infra.llm_client.ollama.chat", side_effect=mock_ollama_chat),
-    ):
+    import inspect
+    from contextlib import ExitStack
+
+    caller_module = inspect.getmodule(inspect.stack()[1].frame)
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch("src.infra.llm_client.generate_text", side_effect=mock_generate_text)
+        )
+        stack.enter_context(
+            patch("src.infra.llm_client.analyze_sentiment", side_effect=mock_analyze_sentiment)
+        )
+        stack.enter_context(
+            patch(
+                "src.infra.llm_client.summarize_memory_context",
+                side_effect=mock_summarize_memory_context,
+            )
+        )
+        stack.enter_context(
+            patch(
+                "src.infra.llm_client.generate_structured_output",
+                side_effect=mock_generate_structured_output,
+            )
+        )
+        stack.enter_context(
+            patch(
+                "src.infra.llm_client.async_generate_structured_output",
+                AsyncMock(side_effect=mock_generate_structured_output),
+            )
+        )
+        stack.enter_context(
+            patch("src.infra.llm_client.generate_response", side_effect=mock_generate_response)
+        )
+        stack.enter_context(
+            patch("src.infra.llm_client.client.chat", side_effect=mock_ollama_chat)
+        )
+        stack.enter_context(
+            patch("src.infra.llm_client.ollama.chat", side_effect=mock_ollama_chat)
+        )
+        if caller_module is not None:
+            stack.enter_context(
+                patch(
+                    f"{caller_module.__name__}.generate_text",
+                    side_effect=mock_generate_text,
+                    create=True,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    f"{caller_module.__name__}.analyze_sentiment",
+                    side_effect=mock_analyze_sentiment,
+                    create=True,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    f"{caller_module.__name__}.summarize_memory_context",
+                    side_effect=mock_summarize_memory_context,
+                    create=True,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    f"{caller_module.__name__}.generate_structured_output",
+                    side_effect=mock_generate_structured_output,
+                    create=True,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    f"{caller_module.__name__}.generate_response",
+                    side_effect=mock_generate_response,
+                    create=True,
+                )
+            )
         try:
-            # Try to patch DSPy if it's available
-            with patch("dspy.Predict.__call__", side_effect=mock_dspy_predict):
-                yield
+            stack.enter_context(patch("dspy.Predict.__call__", side_effect=mock_dspy_predict))
         except ImportError:
-            # If DSPy isn't available, proceed without patching it
-            yield
+            pass
+        yield
