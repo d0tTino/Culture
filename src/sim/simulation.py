@@ -35,8 +35,8 @@ from src.interfaces.dashboard_backend import (
     emit_event,
 )
 from src.shared.typing import SimulationMessage
-from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
+from src.sim.kernel import DiscreteEventKernel
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.quests import generate_quest
 from src.sim.version_vector import VersionVector
@@ -99,7 +99,7 @@ class Simulation:
         self.total_turns_executed = 0
         self.resource_manager = ResourceManager(config.MAX_IP_PER_TICK, config.MAX_DU_PER_TICK)
         self.simulation_complete = False
-        self.event_kernel = EventKernel()
+        self.event_kernel = DiscreteEventKernel()
         self.vector = VersionVector()
         self.paused: bool = False
         self.speed: float = 1.0
@@ -950,8 +950,7 @@ class Simulation:
                 vector=self.vector,
             )
 
-        events = await self.event_kernel.dispatch(max_turns)
-        self.vector = self.event_kernel.vector
+        events = await self.event_kernel.step(max_turns)
 
         return len(events)
 
