@@ -216,6 +216,14 @@ class VoteRequest(BaseModel):
     agent_id: str
     text: str
     approve: bool
+    weight: int | None = 1
+
+
+class StakeRequest(BaseModel):
+    """Request payload for staking influence points."""
+
+    agent_id: str
+    amount: float
 
 
 app = FastAPI()
@@ -560,27 +568,6 @@ async def api_propose_law(proposal: LawProposal) -> Response:
     return JSONResponse({"approved": approved})
 
 
-@app.post("/api/propose")
-async def api_propose(proposal: Proposal) -> Response:
-    """Submit a weighted law proposal to the active simulation."""
-    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
-    approved = False
-    if sim is not None:
-        proposer = next((a for a in sim.agents if a.agent_id == proposal.proposer_id), None)
-        if proposer is not None:
-            try:
-                result = await governance.propose_law(
-                    proposer,
-                    proposal.text,
-                    sim.agents,
-                    proposal.vote_weights,
-                )
-                approved = bool(result.get("approved"))
-            except Exception:  # pragma: no cover - defensive
-                approved = False
-    return JSONResponse({"approved": approved})
-
-
 @app.post("/api/governance/propose")
 async def api_governance_propose(proposal: Proposal) -> Response:
     """Submit a proposal via the governance service and return the outcome."""
@@ -615,11 +602,22 @@ async def api_vote(vote: VoteRequest) -> Response:
         agent = next((a for a in sim.agents if a.agent_id == vote.agent_id), None)
         if agent is not None:
             try:
-                allowed = await governance.vote(agent, vote.text)
-                result = bool(vote.approve and allowed)
+                result = await governance.vote_weighted(
+                    agent, vote.text, vote.weight or 1, vote.approve
+                )
             except Exception:  # pragma: no cover - defensive
                 result = False
     return JSONResponse({"vote": result})
+
+
+@app.post("/api/stake_ip")
+async def api_stake_ip(req: StakeRequest) -> Response:
+    """Stake influence points for an agent and return the total staked."""
+    try:
+        total = await governance.stake_ip(req.agent_id, req.amount)
+    except Exception:  # pragma: no cover - defensive
+        total = 0.0
+    return JSONResponse({"staked_ip": total})
 
 
 @app.get("/api/proposals", response_model=ProposalsResponse)
@@ -887,6 +885,7 @@ __all__ = [
     "ProposalRecord",
     "ProposalsResponse",
     "SimulationEvent",
+    "StakeRequest",
     "VoteRecord",
     "VoteRequest",
     "VotesResponse",
@@ -901,6 +900,7 @@ __all__ = [
     "api_memory_snapshots",
     "api_propose_law",
     "api_recent_proposals",
+    "api_stake_ip",
     "api_token_balances",
     "api_vote",
     "app",

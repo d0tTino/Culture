@@ -31,6 +31,54 @@ class GovernanceService:
         allowed, _ = await evaluate_with_opa(proposal)
         return allowed
 
+    async def vote_weighted(
+        self: Self,
+        agent: Agent,
+        proposal: str,
+        weight: int = 1,
+        approve: bool = True,
+    ) -> bool:
+        """Cast a weighted ``approve`` or ``reject`` vote for ``proposal``.
+
+        ``weight`` additional votes cost ``weight^2`` IP which is deducted
+        from the agent's balance via the ledger. The approval result is
+        returned only when the vote is allowed by the policy and the IP spend
+        succeeds.
+        """
+        if weight < 1:
+            weight = 1
+        allowed = await self.vote(agent, proposal)
+        if not allowed:
+            return False
+        cost = float(weight**2)
+        try:
+            await ledger.spend(agent.agent_id, ip=cost, reason="vote")
+        except Exception:
+            return False
+        return approve
+
+    async def stake_ip(self: Self, agent_id: str, amount: float) -> float:
+        """Stake ``amount`` of IP for ``agent_id`` and return total staked IP."""
+
+        def _stake() -> float:
+            ledger.stake_ip(agent_id, amount)
+            try:
+                return ledger.get_staked_ip(agent_id)
+            except Exception:
+                return 0.0
+
+        return await asyncio.to_thread(_stake)
+
+    async def submit_proposal(
+        self: Self,
+        proposer: Agent,
+        text: str,
+        agents: Iterable[Agent],
+        vote_weights: dict[str, int] | None = None,
+    ) -> dict[str, float | bool]:
+        """Convenience wrapper around :meth:`propose_law`."""
+        return await self.propose_law(proposer, text, agents, vote_weights)
+
     async def propose_law(
         self: Self,
         proposer: Agent,
