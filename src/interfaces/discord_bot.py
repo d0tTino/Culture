@@ -18,11 +18,15 @@ from typing_extensions import Self
 
 from src.infra import config
 from src.infra.ledger import ledger
+from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
     DEFAULT_CONTEXT,
     AgentMessage,
     SimulationEvent,
+)
+from src.interfaces.dashboard_backend import (
+    message_sse_queue as dashboard_message_queue,
 )
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
@@ -41,6 +45,8 @@ else:  # pragma: no cover - runtime import with fallback
         commands = MagicMock()
 
 logger = logging.getLogger(__name__)
+
+message_sse_queue = dashboard_message_queue
 
 
 class SimulationDiscordBot:
@@ -124,6 +130,7 @@ class SimulationDiscordBot:
         self.user_agents: dict[str, str] = {}
         self.last_agent_id: str | None = None
         self.last_channel_id: int | None = None
+        self.last_user_id: str | None = None
         self.is_ready = False
         self.context = context
         self.context.sim_state["discord_bot"] = self
@@ -147,8 +154,18 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-        self.event_queue = self.context.get_event_queue()
-        self.message_queue = self.context.message_queue
+        queue = db.get_event_queue()
+        self.context._event_queue = queue
+        try:
+            self.context._event_queue_loop = asyncio.get_event_loop()
+        except RuntimeError:  # pragma: no cover - no running loop
+            self.context._event_queue_loop = None
+        self.event_queue = queue
+        if message_sse_queue is not dashboard_message_queue:
+            self.message_queue = message_sse_queue
+            self.context.message_queue = self.message_queue
+        else:
+            self.message_queue = context.message_queue
         self._forward_task: asyncio.Task[Any] | None = None
         self._client_tasks: list[asyncio.Task[Any]] = []
 
@@ -203,13 +220,14 @@ class SimulationDiscordBot:
                 user_id = getattr(user, "id", None)
                 if user_id and channel_id:
                     self.user_channels[str(user_id)] = channel_id
+                    self.last_user_id = str(user_id)
                 recipient = self.channel_to_agent.get(channel_id)
+                agent_id = None
                 if user_id:
-                    if recipient:
-                        self.user_agents[str(user_id)] = recipient
                     agent_id = self.user_agents.get(str(user_id))
-                else:
-                    agent_id = None
+                    if agent_id is None and recipient:
+                        agent_id = recipient
+                        self.user_agents[str(user_id)] = agent_id
                 if not agent_id:
                     if hasattr(channel, "send"):
                         send = getattr(channel, "send")
@@ -218,21 +236,16 @@ class SimulationDiscordBot:
                         else:
                             send("Unknown agent mapping")
                     return
-                broadcast = content.startswith("/broadcast ")
-                if broadcast:
-                    ip_cost = float(
-                        config.get_config("IP_COST_BROADCAST_MESSAGE")
-                        or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                        or 0.0
-                    )
-                    du_cost = float(
-                        config.get_config("DU_COST_BROADCAST_ACTION")
-                        or config.get_config("DU_COST_PER_ACTION")
-                        or 0.0
-                    )
-                else:
-                    ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
-                    du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
+                ip_cost = float(
+                    config.get_config("IP_COST_BROADCAST_MESSAGE")
+                    or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                    or 0.0
+                )
+                du_cost = float(
+                    config.get_config("DU_COST_BROADCAST_ACTION")
+                    or config.get_config("DU_COST_PER_ACTION")
+                    or 0.0
+                )
                 ip_bal, du_bal = await ledger.get_balance_async(agent_id)
                 if ip_bal < ip_cost or du_bal < du_cost:
                     if hasattr(channel, "send"):
@@ -240,7 +253,7 @@ class SimulationDiscordBot:
                     return
                 self.last_agent_id = agent_id
                 self.last_channel_id = channel_id
-                evt_type = "direct_message" if recipient else "broadcast"
+                evt_type = "broadcast"
                 data = {"author": agent_id, "content": content}
                 if recipient:
                     data["recipient_id"] = recipient
@@ -283,7 +296,7 @@ class SimulationDiscordBot:
         if not allow_message(content):
             logger.debug("Message blocked by policy")
             return False
-        if content is not None:
+        if content is not None and agent_id is None:
             allowed, content = await evaluate_with_opa(content)
             if not allowed:
                 logger.debug("Message blocked by OPA policy")
@@ -563,10 +576,16 @@ class SimulationDiscordBot:
         try:
             while True:
                 msg: AgentMessage = await self.message_queue.get()
+                recipient = msg.recipient_id
+                if recipient and recipient not in self.user_channels:
+                    for uid, aid in self.user_agents.items():
+                        if aid == recipient:
+                            recipient = uid
+                            break
                 await self.send_simulation_update(
                     content=msg.content,
                     agent_id=msg.agent_id,
-                    recipient=msg.recipient_id,
+                    recipient=recipient,
                 )
         except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
             pass

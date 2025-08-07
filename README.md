@@ -408,7 +408,8 @@ Casts a yes/no vote on the given proposal.
 
 #### Usage and Gating Rules
 
-- Chat in a specific agent's channel to become associated with that agent.
+- The first message you post in an agent's channel binds your Discord user to
+  that agent until you chat in another agent's channel.
 - Each message consumes Influence Points (IP) and Decision Units (DU) from the
   mapped agent according to the simulation's ledger settings.
 - Messages are rejected with an "Insufficient IP/DU" notice if the ledger shows
