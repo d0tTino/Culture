@@ -44,7 +44,7 @@ async def test_slash_propose_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
 
     await bot.slash_propose.callback(DummyInteraction(), text="hello")
 
-    assert DummyClient.called["url"].endswith("/api/propose")
+    assert DummyClient.called["url"].endswith("/api/governance/propose")
     assert DummyClient.called["json"] == {"proposer_id": "a1", "text": "hello"}
     DummyClient.called = {}
 

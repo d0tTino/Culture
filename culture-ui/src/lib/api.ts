@@ -39,6 +39,25 @@ export async function proposeLaw(
   return data.approved
 }
 
+export interface ProposalOutcome {
+  approved: boolean
+  yes_weight: number
+  no_weight: number
+  ip_spent: number
+}
+
+export async function submitProposal(
+  proposerId: string,
+  text: string,
+): Promise<ProposalOutcome> {
+  const res = await fetch('/api/governance/propose', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proposer_id: proposerId, text }),
+  })
+  return (await res.json()) as ProposalOutcome
+}
+
 
 export type WidgetRegistration = WidgetInfo & Record<string, unknown>
 

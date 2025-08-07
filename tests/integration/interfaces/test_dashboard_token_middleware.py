@@ -18,10 +18,13 @@ async def test_token_required(monkeypatch):
     http_app = importlib.import_module("src.http_app")
     transport = ASGITransport(app=http_app.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/api/propose", json={"proposer_id": "a1", "text": "law"})
+        resp = await client.post(
+            "/api/governance/propose",
+            json={"proposer_id": "a1", "text": "law"},
+        )
         assert resp.status_code == 401
         resp = await client.post(
-            "/api/propose",
+            "/api/governance/propose",
             json={"proposer_id": "a1", "text": "law"},
             headers={"Authorization": "Bearer secret"},
         )

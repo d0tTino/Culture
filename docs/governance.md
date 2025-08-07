@@ -49,3 +49,45 @@ Returns a list of laws that have been passed and recorded on the law board.
 
 ### `GET /api/votes`
 Lists recent law proposals with their vote totals as stored in the ledger.
+
+## Example Scenarios
+
+### Simple Proposal
+1. Stake a few influence points for the proposing agent (optional):
+   ```bash
+   curl -X POST -H 'Content-Type: application/json' \
+     -d '{"agent_id": "agent_1", "amount": 5}' \
+     http://localhost:8000/api/stake_ip
+   ```
+2. Submit a proposal:
+   ```bash
+   curl -X POST -H 'Content-Type: application/json' \
+     -d '{"proposer_id": "agent_1", "text": "Allow concerts"}' \
+     http://localhost:8000/api/governance/propose
+   ```
+3. Retrieve the latest proposals and vote totals:
+   ```bash
+   curl http://localhost:8000/api/recent_proposals
+   ```
+
+### Weighted Voting
+1. Cast three "yes" votes costing nine IP:
+   ```bash
+   curl -X POST -H 'Content-Type: application/json' \
+     -d '{"agent_id": "agent_2", "text": "Allow concerts", "approve": true, "weight": 3}' \
+     http://localhost:8000/api/vote
+   ```
+2. Check the proposal record to confirm the additional weight:
+   ```bash
+   curl http://localhost:8000/api/recent_proposals
+   ```
+
+### IP Staking
+An agent can lock IP to increase quadratic voting weight:
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"agent_id": "agent_3", "amount": 10}' \
+  http://localhost:8000/api/stake_ip
+```
+The staked amount counts toward the `sqrt(ip_balance + staked_ip)` formula used
+for default voting weight.
