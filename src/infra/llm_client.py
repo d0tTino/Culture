@@ -509,7 +509,10 @@ def generate_text(
     agent_state: Any | None = None,
 ) -> str | None:
     """
-    Generates text using the specified Ollama model.
+    Generates text using the configured LLM backend.
+
+    vLLM is preferred when available; the function falls back to Ollama if
+    the vLLM client cannot be initialized.
 
     Args:
         prompt (str): The prompt to send to the model.
@@ -789,7 +792,7 @@ async def async_generate_structured_output(
     Args:
         prompt (str): Instruction prompt for the LLM
         response_model (Type[T]): The Pydantic model to parse the response into
-        model (str): The Ollama model to use
+        model (str): The model to use for generation
         temperature (float): The temperature for generation
         timeout (int | None): Request timeout in seconds. Defaults to the
             `OLLAMA_REQUEST_TIMEOUT` config value.
@@ -889,9 +892,19 @@ async def async_generate_structured_output(
         except (ValidationError, json.JSONDecodeError, TypeError) as e:
             logger.error(f"Error generating mock structured output: {e}")
             return None
+
     # Ensure response_model is a subclass of BaseModel for type safety
     if not issubclass(response_model, BaseModel):
         raise TypeError("response_model must be a subclass of BaseModel")
+
+    # Initialize the appropriate LLM client (prefers vLLM, falls back to Ollama)
+    global client, USE_VLLM
+    if client is None and USE_VLLM:
+        try:
+            get_llm_client()
+        except LLMClientInitError as exc:
+            logger.error(f"LLM client unavailable: {exc}")
+            USE_VLLM = False
     if hasattr(response_model, "model_json_schema"):
         schema_json = json.dumps(response_model.model_json_schema(), indent=2)
     else:
@@ -965,7 +978,7 @@ async def async_generate_structured_output(
             response_text = str(result.get("response", ""))
         logger.debug(f"FULL RAW LLM RESPONSE: {response_text}")
         try:
-            logger.debug(f"Received potential JSON response from Ollama: {response_text}")
+            logger.debug(f"Received potential JSON response from LLM: {response_text}")
             if response_model:
                 json_data: JSONDict = json.loads(str(response_text))
                 parsed_output: BaseModel = response_model(**json_data)
@@ -975,7 +988,7 @@ async def async_generate_structured_output(
                 # Defensive: fallback for non-model response, cast to BaseModel | None
                 return cast(BaseModel | None, json.loads(str(response_text)))
         except (json.JSONDecodeError, ValidationError) as e:
-            logger.warning(f"Failed to parse JSON from Ollama response: {e}")
+            logger.warning(f"Failed to parse JSON from LLM response: {e}")
             logger.warning(f"Raw response: {response_text}")
             return None
     except (RequestException, APIError) as e:

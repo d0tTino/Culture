@@ -12,7 +12,8 @@ from typing import Callable
 # Add project root so we can import llm_client directly when executed from scripts/
 sys.path.append(str(os.path.dirname(os.path.dirname(__file__))))
 
-from src.infra import config as infra_config, llm_client
+from src.infra import config as infra_config
+from src.infra import llm_client
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=os.environ.get("VLLM_API_BASE", "http://localhost:8000"),
         help="Base URL of the vLLM server",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Optional path to write benchmark results as JSON",
     )
     return parser.parse_args()
 
@@ -45,7 +52,7 @@ def time_calls(func: Callable[[], None], runs: int) -> list[float]:
     return times
 
 
-def benchmark(prompt: str, model: str, runs: int, vllm_base: str) -> None:
+def benchmark(prompt: str, model: str, runs: int, vllm_base: str, output: str | None) -> None:
     # Benchmark vLLM first
     os.environ["VLLM_API_BASE"] = vllm_base
     infra_config.load_config(validate_required=False)
@@ -86,19 +93,27 @@ def benchmark(prompt: str, model: str, runs: int, vllm_base: str) -> None:
     def throughput(values: list[float]) -> float:
         return runs / sum(values)
 
+    results = {
+        "vllm": {"avg_latency": avg(vllm_times), "throughput": throughput(vllm_times)},
+        "ollama": {"avg_latency": avg(ollama_times), "throughput": throughput(ollama_times)},
+    }
+
     print("| Backend | Avg latency (s) | Throughput (req/s) |")
     print("|---------|----------------:|--------------------:|")
-    print(
-        f"| vLLM | {avg(vllm_times):.2f} | {throughput(vllm_times):.2f} |"
-    )
-    print(
-        f"| Ollama | {avg(ollama_times):.2f} | {throughput(ollama_times):.2f} |"
-    )
+    print(f"| vLLM | {results['vllm']['avg_latency']:.2f} | {results['vllm']['throughput']:.2f} |")
+    print(f"| Ollama | {results['ollama']['avg_latency']:.2f} | {results['ollama']['throughput']:.2f} |")
+
+    if output:
+        import json
+
+        with open(output, "w", encoding="utf-8") as fh:
+            json.dump(results, fh, indent=2)
+        print(f"Results written to {output}")
 
 
 def main() -> None:
     args = parse_args()
-    benchmark(args.prompt, args.model, args.runs, args.vllm_base)
+    benchmark(args.prompt, args.model, args.runs, args.vllm_base, args.output)
 
 
 if __name__ == "__main__":

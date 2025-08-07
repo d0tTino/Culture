@@ -192,7 +192,7 @@ Ollama. See [docs/runbook.md](docs/runbook.md#start-vllm) for additional details
 To compare latency and throughput between vLLM and Ollama, use the benchmarking helper:
 
 ```bash
-python scripts/benchmark_llm.py "Hello" --runs 3 --model mistral:latest --vllm_base "http://localhost:$VLLM_PORT"
+python scripts/benchmark_llm.py "Hello" --runs 3 --model mistral:latest --vllm_base "http://localhost:$VLLM_PORT" --output results.json
 ```
 
 Example results:
