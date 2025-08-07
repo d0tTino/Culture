@@ -31,9 +31,13 @@ ActionIntentLiteral = Literal[
 
 
 class MemoryRetriever(Protocol):
-    async def aretrieve_relevant_memories(
-        self: Any, agent_id: str, query: str, k: int
-    ) -> list[dict[str, Any]]: ...
+    async def get_context_pipeline(
+        self: Any, agent_id: str, query: str, k: int, semantic_limit: int
+    ) -> tuple[list[dict[str, Any]], list[str]]: ...
+
+    def blend_with_recent_semantic(
+        self: Any, agent_id: str, episodic_summary: str, limit: int = 3
+    ) -> str: ...
 
 
 class SummaryAgent(Protocol):
