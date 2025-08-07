@@ -74,6 +74,8 @@ Run `scripts/benchmark_llm.py` after the server starts to compare vLLM and Ollam
 | vLLM    | 0.25            | 4.00               |
 | Ollama  | 1.20            | 0.83               |
 
+Add `--output results.json` to persist the results for later analysis.
+
 Results will vary depending on hardware and models.
 
 When `VLLM_API_BASE` (or `LLM_API_BASE` pointing to the same URL) is configured, the application prefers the vLLM endpoint over Ollama. Unset this variable to switch back to Ollama.
