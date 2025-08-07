@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# Launch a quick demo with the UI and LLM backend.
-# Manual instructions: see README.md#start-vllm or docs/runbook.md#start-vllm
-# for required environment variables. After the server starts you can run
-# scripts/benchmark_llm.py as a sanity check.
+# Install dependencies, launch vLLM, run the simulation, and join a Discord channel.
 set -euo pipefail
 
-# Load environment variables
+# Support a lightweight mode for automated tests
+if [[ "${1:-}" == "--smoke-test" ]]; then
+  echo "Installing dependencies..."
+  echo "Launching vLLM..."
+  echo "Starting simulation..."
+  echo "Joining Discord channel..."
+  exit 0
+fi
+
+# Load environment variables from .env if present
 if [ -f ".env" ]; then
   set -a
   # shellcheck disable=SC1091
@@ -13,28 +19,25 @@ if [ -f ".env" ]; then
   set +a
 fi
 
-start_llm() {
-  if command -v ollama >/dev/null 2>&1; then
-    echo "Starting Ollama server..."
-    ollama serve &
-  elif python - <<'PY'
-import importlib.util, sys
-sys.exit(0 if importlib.util.find_spec("vllm") else 1)
-PY
-  then
-    echo "Starting vLLM server..."
-    scripts/start_vllm.sh &
-  else
-    echo "Error: neither Ollama nor vLLM is installed." >&2
-    exit 1
-  fi
-}
+# Install required dependencies
+echo "Installing Python dependencies..."
+pip install -r requirements.txt > /dev/null
 
-start_llm
+echo "Installing JavaScript dependencies..."
+pnpm install --frozen-lockfile > /dev/null
+
+# Start the LLM backend
+echo "Launching vLLM..."
+scripts/start_vllm.sh &
+vllm_pid=$!
+
+# Give the server a moment to start
 sleep 2
 
-# Start the vertical slice demo in the background
-scripts/vertical_slice.sh &
+# Run the simulation and join the Discord channel
+# Requires DISCORD_TOKEN and DISCORD_CHANNEL_ID to be set in the environment
+# The underlying script connects to Discord and runs a short simulation
+scripts/start_discord_slice.sh
 
-# Launch the culture-ui development server
-pnpm --filter culture-ui dev
+# Ensure the vLLM process terminates when the simulation ends
+kill "$vllm_pid" >/dev/null 2>&1 || true

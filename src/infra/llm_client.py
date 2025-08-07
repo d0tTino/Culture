@@ -952,8 +952,8 @@ async def async_generate_structured_output(
                 "stream": False,
                 "options": {"temperature": temperature, "top_p": 0.95, "num_predict": 400},
             }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload, timeout=timeout_value)
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(url, json=payload, timeout=timeout_value)
         response.raise_for_status()
         try:
             result = cast(JSONDict, json.loads(response.text))
