@@ -276,6 +276,13 @@ class ChromaVectorStoreManager(MemoryStore):
             logger.error("Error pruning documents: %s", exc)
         return pruned
 
+    def delete_agent_memories(self: Self, agent_id: str) -> None:
+        """Remove all memories associated with the given agent."""
+        try:
+            self.collection.delete(where={"agent_id": {"$eq": agent_id}})
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to delete memories for agent %s: %s", agent_id, exc)
+
     def add_memory(
         self: Self,
         agent_id: str,

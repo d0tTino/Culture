@@ -104,6 +104,7 @@ class Simulation:
         self.paused: bool = False
         self.speed: float = 1.0
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
+        self.muted_agents: set[str] = set()
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
 
@@ -386,6 +387,21 @@ class Simulation:
             self.paused = True
         elif action == "resume":
             self.paused = False
+        elif action == "start":
+            self.paused = False
+        elif action == "stop":
+            self.simulation_complete = True
+            await self.stop_event_listener()
+        elif action == "spawn":
+            agent_id = cmd.get("agent_id")
+            if agent_id:
+                try:
+                    from src.agents.core.base_agent import Agent
+
+                    new_agent = Agent(agent_id=str(agent_id), name=str(agent_id))
+                    await self.spawn_agent(new_agent)
+                except Exception:
+                    logger.error("Failed to spawn agent %s", agent_id, exc_info=True)
         elif action == "set_speed":
             try:
                 self.speed = float(cmd.get("value", 1))
@@ -415,6 +431,25 @@ class Simulation:
                         )
                     )
                     _ = task
+
+    async def handle_moderation_command(self: Self, cmd: dict[str, Any]) -> None:
+        """Process moderation actions like muting or penalties."""
+        action = cmd.get("command")
+        agent_id = cmd.get("agent_id")
+        if action == "mute" and agent_id:
+            self.muted_agents.add(str(agent_id))
+        elif action == "reset_memory" and agent_id:
+            try:
+                self.memory_service.reset_agent(str(agent_id))
+            except Exception:
+                logger.error("Failed to reset memory for %s", agent_id, exc_info=True)
+        elif action == "penalty" and agent_id:
+            ip = float(cmd.get("ip", 0))
+            du = float(cmd.get("du", 0))
+            try:
+                ledger.log_change(str(agent_id), -abs(ip), -abs(du), "moderation_penalty")
+            except Exception:
+                logger.error("Failed to apply penalty to %s", agent_id, exc_info=True)
 
     async def spawn_agent(
         self: Self,
@@ -538,6 +573,9 @@ class Simulation:
         self.current_step += 1
         agent = self.agents[agent_index]
         agent_id = agent.agent_id
+        if agent_id in self.muted_agents:
+            self.current_agent_index = (agent_index + 1) % len(self.agents)
+            return
         self.vector.increment(agent_id)
         current_agent_state = agent.state
 
@@ -893,7 +931,12 @@ class Simulation:
         if evt.type == "control":
             await self.handle_control_command(evt.data)
             return
+        if evt.type == "moderation":
+            await self.handle_moderation_command(evt.data)
+            return
         sender = str(evt.data.get("author", "external"))
+        if sender in self.muted_agents:
+            return
         content = str(evt.data.get("content", ""))
         recipient = evt.data.get("recipient_id") if evt.type == "direct_message" else None
         msg: SimulationMessage = {
