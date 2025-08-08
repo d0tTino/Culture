@@ -15,6 +15,7 @@ from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra.ledger import ledger
 from src.infra.snapshot import load_snapshot
+from src.interfaces import metrics
 from src.sim.context import SimulationContext
 from src.sim.event_bus import get_event_bus
 
@@ -668,6 +669,17 @@ async def api_token_balances() -> Response:
 
     agents = await asyncio.to_thread(_load)
     return JSONResponse({"agents": agents})
+
+
+@app.get("/api/cost_metrics")
+async def api_cost_metrics() -> Response:
+    """Return DU cost and latency metrics for dashboards."""
+
+    data = {
+        "du_per_1k_tokens": metrics.get_du_per_1k_tokens(),
+        "llm_latency_p95_ms": metrics.get_llm_latency_p95(),
+    }
+    return JSONResponse(data)
 
 
 @app.get("/api/auctions")
