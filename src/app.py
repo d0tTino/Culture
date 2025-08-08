@@ -10,7 +10,7 @@ from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.extensions import load_plugins
-from src.infra import config, event_log
+from src.infra import config
 from src.infra.checkpoint import (
     load_checkpoint,
     save_checkpoint,
@@ -24,7 +24,6 @@ from src.infra.checkpoint import (
 from src.infra.llm_client import LLMClientInitError, get_llm_client
 from src.infra.logging_config import setup_logging
 from src.infra.settings import settings
-from src.infra.snapshot import load_snapshot
 from src.infra.warning_filters import configure_warning_filters
 from src.interfaces.dashboard_backend import DEFAULT_CONTEXT, SimulationEvent
 from src.sim.context import SimulationContext
@@ -271,6 +270,16 @@ def parse_args() -> argparse.Namespace:
         help="Replay a previous run from the given snapshot using the event log.",
     )
     parser.add_argument(
+        "--replay-start",
+        type=int,
+        help="Start tick for event log replay.",
+    )
+    parser.add_argument(
+        "--replay-end",
+        type=int,
+        help="End tick for event log replay.",
+    )
+    parser.add_argument(
         "--proposal",
         type=str,
         help="Submit a law proposal before running the simulation.",
@@ -316,10 +325,11 @@ def main() -> None:
     sim: Simulation
     meta: dict[str, object] | None = None
     if args.replay:
-        snapshot = load_snapshot(args.replay)
-        sim = Simulation.from_snapshot(snapshot)
-        for event in event_log.stream_events(after_step=sim.current_step):
-            sim.apply_event(event)
+        sim = Simulation.replay_from_snapshot(
+            args.replay,
+            start_step=args.replay_start,
+            end_step=args.replay_end,
+        )
         return
 
     if args.checkpoint and Path(args.checkpoint).exists():

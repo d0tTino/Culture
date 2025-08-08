@@ -1099,13 +1099,28 @@ class Simulation:
         return sim
 
     @classmethod
-    def replay_from_snapshot(cls: type[Self], snapshot_path: str | Path) -> Self:
+    def replay_from_snapshot(
+        cls: type[Self],
+        snapshot_path: str | Path,
+        *,
+        start_step: int | None = None,
+        end_step: int | None = None,
+    ) -> Self:
         """Load a snapshot and replay events from the event log."""
         snap = load_snapshot(snapshot_path)
         sim = cls.from_snapshot(snap)
         from src.infra import event_log
 
-        for event in event_log.stream_events(after_step=sim.current_step):
+        after_step = sim.current_step
+        if start_step is not None:
+            after_step = max(after_step, start_step - 1)
+
+        for event in event_log.stream_events(after_step=after_step):
+            step = int(event.get("step", 0))
+            if start_step is not None and step < start_step:
+                continue
+            if end_step is not None and step > end_step:
+                break
             sim.apply_event(event)
         return sim
 

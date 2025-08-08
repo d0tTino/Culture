@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from opentelemetry import trace
 from typing_extensions import Self
 
 from src.interfaces import metrics
@@ -12,6 +13,8 @@ from .level3_summary_manager import Level3SummaryManager
 from .multi_layer_retriever import MultiLayerRetriever
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
+
+tracer = trace.get_tracer(__name__)
 
 
 class MemoryService:
@@ -39,9 +42,10 @@ class MemoryService:
     ) -> str:
         if not self.vector_store:
             return ""
-        return self.vector_store.add_memory(
-            agent_id, step, event_type, content, memory_type, metadata
-        )
+        with tracer.start_as_current_span("memory.add_memory"):
+            return self.vector_store.add_memory(
+                agent_id, step, event_type, content, memory_type, metadata
+            )
 
     def store_post_turn_memory(
         self: Self,
@@ -68,7 +72,8 @@ class MemoryService:
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
         try:
-            result = await self.retriever.retrieve(agent_id, query, k)
+            with tracer.start_as_current_span("memory.retrieve_relevant"):
+                result = await self.retriever.retrieve(agent_id, query, k)
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return result
         except Exception:
@@ -82,7 +87,8 @@ class MemoryService:
             metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
             return []
         try:
-            result = self.semantic_manager.retrieve_context(agent_id, query, k)
+            with tracer.start_as_current_span("memory.retrieve_semantic"):
+                result = self.semantic_manager.retrieve_context(agent_id, query, k)
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return result
         except Exception:
@@ -96,7 +102,8 @@ class MemoryService:
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
         try:
-            result = await self.retriever.retrieve_and_update_semantic(agent_id, query, k)
+            with tracer.start_as_current_span("memory.retrieve_and_update_semantic"):
+                result = await self.retriever.retrieve_and_update_semantic(agent_id, query, k)
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return result
         except Exception:
@@ -120,18 +127,19 @@ class MemoryService:
         tuple[list[dict[str, Any]], list[str]] | tuple[list[dict[str, Any]], list[str], list[str]]
     ):
         """Return episodic, semantic, and optionally long-term summaries."""
-        episodic = await self.retrieve_episodic_and_update_semantic(agent_id, query, k)
-        semantic = self.get_recent_semantic_summaries(agent_id, semantic_limit)
-        hits = len(episodic) + len(semantic)
-        total = k + semantic_limit
-        if long_term_limit:
-            long_term = self.get_long_term_summaries(agent_id, long_term_limit)
-            hits += len(long_term)
-            total += long_term_limit
+        with tracer.start_as_current_span("memory.get_context_pipeline"):
+            episodic = await self.retrieve_episodic_and_update_semantic(agent_id, query, k)
+            semantic = self.get_recent_semantic_summaries(agent_id, semantic_limit)
+            hits = len(episodic) + len(semantic)
+            total = k + semantic_limit
+            if long_term_limit:
+                long_term = self.get_long_term_summaries(agent_id, long_term_limit)
+                hits += len(long_term)
+                total += long_term_limit
+                metrics.RAG_HIT_RATE.set(hits / total if total else 0)
+                return episodic, semantic, long_term
             metrics.RAG_HIT_RATE.set(hits / total if total else 0)
-            return episodic, semantic, long_term
-        metrics.RAG_HIT_RATE.set(hits / total if total else 0)
-        return episodic, semantic
+            return episodic, semantic
 
     async def run_semantic_job(
         self: Self,
