@@ -20,6 +20,7 @@ _broker = os.getenv("REDPANDA_BROKER", "localhost:9092")
 _topic = os.getenv("REDPANDA_TOPIC", "culture.events")
 
 _producer: Any | None = None
+_last_hash: str | None = None
 
 _consumer_conf = {
     "bootstrap.servers": _broker,
@@ -37,10 +38,20 @@ def _get_producer() -> Any:
 
 def log_event(event: dict[str, Any]) -> dict[str, Any]:
     """Send an event dictionary to Redpanda and return it with ``trace_hash``."""
+
+    global _last_hash
+
     if "trace_hash" in event:
         event = {**event}
         event.pop("trace_hash", None)
+    from src.infra.checkpoint import capture_rng_state
+
+    event = {**event, "rng_state": capture_rng_state()}
+    if _last_hash is not None:
+        event["prev_hash"] = _last_hash
     event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
+    _last_hash = event_with_hash["trace_hash"]
+
     if os.getenv("ENABLE_REDPANDA", "0") != "1":
         return event_with_hash
     try:

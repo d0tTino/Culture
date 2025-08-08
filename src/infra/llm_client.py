@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, c
 
 import httpx
 from httpx import HTTPError, TimeoutException
+from opentelemetry import trace
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
@@ -31,6 +32,8 @@ from src.shared.typing import (
 
 from .config import OLLAMA_REQUEST_TIMEOUT, get_config
 from .ledger import ledger
+
+tracer = trace.get_tracer(__name__)
 
 try:
     import ollama
@@ -523,54 +526,55 @@ def generate_text(
     Returns:
         str | None: The generated text, or None if an error occurred.
     """
-    if is_mock_mode_enabled():
-        # Even in mock mode, allow a monkeypatched side_effect to run for failure tests.
-        if client and hasattr(client, "chat") and hasattr(client.chat, "side_effect"):
-            if client.chat.side_effect:
-                try:
-                    return client.chat(model=model, messages=[{"role": "user", "content": prompt}])
-                except _RequestException:
-                    return None  # Ensure side_effect exceptions are caught and handled.
+    with tracer.start_as_current_span("llm.generate_text"):
+        if is_mock_mode_enabled():
+            # Even in mock mode, allow a monkeypatched side_effect to run for failure tests.
+            if client and hasattr(client, "chat") and hasattr(client.chat, "side_effect"):
+                if client.chat.side_effect:
+                    try:
+                        return client.chat(model=model, messages=[{"role": "user", "content": prompt}])
+                    except _RequestException:
+                        return None  # Ensure side_effect exceptions are caught and handled.
 
-        mock_response = _MOCK_RESPONSES.get("text_generation", _MOCK_RESPONSES["default"])
-        # Simulate the structure of the real response to get the content
-        return {"message": {"content": mock_response}}["message"]["content"]
+            mock_response = _MOCK_RESPONSES.get("text_generation", _MOCK_RESPONSES["default"])
+            # Simulate the structure of the real response to get the content
+            return {"message": {"content": mock_response}}["message"]["content"]
 
-    def call() -> LLMChatResponse:
-        """Invoke the LLM using ``LLMClient`` so the method can be monkeypatched
-        in tests.
+        def call() -> LLMChatResponse:
+            """Invoke the LLM using ``LLMClient`` so the method can be monkeypatched
+            in tests.
 
-        Previous implementations called ``get_llm_client`` directly which
-        returned the underlying Ollama client.  Tests expecting to patch
-        ``LLMClient.chat`` would therefore bypass the patch and attempt a real
-        network request.  Instantiating ``LLMClient`` here preserves the public
-        API while allowing unit tests to mock ``LLMClient.chat`` easily.
-        """
+            Previous implementations called ``get_llm_client`` directly which
+            returned the underlying Ollama client.  Tests expecting to patch
+            ``LLMClient.chat`` would therefore bypass the patch and attempt a real
+            network request.  Instantiating ``LLMClient`` here preserves the public
+            API while allowing unit tests to mock ``LLMClient.chat`` easily.
+            """
 
-        wrapper = LLMClient(LLMClientConfig())
-        messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        return wrapper.chat_sync(
-            model=model,
-            messages=messages,
-            options={"temperature": temperature},
-        )
+            wrapper = LLMClient(LLMClientConfig())
+            messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
+            return wrapper.chat_sync(
+                model=model,
+                messages=messages,
+                options={"temperature": temperature},
+            )
 
-    try:
-        response, error = _retry_with_backoff(call)
-    except LLMClientInitError as exc:
-        logger.error(f"Failed to initialize LLM client: {exc}")
-        return None
+        try:
+            response, error = _retry_with_backoff(call)
+        except LLMClientInitError as exc:
+            logger.error(f"Failed to initialize LLM client: {exc}")
+            return None
 
-    if error:
-        logger.error(f"Failed to generate text after retries: {error}")
-        return None
-    if isinstance(response, dict) and "message" in response and "content" in response["message"]:
-        generated_text = response["message"]["content"]
-        logger.debug(f"Received response from Ollama: {generated_text}")
-        return str(generated_text).strip()
-    else:
-        logger.error(f"Unexpected response structure from Ollama: {response}")
-        return None
+        if error:
+            logger.error(f"Failed to generate text after retries: {error}")
+            return None
+        if isinstance(response, dict) and "message" in response and "content" in response["message"]:
+            generated_text = response["message"]["content"]
+            logger.debug(f"Received response from Ollama: {generated_text}")
+            return str(generated_text).strip()
+        else:
+            logger.error(f"Unexpected response structure from Ollama: {response}")
+            return None
 
 
 @charge_du_cost
@@ -642,11 +646,12 @@ def summarize_memory_context(
         )
 
         chat_messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
-        response = ollama_client.chat_sync(
-            model=model,
-            messages=chat_messages,
-            options={"temperature": temperature},
-        )
+        with tracer.start_as_current_span("llm.summarize_memory_context"):
+            response = ollama_client.chat_sync(
+                model=model,
+                messages=chat_messages,
+                options={"temperature": temperature},
+            )
 
         # Extract the summary text from the response
         if (
@@ -1009,17 +1014,17 @@ def generate_structured_output(
     agent_state: Any | None = None,
 ) -> BaseModel | None:
     """Synchronous wrapper around :func:`async_generate_structured_output`."""
-
-    return asyncio.run(
-        async_generate_structured_output(
-            prompt,
-            response_model,
-            model=model,
-            temperature=temperature,
-            timeout=timeout,
-            agent_state=agent_state,
+    with tracer.start_as_current_span("llm.generate_structured_output"):
+        return asyncio.run(
+            async_generate_structured_output(
+                prompt,
+                response_model,
+                model=model,
+                temperature=temperature,
+                timeout=timeout,
+                agent_state=agent_state,
+            )
         )
-    )
 
 
 def get_default_llm_client() -> OllamaClientProtocol:

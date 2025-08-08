@@ -14,6 +14,7 @@ from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import httpx
+from opentelemetry import trace
 from typing_extensions import Self
 
 from src.infra import config
@@ -45,6 +46,7 @@ else:  # pragma: no cover - runtime import with fallback
         commands = MagicMock()
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 message_sse_queue = dashboard_message_queue
 
@@ -203,61 +205,62 @@ class SimulationDiscordBot:
 
             @client.event
             async def on_message(message: Any, client: Any = client) -> None:
-                if getattr(message, "author", None) == client.user:
-                    return
-                content = getattr(message, "content", "")
-                if not allow_message(content):
-                    logger.debug("Message blocked by policy")
-                    return
-                allowed, content = await evaluate_with_opa(content)
-                if not allowed:
-                    logger.debug("Message blocked by OPA policy")
-                    return
-                metrics.HUMAN_MESSAGES_TOTAL.inc()
-                channel = getattr(message, "channel", None)
-                channel_id = getattr(channel, "id", None)
-                user = getattr(message, "author", None)
-                user_id = getattr(user, "id", None)
-                if user_id and channel_id:
-                    self.user_channels[str(user_id)] = channel_id
-                    self.last_user_id = str(user_id)
-                recipient = self.channel_to_agent.get(channel_id)
-                agent_id = None
-                if user_id:
-                    agent_id = self.user_agents.get(str(user_id))
-                    if agent_id is None and recipient:
-                        agent_id = recipient
-                        self.user_agents[str(user_id)] = agent_id
-                if not agent_id:
-                    if hasattr(channel, "send"):
-                        send = getattr(channel, "send")
-                        if asyncio.iscoroutinefunction(send):
-                            await send("Unknown agent mapping")
-                        else:
-                            send("Unknown agent mapping")
-                    return
-                ip_cost = float(
-                    config.get_config("IP_COST_BROADCAST_MESSAGE")
-                    or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                    or 0.0
-                )
-                du_cost = float(
-                    config.get_config("DU_COST_BROADCAST_ACTION")
-                    or config.get_config("DU_COST_PER_ACTION")
-                    or 0.0
-                )
-                ip_bal, du_bal = await ledger.get_balance_async(agent_id)
-                if ip_bal < ip_cost or du_bal < du_cost:
-                    if hasattr(channel, "send"):
-                        await channel.send("Insufficient IP/DU")
-                    return
-                self.last_agent_id = agent_id
-                self.last_channel_id = channel_id
-                evt_type = "broadcast"
-                data = {"author": agent_id, "content": content}
-                if recipient:
-                    data["recipient_id"] = recipient
-                await self.event_queue.put(SimulationEvent(type=evt_type, data=data))
+                with tracer.start_as_current_span("discord.on_message"):
+                    if getattr(message, "author", None) == client.user:
+                        return
+                    content = getattr(message, "content", "")
+                    if not allow_message(content):
+                        logger.debug("Message blocked by policy")
+                        return
+                    allowed, content = await evaluate_with_opa(content)
+                    if not allowed:
+                        logger.debug("Message blocked by OPA policy")
+                        return
+                    metrics.HUMAN_MESSAGES_TOTAL.inc()
+                    channel = getattr(message, "channel", None)
+                    channel_id = getattr(channel, "id", None)
+                    user = getattr(message, "author", None)
+                    user_id = getattr(user, "id", None)
+                    if user_id and channel_id:
+                        self.user_channels[str(user_id)] = channel_id
+                        self.last_user_id = str(user_id)
+                    recipient = self.channel_to_agent.get(channel_id)
+                    agent_id = None
+                    if user_id:
+                        agent_id = self.user_agents.get(str(user_id))
+                        if agent_id is None and recipient:
+                            agent_id = recipient
+                            self.user_agents[str(user_id)] = agent_id
+                    if not agent_id:
+                        if hasattr(channel, "send"):
+                            send = getattr(channel, "send")
+                            if asyncio.iscoroutinefunction(send):
+                                await send("Unknown agent mapping")
+                            else:
+                                send("Unknown agent mapping")
+                        return
+                    ip_cost = float(
+                        config.get_config("IP_COST_BROADCAST_MESSAGE")
+                        or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                        or 0.0
+                    )
+                    du_cost = float(
+                        config.get_config("DU_COST_BROADCAST_ACTION")
+                        or config.get_config("DU_COST_PER_ACTION")
+                        or 0.0
+                    )
+                    ip_bal, du_bal = await ledger.get_balance_async(agent_id)
+                    if ip_bal < ip_cost or du_bal < du_cost:
+                        if hasattr(channel, "send"):
+                            await channel.send("Insufficient IP/DU")
+                        return
+                    self.last_agent_id = agent_id
+                    self.last_channel_id = channel_id
+                    evt_type = "broadcast"
+                    data = {"author": agent_id, "content": content}
+                    if recipient:
+                        data["recipient_id"] = recipient
+                    await self.event_queue.put(SimulationEvent(type=evt_type, data=data))
 
     async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
         """Return the Discord client for the given agent."""
@@ -290,69 +293,70 @@ class SimulationDiscordBot:
         Returns:
             bool: True if message was sent successfully, False otherwise
         """
-        if not self.is_ready:
-            logger.warning("Discord bot not ready yet, message not sent")
-            return False
-        if not allow_message(content):
-            logger.debug("Message blocked by policy")
-            return False
-        if content is not None and agent_id is None:
-            allowed, content = await evaluate_with_opa(content)
-            if not allowed:
-                logger.debug("Message blocked by OPA policy")
+        with tracer.start_as_current_span("discord.send_simulation_update"):
+            if not self.is_ready:
+                logger.warning("Discord bot not ready yet, message not sent")
                 return False
-        try:
-            client = await self._select_client(agent_id)
-            chan_id = target_channel_id
-            if chan_id is None and recipient:
-                chan_id = self.user_channels.get(recipient)
-            if chan_id is None:
-                chan_id = self.channel_map.get(agent_id, self.channel_id)
-            channel = client.get_channel(chan_id)
-            if not channel:
-                logger.warning(f"Could not find Discord channel with ID: {chan_id}")
+            if not allow_message(content):
+                logger.debug("Message blocked by policy")
                 return False
-            if embed:
-                if hasattr(channel, "send"):
-                    await channel.send(embed=embed)
-                    logger.debug("Sent Discord embed update")
-                    return True
-                else:
-                    if channel is not None:
-                        chan_id = getattr(channel, "id", "unknown")
-                        logger.warning(
-                            f"Attempted to send embed to channel {chan_id} "
-                            f"of type {type(channel).__name__}, which does not support .send()"
-                        )
-                    else:
-                        logger.warning("Attempted to send embed to a None channel.")
+            if content is not None and agent_id is None:
+                allowed, content = await evaluate_with_opa(content)
+                if not allowed:
+                    logger.debug("Message blocked by OPA policy")
                     return False
-            elif content:
-                if len(content) > 1990:
-                    content = content[:1990] + "..."
-                if hasattr(channel, "send"):
-                    await channel.send(content)
-                    logger.debug(f"Sent Discord text update: {content[:50]}...")
-                    return True
-                else:
-                    if channel is not None:
-                        chan_id = getattr(channel, "id", "unknown")
-                        logger.warning(
-                            f"Attempted to send text to channel {chan_id} "
-                            f"of type {type(channel).__name__}, which does not support .send()"
-                        )
-                    else:
-                        logger.warning("Attempted to send text to a None channel.")
+            try:
+                client = await self._select_client(agent_id)
+                chan_id = target_channel_id
+                if chan_id is None and recipient:
+                    chan_id = self.user_channels.get(recipient)
+                if chan_id is None:
+                    chan_id = self.channel_map.get(agent_id, self.channel_id)
+                channel = client.get_channel(chan_id)
+                if not channel:
+                    logger.warning(f"Could not find Discord channel with ID: {chan_id}")
                     return False
-            else:
-                logger.warning("send_simulation_update called with no content or embed")
+                if embed:
+                    if hasattr(channel, "send"):
+                        await channel.send(embed=embed)
+                        logger.debug("Sent Discord embed update")
+                        return True
+                    else:
+                        if channel is not None:
+                            chan_id = getattr(channel, "id", "unknown")
+                            logger.warning(
+                                f"Attempted to send embed to channel {chan_id} "
+                                f"of type {type(channel).__name__}, which does not support .send()"
+                            )
+                        else:
+                            logger.warning("Attempted to send embed to a None channel.")
+                        return False
+                elif content:
+                    if len(content) > 1990:
+                        content = content[:1990] + "..."
+                    if hasattr(channel, "send"):
+                        await channel.send(content)
+                        logger.debug(f"Sent Discord text update: {content[:50]}...")
+                        return True
+                    else:
+                        if channel is not None:
+                            chan_id = getattr(channel, "id", "unknown")
+                            logger.warning(
+                                f"Attempted to send text to channel {chan_id} "
+                                f"of type {type(channel).__name__}, which does not support .send()"
+                            )
+                        else:
+                            logger.warning("Attempted to send text to a None channel.")
+                        return False
+                else:
+                    logger.warning("send_simulation_update called with no content or embed")
+                    return False
+            except (discord.DiscordException, OSError) as e:
+                logger.error(f"Discord API/network error sending message: {e}", exc_info=True)
                 return False
-        except (discord.DiscordException, OSError) as e:
-            logger.error(f"Discord API/network error sending message: {e}", exc_info=True)
-            return False
-        except (RuntimeError, ValueError, TypeError) as e:
-            logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
-            return False
+            except (RuntimeError, ValueError, TypeError) as e:
+                logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
+                return False
 
     def create_step_start_embed(self: Self, step: int) -> Any:
         """Creates an embed for simulation step start"""
