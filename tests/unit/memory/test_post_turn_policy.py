@@ -3,10 +3,10 @@ import pytest
 pytest.importorskip("sklearn")
 pytest.importorskip("chromadb")
 
-from pathlib import Path  # noqa: E402
+from pathlib import Path
 
-from src.agents.memory.memory_service import MemoryService  # noqa: E402
-from src.agents.memory.vector_store import ChromaVectorStoreManager  # noqa: E402
+from src.agents.memory.memory_service import MemoryService
+from src.agents.memory.vector_store import ChromaVectorStoreManager
 
 
 @pytest.mark.unit

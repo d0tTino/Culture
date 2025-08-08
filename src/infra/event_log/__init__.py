@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import time
 from collections.abc import Generator
 from typing import Any
@@ -21,6 +22,7 @@ _topic = os.getenv("REDPANDA_TOPIC", "culture.events")
 
 _producer: Any | None = None
 _last_hash: str | None = None
+_seed: int | None = None
 
 _consumer_conf = {
     "bootstrap.servers": _broker,
@@ -46,7 +48,16 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
         event.pop("trace_hash", None)
     from src.infra.checkpoint import capture_rng_state
 
-    event = {**event, "rng_state": capture_rng_state()}
+    global _seed
+    if _seed is None:
+        try:
+            _seed = random.getstate()[1][0]
+        except Exception:  # pragma: no cover - fallback
+            _seed = 0
+
+    event = {**event, "rng_state": capture_rng_state(), "seed": _seed}
+    if "step" in event and "tick" not in event:
+        event["tick"] = event["step"]
     if _last_hash is not None:
         event["prev_hash"] = _last_hash
     event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}

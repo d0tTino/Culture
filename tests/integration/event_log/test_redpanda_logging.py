@@ -67,15 +67,18 @@ def test_log_and_fetch_events(monkeypatch):
     events_out = event_log.fetch_events(after_step=0)
     decoded = [json.loads(m) for m in messages]
     for d in decoded:
-        d.pop("trace_hash", None)
+        for key in ["trace_hash", "rng_state", "seed", "tick", "prev_hash"]:
+            d.pop(key, None)
     for ev in events_out:
         assert "trace_hash" in ev
-        ev.pop("trace_hash", None)
+        for key in ["trace_hash", "rng_state", "seed", "tick", "prev_hash"]:
+            ev.pop(key, None)
     assert decoded == events_in
     assert events_out == events_in
 
     after_first = event_log.fetch_events(after_step=1)
     for ev in after_first:
         assert "trace_hash" in ev
-        ev.pop("trace_hash", None)
+        for key in ["trace_hash", "rng_state", "seed", "tick", "prev_hash"]:
+            ev.pop(key, None)
     assert after_first == events_in[1:]
