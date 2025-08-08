@@ -41,6 +41,9 @@ except Exception:  # pragma: no cover - optional dependency
 
 # Expose metrics for LLM calls and knowledge board state
 LLM_LATENCY_MS = Gauge("llm_latency_ms", "Latency of last LLM call in milliseconds")
+LLM_LATENCY_P95_MS = Gauge(
+    "llm_latency_p95_ms", "95th percentile latency of recent LLM calls in milliseconds"
+)
 LLM_CALLS_TOTAL = Counter("llm_calls_total", "Total number of LLM calls")
 LLM_ERRORS_TOTAL = Counter("llm_errors_total", "Total number of failed LLM calls")
 KNOWLEDGE_BOARD_SIZE = Gauge(
@@ -69,6 +72,7 @@ HUMAN_MESSAGES_TOTAL = Counter(
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
+LLM_DU_PER_1K_TOKENS = Gauge("llm_du_per_1k_tokens", "DU cost per 1k tokens for the last LLM call")
 
 # Start the metrics HTTP server when this module is imported
 try:
@@ -80,6 +84,11 @@ except Exception:  # pragma: no cover - best effort if port is in use
 def get_llm_latency() -> float:
     """Return the last recorded LLM latency in milliseconds."""
     return float(LLM_LATENCY_MS._value.get())
+
+
+def get_llm_latency_p95() -> float:
+    """Return the 95th percentile LLM latency in milliseconds."""
+    return float(LLM_LATENCY_P95_MS._value.get())
 
 
 def get_kb_size() -> int:
@@ -95,6 +104,11 @@ def get_gas_price_per_call() -> float:
 def get_gas_price_per_token() -> float:
     """Return the latest gas price charged per generated token."""
     return float(GAS_PRICE_PER_TOKEN._value.get())
+
+
+def get_du_per_1k_tokens() -> float:
+    """Return the DU cost per 1k tokens for the last call."""
+    return float(LLM_DU_PER_1K_TOKENS._value.get())
 
 
 def get_memory_retrievals() -> int:
@@ -123,18 +137,22 @@ __all__ = [
     "HUMAN_MESSAGES_TOTAL",
     "KNOWLEDGE_BOARD_SIZE",
     "LLM_CALLS_TOTAL",
+    "LLM_DU_PER_1K_TOKENS",
     "LLM_ERRORS_TOTAL",
     "LLM_LATENCY_MS",
+    "LLM_LATENCY_P95_MS",
     "MEMORY_RETRIEVALS_TOTAL",
     "MEMORY_RETRIEVAL_ERRORS_TOTAL",
     "RAG_HIT_RATE",
     "Counter",
     "Gauge",
+    "get_du_per_1k_tokens",
     "get_gas_price_per_call",
     "get_gas_price_per_token",
     "get_human_messages",
     "get_kb_size",
     "get_llm_latency",
+    "get_llm_latency_p95",
     "get_memory_retrieval_errors",
     "get_memory_retrievals",
     "get_rag_hit_rate",

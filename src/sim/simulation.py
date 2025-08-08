@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 from pydantic import ValidationError
 from typing_extensions import Self
 
-from src.agents.core import ResourceManager
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentActionIntent
 from src.agents.memory.memory_service import MemoryService
@@ -35,10 +34,11 @@ from src.interfaces.dashboard_backend import (
     emit_event,
 )
 from src.shared.typing import SimulationMessage
+from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
-from src.sim.kernel import DiscreteEventKernel
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.quests import generate_quest
+from src.sim.resource_manager import get_resource_manager
 from src.sim.version_vector import VersionVector
 from src.sim.world_map import WorldMap
 
@@ -97,9 +97,9 @@ class Simulation:
         self.last_completed_agent_index: int | None = None
         self.steps_to_run: int = 0  # Number of steps to run, set externally
         self.total_turns_executed = 0
-        self.resource_manager = ResourceManager(config.MAX_IP_PER_TICK, config.MAX_DU_PER_TICK)
+        self.resource_manager = get_resource_manager()
         self.simulation_complete = False
-        self.event_kernel = DiscreteEventKernel()
+        self.event_kernel = EventKernel()
         self.vector = VersionVector()
         self.paused: bool = False
         self.speed: float = 1.0
@@ -209,6 +209,7 @@ class Simulation:
             for agent in self.agents:
                 logger.info(f"  - {agent.get_id()}")
                 self.event_kernel.set_budget(agent.get_id(), self.agent_initial_token_budget)
+                self.resource_manager.set_du_budget(agent.get_id(), agent.state.du)
 
             # Initialize collective metrics based on starting agent states
             self._update_collective_metrics()
@@ -572,7 +573,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -587,9 +590,9 @@ class Simulation:
         async with self._msg_lock:
             perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
         if self.knowledge_board:
-            perception_data["knowledge_board_content"] = (
-                self.knowledge_board.get_recent_entries_for_prompt()
-            )
+            perception_data[
+                "knowledge_board_content"
+            ] = self.knowledge_board.get_recent_entries_for_prompt()
 
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,

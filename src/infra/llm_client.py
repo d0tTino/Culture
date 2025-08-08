@@ -104,19 +104,28 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                if state.du < cost:
+                # Enforce DU budget via the simulation resource manager
+                try:
+                    from src.sim.resource_manager import get_resource_manager
+
+                    get_resource_manager().charge_du(state.agent_id, cost)
+                except Exception as exc:
                     logger.warning(
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
                         cost,
                         state.du,
                     )
-                else:
-                    state.du -= cost
-                    try:
-                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger logging failed", exc_info=True)
+                    raise
+                state.du -= cost
+                # Update cost metrics
+                if tokens > 0:
+                    du_per_1k = cost / (tokens / 1000)
+                    metrics.LLM_DU_PER_1K_TOKENS.set(du_per_1k)
+                try:
+                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                except Exception:  # pragma: no cover - optional
+                    logger.debug("Ledger logging failed", exc_info=True)
 
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
@@ -147,19 +156,26 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                if state.du < cost:
+                try:
+                    from src.sim.resource_manager import get_resource_manager
+
+                    get_resource_manager().charge_du(state.agent_id, cost)
+                except Exception as exc:
                     logger.warning(
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
                         cost,
                         state.du,
                     )
-                else:
-                    state.du -= cost
-                    try:
-                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                    except Exception:  # pragma: no cover - optional
-                        logger.debug("Ledger logging failed", exc_info=True)
+                    raise
+                state.du -= cost
+                if tokens > 0:
+                    du_per_1k = cost / (tokens / 1000)
+                    metrics.LLM_DU_PER_1K_TOKENS.set(du_per_1k)
+                try:
+                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                except Exception:  # pragma: no cover - optional
+                    logger.debug("Ledger logging failed", exc_info=True)
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result
@@ -204,9 +220,9 @@ def async_monitor_llm_call(
                             metrics_data["error_message"] = exc_value.response.text
                     else:
                         metrics_data["error_type"] = "UnknownError"
-                        metrics_data["error_message"] = (
-                            "Function returned None, indicating an error"
-                        )
+                        metrics_data[
+                            "error_message"
+                        ] = "Function returned None, indicating an error"
                 else:
                     metrics_data["success"] = True
                     if hasattr(result, "usage"):
@@ -248,7 +264,8 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse: ...
+    ) -> LLMChatResponse:
+        ...
 
 
 class LLMClientConfig(BaseModel):
@@ -410,6 +427,20 @@ def _create_vllm_client() -> OllamaClientProtocol:
                 "usage": cast(JSONDict, data.get("usage", {})),
             }
 
+        async def async_chat_batch(
+            self: _Client,
+            batch: Iterable[tuple[str, list[LLMMessage], dict[str, Any] | None]],
+        ) -> list[LLMChatResponse]:
+            """Send multiple chat requests concurrently for continuous batching."""
+
+            async def _one(
+                req: tuple[str, list[LLMMessage], dict[str, Any] | None],
+            ) -> LLMChatResponse:
+                model, messages, opts = req
+                return await self.async_chat(model=model, messages=messages, options=opts)
+
+            return await asyncio.gather(*[_one(r) for r in batch])
+
         def chat(
             self: _Client,
             model: str,
@@ -417,6 +448,12 @@ def _create_vllm_client() -> OllamaClientProtocol:
             options: dict[str, Any] | None = None,
         ) -> LLMChatResponse:
             return asyncio.run(self.async_chat(model=model, messages=messages, options=options))
+
+        def chat_batch(
+            self: _Client,
+            batch: Iterable[tuple[str, list[LLMMessage], dict[str, Any] | None]],
+        ) -> list[LLMChatResponse]:
+            return asyncio.run(self.async_chat_batch(batch))
 
         def chat_sync(
             self: _Client,
