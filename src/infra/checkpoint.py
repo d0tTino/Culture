@@ -49,7 +49,14 @@ def capture_rng_state() -> dict[str, Any]:
     try:  # pragma: no cover - optional dependency
         import numpy as np
 
-        state["numpy"] = cast(Any, np.random.get_state())
+        np_state = np.random.get_state()
+        state["numpy"] = (
+            np_state[0],
+            np_state[1].tolist(),
+            np_state[2],
+            np_state[3],
+            np_state[4],
+        )
     except ImportError:
         # ``numpy`` is optional; ignore if unavailable
         pass
