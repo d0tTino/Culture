@@ -159,6 +159,19 @@ class MemoryService:
             l2_min_age_days,
         )
 
+    def reset_agent(self: Self, agent_id: str) -> None:
+        """Remove all memory entries for the given agent."""
+        if self.vector_store and hasattr(self.vector_store, "delete_agent_memories"):
+            try:
+                self.vector_store.delete_agent_memories(agent_id)
+            except Exception:
+                pass
+        if self.semantic_manager and hasattr(self.semantic_manager, "delete_agent"):
+            try:
+                self.semantic_manager.delete_agent(agent_id)
+            except Exception:
+                pass
+
     def consolidate_long_term(self: Self, agent_id: str, start_step: int, end_step: int) -> None:
         if not self.level3_manager:
             return None

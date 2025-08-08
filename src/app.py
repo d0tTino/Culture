@@ -26,6 +26,8 @@ from src.infra.logging_config import setup_logging
 from src.infra.settings import settings
 from src.infra.snapshot import load_snapshot
 from src.infra.warning_filters import configure_warning_filters
+from src.interfaces.dashboard_backend import DEFAULT_CONTEXT, SimulationEvent
+from src.sim.context import SimulationContext
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
@@ -33,6 +35,34 @@ from src.utils.loop_helper import use_uvloop_if_available
 
 restore_rng_state = _restore_rng_state
 restore_environment = _restore_environment
+
+
+async def start_simulation(ctx: SimulationContext | None = None) -> None:
+    """Enqueue a control command to start the simulation."""
+    context = ctx or DEFAULT_CONTEXT
+    await context.get_event_queue().put(
+        SimulationEvent(type="control", data={"command": "start"})
+    )
+
+
+async def stop_simulation(ctx: SimulationContext | None = None) -> None:
+    """Enqueue a control command to stop the simulation."""
+    context = ctx or DEFAULT_CONTEXT
+    await context.get_event_queue().put(
+        SimulationEvent(type="control", data={"command": "stop"})
+    )
+
+
+async def spawn_agent_command(
+    agent_id: str, ctx: SimulationContext | None = None
+) -> None:
+    """Request spawning of a new agent via the event queue."""
+    context = ctx or DEFAULT_CONTEXT
+    await context.get_event_queue().put(
+        SimulationEvent(
+            type="control", data={"command": "spawn", "agent_id": agent_id}
+        )
+    )
 
 
 def _simple_yaml(path: Path) -> dict[str, object]:
@@ -80,13 +110,9 @@ def load_scenario(value: str) -> tuple[str, int | None, int | None]:
 
 use_uvloop_if_available()
 
-try:
-    from src.interfaces.discord_bot import SimulationDiscordBot
-
-    simulation_discord_bot_class: Optional[type[SimulationDiscordBot]] = SimulationDiscordBot
-except ImportError:  # pragma: no cover - optional dependency
-    logging.warning("Discord bot module not found, running without Discord integration.")
-    simulation_discord_bot_class = None
+# Discord bot integration is imported lazily to avoid circular imports when
+# ``src.interfaces.discord_bot`` references functions from this module.
+simulation_discord_bot_class: Optional[type[object]] = None
 
 DEFAULT_SCENARIO = "Agents collaborate to design a specification for a communication protocol."
 
@@ -112,20 +138,34 @@ def create_simulation(
         sys.exit(1)
 
     discord_bot = None
-    if use_discord and simulation_discord_bot_class:
-        bot_token_raw = str(settings.DISCORD_BOT_TOKEN)
-        channel_id = settings.DISCORD_CHANNEL_ID
-        if bot_token_raw and channel_id:
-            tokens = [tok.strip() for tok in bot_token_raw.split(",") if tok.strip()]
-            bot = asyncio.run(
-                simulation_discord_bot_class.create(
-                    tokens if len(tokens) > 1 else tokens[0], int(channel_id)
+    if use_discord:
+        global simulation_discord_bot_class
+        if simulation_discord_bot_class is None:
+            try:
+                from src.interfaces import discord_moderation  # noqa: F401
+                from src.interfaces.discord_bot import SimulationDiscordBot
+
+                simulation_discord_bot_class = SimulationDiscordBot
+            except ImportError:  # pragma: no cover - optional dependency
+                logging.warning(
+                    "Discord bot module not found, running without Discord integration."
                 )
-            )
-            if bot.is_ready:
-                discord_bot = bot
-            else:
-                logging.warning("Discord bot not ready, running without integration.")
+        if simulation_discord_bot_class:
+            bot_token_raw = str(settings.DISCORD_BOT_TOKEN)
+            channel_id = settings.DISCORD_CHANNEL_ID
+            if bot_token_raw and channel_id:
+                tokens = [tok.strip() for tok in bot_token_raw.split(",") if tok.strip()]
+                bot = asyncio.run(
+                    simulation_discord_bot_class.create(
+                        tokens if len(tokens) > 1 else tokens[0], int(channel_id)
+                    )
+                )
+                if bot.is_ready:
+                    discord_bot = bot
+                else:
+                    logging.warning(
+                        "Discord bot not ready, running without integration."
+                    )
 
     agents = [Agent(agent_id=f"agent_{i + 1}", name=f"Agent_{i + 1}") for i in range(num_agents)]
 

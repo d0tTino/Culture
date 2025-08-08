@@ -763,6 +763,41 @@ async def slash_resume(interaction: Any) -> None:
     await interaction.response.send_message("resume", ephemeral=True)
 
 
+@bot.tree.command(name="start")
+async def slash_start(interaction: Any) -> None:
+    """Start the simulation via a control command."""
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(
+        SimulationEvent(type="control", data={"command": "start"})
+    )
+    await interaction.response.send_message("start", ephemeral=True)
+
+
+@bot.tree.command(name="stop")
+async def slash_stop(interaction: Any) -> None:
+    """Stop the simulation via a control command."""
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(
+        SimulationEvent(type="control", data={"command": "stop"})
+    )
+    await interaction.response.send_message("stop", ephemeral=True)
+
+
+@bot.tree.command(name="spawn")
+async def slash_spawn(interaction: Any, agent_id: str) -> None:
+    """Spawn a new agent in the simulation."""
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+    await ctx.get_event_queue().put(
+        SimulationEvent(
+            type="control", data={"command": "spawn", "agent_id": agent_id}
+        )
+    )
+    await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
+
+
 @bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
