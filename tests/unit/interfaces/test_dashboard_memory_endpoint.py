@@ -1,5 +1,7 @@
 import json
+
 import pytest
+
 from src.interfaces import dashboard_backend as db
 
 

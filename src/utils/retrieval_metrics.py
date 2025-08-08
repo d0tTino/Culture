@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Sequence
+from typing import Any, Callable
 
 
 def precision_at_k(retrieved_ids: Sequence[str], relevant_ids: set[str], k: int) -> float:

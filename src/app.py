@@ -272,11 +272,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--replay-start",
         type=int,
+        default=None,
         help="Start tick for event log replay.",
     )
     parser.add_argument(
         "--replay-end",
         type=int,
+        default=None,
         help="End tick for event log replay.",
     )
     parser.add_argument(

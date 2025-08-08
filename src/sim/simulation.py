@@ -1067,6 +1067,11 @@ class Simulation:
 
     def apply_event(self: Self, event: dict[str, Any]) -> None:
         """Apply an event from the Redpanda log to the simulation."""
+        rng_state = event.get("rng_state")
+        if rng_state is not None:
+            from src.infra.checkpoint import restore_rng_state
+
+            restore_rng_state(rng_state)
         expected_hash = event.get("trace_hash")
         if expected_hash is not None:
             actual_hash = compute_trace_hash({k: v for k, v in event.items() if k != "trace_hash"})
@@ -1093,6 +1098,14 @@ class Simulation:
                 from src.infra.checkpoint import restore_environment
 
                 restore_environment(env)
+        elif event.get("type") == "tick":
+            step = event.get("step")
+            if isinstance(step, int) and step > self.current_step:
+                self.current_step = step
+            if "ip" in event:
+                self.collective_ip = float(event["ip"])
+            if "du" in event:
+                self.collective_du = float(event["du"])
         elif event.get("type") == "snapshot":
             step = event.get("step")
             if isinstance(step, int):

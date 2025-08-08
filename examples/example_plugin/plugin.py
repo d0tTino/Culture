@@ -4,6 +4,7 @@ from typing import Any
 
 from src.extensions import PluginResult, register_agent_behavior
 
+
 # Agent-behavior callback executed after every agent action.
 def log_turn(agent: Any, output: dict[str, Any]) -> None:
     """Log each agent turn.
