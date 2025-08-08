@@ -1,0 +1,16 @@
+description: Collaborative project planning with proposal, critique, vote, and deliverable phases
+steps: 40
+agents:
+  - role: planner
+    goal: propose a project plan for the group
+  - role: critic
+    goal: analyze and critique the proposal
+  - role: voter
+    goal: evaluate options and vote on the proposal
+  - role: worker
+    goal: produce the final deliverable after approval
+beats:
+  - proposal
+  - critique
+  - vote
+  - deliverable

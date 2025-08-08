@@ -159,6 +159,11 @@ class Simulation:
         self.collective_du: float = 0.0
         logger.info("Simulation initialized with collective IP/DU tracking.")
 
+        # --- NEW: Evaluation hooks and metrics ---
+        self.evaluation_hooks: list[Callable[[Self, list[Any]], dict[str, Any] | None]] = []
+        self.metrics: list[dict[str, Any]] = []
+        self.add_evaluation_hook(self._collect_metrics)
+
         # --- Initialize memory service ---
         if memory_service is None:
             memory_service = MemoryService(vector_store_manager, semantic_manager)
@@ -980,6 +985,24 @@ class Simulation:
                 pass
             self._event_task = None
 
+    def add_evaluation_hook(
+        self: Self, hook: Callable[[Self, list[Any]], dict[str, Any] | None]
+    ) -> None:
+        """Register a callback to collect metrics after each step."""
+        self.evaluation_hooks.append(hook)
+
+    def _collect_metrics(self: Self, _events: list[Any]) -> dict[str, Any]:
+        """Default metrics: coalition count and average sentiment."""
+        coalition_count = sum(
+            1 for proj in self.projects.values() if len(proj.get("members", [])) > 1
+        )
+        avg_sentiment = (
+            sum(agent.state.mood_level for agent in self.agents) / len(self.agents)
+            if self.agents
+            else 0.0
+        )
+        return {"coalitions": coalition_count, "sentiment": avg_sentiment}
+
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
         if not self.agents:
@@ -997,6 +1020,27 @@ class Simulation:
             )
 
         events = await self.event_kernel.step(max_turns)
+
+        metrics: dict[str, Any] = {}
+        for hook in self.evaluation_hooks:
+            try:
+                result = hook(self, events) or {}
+                metrics.update(result)
+            except Exception:
+                logger.exception("Evaluation hook failed")
+        if metrics:
+            self.metrics.append({"step": self.current_step, **metrics})
+            eval_event = log_event(
+                {"type": "evaluation", "step": self.current_step, **metrics}
+            )
+            if eval_event is None:
+                eval_event = {
+                    "type": "evaluation",
+                    "step": self.current_step,
+                    **metrics,
+                }
+                eval_event["trace_hash"] = compute_trace_hash(eval_event)
+            await emit_event(SimulationEvent(type="evaluation", data=eval_event))
 
         return len(events)
 
