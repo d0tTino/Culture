@@ -156,12 +156,13 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-        queue = db.get_event_queue()
+        queue = context._event_queue or db.get_event_queue()
         self.context._event_queue = queue
-        try:
-            self.context._event_queue_loop = asyncio.get_event_loop()
-        except RuntimeError:  # pragma: no cover - no running loop
-            self.context._event_queue_loop = None
+        if self.context._event_queue_loop is None:
+            try:
+                self.context._event_queue_loop = asyncio.get_event_loop()
+            except RuntimeError:  # pragma: no cover - no running loop
+                self.context._event_queue_loop = None
         self.event_queue = queue
         if message_sse_queue is not dashboard_message_queue:
             self.message_queue = message_sse_queue
@@ -205,10 +206,15 @@ class SimulationDiscordBot:
 
             @client.event
             async def on_message(message: Any, client: Any = client) -> None:
-                with tracer.start_as_current_span("discord.on_message"):
+                with tracer.start_as_current_span("discord.on_message") as span:
                     if getattr(message, "author", None) == client.user:
                         return
                     content = getattr(message, "content", "")
+                    span.set_attribute("discord.message_length", len(content))
+                    channel = getattr(message, "channel", None)
+                    span.set_attribute("discord.channel_id", getattr(channel, "id", None))
+                    user = getattr(message, "author", None)
+                    span.set_attribute("discord.user_id", getattr(user, "id", None))
                     if not allow_message(content):
                         logger.debug("Message blocked by policy")
                         return
@@ -217,9 +223,7 @@ class SimulationDiscordBot:
                         logger.debug("Message blocked by OPA policy")
                         return
                     metrics.HUMAN_MESSAGES_TOTAL.inc()
-                    channel = getattr(message, "channel", None)
                     channel_id = getattr(channel, "id", None)
-                    user = getattr(message, "author", None)
                     user_id = getattr(user, "id", None)
                     if user_id and channel_id:
                         self.user_channels[str(user_id)] = channel_id
@@ -293,7 +297,13 @@ class SimulationDiscordBot:
         Returns:
             bool: True if message was sent successfully, False otherwise
         """
-        with tracer.start_as_current_span("discord.send_simulation_update"):
+        with tracer.start_as_current_span("discord.send_simulation_update") as span:
+            span.set_attribute("discord.agent_id", agent_id or "")
+            span.set_attribute("discord.content_length", len(content) if content else 0)
+            if target_channel_id is not None:
+                span.set_attribute("discord.target_channel_id", target_channel_id)
+            if recipient is not None:
+                span.set_attribute("discord.recipient_id", recipient)
             if not self.is_ready:
                 logger.warning("Discord bot not ready yet, message not sent")
                 return False
@@ -312,6 +322,7 @@ class SimulationDiscordBot:
                     chan_id = self.user_channels.get(recipient)
                 if chan_id is None:
                     chan_id = self.channel_map.get(agent_id, self.channel_id)
+                span.set_attribute("discord.channel_id", chan_id)
                 channel = client.get_channel(chan_id)
                 if not channel:
                     logger.warning(f"Could not find Discord channel with ID: {chan_id}")
@@ -591,7 +602,7 @@ class SimulationDiscordBot:
                     agent_id=msg.agent_id,
                     recipient=recipient,
                 )
-        except asyncio.CancelledError:  # pragma: no cover - task cancelled on stop
+        except (asyncio.CancelledError, RuntimeError):  # pragma: no cover - task cancelled or loop closed
             pass
 
     async def _start_client_with_backoff(

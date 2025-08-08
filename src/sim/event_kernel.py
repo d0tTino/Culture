@@ -218,6 +218,10 @@ class EventKernel:
             executed.append(event)
         return executed
 
+    async def step(self: Self, limit: int) -> list[Event]:
+        """Compatibility wrapper for old ``step`` API."""
+        return await self.dispatch(limit)
+
     def empty(self: Self) -> bool:
         return not self._queue
 

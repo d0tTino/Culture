@@ -4,17 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from opentelemetry import trace
 from typing_extensions import Self
 
 from src.interfaces import metrics
+from src.shared.telemetry import trace_agent_action
 
 from .level3_summary_manager import Level3SummaryManager
 from .multi_layer_retriever import MultiLayerRetriever
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
-
-tracer = trace.get_tracer(__name__)
 
 
 class MemoryService:
@@ -42,7 +40,9 @@ class MemoryService:
     ) -> str:
         if not self.vector_store:
             return ""
-        with tracer.start_as_current_span("memory.add_memory"):
+        with trace_agent_action(
+            "memory.add_memory", agent_id=agent_id, event_type=event_type
+        ):
             return self.vector_store.add_memory(
                 agent_id, step, event_type, content, memory_type, metadata
             )
@@ -72,7 +72,9 @@ class MemoryService:
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
         try:
-            with tracer.start_as_current_span("memory.retrieve_relevant"):
+            with trace_agent_action(
+                "memory.retrieve_relevant", agent_id=agent_id, query=query, k=k
+            ):
                 result = await self.retriever.retrieve(agent_id, query, k)
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return result
@@ -87,7 +89,9 @@ class MemoryService:
             metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
             return []
         try:
-            with tracer.start_as_current_span("memory.retrieve_semantic"):
+            with trace_agent_action(
+                "memory.retrieve_semantic", agent_id=agent_id, query=query, k=k
+            ):
                 result = self.semantic_manager.retrieve_context(agent_id, query, k)
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return result
@@ -102,7 +106,9 @@ class MemoryService:
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
         try:
-            with tracer.start_as_current_span("memory.retrieve_and_update_semantic"):
+            with trace_agent_action(
+                "memory.retrieve_and_update_semantic", agent_id=agent_id, query=query, k=k
+            ):
                 result = await self.retriever.retrieve_and_update_semantic(agent_id, query, k)
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return result
@@ -127,7 +133,14 @@ class MemoryService:
         tuple[list[dict[str, Any]], list[str]] | tuple[list[dict[str, Any]], list[str], list[str]]
     ):
         """Return episodic, semantic, and optionally long-term summaries."""
-        with tracer.start_as_current_span("memory.get_context_pipeline"):
+        with trace_agent_action(
+            "memory.get_context_pipeline",
+            agent_id=agent_id,
+            query=query,
+            k=k,
+            semantic_limit=semantic_limit,
+            long_term_limit=long_term_limit or 0,
+        ):
             episodic = await self.retrieve_episodic_and_update_semantic(agent_id, query, k)
             semantic = self.get_recent_semantic_summaries(agent_id, semantic_limit)
             hits = len(episodic) + len(semantic)
