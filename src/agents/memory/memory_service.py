@@ -43,6 +43,27 @@ class MemoryService:
             agent_id, step, event_type, content, memory_type, metadata
         )
 
+    def store_post_turn_memory(
+        self: Self,
+        agent_id: str,
+        step: int,
+        event_type: str,
+        content: str,
+        *,
+        write: bool,
+        memory_type: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Apply post-turn write/no-write policy.
+
+        When ``write`` is ``False`` the memory is skipped and an empty string is
+        returned. Otherwise the memory is stored using :meth:`add_memory`.
+        """
+
+        if not write:
+            return ""
+        return self.add_memory(agent_id, step, event_type, content, memory_type, metadata)
+
     async def retrieve_relevant_memories(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
