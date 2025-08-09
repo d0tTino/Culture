@@ -9,7 +9,7 @@ def recall_benchmark():
 
     async def _bench(retrieval_coro, relevant_ids, k):
         results, latency = await time_call(retrieval_coro)
-        ids = [m.get("id") for m in results]
+        ids = [m.get("memory_id") or m.get("id") for m in results]
         metrics = {
             "p_at_k": precision_at_k(ids, set(relevant_ids), k),
             "latency": latency,
