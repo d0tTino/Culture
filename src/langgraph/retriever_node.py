@@ -1,4 +1,4 @@
-"""LangGraph node for hybrid episodic-semantic retrieval."""
+"""LangGraph node for hybrid episodic/semantic memory retrieval."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from typing_extensions import Self
 
 
 class RetrieverNode:
-    """Retrieve memories and enforce a per-turn token cap.
+    """Retrieve memories while enforcing a per-turn token budget.
 
-    This node delegates retrieval to a ``MemoryService`` which mixes episodic
-    and semantic memories. Retrieved results are truncated so that the total
-    number of whitespace-separated tokens does not exceed ``token_cap``.
+    The provided ``memory_service`` is expected to merge episodic and semantic
+    memories. Retrieved items are truncated so that the combined number of
+    whitespace-separated tokens does not exceed ``token_cap``.
     """
 
     def __init__(self: Self, memory_service: Any, k: int = 5, token_cap: int = 1000) -> None:

@@ -32,6 +32,7 @@ from src.agents.core.roles import (
 )
 from .embedding_utils import compute_embedding
 from src.infra.config import get_config  # Import get_config function
+from src.langgraph import RetrieverNode
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -165,6 +166,12 @@ class AgentStateData(BaseModel):
     llm_client: Optional[Any] = None
     memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
     mock_llm_client: Optional[Any] = None
+    memory_retriever_top_k: int = Field(
+        default_factory=lambda: int(str(get_config("MEMORY_RETRIEVER_TOP_K") or "5"))
+    )
+    memory_retriever_token_cap: int = Field(
+        default_factory=lambda: int(str(get_config("MEMORY_RETRIEVER_TOKEN_LIMIT") or "1000"))
+    )
 
     def __init__(self, **data: Any) -> None:
         """Initialize and conditionally call ``model_post_init`` for Pydantic v1."""
@@ -550,6 +557,19 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not self.memory_store_manager:
             raise ValueError("MemoryStoreManager not initialized")
         return self.memory_store_manager.get_retriever()
+
+    def get_retriever_node(self, memory_service: Any) -> RetrieverNode:
+        """Return a LangGraph retriever node for this agent.
+
+        The node enforces the agent's per-turn token cap and retrieves up to
+        ``memory_retriever_top_k`` memories using the provided ``memory_service``.
+        """
+
+        return RetrieverNode(
+            memory_service,
+            k=self.memory_retriever_top_k,
+            token_cap=self.memory_retriever_token_cap,
+        )
 
     def mutate_genes(self: Self, mutation_rate: float) -> None:
         """Randomly mutate genes in-place."""
