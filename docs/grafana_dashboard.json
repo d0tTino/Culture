@@ -79,6 +79,42 @@
         "x": 0,
         "y": 24
       }
+    },
+    {
+      "type": "graph",
+      "title": "Memory Retrieval P@5",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "memory_retrieval_precision_at_5",
+          "legendFormat": "p@5",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Memory Retrieval p95 Latency",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "memory_retrieval_latency_p95_ms",
+          "legendFormat": "p95 ms",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      }
     }
   ]
 }

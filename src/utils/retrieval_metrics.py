@@ -7,6 +7,19 @@ from collections.abc import Awaitable, Sequence
 from typing import Any, Callable
 
 
+def p95(values: Sequence[float]) -> float:
+    """Return the 95th percentile of ``values``.
+
+    Values are assumed to be non-empty and expressed in the same units
+    (e.g. seconds). If ``values`` is empty, ``0.0`` is returned.
+    """
+    if not values:
+        return 0.0
+    sorted_vals = sorted(values)
+    index = int(0.95 * (len(sorted_vals) - 1))
+    return sorted_vals[index]
+
+
 def precision_at_k(retrieved_ids: Sequence[str], relevant_ids: set[str], k: int) -> float:
     """Return precision at ``k`` for retrieved versus relevant IDs."""
     if k <= 0:
