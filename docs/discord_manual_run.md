@@ -39,6 +39,21 @@ These commands are helpful for manual smoke testing of the Discord interface.
 When channels are mapped to specific agents you can also use slash commands:
 
 ```text
+/start
+```
+Starts the simulation if it is currently paused.
+
+```text
+/stop
+```
+Stops the simulation.
+
+```text
+/spawn agent_4
+```
+Spawns a new agent with the given ID.
+
+```text
 /status
 ```
 Shows the agent's current IP and DU balance as an ephemeral message.

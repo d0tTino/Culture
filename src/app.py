@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from scripts.export_traces import export_latest
 from src.agents.core.base_agent import Agent
@@ -39,28 +39,20 @@ restore_environment = _restore_environment
 async def start_simulation(ctx: SimulationContext | None = None) -> None:
     """Enqueue a control command to start the simulation."""
     context = ctx or DEFAULT_CONTEXT
-    await context.get_event_queue().put(
-        SimulationEvent(type="control", data={"command": "start"})
-    )
+    await context.get_event_queue().put(SimulationEvent(type="control", data={"command": "start"}))
 
 
 async def stop_simulation(ctx: SimulationContext | None = None) -> None:
     """Enqueue a control command to stop the simulation."""
     context = ctx or DEFAULT_CONTEXT
-    await context.get_event_queue().put(
-        SimulationEvent(type="control", data={"command": "stop"})
-    )
+    await context.get_event_queue().put(SimulationEvent(type="control", data={"command": "stop"}))
 
 
-async def spawn_agent_command(
-    agent_id: str, ctx: SimulationContext | None = None
-) -> None:
+async def spawn_agent_command(agent_id: str, ctx: SimulationContext | None = None) -> None:
     """Request spawning of a new agent via the event queue."""
     context = ctx or DEFAULT_CONTEXT
     await context.get_event_queue().put(
-        SimulationEvent(
-            type="control", data={"command": "spawn", "agent_id": agent_id}
-        )
+        SimulationEvent(type="control", data={"command": "spawn", "agent_id": agent_id})
     )
 
 
@@ -111,7 +103,10 @@ use_uvloop_if_available()
 
 # Discord bot integration is imported lazily to avoid circular imports when
 # ``src.interfaces.discord_bot`` references functions from this module.
-simulation_discord_bot_class: Optional[type[object]] = None
+if TYPE_CHECKING:  # pragma: no cover - import for type checkers only
+    from src.interfaces.discord_bot import SimulationDiscordBot
+
+simulation_discord_bot_class: type["SimulationDiscordBot"] | None = None
 
 DEFAULT_SCENARIO = "Agents collaborate to design a specification for a communication protocol."
 
@@ -162,9 +157,7 @@ def create_simulation(
                 if bot.is_ready:
                     discord_bot = bot
                 else:
-                    logging.warning(
-                        "Discord bot not ready, running without integration."
-                    )
+                    logging.warning("Discord bot not ready, running without integration.")
 
     agents = [Agent(agent_id=f"agent_{i + 1}", name=f"Agent_{i + 1}") for i in range(num_agents)]
 

@@ -17,6 +17,7 @@ import httpx
 from opentelemetry import trace
 from typing_extensions import Self
 
+from src.app import spawn_agent_command, start_simulation, stop_simulation
 from src.infra import config
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
@@ -34,16 +35,19 @@ from src.utils.policy import allow_message, evaluate_with_opa
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     import discord
+    from discord import app_commands
     from discord.ext import commands
 else:  # pragma: no cover - runtime import with fallback
     try:
         import discord
+        from discord import app_commands
         from discord.ext import commands
     except ImportError:  # pragma: no cover - optional dependency
         from unittest.mock import MagicMock
 
         discord = MagicMock()
         commands = MagicMock()
+        app_commands = MagicMock()
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -171,12 +175,39 @@ class SimulationDiscordBot:
             self.message_queue = context.message_queue
         self._forward_task: asyncio.Task[Any] | None = None
         self._client_tasks: list[asyncio.Task[Any]] = []
+        self.command_trees: dict[str, app_commands.CommandTree] = {}
 
-        # Set up event handlers for all clients
+        # Set up event handlers and slash commands for all clients
         for _token, client in self.clients.items():
+            tree: app_commands.CommandTree | None = None
+            try:
+                if hasattr(client, "http"):
+                    tree = app_commands.CommandTree(client)
+            except Exception:
+                tree = None
+            if tree is not None:
+                self.command_trees[_token] = tree
+
+                @tree.command(name="start")
+                async def _tree_start(interaction: "discord.Interaction") -> None:
+                    await start_simulation(self.context)
+                    await interaction.response.send_message("start", ephemeral=True)
+
+                @tree.command(name="stop")
+                async def _tree_stop(interaction: "discord.Interaction") -> None:
+                    await stop_simulation(self.context)
+                    await interaction.response.send_message("stop", ephemeral=True)
+
+                @tree.command(name="spawn")
+                @app_commands.describe(agent_id="ID of the agent to spawn")
+                async def _tree_spawn(interaction: "discord.Interaction", agent_id: str) -> None:
+                    await spawn_agent_command(agent_id, self.context)
+                    await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
 
             @client.event
-            async def on_ready(client: Any = client) -> None:
+            async def on_ready(
+                client: Any = client, tree: app_commands.CommandTree | None = tree
+            ) -> None:
                 """Event handler that fires when the bot connects to Discord."""
                 self.is_ready = True
                 logger.info(f"Discord bot {client.user} connected and ready!")
@@ -203,6 +234,12 @@ class SimulationDiscordBot:
                             logger.warning("Attempted to send message to a None channel.")
                 else:
                     logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
+
+                if tree is not None:
+                    try:
+                        await tree.sync()
+                    except Exception:  # pragma: no cover - sync may fail in tests
+                        logger.exception("Failed to sync command tree")
 
             @client.event
             async def on_message(message: Any, client: Any = client) -> None:
@@ -602,7 +639,10 @@ class SimulationDiscordBot:
                     agent_id=msg.agent_id,
                     recipient=recipient,
                 )
-        except (asyncio.CancelledError, RuntimeError):  # pragma: no cover - task cancelled or loop closed
+        except (
+            asyncio.CancelledError,
+            RuntimeError,
+        ):  # pragma: no cover - task cancelled or loop closed
             pass
 
     async def _start_client_with_backoff(
@@ -783,9 +823,7 @@ async def slash_start(interaction: Any) -> None:
     """Start the simulation via a control command."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(type="control", data={"command": "start"})
-    )
+    await start_simulation(ctx)
     await interaction.response.send_message("start", ephemeral=True)
 
 
@@ -794,9 +832,7 @@ async def slash_stop(interaction: Any) -> None:
     """Stop the simulation via a control command."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(type="control", data={"command": "stop"})
-    )
+    await stop_simulation(ctx)
     await interaction.response.send_message("stop", ephemeral=True)
 
 
@@ -805,11 +841,7 @@ async def slash_spawn(interaction: Any, agent_id: str) -> None:
     """Spawn a new agent in the simulation."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(
-            type="control", data={"command": "spawn", "agent_id": agent_id}
-        )
-    )
+    await spawn_agent_command(agent_id, ctx)
     await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
 
 
