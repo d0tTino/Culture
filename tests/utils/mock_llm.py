@@ -116,7 +116,21 @@ def MockLLM(
             patch("src.infra.llm_client.client.chat", side_effect=mock_ollama_chat)
         )
         stack.enter_context(
+            patch(
+                "src.infra.llm_client.client.chat_sync",
+                side_effect=mock_ollama_chat,
+                create=True,
+            )
+        )
+        stack.enter_context(
             patch("src.infra.llm_client.ollama.chat", side_effect=mock_ollama_chat)
+        )
+        stack.enter_context(
+            patch(
+                "src.infra.llm_client.ollama.chat_sync",
+                side_effect=mock_ollama_chat,
+                create=True,
+            )
         )
         if caller_module is not None:
             stack.enter_context(

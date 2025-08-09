@@ -70,6 +70,7 @@ class _DummyAgent:
         self,
         simulation_step: int,
         environment_perception: dict[str, Any] | None = None,
+        memory_service: Any | None = None,
         vector_store_manager: Any | None = None,
         knowledge_board: Any | None = None,
     ) -> dict[str, int]:
