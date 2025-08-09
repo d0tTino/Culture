@@ -438,24 +438,42 @@ class Simulation:
                     )
                     _ = task
 
+    async def mute_agent(self: Self, agent_id: str) -> None:
+        from .resources import mute_agent as _mute_agent
+
+        await _mute_agent(self, agent_id)
+
+    async def reset_memory(self: Self, agent_id: str) -> None:
+        from .resources import reset_memory as _reset_memory
+
+        await _reset_memory(self, agent_id)
+
+    async def apply_penalty(self: Self, agent_id: str, ip: float, du: float) -> None:
+        from .resources import apply_penalty as _apply_penalty
+
+        await _apply_penalty(self, agent_id, ip, du)
+
     async def handle_moderation_command(self: Self, cmd: dict[str, Any]) -> None:
         """Process moderation actions like muting or penalties."""
         action = cmd.get("command")
         agent_id = cmd.get("agent_id")
         if action == "mute" and agent_id:
-            self.muted_agents.add(str(agent_id))
+            await self.event_kernel.schedule_immediate(
+                lambda aid=str(agent_id): self.mute_agent(aid),
+                vector=self.vector,
+            )
         elif action == "reset_memory" and agent_id:
-            try:
-                self.memory_service.reset_agent(str(agent_id))
-            except Exception:
-                logger.error("Failed to reset memory for %s", agent_id, exc_info=True)
+            await self.event_kernel.schedule_immediate(
+                lambda aid=str(agent_id): self.reset_memory(aid),
+                vector=self.vector,
+            )
         elif action == "penalty" and agent_id:
             ip = float(cmd.get("ip", 0))
             du = float(cmd.get("du", 0))
-            try:
-                ledger.log_change(str(agent_id), -abs(ip), -abs(du), "moderation_penalty")
-            except Exception:
-                logger.error("Failed to apply penalty to %s", agent_id, exc_info=True)
+            await self.event_kernel.schedule_immediate(
+                lambda aid=str(agent_id), ip=ip, du=du: self.apply_penalty(aid, ip, du),
+                vector=self.vector,
+            )
 
     async def spawn_agent(
         self: Self,
@@ -616,9 +634,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -633,9 +649,9 @@ class Simulation:
         async with self._msg_lock:
             perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
         if self.knowledge_board:
-            perception_data[
-                "knowledge_board_content"
-            ] = self.knowledge_board.get_recent_entries_for_prompt()
+            perception_data["knowledge_board_content"] = (
+                self.knowledge_board.get_recent_entries_for_prompt()
+            )
 
         agent_output = await agent.run_turn(
             simulation_step=self.current_step,
@@ -1030,9 +1046,7 @@ class Simulation:
                 logger.exception("Evaluation hook failed")
         if metrics:
             self.metrics.append({"step": self.current_step, **metrics})
-            eval_event = log_event(
-                {"type": "evaluation", "step": self.current_step, **metrics}
-            )
+            eval_event = log_event({"type": "evaluation", "step": self.current_step, **metrics})
             if eval_event is None:
                 eval_event = {
                     "type": "evaluation",

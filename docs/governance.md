@@ -91,3 +91,16 @@ curl -X POST -H 'Content-Type: application/json' \
 ```
 The staked amount counts toward the `sqrt(ip_balance + staked_ip)` formula used
 for default voting weight.
+
+## Moderation API
+
+The event kernel exposes helper functions for moderation that can be invoked via
+slash commands or other external interfaces:
+
+- `mute_agent(agent_id)`: prevent an agent from sending messages.
+- `reset_memory(agent_id)`: clear all stored memories for the agent.
+- `apply_penalty(agent_id, ip, du)`: subtract Influence Points (IP) and/or
+  Development Units (DU) from an agent's balance.
+
+Each call publishes a `moderation` event through the kernel so that the
+simulation and connected clients can react accordingly.
