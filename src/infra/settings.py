@@ -139,6 +139,8 @@ class ConfigSettings(BaseSettings):
     QUEST_GENERATION_INTERVAL_STEPS: int = 0
     MAX_AGENT_AGE: int = 100
     AGENT_TOKEN_BUDGET: int = 10000
+    MEMORY_RETRIEVER_TOP_K: int = 5
+    MEMORY_RETRIEVER_TOKEN_LIMIT: int = 1000
     GENE_MUTATION_RATE: float = 0.1
     ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
         "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
