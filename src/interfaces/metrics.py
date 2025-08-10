@@ -9,26 +9,26 @@ try:
 except Exception:  # pragma: no cover - optional dependency
 
     class _Value:
-        def __init__(self) -> None:
+        def __init__(self: "_Value") -> None:
             self._val = 0
 
-        def get(self) -> int:
+        def get(self: "_Value") -> int:
             return self._val
 
     class _Dummy:
-        def __init__(self, *args: object, **kwargs: object) -> None:
+        def __init__(self: "_Dummy", *args: object, **kwargs: object) -> None:
             self._value = _Value()
 
-        def __call__(self, *args: object, **kwargs: object) -> "_Dummy":
+        def __call__(self: "_Dummy", *args: object, **kwargs: object) -> "_Dummy":
             return self
 
         def inc(
-            self, amount: int = 1, *args: object, **kwargs: object
+            self: "_Dummy", amount: int = 1, *args: object, **kwargs: object
         ) -> None:  # pragma: no cover - noop
             self._value._val += amount
 
         def set(
-            self, value: int = 0, *args: object, **kwargs: object
+            self: "_Dummy", value: int = 0, *args: object, **kwargs: object
         ) -> None:  # pragma: no cover - noop
             self._value._val = value
 
@@ -68,6 +68,11 @@ HUMAN_MESSAGES_TOTAL = Counter(
     "human_messages_total",
     "Total number of human messages received",
 )
+
+# Simulation state metrics
+COALITION_COUNT = Gauge("coalition_count", "Number of active coalitions")
+AVERAGE_SENTIMENT = Gauge("average_sentiment", "Average sentiment across all agents")
+PROPOSAL_THROUGHPUT = Gauge("proposal_throughput", "Proposals processed per minute")
 
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
@@ -131,6 +136,21 @@ def get_human_messages() -> int:
     return int(HUMAN_MESSAGES_TOTAL._value.get())
 
 
+def get_coalition_count() -> int:
+    """Return the current number of coalitions."""
+    return int(COALITION_COUNT._value.get())
+
+
+def get_average_sentiment() -> float:
+    """Return the current average sentiment across agents."""
+    return float(AVERAGE_SENTIMENT._value.get())
+
+
+def get_proposal_throughput() -> float:
+    """Return the proposals processed per minute."""
+    return float(PROPOSAL_THROUGHPUT._value.get())
+
+
 __all__ = [
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
@@ -141,6 +161,9 @@ __all__ = [
     "LLM_ERRORS_TOTAL",
     "LLM_LATENCY_MS",
     "LLM_LATENCY_P95_MS",
+    "COALITION_COUNT",
+    "AVERAGE_SENTIMENT",
+    "PROPOSAL_THROUGHPUT",
     "MEMORY_RETRIEVALS_TOTAL",
     "MEMORY_RETRIEVAL_ERRORS_TOTAL",
     "RAG_HIT_RATE",
@@ -156,5 +179,8 @@ __all__ = [
     "get_memory_retrieval_errors",
     "get_memory_retrievals",
     "get_rag_hit_rate",
+    "get_coalition_count",
+    "get_average_sentiment",
+    "get_proposal_throughput",
     "start_http_server",
 ]
