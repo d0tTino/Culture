@@ -70,6 +70,7 @@ class Simulation:
         vector_store_manager: Optional["ChromaVectorStoreManager"] = None,
         semantic_manager: Optional["SemanticMemoryManager"] = None,
         scenario: str = "",
+        beats: list[str] | None = None,
         discord_bot: Optional["SimulationDiscordBot"] = None,
     ) -> None:
         """
@@ -85,6 +86,8 @@ class Simulation:
                 vector-based agent memory storage and retrieval.
             scenario (str): Description of the simulation scenario that provides
                 context for agent interactions.
+            beats (list[str] | None): Optional beat names that segment the
+                scenario into phases for evaluation.
             discord_bot (Optional[SimulationDiscordBot]): Discord bot for sending
                 simulation updates to Discord.
         """
@@ -105,6 +108,9 @@ class Simulation:
         self.speed: float = 1.0
         self.agent_initial_token_budget = int(config.get_config("AGENT_TOKEN_BUDGET"))
         self.muted_agents: set[str] = set()
+        self.beats: list[str] = beats or []
+        self._beat_index = 0
+        self._beat_interval = 0
         # Add other simulation-wide state if needed (e.g., environment properties)
         # self.environment_state = {}
 
@@ -877,6 +883,31 @@ class Simulation:
             )
             self._last_quest_step = self.current_step
 
+        if (
+            self.beats
+            and self._beat_interval > 0
+            and self._beat_index < len(self.beats)
+            and self.current_step >= (self._beat_index + 1) * self._beat_interval
+        ):
+            metrics: dict[str, Any] = {}
+            for hook in self.evaluation_hooks:
+                try:
+                    metrics.update(hook(self, []) or {})
+                except Exception:  # pragma: no cover - defensive
+                    logger.exception("Evaluation hook failed")
+            metrics["beat"] = self.beats[self._beat_index]
+            self.metrics.append({"step": self.current_step, **metrics})
+            eval_event = log_event({"type": "evaluation", "step": self.current_step, **metrics})
+            if eval_event is None:
+                eval_event = {
+                    "type": "evaluation",
+                    "step": self.current_step,
+                    **metrics,
+                }
+                eval_event["trace_hash"] = compute_trace_hash(eval_event)
+            await emit_event(SimulationEvent(type="evaluation", data=eval_event))
+            self._beat_index += 1
+
         self.vector.increment(self.agents[next_agent_index].get_id())
         await self.event_kernel.schedule_in(
             1,
@@ -1066,6 +1097,9 @@ class Simulation:
             num_steps (int): Number of steps to run.
         """
         logger.info(f"Starting simulation run for {num_steps} steps (async)")
+        self.steps_to_run = num_steps
+        if self.beats and self._beat_interval == 0:
+            self._beat_interval = max(1, num_steps // len(self.beats))
         start_time = time.time()
         total_steps_executed = 0
         try:

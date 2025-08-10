@@ -17,6 +17,9 @@ This scenario guides a small group through a structured planning process.
    python tools/export_traces.py data/traces.jsonl --outdir plots
    ```
 
+During the run, evaluation events are emitted at the end of each beat, recording
+coalition counts and sentiment snapshots for plotting.
+
 ## Scripted Beats
 
 1. **Proposal** – the planner presents a project idea.
