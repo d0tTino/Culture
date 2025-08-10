@@ -1,3 +1,4 @@
+name: planning_project
 description: Collaborative project planning with proposal, critique, vote, and deliverable phases
 steps: 40
 agents:

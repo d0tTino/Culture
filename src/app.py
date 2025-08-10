@@ -73,8 +73,8 @@ def _simple_yaml(path: Path) -> dict[str, object]:
     return data
 
 
-def load_scenario(value: str) -> tuple[str, int | None, int | None]:
-    """Return scenario description and optional overrides from a file."""
+def load_scenario(value: str) -> tuple[str, int | None, int | None, list[str]]:
+    """Return scenario description, overrides, and optional beats from a file."""
     path = Path(value)
     if path.is_file():
         try:  # Try full YAML parsing if PyYAML is available
@@ -88,15 +88,18 @@ def load_scenario(value: str) -> tuple[str, int | None, int | None]:
             desc = str(content.get("description") or content.get("scenario") or "")
             steps = content.get("steps")
             agents = content.get("agents")
+            beats = content.get("beats")
+            beat_list = [str(b) for b in beats] if isinstance(beats, list) else []
             return (
                 desc,
                 int(steps) if steps is not None else None,
                 int(agents) if agents is not None else None,
+                beat_list,
             )
         if isinstance(content, str):
-            return content, None, None
-        return str(content), None, None
-    return value, None, None
+            return content, None, None, []
+        return str(content), None, None, []
+    return value, None, None, []
 
 
 use_uvloop_if_available()
@@ -115,6 +118,7 @@ def create_simulation(
     num_agents: int = 3,
     steps: int = 10,
     scenario: str = DEFAULT_SCENARIO,
+    beats: list[str] | None = None,
     use_discord: bool = False,
     use_vector_store: bool = False,
     vector_store_dir: str = "./chroma_db",
@@ -186,6 +190,7 @@ def create_simulation(
         vector_store_manager=vector_store,
         semantic_manager=semantic_manager,
         scenario=scenario,
+        beats=beats,
         discord_bot=discord_bot,
     )
     if config.KNOWLEDGE_BOARD_BACKEND == "graph":
@@ -299,7 +304,7 @@ def main() -> None:
     # Load optional plugins before argument parsing
     asyncio.run(load_plugins())
     args = parse_args()
-    desc, file_steps, file_agents = load_scenario(args.scenario)
+    desc, file_steps, file_agents, beats = load_scenario(args.scenario)
     if file_steps is not None:
         args.steps = file_steps
     if file_agents is not None:
@@ -336,6 +341,7 @@ def main() -> None:
             num_agents=args.agents,
             steps=args.steps,
             scenario=args.scenario,
+            beats=beats,
             use_discord=args.discord,
             use_vector_store=args.vector_store,
             vector_store_dir=args.vector_dir,

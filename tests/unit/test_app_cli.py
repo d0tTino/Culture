@@ -60,6 +60,7 @@ def test_main_invokes_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
         num_agents=2,
         steps=3,
         scenario=app.DEFAULT_SCENARIO,
+        beats=[],
         use_discord=False,
         use_vector_store=False,
         vector_store_dir="./chroma_db",
@@ -79,11 +80,12 @@ def test_load_scenario_from_file(tmp_path) -> None:
     path = tmp_path / "demo.yaml"
     path.write_text("""description: Test scenario\nsteps: 7\nagents: 4\n""")
 
-    desc, steps, agents = app.load_scenario(str(path))
+    desc, steps, agents, beats = app.load_scenario(str(path))
 
     assert desc == "Test scenario"
     assert steps == 7
     assert agents == 4
+    assert beats == []
 
 
 def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -109,6 +111,7 @@ def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
         num_agents=1,
         steps=2,
         scenario="File scenario",
+        beats=[],
         use_discord=False,
         use_vector_store=False,
         vector_store_dir="./chroma_db",
