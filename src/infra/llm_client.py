@@ -57,6 +57,9 @@ LLM_API_BASE = cast(str | None, get_config("LLM_API_BASE"))
 VLLM_API_BASE = cast(str | None, get_config("VLLM_API_BASE"))
 USE_VLLM = True
 
+LLM_BATCH_SIZE = int(cast(int | str | None, get_config("LLM_BATCH_SIZE") or 1))
+LLM_BATCH_TIMEOUT = float(cast(float | str | None, get_config("LLM_BATCH_TIMEOUT") or 0.1))
+
 if TYPE_CHECKING:
     from litellm.exceptions import APIError
 else:
@@ -145,7 +148,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -216,7 +219,7 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -294,7 +297,9 @@ def async_monitor_llm_call(
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
                 infra_metrics.record_llm_latency(metrics_data["duration_ms"])
-                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
+                llm_perf_logger.info(
+                    f"LLM_CALL_METRICS: {json.dumps(metrics_data, default=str)}"
+                )
 
         return wrapper
 
@@ -317,6 +322,8 @@ class LLMClientConfig(BaseModel):
 
     model_name: str = "mistral:latest"
     api_key: str | None = None
+    batch_size: int = LLM_BATCH_SIZE
+    batch_timeout: float = LLM_BATCH_TIMEOUT
 
 
 class LLMClient:
@@ -328,18 +335,21 @@ class LLMClient:
             self._client = get_llm_client()
         except LLMClientInitError:
             raise
+        self.batch_size = config.batch_size
+        self.batch_timeout = config.batch_timeout
+        self._pending: list[
+            tuple[str, list[LLMMessage], dict[str, Any] | None, asyncio.Future[LLMChatResponse]]
+        ] = []
+        self._lock = asyncio.Lock()
+        self._flush_task: asyncio.Task | None = None
 
-    @async_monitor_llm_call(model_param="model", context="ollama_chat")
-    async def chat(
+    async def _chat_single(
         self: LLMClient,
         model: str,
         messages: list[LLMMessage],
-        options: dict[str, Any] | None = None,
+        options: dict[str, Any] | None,
     ) -> LLMChatResponse:
-        # Prefer vLLM for large Hugging Face models; use Ollama for smaller
-        # colon-delimited model names (e.g., "mistral:latest").  When tests
-        # patch the underlying client, try using the patched instance first
-        # before falling back to a new Ollama client.
+
         if ":" in model:
             if self._client:
                 try:
@@ -390,6 +400,67 @@ class LLMClient:
                 self._client.chat, model=model, messages=messages, options=options
             ),
         )
+
+    async def _flush_pending(self: LLMClient) -> None:
+        async with self._lock:
+            batch = self._pending
+            self._pending = []
+            self._flush_task = None
+        if not batch:
+            return
+        payload = [(m, msgs, opts) for m, msgs, opts, _ in batch]
+        futures = [fut for _, _, _, fut in batch]
+        try:
+            batch_func = getattr(self._client, "async_chat_batch", None)
+            if batch_func and asyncio.iscoroutinefunction(batch_func):
+                responses = await cast(Any, batch_func)(payload)
+            else:
+                responses = [
+                    await self._chat_single(m, msgs, opts) for m, msgs, opts in payload
+                ]
+            for fut, resp in zip(futures, responses):
+                fut.set_result(resp)
+        except Exception as exc:
+            for fut in futures:
+                if not fut.done():
+                    fut.set_exception(exc)
+
+    async def _flush_after_timeout(self: LLMClient) -> None:
+        try:
+            await asyncio.sleep(self.batch_timeout)
+            await self._flush_pending()
+        except asyncio.CancelledError:  # pragma: no cover - timing dependent
+            pass
+
+    @async_monitor_llm_call(model_param="model", context="ollama_chat")
+    async def chat(
+        self: LLMClient,
+        model: str,
+        messages: list[LLMMessage],
+        options: dict[str, Any] | None = None,
+    ) -> LLMChatResponse:
+        if (
+            ":" in model
+            or self.batch_size <= 1
+            or not USE_VLLM
+            or not hasattr(self._client, "async_chat_batch")
+        ):
+            return await self._chat_single(model, messages, options)
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[LLMChatResponse] = loop.create_future()
+        async with self._lock:
+            self._pending.append((model, messages, options, future))
+            should_flush = len(self._pending) >= self.batch_size
+            if should_flush and self._flush_task and not self._flush_task.done():
+                self._flush_task.cancel()
+            elif not should_flush and (
+                not self._flush_task or self._flush_task.done()
+            ):
+                self._flush_task = asyncio.create_task(self._flush_after_timeout())
+        if should_flush:
+            await self._flush_pending()
+        return await future
 
     def chat_sync(
         self: LLMClient,
