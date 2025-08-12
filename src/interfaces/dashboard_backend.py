@@ -165,6 +165,19 @@ class AgentMessage(BaseModel):
     extra: dict[str, Any] | None = None
 
 
+def board_payload_to_embed(payload: dict[str, Any]) -> dict[str, Any]:
+    """Map a knowledge board payload to Discord embed fields."""
+    agent_id = str(payload.get("agent_id", ""))
+    content = str(payload.get("content", ""))
+    step = int(payload.get("step", 0))
+    return {
+        "title": f"📝 New Knowledge Board Entry (Step {step})",
+        "description": f"```{content}```",
+        "color": 0xFFD700,
+        "author": {"name": f"Posted by Agent {agent_id[:8]}"},
+    }
+
+
 class SimulationEvent(BaseModel):
     """Generic simulation event structure for dashboards."""
 
@@ -916,6 +929,7 @@ __all__ = [
     "api_token_balances",
     "api_vote",
     "app",
+    "board_payload_to_embed",
     "emit_event",
     "emit_map_action_event",
     "emit_map_change_event",
