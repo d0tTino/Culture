@@ -57,6 +57,9 @@ LLM_API_BASE = cast(str | None, get_config("LLM_API_BASE"))
 VLLM_API_BASE = cast(str | None, get_config("VLLM_API_BASE"))
 USE_VLLM = True
 
+LLM_BATCH_SIZE = int(cast(int | str | None, get_config("LLM_BATCH_SIZE") or 1))
+LLM_BATCH_TIMEOUT = float(cast(float | str | None, get_config("LLM_BATCH_TIMEOUT") or 0.1))
+
 if TYPE_CHECKING:
     from litellm.exceptions import APIError
 else:
@@ -145,7 +148,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -216,7 +219,7 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -289,6 +292,7 @@ def async_monitor_llm_call(
                             )
                         except Exception:
                             metrics_data["completion_tokens"] = None
+
                 return result
             except Exception as e:
                 metrics_data["success"] = False
@@ -331,6 +335,8 @@ class LLMClientConfig(BaseModel):
 
     model_name: str = "mistral:latest"
     api_key: str | None = None
+    batch_size: int = LLM_BATCH_SIZE
+    batch_timeout: float = LLM_BATCH_TIMEOUT
 
 
 class LLMClient:
@@ -342,18 +348,24 @@ class LLMClient:
             self._client = get_llm_client()
         except LLMClientInitError:
             raise
+        self.batch_size = config.batch_size
+        self.batch_timeout = config.batch_timeout
+        self._pending: list[
+            tuple[str, list[LLMMessage], dict[str, Any] | None, asyncio.Future[LLMChatResponse]]
+        ] = []
+        self._lock = asyncio.Lock()
+        self._flush_task: asyncio.Task | None = None
 
-    @async_monitor_llm_call(model_param="model", context="ollama_chat")
-    async def chat(
+    async def _chat_single(
         self: LLMClient,
         model: str,
         messages: list[LLMMessage],
-        options: dict[str, Any] | None = None,
+        options: dict[str, Any] | None,
     ) -> LLMChatResponse:
-        # Prefer vLLM for large Hugging Face models; use Ollama for smaller
-        # colon-delimited model names (e.g., "mistral:latest").
+
         if ":" in model:
             small_client = self._client or _create_ollama_client()
+
             async_chat = getattr(small_client, "async_chat", None)
             if async_chat and asyncio.iscoroutinefunction(async_chat):
                 return cast(
@@ -381,6 +393,67 @@ class LLMClient:
                 self._client.chat, model=model, messages=messages, options=options
             ),
         )
+
+    async def _flush_pending(self: LLMClient) -> None:
+        async with self._lock:
+            batch = self._pending
+            self._pending = []
+            self._flush_task = None
+        if not batch:
+            return
+        payload = [(m, msgs, opts) for m, msgs, opts, _ in batch]
+        futures = [fut for _, _, _, fut in batch]
+        try:
+            batch_func = getattr(self._client, "async_chat_batch", None)
+            if batch_func and asyncio.iscoroutinefunction(batch_func):
+                responses = await cast(Any, batch_func)(payload)
+            else:
+                responses = [
+                    await self._chat_single(m, msgs, opts) for m, msgs, opts in payload
+                ]
+            for fut, resp in zip(futures, responses):
+                fut.set_result(resp)
+        except Exception as exc:
+            for fut in futures:
+                if not fut.done():
+                    fut.set_exception(exc)
+
+    async def _flush_after_timeout(self: LLMClient) -> None:
+        try:
+            await asyncio.sleep(self.batch_timeout)
+            await self._flush_pending()
+        except asyncio.CancelledError:  # pragma: no cover - timing dependent
+            pass
+
+    @async_monitor_llm_call(model_param="model", context="ollama_chat")
+    async def chat(
+        self: LLMClient,
+        model: str,
+        messages: list[LLMMessage],
+        options: dict[str, Any] | None = None,
+    ) -> LLMChatResponse:
+        if (
+            ":" in model
+            or self.batch_size <= 1
+            or not USE_VLLM
+            or not hasattr(self._client, "async_chat_batch")
+        ):
+            return await self._chat_single(model, messages, options)
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[LLMChatResponse] = loop.create_future()
+        async with self._lock:
+            self._pending.append((model, messages, options, future))
+            should_flush = len(self._pending) >= self.batch_size
+            if should_flush and self._flush_task and not self._flush_task.done():
+                self._flush_task.cancel()
+            elif not should_flush and (
+                not self._flush_task or self._flush_task.done()
+            ):
+                self._flush_task = asyncio.create_task(self._flush_after_timeout())
+        if should_flush:
+            await self._flush_pending()
+        return await future
 
     def chat_sync(
         self: LLMClient,
@@ -475,83 +548,109 @@ def _create_vllm_client() -> OllamaClientProtocol:
             messages: list[LLMMessage],
             options: dict[str, Any] | None = None,
         ) -> LLMChatResponse:
-            base = VLLM_API_BASE or LLM_API_BASE
-            url = f"{base.rstrip('/')}/v1/chat/completions"
-            payload: JSONDict = {
-                "model": model,
-                "messages": cast(list[JSONValue], messages),
-            }
-            if options:
-                if "temperature" in options:
-                    payload["temperature"] = options["temperature"]
-                if "top_p" in options:
-                    payload["top_p"] = options["top_p"]
-                if "num_predict" in options:
-                    payload["max_tokens"] = options["num_predict"]
-            import importlib
-            import json as _json
+            with tracer.start_as_current_span("llm.request") as span:
+                span.set_attribute("llm.model", model)
+                start_time = time.perf_counter()
+                try:
+                    base = VLLM_API_BASE or LLM_API_BASE
+                    url = f"{base.rstrip('/')}/v1/chat/completions"
+                    payload: JSONDict = {
+                        "model": model,
+                        "messages": cast(list[JSONValue], messages),
+                    }
+                    if options:
+                        if "temperature" in options:
+                            payload["temperature"] = options["temperature"]
+                        if "top_p" in options:
+                            payload["top_p"] = options["top_p"]
+                        if "num_predict" in options:
+                            payload["max_tokens"] = options["num_predict"]
+                    import importlib
+                    import json as _json
 
-            importlib.reload(_json)
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            data = cast(JSONDict, json.loads(resp.text))
-            choices = cast(list[JSONDict], data.get("choices", []))
-            message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
-            return {
-                "message": cast(LLMMessage, message),
-                "usage": cast(JSONDict, data.get("usage", {})),
-            }
+                    importlib.reload(_json)
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(url, json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
+                    resp.raise_for_status()
+                    data = cast(JSONDict, json.loads(resp.text))
+                    usage = cast(JSONDict, data.get("usage", {}))
+                    prompt_tokens = int(usage.get("prompt_tokens", 0))
+                    completion_tokens = int(usage.get("completion_tokens", 0))
+                    span.set_attribute("llm.tokens.prompt", prompt_tokens)
+                    span.set_attribute("llm.tokens.completion", completion_tokens)
+                    span.set_attribute("llm.tokens.total", prompt_tokens + completion_tokens)
+                    choices = cast(list[JSONDict], data.get("choices", []))
+                    message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
+                    return {
+                        "message": cast(LLMMessage, message),
+                        "usage": usage,
+                    }
+                finally:
+                    span.set_attribute(
+                        "llm.latency_ms", (time.perf_counter() - start_time) * 1000
+                    )
 
         async def async_chat_batch(
             self: _Client,
             batch: Iterable[tuple[str, list[LLMMessage], dict[str, Any] | None]],
         ) -> list[LLMChatResponse]:
             """Send multiple chat requests using vLLM's batching API."""
-
-            base = VLLM_API_BASE or LLM_API_BASE
-            url = f"{base.rstrip('/')}/v1/batch"
-
-            requests_payload: list[JSONDict] = []
-            for model, messages, opts in batch:
-                req: JSONDict = {
-                    "model": model,
-                    "messages": cast(list[JSONValue], messages),
-                }
-                if opts:
-                    if "temperature" in opts:
-                        req["temperature"] = opts["temperature"]
-                    if "top_p" in opts:
-                        req["top_p"] = opts["top_p"]
-                    if "num_predict" in opts:
-                        req["max_tokens"] = opts["num_predict"]
-                requests_payload.append(req)
-
-            import importlib
-            import json as _json
-
-            importlib.reload(_json)
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    url,
-                    json={"requests": requests_payload},
-                    timeout=OLLAMA_REQUEST_TIMEOUT,
-                )
-            resp.raise_for_status()
-            data = cast(JSONDict, json.loads(resp.text))
-            results = cast(list[JSONDict], data.get("responses", []))
-
-            outputs: list[LLMChatResponse] = []
-            for item in results:
-                choices = cast(list[JSONDict], item.get("choices", []))
-                message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
-                outputs.append(
-                    {
-                        "message": cast(LLMMessage, message),
-                        "usage": cast(JSONDict, item.get("usage", {})),
+            with tracer.start_as_current_span("llm.batch") as span:
+                models_used: list[str] = []
+                requests_payload: list[JSONDict] = []
+                for model, messages, opts in batch:
+                    models_used.append(model)
+                    req: JSONDict = {
+                        "model": model,
+                        "messages": cast(list[JSONValue], messages),
                     }
-                )
-            return outputs
+                    if opts:
+                        if "temperature" in opts:
+                            req["temperature"] = opts["temperature"]
+                        if "top_p" in opts:
+                            req["top_p"] = opts["top_p"]
+                        if "num_predict" in opts:
+                            req["max_tokens"] = opts["num_predict"]
+                    requests_payload.append(req)
+                span.set_attribute("llm.model", ",".join(models_used))
+                start_time = time.perf_counter()
+                try:
+                    base = VLLM_API_BASE or LLM_API_BASE
+                    url = f"{base.rstrip('/')}/v1/batch"
+                    import importlib
+                    import json as _json
+
+                    importlib.reload(_json)
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(
+                            url,
+                            json={"requests": requests_payload},
+                            timeout=OLLAMA_REQUEST_TIMEOUT,
+                        )
+                    resp.raise_for_status()
+                    data = cast(JSONDict, json.loads(resp.text))
+                    results = cast(list[JSONDict], data.get("responses", []))
+
+                    outputs: list[LLMChatResponse] = []
+                    prompt_tokens = 0
+                    completion_tokens = 0
+                    for item in results:
+                        choices = cast(list[JSONDict], item.get("choices", []))
+                        message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
+                        usage = cast(JSONDict, item.get("usage", {}))
+                        prompt_tokens += int(usage.get("prompt_tokens", 0))
+                        completion_tokens += int(usage.get("completion_tokens", 0))
+                        outputs.append({"message": cast(LLMMessage, message), "usage": usage})
+                    span.set_attribute("llm.tokens.prompt", prompt_tokens)
+                    span.set_attribute("llm.tokens.completion", completion_tokens)
+                    span.set_attribute(
+                        "llm.tokens.total", prompt_tokens + completion_tokens
+                    )
+                    return outputs
+                finally:
+                    span.set_attribute(
+                        "llm.latency_ms", (time.perf_counter() - start_time) * 1000
+                    )
 
         def chat(
             self: _Client,
@@ -686,11 +785,11 @@ def generate_text(
                             )
                         except _RequestException:
                             result = None
-                        return result
+                        return cast(str | None, result)
 
                 mock_response = _MOCK_RESPONSES.get("text_generation", _MOCK_RESPONSES["default"])
                 # Simulate the structure of the real response to get the content
-                return {"message": {"content": mock_response}}["message"]["content"]
+                return cast(str, {"message": {"content": mock_response}}["message"]["content"])
 
             def call() -> LLMChatResponse:
                 """Invoke the LLM using ``LLMClient`` so the method can be monkeypatched
@@ -1224,4 +1323,6 @@ def generate_response(
         return str(val) if isinstance(val, str) else None
 
     # Otherwise use the real client
-    return generate_text(prompt, model, temperature, agent_state=agent_state)
+    return cast(
+        str | None, generate_text(prompt, model, temperature, agent_state=agent_state)
+    )

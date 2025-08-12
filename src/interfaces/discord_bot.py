@@ -657,8 +657,32 @@ class SimulationDiscordBot:
                         if aid == recipient:
                             recipient = uid
                             break
+                embed = None
+                if msg.extra and msg.extra.get("embed"):
+                    data = msg.extra.get("embed", {})
+                    embed = discord.Embed(
+                        title=data.get("title"),
+                        description=data.get("description"),
+                        color=data.get("color"),
+                    )
+                    author = data.get("author")
+                    if author:
+                        try:
+                            embed.set_author(**author)
+                        except Exception:  # pragma: no cover - best effort
+                            pass
+                    for field in data.get("fields", []):
+                        try:
+                            embed.add_field(
+                                name=field.get("name"),
+                                value=field.get("value"),
+                                inline=field.get("inline", True),
+                            )
+                        except Exception:  # pragma: no cover - best effort
+                            pass
                 await self.send_simulation_update(
-                    content=msg.content,
+                    content=None if embed else msg.content,
+                    embed=embed,
                     agent_id=msg.agent_id,
                     recipient=recipient,
                 )

@@ -10,17 +10,22 @@ from src.interfaces.discord_bot import bot, get_active_bot
 from src.utils.policy import evaluate_with_opa
 
 
-async def _rate_limit(user: Any, action: str) -> bool:
-    """Use OPA to determine if the action is allowed for the user."""
+async def _rate_limit(user: Any, action: str, agent_id: str | None = None) -> bool:
+    """Use OPA to determine if the action is allowed for the user and agent."""
     user_id = str(getattr(user, "id", ""))
-    allow, _ = await evaluate_with_opa(f"{user_id}:{action}")
+    key = f"{user_id}:{action}"
+    if agent_id is not None:
+        key += f":{agent_id}"
+    allow, _ = await evaluate_with_opa(key)
     return allow
 
 
 @bot.tree.command(name="mute")
 async def slash_mute(interaction: Any, agent_id: str) -> None:
     """Mute an agent in the simulation."""
-    if not await _rate_limit(getattr(interaction, "user", None), "mute"):
+    if not await _rate_limit(
+        getattr(interaction, "user", None), "mute", agent_id
+    ):
         await interaction.response.send_message("rate limited", ephemeral=True)
         return
     bot_instance = get_active_bot()
@@ -36,7 +41,9 @@ async def slash_mute(interaction: Any, agent_id: str) -> None:
 @bot.tree.command(name="reset_memory")
 async def slash_reset_memory(interaction: Any, agent_id: str) -> None:
     """Reset the memory of an agent."""
-    if not await _rate_limit(getattr(interaction, "user", None), "reset_memory"):
+    if not await _rate_limit(
+        getattr(interaction, "user", None), "reset_memory", agent_id
+    ):
         await interaction.response.send_message("rate limited", ephemeral=True)
         return
     bot_instance = get_active_bot()
@@ -54,7 +61,9 @@ async def slash_penalty(
     interaction: Any, agent_id: str, ip: float = 0.0, du: float = 0.0
 ) -> None:
     """Apply an IP/DU penalty to an agent."""
-    if not await _rate_limit(getattr(interaction, "user", None), "penalty"):
+    if not await _rate_limit(
+        getattr(interaction, "user", None), "penalty", agent_id
+    ):
         await interaction.response.send_message("rate limited", ephemeral=True)
         return
     bot_instance = get_active_bot()

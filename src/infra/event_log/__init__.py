@@ -6,7 +6,7 @@ import json
 import os
 import random
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from typing import Any
 
 try:  # pragma: no cover - optional dependency
@@ -29,6 +29,37 @@ _consumer_conf = {
     "group.id": os.getenv("REPLAY_GROUP", "culture-replay"),
     "auto.offset.reset": "earliest",
 }
+
+
+def _is_valid_event(
+    event: dict[str, Any], last_step: int, last_hash: str | None
+) -> bool:
+    """Check ``event`` ordering and integrity."""
+    step = event.get("step", 0)
+    if step <= last_step:
+        return False
+    event_copy = {**event}
+    trace_hash = event_copy.pop("trace_hash", None)
+    if trace_hash != compute_trace_hash(event_copy):
+        return False
+    if last_hash is not None and event.get("prev_hash") != last_hash:
+        return False
+    return True
+
+
+def _filter_events(
+    events: Iterable[dict[str, Any]], *, after_step: int = 0
+) -> list[dict[str, Any]]:
+    """Return events sorted by step and validated against tampering."""
+    last_step = after_step
+    last_hash: str | None = None
+    valid: list[dict[str, Any]] = []
+    for ev in events:
+        if _is_valid_event(ev, last_step, last_hash):
+            last_step = ev.get("step", last_step)
+            last_hash = ev.get("trace_hash")
+            valid.append(ev)
+    return valid
 
 
 def _get_producer() -> Any:
@@ -81,7 +112,7 @@ def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
     """Retrieve events from Redpanda after ``after_step``."""
     if os.getenv("ENABLE_REDPANDA", "0") != "1":
         return []
-    events: list[dict[str, Any]] = []
+    raw_events: list[dict[str, Any]] = []
     try:
         consumer = KafkaConsumer(_consumer_conf)
         consumer.subscribe([_topic])
@@ -96,7 +127,7 @@ def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
             except Exception:
                 continue
             if event.get("step", 0) > after_step:
-                events.append(event)
+                raw_events.append(event)
     except Exception as exc:  # pragma: no cover - best effort
         import logging
 
@@ -106,7 +137,7 @@ def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
             consumer.close()
         except Exception:  # pragma: no cover - ignore
             pass
-    return events
+    return _filter_events(raw_events, after_step=after_step)
 
 
 def stream_events(
@@ -120,6 +151,8 @@ def stream_events(
     start = time.time()
     consumer = KafkaConsumer(_consumer_conf)
     consumer.subscribe([_topic])
+    last_step = after_step
+    last_hash: str | None = None
     try:
         while True:
             msg = consumer.poll(0.1)
@@ -134,8 +167,9 @@ def stream_events(
                 event = json.loads(msg.value().decode("utf-8"))
             except Exception:
                 continue
-            if event.get("step", 0) > after_step:
-                after_step = event.get("step", after_step)
+            if _is_valid_event(event, last_step, last_hash):
+                last_step = event.get("step", last_step)
+                last_hash = event.get("trace_hash")
                 yield event
     finally:
         try:
