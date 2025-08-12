@@ -271,12 +271,24 @@ def async_monitor_llm_call(
                 else:
                     metrics_data["success"] = True
                     if hasattr(result, "usage"):
-                        metrics_data["prompt_tokens"] = getattr(
-                            result.usage, "prompt_tokens", None
-                        )
-                        metrics_data["completion_tokens"] = getattr(
+                        prompt_tokens = getattr(result.usage, "prompt_tokens", None)
+                        completion_tokens = getattr(
                             result.usage, "completion_tokens", None
                         )
+                        try:
+                            metrics_data["prompt_tokens"] = (
+                                int(prompt_tokens) if prompt_tokens is not None else None
+                            )
+                        except Exception:
+                            metrics_data["prompt_tokens"] = None
+                        try:
+                            metrics_data["completion_tokens"] = (
+                                int(completion_tokens)
+                                if completion_tokens is not None
+                                else None
+                            )
+                        except Exception:
+                            metrics_data["completion_tokens"] = None
                 return result
             except Exception as e:
                 metrics_data["success"] = False
@@ -294,7 +306,9 @@ def async_monitor_llm_call(
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
                 infra_metrics.record_llm_latency(metrics_data["duration_ms"])
-                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
+                llm_perf_logger.info(
+                    f"LLM_CALL_METRICS: {json.dumps(metrics_data, default=str)}"
+                )
 
         return wrapper
 
@@ -339,7 +353,7 @@ class LLMClient:
         # Prefer vLLM for large Hugging Face models; use Ollama for smaller
         # colon-delimited model names (e.g., "mistral:latest").
         if ":" in model:
-            small_client = _create_ollama_client()
+            small_client = self._client or _create_ollama_client()
             async_chat = getattr(small_client, "async_chat", None)
             if async_chat and asyncio.iscoroutinefunction(async_chat):
                 return cast(
