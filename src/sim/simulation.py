@@ -33,6 +33,7 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
 )
+from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
@@ -658,14 +659,14 @@ class Simulation:
             perception_data["knowledge_board_content"] = (
                 self.knowledge_board.get_recent_entries_for_prompt()
             )
-
-        agent_output = await agent.run_turn(
-            simulation_step=self.current_step,
-            environment_perception=perception_data,
-            memory_service=self.memory_service,
-            vector_store_manager=self.vector_store_manager,
-            knowledge_board=self.knowledge_board,
-        )
+        with trace_agent_action("agent_activation", agent_id=agent_id, step=self.current_step):
+            agent_output = await agent.run_turn(
+                simulation_step=self.current_step,
+                environment_perception=perception_data,
+                memory_service=self.memory_service,
+                vector_store_manager=self.vector_store_manager,
+                knowledge_board=self.knowledge_board,
+            )
 
         self.resource_manager.cap_tick(
             ip_start=ip_start, du_start=du_start, obj=current_agent_state
@@ -1065,29 +1066,32 @@ class Simulation:
                 agent_id=self.agents[self.current_agent_index].get_id(),
                 vector=self.vector,
             )
+        agent_id = self.agents[self.current_agent_index].get_id()
+        with trace_agent_action("tick", agent_id=agent_id, step=self.current_step):
+            events = await self.event_kernel.step(max_turns)
 
-        events = await self.event_kernel.step(max_turns)
+            metrics: dict[str, Any] = {}
+            for hook in self.evaluation_hooks:
+                try:
+                    result = hook(self, events) or {}
+                    metrics.update(result)
+                except Exception:
+                    logger.exception("Evaluation hook failed")
+            if metrics:
+                self.metrics.append({"step": self.current_step, **metrics})
+                eval_event = log_event(
+                    {"type": "evaluation", "step": self.current_step, **metrics}
+                )
+                if eval_event is None:
+                    eval_event = {
+                        "type": "evaluation",
+                        "step": self.current_step,
+                        **metrics,
+                    }
+                    eval_event["trace_hash"] = compute_trace_hash(eval_event)
+                await emit_event(SimulationEvent(type="evaluation", data=eval_event))
 
-        metrics: dict[str, Any] = {}
-        for hook in self.evaluation_hooks:
-            try:
-                result = hook(self, events) or {}
-                metrics.update(result)
-            except Exception:
-                logger.exception("Evaluation hook failed")
-        if metrics:
-            self.metrics.append({"step": self.current_step, **metrics})
-            eval_event = log_event({"type": "evaluation", "step": self.current_step, **metrics})
-            if eval_event is None:
-                eval_event = {
-                    "type": "evaluation",
-                    "step": self.current_step,
-                    **metrics,
-                }
-                eval_event["trace_hash"] = compute_trace_hash(eval_event)
-            await emit_event(SimulationEvent(type="evaluation", data=eval_event))
-
-        return len(events)
+            return len(events)
 
     async def async_run(self: Self, num_steps: int) -> None:
         """
