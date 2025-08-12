@@ -41,4 +41,12 @@ def test_start_vllm_script(tmp_path: Path) -> None:
         "9999",
         "--swap-space",
         "16",
+        "--tensor-parallel-size",
+        "1",
+        "--gpu-memory-utilization",
+        "0.9",
+        "--max-num-batched-tokens",
+        "8192",
+        "--max-num-seqs",
+        "32",
     ]

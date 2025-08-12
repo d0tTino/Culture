@@ -43,7 +43,7 @@ def test_generate_text_vllm(monkeypatch: pytest.MonkeyPatch) -> None:
         AsyncMock(side_effect=fake_post),
     )
 
-    result = llm_client.generate_text("hello")
+    result = llm_client.generate_text("hello", model="dummy/model")
 
     assert result == "hi"
     assert captured["url"] == "http://vllm:8001/v1/chat/completions"
@@ -88,7 +88,7 @@ def test_generate_text_vllm_env_switch(monkeypatch: pytest.MonkeyPatch) -> None:
         AsyncMock(side_effect=fake_post),
     )
 
-    result = module.generate_text("hello")
+    result = module.generate_text("hello", model="dummy/model")
 
     assert result == "hi"
     assert captured["url"] == "http://vllm:8002/v1/chat/completions"
@@ -130,7 +130,7 @@ def test_vllm_client_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
         AsyncMock(side_effect=fake_post),
     )
 
-    result = llm_client.generate_text("hello")
+    result = llm_client.generate_text("hello", model="dummy/model")
 
     assert result == "hi"
     assert captured["url"] == "http://ollama:1234/v1/chat/completions"

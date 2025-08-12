@@ -336,8 +336,25 @@ class LLMClient:
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
     ) -> LLMChatResponse:
+        # Prefer vLLM for large Hugging Face models; use Ollama for smaller
+        # colon-delimited model names (e.g., "mistral:latest").
+        if ":" in model:
+            small_client = _create_ollama_client()
+            async_chat = getattr(small_client, "async_chat", None)
+            if async_chat and asyncio.iscoroutinefunction(async_chat):
+                return cast(
+                    LLMChatResponse,
+                    await cast(Any, async_chat)(model=model, messages=messages, options=options),
+                )
+            return cast(
+                LLMChatResponse,
+                await asyncio.to_thread(
+                    small_client.chat, model=model, messages=messages, options=options
+                ),
+            )
+
         if not self._client:
-            raise RuntimeError("Ollama client not initialized")
+            raise RuntimeError("LLM client not initialized")
         async_chat = getattr(self._client, "async_chat", None)
         if async_chat and asyncio.iscoroutinefunction(async_chat):
             return cast(
@@ -409,16 +426,17 @@ def is_ollama_available() -> bool:
         return False  # In mock mode, no real service is available
 
     base = VLLM_API_BASE or LLM_API_BASE
+    url = f"{base.rstrip('/')}/api/tags"
 
     async def _check() -> bool:
         async with httpx.AsyncClient() as client:
-            resp = await client.get(base, timeout=1)
+            resp = await client.get(url, timeout=1)
             return bool(getattr(resp, "status_code", 0) == 200)
 
     try:
         return asyncio.run(_check())
     except RequestException as e:
-        logger.debug(f"LLM service at {base} is not available: {e}")
+        logger.debug(f"LLM service at {url} is not available: {e}")
         return False
 
 
@@ -475,15 +493,51 @@ def _create_vllm_client() -> OllamaClientProtocol:
             self: _Client,
             batch: Iterable[tuple[str, list[LLMMessage], dict[str, Any] | None]],
         ) -> list[LLMChatResponse]:
-            """Send multiple chat requests concurrently for continuous batching."""
+            """Send multiple chat requests using vLLM's batching API."""
 
-            async def _one(
-                req: tuple[str, list[LLMMessage], dict[str, Any] | None],
-            ) -> LLMChatResponse:
-                model, messages, opts = req
-                return await self.async_chat(model=model, messages=messages, options=opts)
+            base = VLLM_API_BASE or LLM_API_BASE
+            url = f"{base.rstrip('/')}/v1/batch"
 
-            return await asyncio.gather(*[_one(r) for r in batch])
+            requests_payload: list[JSONDict] = []
+            for model, messages, opts in batch:
+                req: JSONDict = {
+                    "model": model,
+                    "messages": cast(list[JSONValue], messages),
+                }
+                if opts:
+                    if "temperature" in opts:
+                        req["temperature"] = opts["temperature"]
+                    if "top_p" in opts:
+                        req["top_p"] = opts["top_p"]
+                    if "num_predict" in opts:
+                        req["max_tokens"] = opts["num_predict"]
+                requests_payload.append(req)
+
+            import importlib
+            import json as _json
+
+            importlib.reload(_json)
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    url,
+                    json={"requests": requests_payload},
+                    timeout=OLLAMA_REQUEST_TIMEOUT,
+                )
+            resp.raise_for_status()
+            data = cast(JSONDict, json.loads(resp.text))
+            results = cast(list[JSONDict], data.get("responses", []))
+
+            outputs: list[LLMChatResponse] = []
+            for item in results:
+                choices = cast(list[JSONDict], item.get("choices", []))
+                message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
+                outputs.append(
+                    {
+                        "message": cast(LLMMessage, message),
+                        "usage": cast(JSONDict, item.get("usage", {})),
+                    }
+                )
+            return outputs
 
         def chat(
             self: _Client,
