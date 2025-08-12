@@ -1039,7 +1039,7 @@ class Simulation:
         self.evaluation_hooks.append(hook)
 
     def _collect_metrics(self: Self, _events: list[Any]) -> dict[str, Any]:
-        """Default metrics: coalition count and average sentiment."""
+        """Default metrics: coalition count, sentiment, and collective resources."""
         coalition_count = sum(
             1 for proj in self.projects.values() if len(proj.get("members", [])) > 1
         )
@@ -1048,7 +1048,12 @@ class Simulation:
             if self.agents
             else 0.0
         )
-        return {"coalitions": coalition_count, "sentiment": avg_sentiment}
+        return {
+            "coalitions": coalition_count,
+            "sentiment": avg_sentiment,
+            "collective_ip": self.collective_ip,
+            "collective_du": self.collective_du,
+        }
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
