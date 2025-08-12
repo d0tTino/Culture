@@ -6,6 +6,8 @@ import time
 from collections.abc import Awaitable, Sequence
 from typing import Any, Callable
 
+from src.interfaces import metrics
+
 
 def p95(values: Sequence[float]) -> float:
     """Return the 95th percentile of ``values``.
@@ -28,11 +30,15 @@ def precision_at_k(retrieved_ids: Sequence[str], relevant_ids: set[str], k: int)
     if not top_k:
         return 0.0
     hits = sum(1 for _id in top_k if _id in relevant_ids)
-    return hits / float(min(k, len(top_k)))
+    precision = hits / float(min(k, len(top_k)))
+    metrics.P_AT_K.set(precision)
+    return precision
 
 
 async def time_call(coro: Callable[[], Awaitable[Sequence[Any]]]) -> tuple[Sequence[Any], float]:
     """Execute ``coro`` and return its result and runtime in seconds."""
     start = time.perf_counter()
     result = await coro()
-    return result, time.perf_counter() - start
+    latency = time.perf_counter() - start
+    metrics.RETRIEVAL_LATENCY_MS.set(latency * 1000)
+    return result, latency

@@ -63,6 +63,12 @@ MEMORY_RETRIEVAL_ERRORS_TOTAL = Counter(
 # Retrieval Augmented Generation (RAG) metrics
 RAG_HIT_RATE = Gauge("rag_hit_rate", "Hit rate for RAG memory retrieval")
 
+# Retrieval evaluation metrics
+RETRIEVAL_LATENCY_MS = Gauge(
+    "retrieval_latency_ms", "Latency of retrieval operations in milliseconds"
+)
+P_AT_K = Gauge("p_at_k", "Precision at k for retrieval operations")
+
 # Human interaction metrics
 HUMAN_MESSAGES_TOTAL = Counter(
     "human_messages_total",
@@ -137,6 +143,16 @@ def get_rag_hit_rate() -> float:
     return float(RAG_HIT_RATE._value.get())
 
 
+def get_retrieval_latency_ms() -> float:
+    """Return the latency of the last retrieval in milliseconds."""
+    return float(RETRIEVAL_LATENCY_MS._value.get())
+
+
+def get_p_at_k() -> float:
+    """Return the most recent precision@k value."""
+    return float(P_AT_K._value.get())
+
+
 def get_human_messages() -> int:
     """Return the total human messages received."""
     return int(HUMAN_MESSAGES_TOTAL._value.get())
@@ -175,6 +191,8 @@ __all__ = [
     "MEMORY_RETRIEVAL_ERRORS_TOTAL",
     "PROPOSAL_THROUGHPUT",
     "RAG_HIT_RATE",
+    "RETRIEVAL_LATENCY_MS",
+    "P_AT_K",
     "Counter",
     "Gauge",
     "get_average_sentiment",
@@ -188,6 +206,11 @@ __all__ = [
     "get_llm_latency_p95",
     "get_memory_retrieval_errors",
     "get_memory_retrievals",
+    "get_rag_hit_rate",
+    "get_retrieval_latency_ms",
+    "get_p_at_k",
+    "get_coalition_count",
+    "get_average_sentiment",
     "get_proposal_throughput",
     "get_rag_hit_rate",
     "start_http_server",
