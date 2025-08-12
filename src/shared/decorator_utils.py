@@ -3,9 +3,9 @@ import json
 import sys
 import time
 import uuid
-from collections import deque
 from typing import Any, Callable, Optional, ParamSpec, TypeVar
 
+from src.infra import metrics as infra_metrics
 from src.interfaces import metrics
 from src.shared.logging_utils import get_logger
 
@@ -14,8 +14,6 @@ llm_perf_logger = get_logger("llm_performance")
 
 P = ParamSpec("P")
 R = TypeVar("R")
-
-_LATENCY_SAMPLES: "deque[float]" = deque(maxlen=100)
 
 
 def monitor_llm_call(
@@ -68,9 +66,9 @@ def monitor_llm_call(
                             metrics_data["error_message"] = exc_value.response.text
                     else:
                         metrics_data["error_type"] = "UnknownError"
-                        metrics_data[
-                            "error_message"
-                        ] = "Function returned None, indicating an error"
+                        metrics_data["error_message"] = (
+                            "Function returned None, indicating an error"
+                        )
                 else:
                     metrics_data["success"] = True
                     if result is not None and hasattr(result, "usage"):
@@ -95,12 +93,7 @@ def monitor_llm_call(
                 metrics.LLM_CALLS_TOTAL.inc()
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
-                metrics.LLM_LATENCY_MS.set(metrics_data["duration_ms"])
-                _LATENCY_SAMPLES.append(metrics_data["duration_ms"])
-                if _LATENCY_SAMPLES:
-                    ordered = sorted(_LATENCY_SAMPLES)
-                    idx = int(0.95 * (len(ordered) - 1))
-                    metrics.LLM_LATENCY_P95_MS.set(ordered[idx])
+                infra_metrics.record_llm_latency(metrics_data["duration_ms"])
                 llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
             return result
 
