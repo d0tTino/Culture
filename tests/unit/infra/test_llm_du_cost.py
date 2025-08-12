@@ -26,6 +26,7 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
             }
 
     monkeypatch.setattr(module, "get_llm_client", lambda: DummyClient())
+
     monkeypatch.setattr(
         module,
         "_retry_with_backoff",
@@ -83,6 +84,7 @@ def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
             }
 
     monkeypatch.setattr(module, "get_llm_client", lambda: DummyClient())
+
     monkeypatch.setattr(
         module,
         "_retry_with_backoff",
