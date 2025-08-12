@@ -84,6 +84,12 @@ PROPOSAL_THROUGHPUT = Gauge("proposal_throughput", "Proposals processed per minu
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
 LLM_DU_PER_1K_TOKENS = Gauge("llm_du_per_1k_tokens", "DU cost per 1k tokens for the last LLM call")
+AGENT_REMAINING_DU = Gauge(
+    "agent_remaining_du", "Remaining DU balance per agent", ["agent_id"]
+)
+AGENT_DU_PER_1K_TOKENS = Gauge(
+    "agent_du_per_1k_tokens", "DU cost per 1k tokens per agent", ["agent_id"]
+)
 
 # Start the metrics HTTP server when this module is imported
 try:
@@ -168,6 +174,10 @@ def get_proposal_throughput() -> float:
 
 
 __all__ = [
+    "AGENT_DU_PER_1K_TOKENS",
+    "AGENT_REMAINING_DU",
+    "AVERAGE_SENTIMENT",
+    "COALITION_COUNT",
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
     "HUMAN_MESSAGES_TOTAL",
@@ -177,16 +187,16 @@ __all__ = [
     "LLM_ERRORS_TOTAL",
     "LLM_LATENCY_MS",
     "LLM_LATENCY_P95_MS",
-    "COALITION_COUNT",
-    "AVERAGE_SENTIMENT",
-    "PROPOSAL_THROUGHPUT",
     "MEMORY_RETRIEVALS_TOTAL",
     "MEMORY_RETRIEVAL_ERRORS_TOTAL",
+    "PROPOSAL_THROUGHPUT",
     "RAG_HIT_RATE",
     "RETRIEVAL_LATENCY_MS",
     "P_AT_K",
     "Counter",
     "Gauge",
+    "get_average_sentiment",
+    "get_coalition_count",
     "get_du_per_1k_tokens",
     "get_gas_price_per_call",
     "get_gas_price_per_token",
@@ -202,5 +212,6 @@ __all__ = [
     "get_coalition_count",
     "get_average_sentiment",
     "get_proposal_throughput",
+    "get_rag_hit_rate",
     "start_http_server",
 ]
