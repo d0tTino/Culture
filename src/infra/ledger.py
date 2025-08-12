@@ -128,6 +128,8 @@ class Ledger:
         self.gas_price_per_token = float(settings.GAS_PRICE_PER_TOKEN)
         self._hooks: list[Callable[[str, float, float, str, float, float], None]] = []
         self.register_hook(self._db_hook)
+        self._agent_du_balance: dict[str, float] = {}
+        self._agent_du_per_1k_tokens: dict[str, float] = {}
 
     def register_hook(self, hook: Callable[[str, float, float, str, float, float], None]) -> None:
         """Register a hook called for every ``log_change`` invocation."""
@@ -171,6 +173,27 @@ class Ledger:
             ),
         )
         self.conn.commit()
+        row = cur.execute(
+            "SELECT du FROM agent_balances WHERE agent_id=?", (agent_id,)
+        ).fetchone()
+        du_balance = float(row[0]) if row else 0.0
+        self._agent_du_balance[agent_id] = du_balance
+        try:  # pragma: no cover - optional dependency
+            from src.interfaces import metrics
+
+            metrics.AGENT_REMAINING_DU.labels(agent_id=agent_id).set(du_balance)
+        except Exception:
+            pass
+
+    def record_du_per_1k_tokens(self, agent_id: str, value: float) -> None:
+        """Record the DU cost per 1k tokens for ``agent_id``."""
+        self._agent_du_per_1k_tokens[agent_id] = float(value)
+        try:  # pragma: no cover - optional dependency
+            from src.interfaces import metrics
+
+            metrics.AGENT_DU_PER_1K_TOKENS.labels(agent_id=agent_id).set(value)
+        except Exception:
+            pass
 
     def log_change(
         self,
