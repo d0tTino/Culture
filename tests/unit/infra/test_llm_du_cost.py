@@ -1,6 +1,6 @@
 import importlib
 from pathlib import Path
-from unittest.mock import MagicMock
+from typing import Any
 
 import pytest
 
@@ -12,15 +12,20 @@ from tests.utils.mock_llm import MockLLM
 
 @pytest.mark.unit
 @pytest.mark.require_ollama
+@pytest.mark.skip(reason="skip in CI")
 def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    pytest.skip("skip in CI")
     module = importlib.reload(llm_client_mod)
     state = AgentState(agent_id="A", name="Agent")
     start_du = state.du
 
-    fake_client = MagicMock()
-    fake_client.chat.return_value = {"message": {"content": "hi"}}
-    monkeypatch.setattr(module, "get_llm_client", lambda: fake_client)
+    class DummyClient:
+        def chat(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "message": {"content": "hi"},
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            }
+
+    monkeypatch.setattr(module, "get_llm_client", lambda: DummyClient())
     monkeypatch.setattr(
         module,
         "_retry_with_backoff",
@@ -28,7 +33,7 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(module.ledger, "calculate_gas_price", lambda *_a, **_k: (1.0, 0.0))
 
-    result = module.generate_text("hi", agent_state=state)
+    result = module.generate_text("hi", model="mistral", agent_state=state)
 
     assert result == "hi"
     expected = start_du - (get_config("GAS_PRICE_PER_CALL") + get_config("GAS_PRICE_PER_TOKEN"))
@@ -37,8 +42,8 @@ def test_du_decreases_after_llm_call(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 @pytest.mark.require_ollama
+@pytest.mark.skip(reason="skip in CI")
 def test_du_and_ledger_with_mockllm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    pytest.skip("skip in CI")
     module = importlib.reload(llm_client_mod)
     orig_generate_text = module.generate_text
     state = AgentState(agent_id="A", name="Agent")
@@ -70,9 +75,14 @@ def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
     state = AgentState(agent_id="A", name="Agent")
     state.du = 0.5
 
-    fake_client = MagicMock()
-    fake_client.chat.return_value = {"message": {"content": "hi"}}
-    monkeypatch.setattr(module, "get_llm_client", lambda: fake_client)
+    class DummyClient:
+        def chat(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "message": {"content": "hi"},
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            }
+
+    monkeypatch.setattr(module, "get_llm_client", lambda: DummyClient())
     monkeypatch.setattr(
         module,
         "_retry_with_backoff",
@@ -87,7 +97,7 @@ def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(module.ledger, "log_change", fake_log)
 
-    result = module.generate_text("hi", agent_state=state)
+    result = module.generate_text("hi", model="mistral", agent_state=state)
 
     assert result == "hi"
     assert state.du == pytest.approx(0.5)

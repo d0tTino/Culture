@@ -126,6 +126,7 @@ def create_simulation(
     semantic_db_uri: str = "bolt://localhost:7687",
     semantic_user: str = "neo4j",
     semantic_password: str = "test",
+    seed: int | None = None,
 ) -> Simulation:
     """Construct a Simulation instance with basic defaults."""
 
@@ -192,6 +193,7 @@ def create_simulation(
         scenario=scenario,
         beats=beats,
         discord_bot=discord_bot,
+        seed=seed,
     )
     if config.KNOWLEDGE_BOARD_BACKEND == "graph":
         sim.knowledge_board = GraphKnowledgeBoard()
@@ -210,6 +212,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--agents", type=int, default=3, help="Number of agents.")
     parser.add_argument("--steps", type=int, default=10, help="Number of steps to run.")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for Python and NumPy random number generators.",
+    )
     parser.add_argument(
         "--scenario", type=str, default=DEFAULT_SCENARIO, help="Simulation scenario."
     )
@@ -325,10 +333,15 @@ def main() -> None:
     sim: Simulation
     meta: dict[str, object] | None = None
     if args.replay:
+        replay_kwargs = {
+            "start_step": args.replay_start,
+            "end_step": args.replay_end,
+        }
+        if args.seed is not None:
+            replay_kwargs["seed"] = args.seed
         sim = Simulation.replay_from_snapshot(
             args.replay,
-            start_step=args.replay_start,
-            end_step=args.replay_end,
+            **replay_kwargs,
         )
         return
 
@@ -337,19 +350,22 @@ def main() -> None:
         sim, meta = load_checkpoint(args.checkpoint)
         sim.steps_to_run = args.steps
     else:
-        sim = create_simulation(
-            num_agents=args.agents,
-            steps=args.steps,
-            scenario=args.scenario,
-            beats=beats,
-            use_discord=args.discord,
-            use_vector_store=args.vector_store,
-            vector_store_dir=args.vector_dir,
-            use_semantic_memory=args.semantic_memory,
-            semantic_db_uri=args.semantic_db,
-            semantic_user=args.semantic_user,
-            semantic_password=args.semantic_password,
-        )
+        sim_kwargs = {
+            "num_agents": args.agents,
+            "steps": args.steps,
+            "scenario": args.scenario,
+            "beats": beats,
+            "use_discord": args.discord,
+            "use_vector_store": args.vector_store,
+            "vector_store_dir": args.vector_dir,
+            "use_semantic_memory": args.semantic_memory,
+            "semantic_db_uri": args.semantic_db,
+            "semantic_user": args.semantic_user,
+            "semantic_password": args.semantic_password,
+        }
+        if args.seed is not None:
+            sim_kwargs["seed"] = args.seed
+        sim = create_simulation(**sim_kwargs)
 
     if args.proposal:
         asyncio.run(sim.forward_proposal(args.proposer_id, args.proposal))
