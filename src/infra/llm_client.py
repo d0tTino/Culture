@@ -145,7 +145,7 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -216,7 +216,7 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -294,7 +294,9 @@ def async_monitor_llm_call(
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
                 infra_metrics.record_llm_latency(metrics_data["duration_ms"])
-                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
+                llm_perf_logger.info(
+                    f"LLM_CALL_METRICS: {json.dumps(metrics_data, default=str)}"
+                )
 
         return wrapper
 

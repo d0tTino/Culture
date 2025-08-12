@@ -3,22 +3,27 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque
 
 from src.interfaces import metrics as prom_metrics
+
+from .ledger import ledger
 
 # Store the most recent DU-per-1k-tokens value
 _last_du_per_1k_tokens: float = 0.0
 
 # Keep a rolling window of recent LLM latencies in milliseconds
-_LATENCY_SAMPLES: Deque[float] = deque(maxlen=100)
+_LATENCY_SAMPLES: deque[float] = deque(maxlen=100)
 
 
-def record_du_per_1k_tokens(value: float) -> None:
+def record_du_per_1k_tokens(agent_id: str, value: float) -> None:
     """Record DU cost per 1k tokens for the latest LLM call."""
     global _last_du_per_1k_tokens
     _last_du_per_1k_tokens = float(value)
     prom_metrics.LLM_DU_PER_1K_TOKENS.set(_last_du_per_1k_tokens)
+    try:  # pragma: no cover - optional dependency
+        ledger.record_du_per_1k_tokens(agent_id, value)
+    except Exception:
+        pass
 
 
 def get_du_per_1k_tokens() -> float:
