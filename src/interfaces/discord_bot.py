@@ -201,19 +201,30 @@ class SimulationDiscordBot:
 
                 @tree.command(name="start")
                 async def _tree_start(interaction: "discord.Interaction") -> None:
-                    await start_simulation(self.context)
-                    await interaction.response.send_message("start", ephemeral=True)
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "start")
+                        await start_simulation(self.context)
+                        await interaction.response.send_message("start", ephemeral=True)
 
                 @tree.command(name="stop")
                 async def _tree_stop(interaction: "discord.Interaction") -> None:
-                    await stop_simulation(self.context)
-                    await interaction.response.send_message("stop", ephemeral=True)
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "stop")
+                        await stop_simulation(self.context)
+                        await interaction.response.send_message("stop", ephemeral=True)
 
                 @tree.command(name="spawn")
                 @app_commands.describe(agent_id="ID of the agent to spawn")
-                async def _tree_spawn(interaction: "discord.Interaction", agent_id: str) -> None:
-                    await spawn_agent_command(agent_id, self.context)
-                    await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
+                async def _tree_spawn(
+                    interaction: "discord.Interaction", agent_id: str
+                ) -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "spawn")
+                        span.set_attribute("discord.agent.id", agent_id)
+                        await spawn_agent_command(agent_id, self.context)
+                        await interaction.response.send_message(
+                            f"spawn {agent_id}", ephemeral=True
+                        )
 
             @client.event
             async def on_ready(
@@ -258,11 +269,11 @@ class SimulationDiscordBot:
                     if getattr(message, "author", None) == client.user:
                         return
                     content = getattr(message, "content", "")
-                    span.set_attribute("discord.message_length", len(content))
+                    span.set_attribute("discord.message.length", len(content))
                     channel = getattr(message, "channel", None)
-                    span.set_attribute("discord.channel_id", getattr(channel, "id", None))
+                    span.set_attribute("discord.channel.id", getattr(channel, "id", None))
                     user = getattr(message, "author", None)
-                    span.set_attribute("discord.user_id", getattr(user, "id", None))
+                    span.set_attribute("discord.user.id", getattr(user, "id", None))
                     if not allow_message(content):
                         logger.debug("Message blocked by policy")
                         return
@@ -283,6 +294,7 @@ class SimulationDiscordBot:
                         if agent_id is None and recipient:
                             agent_id = recipient
                             self.user_agents[str(user_id)] = agent_id
+                    span.set_attribute("discord.agent.id", agent_id or "")
                     if not agent_id:
                         if hasattr(channel, "send"):
                             send = getattr(channel, "send")
