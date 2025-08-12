@@ -28,10 +28,22 @@ class ResourceManager:
     def set_du_budget(self, agent_id: str, budget: float) -> None:
         self._du_budgets[agent_id] = float(budget)
 
-    def charge_du(self, agent_id: str, amount: float) -> None:
+    def ensure_du_budget(self, agent_id: str, amount: float) -> None:
+        """Verify that the agent has at least ``amount`` DU available."""
         remaining = self._du_budgets.get(agent_id, 0.0)
         if amount > remaining:
+            try:
+                from src.interfaces.discord_bot import notify_budget_exceeded
+
+                notify_budget_exceeded(agent_id, amount, remaining)
+            except Exception:  # pragma: no cover - best effort
+                pass
+            self._du_budgets[agent_id] = 0.0
             raise RuntimeError(f"Agent {agent_id} exceeded DU budget")
+
+    def charge_du(self, agent_id: str, amount: float) -> None:
+        self.ensure_du_budget(agent_id, amount)
+        remaining = self._du_budgets.get(agent_id, 0.0)
         self._du_budgets[agent_id] = remaining - amount
 
     def get_du_budget(self, agent_id: str) -> float:

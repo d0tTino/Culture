@@ -18,6 +18,7 @@ from opentelemetry import trace
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
+from src.infra import metrics as infra_metrics
 from src.interfaces import metrics
 from src.shared.decorator_utils import llm_perf_logger, monitor_llm_call
 from src.shared.typing import (
@@ -91,6 +92,28 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         state = cast("AgentState | None", kwargs.get("agent_state"))
+        if state is not None:
+            try:
+                try:
+                    base_price, token_price = ledger.calculate_gas_price(state.agent_id)
+                except AttributeError:
+                    base_price = float(get_config("GAS_PRICE_PER_CALL"))
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
+                # Ensure the agent has at least enough DU for the base call
+                try:
+                    from src.sim.resource_manager import get_resource_manager
+
+                    get_resource_manager().ensure_du_budget(state.agent_id, base_price)
+                except Exception:
+                    logger.warning(
+                        "Insufficient DU for agent %s: required=%s, available=%s",
+                        state.agent_id,
+                        base_price,
+                        state.du,
+                    )
+                    raise
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"Failed to validate DU budget: {e}")
         result = func(*args, **kwargs)
         if state is not None:
             try:
@@ -107,12 +130,11 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                # Enforce DU budget via the simulation resource manager
                 try:
                     from src.sim.resource_manager import get_resource_manager
 
                     get_resource_manager().charge_du(state.agent_id, cost)
-                except Exception as exc:
+                except Exception:
                     logger.warning(
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
@@ -121,10 +143,9 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                     )
                     raise
                 state.du -= cost
-                # Update cost metrics
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    metrics.LLM_DU_PER_1K_TOKENS.set(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -143,6 +164,27 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
     @functools.wraps(func)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         state = cast("AgentState | None", kwargs.get("agent_state"))
+        if state is not None:
+            try:
+                try:
+                    base_price, token_price = ledger.calculate_gas_price(state.agent_id)
+                except AttributeError:
+                    base_price = float(get_config("GAS_PRICE_PER_CALL"))
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
+                try:
+                    from src.sim.resource_manager import get_resource_manager
+
+                    get_resource_manager().ensure_du_budget(state.agent_id, base_price)
+                except Exception:
+                    logger.warning(
+                        "Insufficient DU for agent %s: required=%s, available=%s",
+                        state.agent_id,
+                        base_price,
+                        state.du,
+                    )
+                    raise
+            except Exception as e:  # pragma: no cover - defensive
+                logger.debug(f"Failed to validate DU budget: {e}")
         result = await func(*args, **kwargs)
         if state is not None:
             try:
@@ -163,7 +205,7 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                     from src.sim.resource_manager import get_resource_manager
 
                     get_resource_manager().charge_du(state.agent_id, cost)
-                except Exception as exc:
+                except Exception:
                     logger.warning(
                         "Insufficient DU for agent %s: cost=%s, available=%s",
                         state.agent_id,
@@ -174,7 +216,7 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                 state.du -= cost
                 if tokens > 0:
                     du_per_1k = cost / (tokens / 1000)
-                    metrics.LLM_DU_PER_1K_TOKENS.set(du_per_1k)
+                    infra_metrics.record_du_per_1k_tokens(du_per_1k)
                 try:
                     ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
                 except Exception:  # pragma: no cover - optional
@@ -223,9 +265,9 @@ def async_monitor_llm_call(
                             metrics_data["error_message"] = exc_value.response.text
                     else:
                         metrics_data["error_type"] = "UnknownError"
-                        metrics_data[
-                            "error_message"
-                        ] = "Function returned None, indicating an error"
+                        metrics_data["error_message"] = (
+                            "Function returned None, indicating an error"
+                        )
                 else:
                     metrics_data["success"] = True
                     if hasattr(result, "usage"):
@@ -251,7 +293,7 @@ def async_monitor_llm_call(
                 metrics.LLM_CALLS_TOTAL.inc()
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
-                metrics.LLM_LATENCY_MS.set(metrics_data["duration_ms"])
+                infra_metrics.record_llm_latency(metrics_data["duration_ms"])
                 llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
 
         return wrapper
@@ -267,8 +309,7 @@ class OllamaClientProtocol(Protocol):
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
-    ) -> LLMChatResponse:
-        ...
+    ) -> LLMChatResponse: ...
 
 
 class LLMClientConfig(BaseModel):
@@ -579,9 +620,7 @@ def generate_text(
                             result = None
                         return result
 
-                mock_response = _MOCK_RESPONSES.get(
-                    "text_generation", _MOCK_RESPONSES["default"]
-                )
+                mock_response = _MOCK_RESPONSES.get("text_generation", _MOCK_RESPONSES["default"])
                 # Simulate the structure of the real response to get the content
                 return {"message": {"content": mock_response}}["message"]["content"]
 
@@ -613,7 +652,11 @@ def generate_text(
             if error:
                 logger.error(f"Failed to generate text after retries: {error}")
                 return None
-            if isinstance(response, dict) and "message" in response and "content" in response["message"]:
+            if (
+                isinstance(response, dict)
+                and "message" in response
+                and "content" in response["message"]
+            ):
                 usage = response.get("usage", {})
                 if isinstance(usage, dict):
                     prompt_tokens = int(usage.get("prompt_tokens", 0))

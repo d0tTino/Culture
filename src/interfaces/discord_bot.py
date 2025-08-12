@@ -55,6 +55,17 @@ tracer = trace.get_tracer(__name__)
 message_sse_queue = dashboard_message_queue
 
 
+def notify_budget_exceeded(agent_id: str, required: float, remaining: float) -> None:
+    """Notify via Discord when an agent exceeds its DU budget."""
+    msg = (
+        f"Agent {agent_id} exceeded DU budget: required {required:.2f}, remaining {remaining:.2f}"
+    )
+    try:
+        message_sse_queue.put_nowait(AgentMessage(agent_id=agent_id, content=msg, step=0))
+    except Exception:  # pragma: no cover - best effort
+        logger.exception("Failed to enqueue budget exceeded notification")
+
+
 class SimulationDiscordBot:
     """
     A Discord bot that provides real-time updates about the Culture simulation.
