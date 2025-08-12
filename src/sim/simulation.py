@@ -9,6 +9,7 @@ from collections.abc import Awaitable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
+import numpy as np
 from pydantic import ValidationError
 from typing_extensions import Self
 
@@ -73,6 +74,7 @@ class Simulation:
         scenario: str = "",
         beats: list[str] | None = None,
         discord_bot: Optional["SimulationDiscordBot"] = None,
+        seed: int | None = None,
     ) -> None:
         """
         Initializes the Simulation instance.
@@ -91,9 +93,16 @@ class Simulation:
                 scenario into phases for evaluation.
             discord_bot (Optional[SimulationDiscordBot]): Discord bot for sending
                 simulation updates to Discord.
+            seed (int | None): Seed for Python and NumPy random number generators.
         """
         # Reload configuration to pick up any environment overrides set in tests
         config.load_config(validate_required=False)
+
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+            logger.info("Random generators seeded with %s", seed)
+        self.seed = seed
 
         self.agents: list[Agent] = agents
         self.current_step: int = 0
@@ -1175,11 +1184,11 @@ class Simulation:
                 self._last_trace_hash = snapshot.get("trace_hash", "")
 
     @classmethod
-    def from_snapshot(cls: type[Self], snapshot: dict[str, Any]) -> Self:
+    def from_snapshot(cls: type[Self], snapshot: dict[str, Any], seed: int | None = None) -> Self:
         """Create a ``Simulation`` instance from a snapshot dictionary."""
         agents_data = snapshot.get("agents", [])
         agents = [Agent(agent_id=a.get("agent_id", str(i))) for i, a in enumerate(agents_data)]
-        sim = cls(agents=agents, scenario="")
+        sim = cls(agents=agents, scenario="", seed=seed)
         sim.current_step = int(snapshot.get("step", 0))
         sim.collective_ip = float(snapshot.get("collective_ip", 0.0))
         sim.collective_du = float(snapshot.get("collective_du", 0.0))
@@ -1222,10 +1231,11 @@ class Simulation:
         *,
         start_step: int | None = None,
         end_step: int | None = None,
+        seed: int | None = None,
     ) -> Self:
         """Load a snapshot and replay events from the event log."""
         snap = load_snapshot(snapshot_path)
-        sim = cls.from_snapshot(snap)
+        sim = cls.from_snapshot(snap, seed=seed)
         from src.infra import event_log
 
         after_step = sim.current_step
