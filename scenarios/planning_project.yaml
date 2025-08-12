@@ -15,3 +15,11 @@ beats:
   - critique
   - vote
   - deliverable
+expected_beats:
+  proposal: 10
+  critique: 20
+  vote: 30
+  deliverable: 40
+success_metrics:
+  coalitions: 1
+  sentiment: 0.0

@@ -274,12 +274,13 @@ def async_monitor_llm_call(
                 else:
                     metrics_data["success"] = True
                     if hasattr(result, "usage"):
-                        pt = getattr(result.usage, "prompt_tokens", None)
-                        ct = getattr(result.usage, "completion_tokens", None)
-                        if isinstance(pt, (int, float)):
-                            metrics_data["prompt_tokens"] = int(pt)
-                        if isinstance(ct, (int, float)):
-                            metrics_data["completion_tokens"] = int(ct)
+                        prompt_tokens = getattr(result.usage, "prompt_tokens", None)
+                        if isinstance(prompt_tokens, (int, float)):
+                            metrics_data["prompt_tokens"] = prompt_tokens
+                        completion_tokens = getattr(result.usage, "completion_tokens", None)
+                        if isinstance(completion_tokens, (int, float)):
+                            metrics_data["completion_tokens"] = completion_tokens
+
                 return result
             except Exception as e:
                 metrics_data["success"] = False
@@ -351,28 +352,25 @@ class LLMClient:
     ) -> LLMChatResponse:
 
         if ":" in model:
-            if self._client:
-                try:
-                    async_chat = getattr(self._client, "async_chat", None)
-                    if async_chat and asyncio.iscoroutinefunction(async_chat):
-                        return cast(
-                            LLMChatResponse,
-                            await cast(Any, async_chat)(
-                                model=model, messages=messages, options=options
-                            ),
-                        )
+            if self._client is not None:
+                async_chat = getattr(self._client, "async_chat", None)
+                if async_chat and asyncio.iscoroutinefunction(async_chat):
                     return cast(
                         LLMChatResponse,
-                        await asyncio.to_thread(
-                            self._client.chat,
-                            model=model,
-                            messages=messages,
-                            options=options,
+                        await cast(Any, async_chat)(
+                            model=model, messages=messages, options=options
                         ),
                     )
-                except Exception:
-                    pass
-            small_client = _create_ollama_client()
+                return cast(
+                    LLMChatResponse,
+                    await asyncio.to_thread(
+                        self._client.chat,
+                        model=model,
+                        messages=messages,
+                        options=options,
+                    ),
+                )
+all_client = _create_ollama_client()
             async_chat = getattr(small_client, "async_chat", None)
             if async_chat and asyncio.iscoroutinefunction(async_chat):
                 return cast(
