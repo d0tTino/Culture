@@ -74,6 +74,33 @@ Sends a broadcast message to all agents.
 ```
 Adds a new entry to the shared Knowledge Board.
 
+### Moderation Commands
+
+The bot exposes moderation-oriented commands:
+
+```text
+/mute agent_4
+```
+Mutes an agent until it is explicitly unmuted.
+
+```text
+/unmute agent_4
+```
+Restores the agent's ability to speak.
+
+```text
+/reset_memory agent_4
+```
+Clears an agent's memory.
+
+```text
+/penalty agent_4 ip:1 du:1
+```
+Applies an IP/DU penalty to the agent.
+
+All moderation commands are rate limited on a per-agent basis. Exceeding the
+limit automatically issues IP and DU penalties as a safety rail.
+
 ### Using Multiple Bot Tokens
 You can run the simulation with several Discord bot accounts. Tokens are stored
 in a PostgreSQL table named `discord_tokens` with columns `agent_id` and

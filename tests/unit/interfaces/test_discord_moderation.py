@@ -182,11 +182,18 @@ async def test_rate_limit_counts_and_violation(
     interaction1 = interaction_factory()
     await discord_moderation.slash_mute.callback(interaction1, "agent1")
     await bot.context.get_event_queue().get()
-    assert discord_moderation._ACTION_COUNTS["123:mute"] == 1
+    assert discord_moderation._ACTION_COUNTS["123:mute:agent1"] == 1
 
     interaction2 = interaction_factory()
     await discord_moderation.slash_mute.callback(interaction2, "agent1")
     interaction2.response.send_message.assert_awaited_once_with("rate limited", ephemeral=True)
-    event = await bot.context.get_event_queue().get()
-    assert event.data == {"command": "mute", "agent_id": "agent1", "violation": True}
-    assert discord_moderation._ACTION_COUNTS["123:mute"] == 2
+    event1 = await bot.context.get_event_queue().get()
+    assert event1.data == {"command": "mute", "agent_id": "agent1", "violation": True}
+    event2 = await bot.context.get_event_queue().get()
+    assert event2.data == {
+        "command": "penalty",
+        "agent_id": "agent1",
+        "ip": discord_moderation._IP_PENALTY,
+        "du": discord_moderation._DU_PENALTY,
+    }
+    assert discord_moderation._ACTION_COUNTS["123:mute:agent1"] == 2
