@@ -60,6 +60,16 @@ Additional Prometheus metrics include:
 - `memory_retrievals_total` – counts successful memory lookups.
 - `memory_retrieval_errors_total` – counts memory retrieval failures.
 
+### Monitoring DU Budgets
+
+Each agent exposes its remaining DU balance and efficiency via Prometheus gauges:
+
+- `agent_remaining_du{agent_id="<id>"}` shows the DU balance for a given agent.
+- `agent_du_per_1k_tokens{agent_id="<id>"}` reports DU spent per 1k tokens on the last LLM call.
+
+Create Grafana panels with queries such as `agent_remaining_du` or `agent_du_per_1k_tokens`
+to alert when budgets run low or spike unexpectedly.
+
 ## 4. Running Grafana Locally
 
 If you want to run Grafana locally for quick testing, you can use Docker. The default login is `admin`/`admin`:
