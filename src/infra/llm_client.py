@@ -133,26 +133,30 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                try:
-                    from src.sim.resource_manager import get_resource_manager
+                with tracer.start_as_current_span("llm.du_burn") as span:
+                    span.set_attribute("llm.agent_id", state.agent_id)
+                    span.set_attribute("llm.du.tokens", tokens)
+                    span.set_attribute("llm.du.cost", cost)
+                    try:
+                        from src.sim.resource_manager import get_resource_manager
 
-                    get_resource_manager().charge_du(state.agent_id, cost)
-                except Exception:
-                    logger.warning(
-                        "Insufficient DU for agent %s: cost=%s, available=%s",
-                        state.agent_id,
-                        cost,
-                        state.du,
-                    )
-                    raise
-                state.du -= cost
-                if tokens > 0:
-                    du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
-                try:
-                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                        get_resource_manager().charge_du(state.agent_id, cost)
+                    except Exception:
+                        logger.warning(
+                            "Insufficient DU for agent %s: cost=%s, available=%s",
+                            state.agent_id,
+                            cost,
+                            state.du,
+                        )
+                        raise
+                    state.du -= cost
+                    if tokens > 0:
+                        du_per_1k = cost / (tokens / 1000)
+                        infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
+                    try:
+                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
 
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
@@ -204,26 +208,30 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                try:
-                    from src.sim.resource_manager import get_resource_manager
+                with tracer.start_as_current_span("llm.du_burn") as span:
+                    span.set_attribute("llm.agent_id", state.agent_id)
+                    span.set_attribute("llm.du.tokens", tokens)
+                    span.set_attribute("llm.du.cost", cost)
+                    try:
+                        from src.sim.resource_manager import get_resource_manager
 
-                    get_resource_manager().charge_du(state.agent_id, cost)
-                except Exception:
-                    logger.warning(
-                        "Insufficient DU for agent %s: cost=%s, available=%s",
-                        state.agent_id,
-                        cost,
-                        state.du,
-                    )
-                    raise
-                state.du -= cost
-                if tokens > 0:
-                    du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
-                try:
-                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                        get_resource_manager().charge_du(state.agent_id, cost)
+                    except Exception:
+                        logger.warning(
+                            "Insufficient DU for agent %s: cost=%s, available=%s",
+                            state.agent_id,
+                            cost,
+                            state.du,
+                        )
+                        raise
+                    state.du -= cost
+                    if tokens > 0:
+                        du_per_1k = cost / (tokens / 1000)
+                        infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
+                    try:
+                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result

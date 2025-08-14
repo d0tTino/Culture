@@ -34,95 +34,111 @@ class MultiLayerRetriever:
         k: int = 5,
         token_budget: int | None = None,
     ) -> list[dict[str, Any]]:
-        try:
-            episodic: list[dict[str, Any]] = []
-            if self.vector_store:
-                with tracer.start_as_current_span("memory.episodic_retrieve") as span:
-                    span.set_attribute("llm.tokens.prompt", 0)
-                    span.set_attribute("llm.tokens.completion", 0)
-                    span.set_attribute("llm.tokens.total", 0)
-                    start = time.perf_counter()
-                    try:
-                        episodic = await self.vector_store.aretrieve_relevant_memories(
-                            agent_id, query, k
-                        )
-                    finally:
-                        span.set_attribute(
-                            "memory.latency_ms", (time.perf_counter() - start) * 1000
-                        )
+        with tracer.start_as_current_span("memory.retrieve") as span:
+            span.set_attribute("memory.agent_id", agent_id)
+            span.set_attribute("memory.query.length", len(query))
+            span.set_attribute("memory.k", k)
+            try:
+                episodic: list[dict[str, Any]] = []
+                if self.vector_store:
+                    with tracer.start_as_current_span("memory.episodic_retrieve") as e_span:
+                        e_span.set_attribute("memory.path", "episodic")
+                        e_span.set_attribute("llm.tokens.prompt", 0)
+                        e_span.set_attribute("llm.tokens.completion", 0)
+                        e_span.set_attribute("llm.tokens.total", 0)
+                        start = time.perf_counter()
+                        try:
+                            episodic = await self.vector_store.aretrieve_relevant_memories(
+                                agent_id, query, k
+                            )
+                        finally:
+                            e_span.set_attribute(
+                                "memory.latency_ms",
+                                (time.perf_counter() - start) * 1000,
+                            )
 
-            semantic: list[dict[str, Any]] = []
-            if self.semantic_manager:
-                import asyncio
+                semantic: list[dict[str, Any]] = []
+                if self.semantic_manager:
+                    import asyncio
 
-                with tracer.start_as_current_span("memory.semantic_retrieve") as span:
-                    span.set_attribute("llm.tokens.prompt", 0)
-                    span.set_attribute("llm.tokens.completion", 0)
-                    span.set_attribute("llm.tokens.total", 0)
-                    start = time.perf_counter()
-                    try:
-                        semantic = await asyncio.to_thread(
-                            self.semantic_manager.retrieve_context_with_scores,
-                            agent_id,
-                            query,
-                            k,
-                        )
-                    finally:
-                        span.set_attribute(
-                            "memory.latency_ms", (time.perf_counter() - start) * 1000
-                        )
+                    with tracer.start_as_current_span("memory.semantic_retrieve") as s_span:
+                        s_span.set_attribute("memory.path", "semantic")
+                        s_span.set_attribute("llm.tokens.prompt", 0)
+                        s_span.set_attribute("llm.tokens.completion", 0)
+                        s_span.set_attribute("llm.tokens.total", 0)
+                        start = time.perf_counter()
+                        try:
+                            semantic = await asyncio.to_thread(
+                                self.semantic_manager.retrieve_context_with_scores,
+                                agent_id,
+                                query,
+                                k,
+                            )
+                        finally:
+                            s_span.set_attribute(
+                                "memory.latency_ms",
+                                (time.perf_counter() - start) * 1000,
+                            )
 
-            combined = episodic + semantic
-            combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
-            if token_budget is not None:
-                limited: list[dict[str, Any]] = []
-                tokens = 0
-                for mem in combined:
-                    text = str(mem.get("content", ""))
-                    tokens += len(text.split())
-                    if tokens > token_budget:
-                        break
-                    limited.append(mem)
-                combined = limited
-            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
-            return combined[:k]
-        except Exception:
-            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
-            raise
+                combined = episodic + semantic
+                combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
+                if token_budget is not None:
+                    limited: list[dict[str, Any]] = []
+                    tokens = 0
+                    for mem in combined:
+                        text = str(mem.get("content", ""))
+                        tokens += len(text.split())
+                        if tokens > token_budget:
+                            break
+                        limited.append(mem)
+                    combined = limited
+                metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+                span.set_attribute("memory.results", len(combined))
+                return combined[:k]
+            except Exception:
+                metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+                raise
 
     async def retrieve_and_update_semantic(
         self: Self, agent_id: str, query: str = "", k: int = 5
     ) -> list[dict[str, Any]]:
-        try:
-            episodic = []
-            if self.vector_store:
-                with tracer.start_as_current_span("memory.episodic_retrieve") as span:
-                    span.set_attribute("llm.tokens.prompt", 0)
-                    span.set_attribute("llm.tokens.completion", 0)
-                    span.set_attribute("llm.tokens.total", 0)
-                    start = time.perf_counter()
+        with tracer.start_as_current_span("memory.retrieve_and_update_semantic") as span:
+            span.set_attribute("memory.agent_id", agent_id)
+            span.set_attribute("memory.query.length", len(query))
+            span.set_attribute("memory.k", k)
+            try:
+                episodic = []
+                if self.vector_store:
+                    with tracer.start_as_current_span("memory.episodic_retrieve") as e_span:
+                        e_span.set_attribute("memory.path", "episodic")
+                        e_span.set_attribute("llm.tokens.prompt", 0)
+                        e_span.set_attribute("llm.tokens.completion", 0)
+                        e_span.set_attribute("llm.tokens.total", 0)
+                        start = time.perf_counter()
+                        try:
+                            episodic = await self.vector_store.aretrieve_relevant_memories(
+                                agent_id, query, k
+                            )
+                        finally:
+                            e_span.set_attribute(
+                                "memory.latency_ms",
+                                (time.perf_counter() - start) * 1000,
+                            )
+                if self.semantic_manager:
                     try:
-                        episodic = await self.vector_store.aretrieve_relevant_memories(
-                            agent_id, query, k
-                        )
-                    finally:
-                        span.set_attribute(
-                            "memory.latency_ms", (time.perf_counter() - start) * 1000
-                        )
-            if self.semantic_manager:
-                try:
-                    await self.semantic_manager.run_nightly_job(agent_id, episodic)
-                except Exception:  # pragma: no cover - defensive
-                    import logging
+                        await self.semantic_manager.run_nightly_job(agent_id, episodic)
+                    except Exception:  # pragma: no cover - defensive
+                        import logging
 
-                    logging.getLogger(__name__).error(
-                        "Semantic consolidation failed", exc_info=True
-                    )
-            metrics.MEMORY_RETRIEVALS_TOTAL.inc()
-            return episodic
-        except Exception:
-            metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
-            raise
+                        logging.getLogger(__name__).error(
+                            "Semantic consolidation failed", exc_info=True
+                        )
+                metrics.MEMORY_RETRIEVALS_TOTAL.inc()
+                span.set_attribute("memory.results", len(episodic))
+                return episodic
+            except Exception:
+                metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
+                raise
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         if not self.semantic_manager:
