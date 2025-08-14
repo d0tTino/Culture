@@ -28,7 +28,11 @@ class MultiLayerRetriever:
         self.semantic_manager = semantic_manager
 
     async def retrieve(
-        self: Self, agent_id: str, query: str = "", k: int = 5
+        self: Self,
+        agent_id: str,
+        query: str = "",
+        k: int = 5,
+        token_budget: int | None = None,
     ) -> list[dict[str, Any]]:
         try:
             episodic: list[dict[str, Any]] = []
@@ -70,6 +74,16 @@ class MultiLayerRetriever:
 
             combined = episodic + semantic
             combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
+            if token_budget is not None:
+                limited: list[dict[str, Any]] = []
+                tokens = 0
+                for mem in combined:
+                    text = str(mem.get("content", ""))
+                    tokens += len(text.split())
+                    if tokens > token_budget:
+                        break
+                    limited.append(mem)
+                combined = limited
             metrics.MEMORY_RETRIEVALS_TOTAL.inc()
             return combined[:k]
         except Exception:

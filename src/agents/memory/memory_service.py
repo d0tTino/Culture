@@ -129,6 +129,7 @@ class MemoryService:
         k: int = 5,
         semantic_limit: int = 3,
         long_term_limit: int | None = None,
+        token_budget: int | None = None,
     ) -> (
         tuple[list[dict[str, Any]], list[str]] | tuple[list[dict[str, Any]], list[str], list[str]]
     ):
@@ -143,15 +144,46 @@ class MemoryService:
         ):
             episodic = await self.retrieve_episodic_and_update_semantic(agent_id, query, k)
             semantic = self.get_recent_semantic_summaries(agent_id, semantic_limit)
-            hits = len(episodic) + len(semantic)
-            total = k + semantic_limit
+            long_term: list[str] = []
             if long_term_limit:
                 long_term = self.get_long_term_summaries(agent_id, long_term_limit)
-                hits += len(long_term)
-                total += long_term_limit
-                metrics.RAG_HIT_RATE.set(hits / total if total else 0)
-                return episodic, semantic, long_term
+
+            if token_budget is not None:
+                tokens = 0
+                limited_episodic: list[dict[str, Any]] = []
+                for mem in episodic:
+                    text = str(mem.get("content", ""))
+                    t = len(text.split())
+                    if tokens + t > token_budget:
+                        break
+                    limited_episodic.append(mem)
+                    tokens += t
+                episodic = limited_episodic
+
+                limited_semantic: list[str] = []
+                for summary in semantic:
+                    t = len(summary.split())
+                    if tokens + t > token_budget:
+                        break
+                    limited_semantic.append(summary)
+                    tokens += t
+                semantic = limited_semantic
+
+                if long_term:
+                    limited_long_term: list[str] = []
+                    for summary in long_term:
+                        t = len(summary.split())
+                        if tokens + t > token_budget:
+                            break
+                        limited_long_term.append(summary)
+                        tokens += t
+                    long_term = limited_long_term
+
+            hits = len(episodic) + len(semantic) + len(long_term)
+            total = k + semantic_limit + (long_term_limit or 0)
             metrics.RAG_HIT_RATE.set(hits / total if total else 0)
+            if long_term_limit:
+                return episodic, semantic, long_term
             return episodic, semantic
 
     async def run_semantic_job(
