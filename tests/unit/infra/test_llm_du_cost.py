@@ -104,3 +104,67 @@ def test_du_never_negative(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == "hi"
     assert state.du == pytest.approx(0.5)
     assert not log_called
+
+
+@pytest.mark.unit
+def test_llm_call_fails_without_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = importlib.reload(llm_client_mod)
+    state = AgentState(agent_id="A", name="Agent")
+
+    class DummyClient:
+        def chat(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "message": {"content": "hi"},
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            }
+
+    monkeypatch.setattr(module, "get_llm_client", lambda: DummyClient())
+    monkeypatch.setattr(
+        module,
+        "_retry_with_backoff",
+        lambda func, *a, **kw: (func(), None),
+    )
+    monkeypatch.setattr(module.ledger, "calculate_gas_price", lambda *_a, **_k: (1.0, 0.0))
+
+    from src.sim.resource_manager import get_resource_manager
+
+    rm = get_resource_manager()
+    rm.set_du_budget(state.agent_id, 0.5)
+    start_du = state.du
+
+    module.generate_text("hi", agent_state=state)
+    assert rm.get_du_budget(state.agent_id) == pytest.approx(0.0)
+    assert state.du == pytest.approx(start_du)
+
+
+@pytest.mark.unit
+def test_llm_budget_consumed(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = importlib.reload(llm_client_mod)
+    state = AgentState(agent_id="A", name="Agent")
+
+    class DummyClient:
+        def chat(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "message": {"content": "hi"},
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            }
+
+    monkeypatch.setattr(module, "get_llm_client", lambda: DummyClient())
+    monkeypatch.setattr(
+        module,
+        "_retry_with_backoff",
+        lambda func, *a, **kw: (func(), None),
+    )
+    monkeypatch.setattr(module.ledger, "calculate_gas_price", lambda *_a, **_k: (1.0, 0.0))
+
+    from src.sim.resource_manager import get_resource_manager
+
+    rm = get_resource_manager()
+    rm.set_du_budget(state.agent_id, 1.0)
+
+    module.generate_text("hi", agent_state=state)
+    assert rm.get_du_budget(state.agent_id) == pytest.approx(0.0)
+    first_du = state.du
+
+    module.generate_text("hi", agent_state=state)
+    assert state.du == pytest.approx(first_du)
