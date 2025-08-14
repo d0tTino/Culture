@@ -70,6 +70,13 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
   pytest --durations=10 -v
   ```
 
+- **Memory recall benchmark:**
+  ```bash
+  pytest tests/integration/memory/test_recall_benchmark.py::test_recall_benchmark -v
+  ```
+  This logs precision@k and latency, exposing the values via the `P_AT_K` and
+  `RETRIEVAL_LATENCY_MS` Prometheus gauges.
+
 - On Windows, run these commands from **Git Bash** or **WSL** for full Bash compatibility.
 - Use `scripts\lint.bat --format` to run the same linters as CI.
 
