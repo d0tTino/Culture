@@ -7,6 +7,7 @@ import os
 import random
 import time
 from collections.abc import Generator, Iterable
+from pathlib import Path
 from typing import Any
 
 try:  # pragma: no cover - optional dependency
@@ -29,6 +30,13 @@ _consumer_conf = {
     "group.id": os.getenv("REPLAY_GROUP", "culture-replay"),
     "auto.offset.reset": "earliest",
 }
+
+
+def _log_file(path: str | Path | None = None) -> Path:
+    """Return the event log file path."""
+    if path is not None:
+        return Path(path)
+    return Path(os.getenv("EVENT_LOG_PATH", "event_log.jsonl"))
 
 
 def _is_valid_event(
@@ -69,8 +77,36 @@ def _get_producer() -> Any:
     return _producer
 
 
+def _iter_file_events(
+    start_tick: int = 0,
+    end_tick: int | None = None,
+    *,
+    path: str | Path | None = None,
+) -> Generator[dict[str, Any], None, None]:
+    """Yield events from the append-only log file."""
+
+    file = _log_file(path)
+    if not file.exists():
+        return
+    with file.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except Exception:  # pragma: no cover - defensive
+                continue
+            tick = int(event.get("tick", event.get("step", 0)))
+            if tick <= start_tick:
+                continue
+            if end_tick is not None and tick > end_tick:
+                break
+            yield event
+
+
 def log_event(event: dict[str, Any]) -> dict[str, Any]:
-    """Send an event dictionary to Redpanda and return it with ``trace_hash``."""
+    """Log an event to the append-only file and Redpanda if enabled."""
 
     global _last_hash
 
@@ -94,9 +130,19 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
     event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
     _last_hash = event_with_hash["trace_hash"]
 
+    # Append to local log file
+    try:  # pragma: no cover - best effort
+        path = _log_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(event_with_hash))
+            fh.write("\n")
+    except Exception:  # pragma: no cover - ignore
+        pass
+
     if os.getenv("ENABLE_REDPANDA", "0") != "1":
         return event_with_hash
-    try:
+    try:  # pragma: no cover - best effort
         payload = json.dumps(event_with_hash).encode("utf-8")
         producer = _get_producer()
         producer.produce(_topic, payload)
@@ -108,10 +154,18 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
     return event_with_hash
 
 
-def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
-    """Retrieve events from Redpanda after ``after_step``."""
+def fetch_events(
+    after_step: int = 0,
+    *,
+    end_step: int | None = None,
+    path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve events from the log after ``after_step``."""
+
     if os.getenv("ENABLE_REDPANDA", "0") != "1":
-        return []
+        events = list(_iter_file_events(after_step, end_step, path=path))
+        return _filter_events(events, after_step=after_step)
+
     raw_events: list[dict[str, Any]] = []
     try:
         consumer = KafkaConsumer(_consumer_conf)
@@ -126,7 +180,8 @@ def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
                 event = json.loads(msg.value().decode("utf-8"))
             except Exception:
                 continue
-            if event.get("step", 0) > after_step:
+            step = event.get("step", 0)
+            if step > after_step and (end_step is None or step <= end_step):
                 raw_events.append(event)
     except Exception as exc:  # pragma: no cover - best effort
         import logging
@@ -141,13 +196,20 @@ def fetch_events(after_step: int = 0) -> list[dict[str, Any]]:
 
 
 def stream_events(
-    after_step: int = 0, timeout: float = 1.0
+    after_step: int = 0,
+    timeout: float = 1.0,
+    *,
+    end_step: int | None = None,
+    path: str | Path | None = None,
 ) -> Generator[dict[str, Any], None, None]:
-    """Yield events from Redpanda until ``timeout`` seconds of inactivity."""
+    """Yield events from the log or Redpanda until ``timeout`` of inactivity."""
+
     if os.getenv("ENABLE_REDPANDA", "0") != "1":
-        if False:
-            yield {}
+        yield from _filter_events(
+            _iter_file_events(after_step, end_step, path=path), after_step=after_step
+        )
         return
+
     start = time.time()
     consumer = KafkaConsumer(_consumer_conf)
     consumer.subscribe([_topic])
@@ -170,6 +232,9 @@ def stream_events(
             if _is_valid_event(event, last_step, last_hash):
                 last_step = event.get("step", last_step)
                 last_hash = event.get("trace_hash")
+                step = event.get("step", 0)
+                if end_step is not None and step > end_step:
+                    break
                 yield event
     finally:
         try:

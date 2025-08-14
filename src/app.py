@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import json
 import logging
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ from src.agents.core.base_agent import Agent
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
 from src.extensions import load_plugins
-from src.infra import config
+from src.infra import config, event_log
 from src.infra.checkpoint import (
     load_checkpoint,
     save_checkpoint,
@@ -339,10 +340,24 @@ def main() -> None:
         }
         if args.seed is not None:
             replay_kwargs["seed"] = args.seed
-        sim = Simulation.replay_from_snapshot(
+        Simulation.replay_from_snapshot(
             args.replay,
             **replay_kwargs,
         )
+        if args.export_dataset:
+            out_path = Path(args.export_dataset)
+            with out_path.open("w", encoding="utf-8") as fh:
+                after = (args.replay_start or 0) - 1
+                for ev in event_log.stream_events(
+                    after_step=after, end_step=args.replay_end
+                ):
+                    step = int(ev.get("step", 0))
+                    if args.replay_start is not None and step < args.replay_start:
+                        continue
+                    if args.replay_end is not None and step > args.replay_end:
+                        break
+                    fh.write(json.dumps(ev))
+                    fh.write("\n")
         return
 
     if args.checkpoint and Path(args.checkpoint).exists():
