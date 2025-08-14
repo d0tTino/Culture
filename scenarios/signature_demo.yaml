@@ -1,0 +1,13 @@
+name: signature_demo
+description: Demo scenario showcasing evaluation hooks for coalition and sentiment tracking
+goal: Agents collaborate to sign a shared plan while monitoring group dynamics
+steps: 30
+beats:
+  - introduction
+  - collaboration
+  - resolution
+evaluation_hooks:
+  - coalitions
+  - sentiment
+  - collective_du
+  - collective_ip
