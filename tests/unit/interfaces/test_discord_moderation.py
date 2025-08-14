@@ -48,6 +48,12 @@ def interaction_factory() -> "Callable[[], DummyInteraction]":
     return factory
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limit() -> None:
+    discord_moderation._ACTION_COUNTS.clear()
+    discord_moderation._COOLDOWNS.clear()
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_rate_limit_includes_agent_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,3 +145,48 @@ async def test_slash_reset_memory_flow(
     event = await bot.context.get_event_queue().get()
     assert event.type == "moderation"
     assert event.data == {"command": "reset_memory", "agent_id": "agent1"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slash_unmute_flow(
+    monkeypatch: pytest.MonkeyPatch, bot: DummyBot, interaction: DummyInteraction
+) -> None:
+    async def allow_eval(content: str) -> tuple[bool, str]:
+        return True, ""
+
+    monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
+    await discord_moderation.slash_unmute.callback(interaction, "agent1")
+    interaction.response.send_message.assert_awaited_once_with("unmuted", ephemeral=True)
+    event = await bot.context.get_event_queue().get()
+    assert event.type == "moderation"
+    assert event.data == {"command": "unmute", "agent_id": "agent1"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_rate_limit_counts_and_violation(
+    monkeypatch: pytest.MonkeyPatch,
+    bot: DummyBot,
+    interaction_factory: Callable[[], DummyInteraction],
+) -> None:
+    discord_moderation._ACTION_COUNTS.clear()
+    discord_moderation._COOLDOWNS.clear()
+    monkeypatch.setattr(discord_moderation, "_COOLDOWN_SECONDS", 999.0)
+
+    async def allow_eval(content: str) -> tuple[bool, str]:
+        return True, ""
+
+    monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
+
+    interaction1 = interaction_factory()
+    await discord_moderation.slash_mute.callback(interaction1, "agent1")
+    await bot.context.get_event_queue().get()
+    assert discord_moderation._ACTION_COUNTS["123:mute"] == 1
+
+    interaction2 = interaction_factory()
+    await discord_moderation.slash_mute.callback(interaction2, "agent1")
+    interaction2.response.send_message.assert_awaited_once_with("rate limited", ephemeral=True)
+    event = await bot.context.get_event_queue().get()
+    assert event.data == {"command": "mute", "agent_id": "agent1", "violation": True}
+    assert discord_moderation._ACTION_COUNTS["123:mute"] == 2
