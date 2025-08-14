@@ -10,6 +10,8 @@ As the "Culture: An AI Genesis Engine" simulation progresses, agents continually
 4. **Response quality deterioration**: Too many competing memories may cause confusing or diluted agent responses
 
 This document outlines strategies for memory pruning to maintain optimal performance while preserving critical information.
+Accurate token budgeting should rely on model-aware tokenizers (e.g., ``tiktoken``)
+rather than simple whitespace counts so multilingual content is handled correctly.
 
 ## Strategy 1: Age-Based Pruning with Hierarchical Preservation
 
