@@ -60,6 +60,16 @@ Additional Prometheus metrics include:
 - `memory_retrievals_total` – counts successful memory lookups.
 - `memory_retrieval_errors_total` – counts memory retrieval failures.
 
+### Monitoring DU Budgets
+
+Each agent exposes its remaining DU balance and efficiency via Prometheus gauges:
+
+- `agent_remaining_du{agent_id="<id>"}` shows the DU balance for a given agent.
+- `agent_du_per_1k_tokens{agent_id="<id>"}` reports DU spent per 1k tokens on the last LLM call.
+
+Create Grafana panels with queries such as `agent_remaining_du` or `agent_du_per_1k_tokens`
+to alert when budgets run low or spike unexpectedly.
+
 ## 4. Running Grafana Locally
 
 If you want to run Grafana locally for quick testing, you can use Docker. The default login is `admin`/`admin`:
@@ -90,6 +100,27 @@ otelcol --config=your_config.yaml
 ```
 
 You should then see logs arriving on port `4318`.
+
+### Tracing
+
+The simulation also emits OpenTelemetry spans for deeper insight into runtime
+behavior:
+
+- `memory.retrieve`, `memory.episodic_retrieve`, and `memory.semantic_retrieve`
+  capture memory lookup paths and latency.
+- `llm.request` and `llm.du_burn` record LLM API calls and digital unit charges.
+- `discord.command` and `discord.send_message` trace Discord command handlers
+  and outbound messages.
+
+To view traces locally, run a collector such as
+[Jaeger](https://www.jaegertracing.io/) and set:
+
+```env
+ENABLE_OTEL=1
+OTEL_EXPORTER_ENDPOINT=http://localhost:4318/v1/traces
+```
+
+Then open Jaeger's UI (default `http://localhost:16686`) to explore the spans.
 
 ## 6. Debugging SQLite Locks
 

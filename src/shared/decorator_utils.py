@@ -93,7 +93,9 @@ def monitor_llm_call(
                 metrics.LLM_CALLS_TOTAL.inc()
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
-                infra_metrics.record_llm_latency(metrics_data["duration_ms"])
+                agent_state = kwargs.get("agent_state")
+                agent_id = getattr(agent_state, "agent_id", "unknown")
+                infra_metrics.record_llm_latency(agent_id, metrics_data["duration_ms"])
                 llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data)}")
             return result
 
