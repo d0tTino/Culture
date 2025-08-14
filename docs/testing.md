@@ -74,8 +74,10 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
   ```bash
   pytest tests/integration/memory/test_recall_benchmark.py::test_recall_benchmark -v
   ```
-  This logs precision@k and latency, exposing the values via the `P_AT_K` and
-  `RETRIEVAL_LATENCY_MS` Prometheus gauges.
+  Runs 30 retrievals and reports precision@5 and latency for each case.
+  The running average precision@5 and 95th percentile latency are exposed via the
+  `recall_p5` and `retrieval_latency_p95_ms` Prometheus gauges. A passing run
+  should yield `recall_p5` ≥ 0.7 and `retrieval_latency_p95_ms` ≤ 50ms.
 
 - On Windows, run these commands from **Git Bash** or **WSL** for full Bash compatibility.
 - Use `scripts\lint.bat --format` to run the same linters as CI.

@@ -12,6 +12,7 @@ pytest.importorskip("chromadb")
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaVectorStoreManager
+from src.infra import metrics as infra_metrics
 from src.interfaces import metrics
 from src.utils import retrieval_metrics
 from src.utils.retrieval_metrics import p95
@@ -38,6 +39,8 @@ def recall_benchmark() -> BenchFixture:
         logger.info("p@%d=%.3f latency=%.2fms", k, p_at_k, latency_ms)
         metrics.P_AT_K.set(p_at_k)
         metrics.RETRIEVAL_LATENCY_MS.set(latency_ms)
+        infra_metrics.record_recall_p5(p_at_k)
+        infra_metrics.record_retrieval_latency(latency_ms)
         return {"p_at_k": p_at_k, "latency": latency}
 
     return _bench
