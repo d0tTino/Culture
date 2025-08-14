@@ -275,9 +275,7 @@ def async_monitor_llm_call(
                     metrics_data["success"] = True
                     if hasattr(result, "usage"):
                         prompt_tokens = getattr(result.usage, "prompt_tokens", None)
-                        completion_tokens = getattr(
-                            result.usage, "completion_tokens", None
-                        )
+                        completion_tokens = getattr(result.usage, "completion_tokens", None)
                         try:
                             metrics_data["prompt_tokens"] = (
                                 int(prompt_tokens) if prompt_tokens is not None else None
@@ -286,9 +284,7 @@ def async_monitor_llm_call(
                             metrics_data["prompt_tokens"] = None
                         try:
                             metrics_data["completion_tokens"] = (
-                                int(completion_tokens)
-                                if completion_tokens is not None
-                                else None
+                                int(completion_tokens) if completion_tokens is not None else None
                             )
                         except Exception:
                             metrics_data["completion_tokens"] = None
@@ -310,9 +306,7 @@ def async_monitor_llm_call(
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
                 infra_metrics.record_llm_latency(metrics_data["duration_ms"])
-                llm_perf_logger.info(
-                    f"LLM_CALL_METRICS: {json.dumps(metrics_data, default=str)}"
-                )
+                llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data, default=str)}")
 
         return wrapper
 
@@ -354,7 +348,7 @@ class LLMClient:
             tuple[str, list[LLMMessage], dict[str, Any] | None, asyncio.Future[LLMChatResponse]]
         ] = []
         self._lock = asyncio.Lock()
-        self._flush_task: asyncio.Task | None = None
+        self._flush_task: asyncio.Task[None] | None = None
 
     async def _chat_single(
         self: LLMClient,
@@ -362,7 +356,6 @@ class LLMClient:
         messages: list[LLMMessage],
         options: dict[str, Any] | None,
     ) -> LLMChatResponse:
-
         if ":" in model:
             small_client = self._client or _create_ollama_client()
 
@@ -408,9 +401,7 @@ class LLMClient:
             if batch_func and asyncio.iscoroutinefunction(batch_func):
                 responses = await cast(Any, batch_func)(payload)
             else:
-                responses = [
-                    await self._chat_single(m, msgs, opts) for m, msgs, opts in payload
-                ]
+                responses = [await self._chat_single(m, msgs, opts) for m, msgs, opts in payload]
             for fut, resp in zip(futures, responses):
                 fut.set_result(resp)
         except Exception as exc:
@@ -447,9 +438,7 @@ class LLMClient:
             should_flush = len(self._pending) >= self.batch_size
             if should_flush and self._flush_task and not self._flush_task.done():
                 self._flush_task.cancel()
-            elif not should_flush and (
-                not self._flush_task or self._flush_task.done()
-            ):
+            elif not should_flush and (not self._flush_task or self._flush_task.done()):
                 self._flush_task = asyncio.create_task(self._flush_after_timeout())
         if should_flush:
             await self._flush_pending()
@@ -586,9 +575,7 @@ def _create_vllm_client() -> OllamaClientProtocol:
                         "usage": usage,
                     }
                 finally:
-                    span.set_attribute(
-                        "llm.latency_ms", (time.perf_counter() - start_time) * 1000
-                    )
+                    span.set_attribute("llm.latency_ms", (time.perf_counter() - start_time) * 1000)
 
         async def async_chat_batch(
             self: _Client,
@@ -596,6 +583,9 @@ def _create_vllm_client() -> OllamaClientProtocol:
         ) -> list[LLMChatResponse]:
             """Send multiple chat requests using vLLM's batching API."""
             with tracer.start_as_current_span("llm.batch") as span:
+                span.set_attribute("llm.tokens.prompt", 0)
+                span.set_attribute("llm.tokens.completion", 0)
+                span.set_attribute("llm.tokens.total", 0)
                 models_used: list[str] = []
                 requests_payload: list[JSONDict] = []
                 for model, messages, opts in batch:
@@ -643,14 +633,10 @@ def _create_vllm_client() -> OllamaClientProtocol:
                         outputs.append({"message": cast(LLMMessage, message), "usage": usage})
                     span.set_attribute("llm.tokens.prompt", prompt_tokens)
                     span.set_attribute("llm.tokens.completion", completion_tokens)
-                    span.set_attribute(
-                        "llm.tokens.total", prompt_tokens + completion_tokens
-                    )
+                    span.set_attribute("llm.tokens.total", prompt_tokens + completion_tokens)
                     return outputs
                 finally:
-                    span.set_attribute(
-                        "llm.latency_ms", (time.perf_counter() - start_time) * 1000
-                    )
+                    span.set_attribute("llm.latency_ms", (time.perf_counter() - start_time) * 1000)
 
         def chat(
             self: _Client,
@@ -1323,6 +1309,4 @@ def generate_response(
         return str(val) if isinstance(val, str) else None
 
     # Otherwise use the real client
-    return cast(
-        str | None, generate_text(prompt, model, temperature, agent_state=agent_state)
-    )
+    return cast(str | None, generate_text(prompt, model, temperature, agent_state=agent_state))
