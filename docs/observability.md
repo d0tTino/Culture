@@ -91,6 +91,27 @@ otelcol --config=your_config.yaml
 
 You should then see logs arriving on port `4318`.
 
+### Tracing
+
+The simulation also emits OpenTelemetry spans for deeper insight into runtime
+behavior:
+
+- `memory.retrieve`, `memory.episodic_retrieve`, and `memory.semantic_retrieve`
+  capture memory lookup paths and latency.
+- `llm.request` and `llm.du_burn` record LLM API calls and digital unit charges.
+- `discord.command` and `discord.send_message` trace Discord command handlers
+  and outbound messages.
+
+To view traces locally, run a collector such as
+[Jaeger](https://www.jaegertracing.io/) and set:
+
+```env
+ENABLE_OTEL=1
+OTEL_EXPORTER_ENDPOINT=http://localhost:4318/v1/traces
+```
+
+Then open Jaeger's UI (default `http://localhost:16686`) to explore the spans.
+
 ## 6. Debugging SQLite Locks
 
 If you encounter database lock errors during development, enable SQLite debug mode:
