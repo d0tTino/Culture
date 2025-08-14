@@ -235,13 +235,11 @@ class SimulationDiscordBot:
                         except Exception as exc:
                             embed = self.create_start_embed(False, str(exc))
                             await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction, "start failed", ephemeral=True
-                            )
+                            await interaction.response.send_message("start failed", ephemeral=True)
                         else:
                             embed = self.create_start_embed(True)
                             await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(interaction, "start", ephemeral=True)
+                            await interaction.response.send_message("start", ephemeral=True)
 
                 @tree.command(name="stop")
                 async def _tree_stop(interaction: "discord.Interaction") -> None:
@@ -252,13 +250,12 @@ class SimulationDiscordBot:
                         except Exception as exc:
                             embed = self.create_stop_embed(False, str(exc))
                             await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction, "stop failed", ephemeral=True
-                            )
+                            await interaction.response.send_message("stop failed", ephemeral=True)
                         else:
                             embed = self.create_stop_embed(True)
                             await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(interaction, "stop", ephemeral=True)
+                            await interaction.response.send_message("stop", ephemeral=True)
+
 
                 @tree.command(name="spawn")
                 @app_commands.describe(agent_id="ID of the agent to spawn")
@@ -284,6 +281,52 @@ class SimulationDiscordBot:
                                 f"spawn {agent_id}",
                                 ephemeral=True,
                             )
+
+                @tree.command(name="pause")
+                async def _tree_pause(interaction: "discord.Interaction") -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "pause")
+                        await self.event_queue.put(
+                            SimulationEvent(type="control", data={"command": "pause"})
+                        )
+                        await interaction.response.send_message("pause", ephemeral=True)
+
+                @tree.command(name="resume")
+                async def _tree_resume(interaction: "discord.Interaction") -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "resume")
+                        await self.event_queue.put(
+                            SimulationEvent(type="control", data={"command": "resume"})
+                        )
+                        await interaction.response.send_message("resume", ephemeral=True)
+
+                @tree.command(name="mute")
+                @app_commands.describe(agent_id="ID of the agent to mute")
+                async def _tree_mute(interaction: "discord.Interaction", agent_id: str) -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "mute")
+                        span.set_attribute("discord.agent.id", agent_id)
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="moderation",
+                                data={"command": "mute", "agent_id": agent_id},
+                            )
+                        )
+                        await interaction.response.send_message("muted", ephemeral=True)
+
+                @tree.command(name="unmute")
+                @app_commands.describe(agent_id="ID of the agent to unmute")
+                async def _tree_unmute(interaction: "discord.Interaction", agent_id: str) -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "unmute")
+                        span.set_attribute("discord.agent.id", agent_id)
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="moderation",
+                                data={"command": "unmute", "agent_id": agent_id},
+                            )
+                        )
+                        await interaction.response.send_message("unmuted", ephemeral=True)
 
             @client.event
             async def on_ready(
@@ -976,25 +1019,21 @@ async def slash_stop(interaction: Any) -> None:
 @bot.tree.command(name="spawn")
 async def slash_spawn(interaction: Any, agent_id: str) -> None:
     """Spawn a new agent in the simulation."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "spawn")
-        span.set_attribute("discord.agent.id", agent_id)
-        bot_instance = get_active_bot()
-        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        try:
-            await spawn_agent_command(agent_id, ctx)
-        except Exception as exc:
-            if bot_instance is not None:
-                embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
-                await bot_instance.send_simulation_update(embed=embed)
-            await send_interaction_response(
-                interaction, f"spawn {agent_id} failed", ephemeral=True
-            )
-        else:
-            if bot_instance is not None:
-                embed = bot_instance.create_spawn_embed(agent_id, True)
-                await bot_instance.send_simulation_update(embed=embed)
-            await send_interaction_response(interaction, f"spawn {agent_id}", ephemeral=True)
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+    try:
+        await spawn_agent_command(agent_id, ctx)
+    except Exception as exc:
+        if bot_instance is not None:
+            embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message(f"spawn {agent_id} failed", ephemeral=True)
+    else:
+        if bot_instance is not None:
+            embed = bot_instance.create_spawn_embed(agent_id, True)
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
+
 
 
 @bot.tree.command(name="set_speed")
