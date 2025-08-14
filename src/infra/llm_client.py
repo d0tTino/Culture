@@ -133,26 +133,30 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                try:
-                    from src.sim.resource_manager import get_resource_manager
+                with tracer.start_as_current_span("llm.du_burn") as span:
+                    span.set_attribute("llm.agent_id", state.agent_id)
+                    span.set_attribute("llm.du.tokens", tokens)
+                    span.set_attribute("llm.du.cost", cost)
+                    try:
+                        from src.sim.resource_manager import get_resource_manager
 
-                    get_resource_manager().charge_du(state.agent_id, cost)
-                except Exception:
-                    logger.warning(
-                        "Insufficient DU for agent %s: cost=%s, available=%s",
-                        state.agent_id,
-                        cost,
-                        state.du,
-                    )
-                    raise
-                state.du -= cost
-                if tokens > 0:
-                    du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
-                try:
-                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                        get_resource_manager().charge_du(state.agent_id, cost)
+                    except Exception:
+                        logger.warning(
+                            "Insufficient DU for agent %s: cost=%s, available=%s",
+                            state.agent_id,
+                            cost,
+                            state.du,
+                        )
+                        raise
+                    state.du -= cost
+                    if tokens > 0:
+                        du_per_1k = cost / (tokens / 1000)
+                        infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
+                    try:
+                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
 
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
@@ -204,26 +208,30 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                             usage.get("completion_tokens", 0)
                         )
                 cost = base_price + token_price * tokens
-                try:
-                    from src.sim.resource_manager import get_resource_manager
+                with tracer.start_as_current_span("llm.du_burn") as span:
+                    span.set_attribute("llm.agent_id", state.agent_id)
+                    span.set_attribute("llm.du.tokens", tokens)
+                    span.set_attribute("llm.du.cost", cost)
+                    try:
+                        from src.sim.resource_manager import get_resource_manager
 
-                    get_resource_manager().charge_du(state.agent_id, cost)
-                except Exception:
-                    logger.warning(
-                        "Insufficient DU for agent %s: cost=%s, available=%s",
-                        state.agent_id,
-                        cost,
-                        state.du,
-                    )
-                    raise
-                state.du -= cost
-                if tokens > 0:
-                    du_per_1k = cost / (tokens / 1000)
-                    infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
-                try:
-                    ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
-                except Exception:  # pragma: no cover - optional
-                    logger.debug("Ledger logging failed", exc_info=True)
+                        get_resource_manager().charge_du(state.agent_id, cost)
+                    except Exception:
+                        logger.warning(
+                            "Insufficient DU for agent %s: cost=%s, available=%s",
+                            state.agent_id,
+                            cost,
+                            state.du,
+                        )
+                        raise
+                    state.du -= cost
+                    if tokens > 0:
+                        du_per_1k = cost / (tokens / 1000)
+                        infra_metrics.record_du_per_1k_tokens(state.agent_id, du_per_1k)
+                    try:
+                        ledger.log_change(state.agent_id, 0.0, -cost, "llm_gas")
+                    except Exception:  # pragma: no cover - optional
+                        logger.debug("Ledger logging failed", exc_info=True)
             except Exception as e:  # pragma: no cover - defensive
                 logger.debug(f"Failed to deduct DU cost: {e}")
         return result
@@ -305,7 +313,9 @@ def async_monitor_llm_call(
                 metrics.LLM_CALLS_TOTAL.inc()
                 if not metrics_data.get("success", False):
                     metrics.LLM_ERRORS_TOTAL.inc()
-                infra_metrics.record_llm_latency(metrics_data["duration_ms"])
+                agent_state = kwargs.get("agent_state")
+                agent_id = getattr(agent_state, "agent_id", "unknown")
+                infra_metrics.record_llm_latency(agent_id, metrics_data["duration_ms"])
                 llm_perf_logger.info(f"LLM_CALL_METRICS: {json.dumps(metrics_data, default=str)}")
 
         return wrapper
@@ -518,8 +528,8 @@ def is_ollama_available() -> bool:
 
 # Determine which LLM backend to use and initialize the client accordingly
 if not VLLM_API_BASE:
-    VLLM_API_BASE = "http://localhost:8000"
-    logger.warning("VLLM_API_BASE not set in config, using default: %s", VLLM_API_BASE)
+    USE_VLLM = False
+    logger.info("VLLM_API_BASE not set; defaulting to Ollama")
 else:
     logger.info("Using VLLM_API_BASE: %s", VLLM_API_BASE)
 if not LLM_API_BASE:
@@ -682,13 +692,19 @@ def get_llm_client() -> OllamaClientProtocol:
         client = None
 
     if client is None:
-        client, err = _retry_with_backoff(_create_vllm_client)
+        err: Exception | None = None
+        if VLLM_API_BASE:
+            client, err = _retry_with_backoff(_create_vllm_client)
+            if client is not None:
+                logger.info(f"Using vLLM API base: {VLLM_API_BASE}")
+                USE_VLLM = True
+            else:
+                logger.error(
+                    "Failed to initialize vLLM client: %s",
+                    err,
+                    exc_info=True,
+                )
         if client is None:
-            logger.error(
-                "Failed to initialize vLLM client: %s",
-                err,
-                exc_info=True,
-            )
             client, err = _retry_with_backoff(_create_ollama_client)
             if client is None:
                 logger.error(
@@ -698,9 +714,6 @@ def get_llm_client() -> OllamaClientProtocol:
                 )
                 raise LLMClientInitError("Failed to initialize vLLM and Ollama clients")
             USE_VLLM = False
-        else:
-            logger.info(f"Using vLLM API base: {VLLM_API_BASE or LLM_API_BASE}")
-            USE_VLLM = True
     return client
 
 

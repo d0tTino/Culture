@@ -33,3 +33,30 @@ coalition counts and sentiment snapshots for plotting.
 - **Sentiment curves**: average agent mood over time.
 
 The resulting plots appear in the `plots/` directory.
+
+## Signature Demo Scenario
+
+This lightweight scenario highlights evaluation hooks for common group metrics.
+
+### Usage
+
+1. Run the simulation with the signature demo:
+   ```bash
+   python src/app.py --scenario scenarios/signature_demo.yaml
+   ```
+2. Export trace data:
+   ```bash
+   python scripts/export_traces.py --snapshots snapshots --output data/traces.jsonl
+   ```
+3. Generate plots and bundle metrics:
+   ```bash
+   python tools/export_traces.py data/traces.jsonl --outdir plots --bundle run_bundle
+   ```
+
+### Expected Arc
+
+1. **Introduction** – agents share initial perspectives and set intent.
+2. **Collaboration** – members coordinate to sign onto a shared plan.
+3. **Resolution** – the group finalizes the plan and reflects on the process.
+
+Evaluation hooks record coalition counts, sentiment, and collective DU/IP curves for analysis.

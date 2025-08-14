@@ -93,6 +93,11 @@ AGENT_REMAINING_DU = Gauge("agent_remaining_du", "Remaining DU balance per agent
 AGENT_DU_PER_1K_TOKENS = Gauge(
     "agent_du_per_1k_tokens", "DU cost per 1k tokens per agent", ["agent_id"]
 )
+AGENT_LLM_LATENCY_P95_MS = Gauge(
+    "agent_llm_latency_p95_ms",
+    "95th percentile latency of recent LLM calls per agent in milliseconds",
+    ["agent_id"],
+)
 
 # Start the metrics HTTP server when this module is imported
 try:
@@ -188,6 +193,7 @@ def get_proposal_throughput() -> float:
 
 __all__ = [
     "AGENT_DU_PER_1K_TOKENS",
+    "AGENT_LLM_LATENCY_P95_MS",
     "AGENT_REMAINING_DU",
     "AVERAGE_SENTIMENT",
     "COALITION_COUNT",

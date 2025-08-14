@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import tiktoken
 from typing_extensions import Self
 
 
@@ -12,13 +13,20 @@ class RetrieverNode:
 
     The provided ``memory_service`` is expected to merge episodic and semantic
     memories. Retrieved items are truncated so that the combined number of
-    whitespace-separated tokens does not exceed ``token_cap``.
+    model tokens, measured via ``tiktoken``, does not exceed ``token_cap``.
     """
 
-    def __init__(self: Self, memory_service: Any, k: int = 5, token_cap: int = 1000) -> None:
+    def __init__(
+        self: Self,
+        memory_service: Any,
+        k: int = 5,
+        token_cap: int = 1000,
+        tokenizer: tiktoken.Encoding | None = None,
+    ) -> None:
         self.memory_service = memory_service
         self.k = k
         self.token_cap = token_cap
+        self.tokenizer = tokenizer or tiktoken.get_encoding("cl100k_base")
 
     async def __call__(self: Self, state: dict[str, Any]) -> dict[str, Any]:
         """Retrieve relevant memories for the given state."""
@@ -29,7 +37,7 @@ class RetrieverNode:
         tokens = 0
         for mem in memories:
             text = mem.get("content", "")
-            tokens += len(text.split())
+            tokens += len(self.tokenizer.encode(text))
             if tokens > self.token_cap:
                 break
             limited.append(mem)

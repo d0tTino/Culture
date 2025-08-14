@@ -49,4 +49,7 @@ def test_start_vllm_script(tmp_path: Path) -> None:
         "8192",
         "--max-num-seqs",
         "32",
+        "--enable-chunked-prefill",
+        "--download-dir",
+        f"{Path.home()}/.cache/huggingface",
     ]

@@ -55,6 +55,33 @@ tracer = trace.get_tracer(__name__)
 message_sse_queue = dashboard_message_queue
 
 
+async def send_interaction_response(interaction: Any, content: str, **kwargs: Any) -> None:
+    """Send a Discord interaction response with tracing."""
+    with tracer.start_as_current_span("discord.send_message") as span:
+        span.set_attribute("discord.message.length", len(content) if content else 0)
+        await interaction.response.send_message(content, **kwargs)
+
+
+async def send_channel_message(
+    channel: Any, *, content: str | None = None, embed: Any | None = None
+) -> None:
+    """Send a Discord channel message with tracing."""
+    with tracer.start_as_current_span("discord.send_message") as span:
+        if content is not None:
+            span.set_attribute("discord.message.length", len(content))
+        span.set_attribute("discord.embed", embed is not None)
+        if hasattr(channel, "send"):
+            if embed is not None:
+                await channel.send(content, embed=embed)
+            else:
+                await channel.send(content)
+        else:  # pragma: no cover - defensive
+            chan_id = getattr(channel, "id", "unknown")
+            logger.warning(
+                f"Attempted to send message to channel {chan_id} of type {type(channel).__name__}, which does not support .send()"
+            )
+
+
 def notify_budget_exceeded(agent_id: str, required: float, remaining: float) -> None:
     """Notify via Discord when an agent exceeds its DU budget."""
     msg = (
@@ -208,15 +235,11 @@ class SimulationDiscordBot:
                         except Exception as exc:
                             embed = self.create_start_embed(False, str(exc))
                             await self.send_simulation_update(embed=embed)
-                            await interaction.response.send_message(
-                                "start failed", ephemeral=True
-                            )
+                            await interaction.response.send_message("start failed", ephemeral=True)
                         else:
                             embed = self.create_start_embed(True)
                             await self.send_simulation_update(embed=embed)
-                            await interaction.response.send_message(
-                                "start", ephemeral=True
-                            )
+                            await interaction.response.send_message("start", ephemeral=True)
 
                 @tree.command(name="stop")
                 async def _tree_stop(interaction: "discord.Interaction") -> None:
@@ -227,21 +250,16 @@ class SimulationDiscordBot:
                         except Exception as exc:
                             embed = self.create_stop_embed(False, str(exc))
                             await self.send_simulation_update(embed=embed)
-                            await interaction.response.send_message(
-                                "stop failed", ephemeral=True
-                            )
+                            await interaction.response.send_message("stop failed", ephemeral=True)
                         else:
                             embed = self.create_stop_embed(True)
                             await self.send_simulation_update(embed=embed)
-                            await interaction.response.send_message(
-                                "stop", ephemeral=True
-                            )
+                            await interaction.response.send_message("stop", ephemeral=True)
+
 
                 @tree.command(name="spawn")
                 @app_commands.describe(agent_id="ID of the agent to spawn")
-                async def _tree_spawn(
-                    interaction: "discord.Interaction", agent_id: str
-                ) -> None:
+                async def _tree_spawn(interaction: "discord.Interaction", agent_id: str) -> None:
                     with tracer.start_as_current_span("discord.command") as span:
                         span.set_attribute("discord.command.name", "spawn")
                         span.set_attribute("discord.agent.id", agent_id)
@@ -250,15 +268,65 @@ class SimulationDiscordBot:
                         except Exception as exc:
                             embed = self.create_spawn_embed(agent_id, False, str(exc))
                             await self.send_simulation_update(embed=embed)
-                            await interaction.response.send_message(
-                                f"spawn {agent_id} failed", ephemeral=True
+                            await send_interaction_response(
+                                interaction,
+                                f"spawn {agent_id} failed",
+                                ephemeral=True,
                             )
                         else:
                             embed = self.create_spawn_embed(agent_id, True)
                             await self.send_simulation_update(embed=embed)
-                            await interaction.response.send_message(
-                                f"spawn {agent_id}", ephemeral=True
+                            await send_interaction_response(
+                                interaction,
+                                f"spawn {agent_id}",
+                                ephemeral=True,
                             )
+
+                @tree.command(name="pause")
+                async def _tree_pause(interaction: "discord.Interaction") -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "pause")
+                        await self.event_queue.put(
+                            SimulationEvent(type="control", data={"command": "pause"})
+                        )
+                        await interaction.response.send_message("pause", ephemeral=True)
+
+                @tree.command(name="resume")
+                async def _tree_resume(interaction: "discord.Interaction") -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "resume")
+                        await self.event_queue.put(
+                            SimulationEvent(type="control", data={"command": "resume"})
+                        )
+                        await interaction.response.send_message("resume", ephemeral=True)
+
+                @tree.command(name="mute")
+                @app_commands.describe(agent_id="ID of the agent to mute")
+                async def _tree_mute(interaction: "discord.Interaction", agent_id: str) -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "mute")
+                        span.set_attribute("discord.agent.id", agent_id)
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="moderation",
+                                data={"command": "mute", "agent_id": agent_id},
+                            )
+                        )
+                        await interaction.response.send_message("muted", ephemeral=True)
+
+                @tree.command(name="unmute")
+                @app_commands.describe(agent_id="ID of the agent to unmute")
+                async def _tree_unmute(interaction: "discord.Interaction", agent_id: str) -> None:
+                    with tracer.start_as_current_span("discord.command") as span:
+                        span.set_attribute("discord.command.name", "unmute")
+                        span.set_attribute("discord.agent.id", agent_id)
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="moderation",
+                                data={"command": "unmute", "agent_id": agent_id},
+                            )
+                        )
+                        await interaction.response.send_message("unmuted", ephemeral=True)
 
             @client.event
             async def on_ready(
@@ -277,17 +345,7 @@ class SimulationDiscordBot:
                         color=discord.Color.blue(),
                     )
                     embed.set_footer(text=f"Channel ID: {self.channel_id}")
-                    if hasattr(channel, "send"):
-                        await channel.send(embed=embed)
-                    else:
-                        if channel is not None:
-                            chan_id = getattr(channel, "id", "unknown")
-                            logger.warning(
-                                f"Attempted to send message to channel {chan_id} "
-                                f"of type {type(channel).__name__}, which does not support .send()",
-                            )
-                        else:
-                            logger.warning("Attempted to send message to a None channel.")
+                    await send_channel_message(channel, embed=embed)
                 else:
                     logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
@@ -330,12 +388,7 @@ class SimulationDiscordBot:
                             self.user_agents[str(user_id)] = agent_id
                     span.set_attribute("discord.agent.id", agent_id or "")
                     if not agent_id:
-                        if hasattr(channel, "send"):
-                            send = getattr(channel, "send")
-                            if asyncio.iscoroutinefunction(send):
-                                await send("Unknown agent mapping")
-                            else:
-                                send("Unknown agent mapping")
+                        await send_channel_message(channel, content="Unknown agent mapping")
                         return
                     ip_cost = float(
                         config.get_config("IP_COST_BROADCAST_MESSAGE")
@@ -349,8 +402,7 @@ class SimulationDiscordBot:
                     )
                     ip_bal, du_bal = await ledger.get_balance_async(agent_id)
                     if ip_bal < ip_cost or du_bal < du_cost:
-                        if hasattr(channel, "send"):
-                            await channel.send("Insufficient IP/DU")
+                        await send_channel_message(channel, content="Insufficient IP/DU")
                         return
                     self.last_agent_id = agent_id
                     self.last_channel_id = channel_id
@@ -422,37 +474,15 @@ class SimulationDiscordBot:
                     logger.warning(f"Could not find Discord channel with ID: {chan_id}")
                     return False
                 if embed:
-                    if hasattr(channel, "send"):
-                        await channel.send(embed=embed)
-                        logger.debug("Sent Discord embed update")
-                        return True
-                    else:
-                        if channel is not None:
-                            chan_id = getattr(channel, "id", "unknown")
-                            logger.warning(
-                                f"Attempted to send embed to channel {chan_id} "
-                                f"of type {type(channel).__name__}, which does not support .send()"
-                            )
-                        else:
-                            logger.warning("Attempted to send embed to a None channel.")
-                        return False
+                    await send_channel_message(channel, embed=embed)
+                    logger.debug("Sent Discord embed update")
+                    return True
                 elif content:
                     if len(content) > 1990:
                         content = content[:1990] + "..."
-                    if hasattr(channel, "send"):
-                        await channel.send(content)
-                        logger.debug(f"Sent Discord text update: {content[:50]}...")
-                        return True
-                    else:
-                        if channel is not None:
-                            chan_id = getattr(channel, "id", "unknown")
-                            logger.warning(
-                                f"Attempted to send text to channel {chan_id} "
-                                f"of type {type(channel).__name__}, which does not support .send()"
-                            )
-                        else:
-                            logger.warning("Attempted to send text to a None channel.")
-                        return False
+                    await send_channel_message(channel, content=content)
+                    logger.debug(f"Sent Discord text update: {content[:50]}...")
+                    return True
                 else:
                     logger.warning("send_simulation_update called with no content or embed")
                     return False
@@ -805,17 +835,7 @@ class SimulationDiscordBot:
                         description="The Culture simulation has ended. Bot going offline.",
                         color=discord.Color.red(),
                     )
-                    if hasattr(channel, "send"):
-                        await channel.send(embed=embed)
-                    else:
-                        if channel is not None:
-                            chan_id = getattr(channel, "id", "unknown")
-                            logger.warning(
-                                f"Attempted to send message to channel {chan_id} "
-                                f"of type {type(channel).__name__}, which does not support .send()"
-                            )
-                        else:
-                            logger.warning("Attempted to send message to a None channel.")
+                    await send_channel_message(channel, embed=embed)
             for client in self.clients.values():
                 await client.close()
             for t in self._client_tasks:
@@ -870,107 +890,130 @@ def get_active_bot(ctx: SimulationContext = DEFAULT_CONTEXT) -> "SimulationDisco
 @bot.command(name="say")
 async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
-    await ctx.send(f"Simulated message received: {message}")
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "say")
+        await send_channel_message(ctx, content=f"Simulated message received: {message}")
 
 
 @bot.command(name="stats")
 async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
-    await ctx.send(stats_text)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "stats")
+        span.set_attribute("discord.message.length", len(stats_text))
+        await send_channel_message(ctx, content=stats_text)
 
 
 @bot.tree.command(name="status")
 async def slash_status(interaction: Any) -> None:
     """Return IP/DU balance for the mapped agent."""
-    agent_id = None
-    bot_instance = get_active_bot()
-    if bot_instance is not None:
-        channel = getattr(interaction, "channel", None)
-        chan_id = getattr(channel, "id", None)
-        agent_id = bot_instance.channel_to_agent.get(chan_id)
-    if agent_id:
-        ip, du = await ledger.get_balance_async(agent_id)
-        if ip <= 0 or du <= 0:
-            await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
-            return
-        await interaction.response.send_message(f"IP: {ip:.1f}; DU: {du:.1f}", ephemeral=True)
-    else:
-        await interaction.response.send_message("Unknown channel", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "status")
+        agent_id = None
+        bot_instance = get_active_bot()
+        if bot_instance is not None:
+            channel = getattr(interaction, "channel", None)
+            chan_id = getattr(channel, "id", None)
+            agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if agent_id:
+            span.set_attribute("discord.agent.id", agent_id)
+            ip, du = await ledger.get_balance_async(agent_id)
+            if ip <= 0 or du <= 0:
+                await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
+                return
+            await send_interaction_response(
+                interaction, f"IP: {ip:.1f}; DU: {du:.1f}", ephemeral=True
+            )
+        else:
+            await send_interaction_response(interaction, "Unknown channel", ephemeral=True)
 
 
 @bot.tree.command(name="stats")
 async def slash_stats(interaction: Any) -> None:
     """Return runtime metrics if the agent has resources."""
-    agent_id = None
-    bot_instance = get_active_bot()
-    if bot_instance is not None:
-        channel = getattr(interaction, "channel", None)
-        chan_id = getattr(channel, "id", None)
-        agent_id = bot_instance.channel_to_agent.get(chan_id)
-    if agent_id:
-        ip, du = await ledger.get_balance_async(agent_id)
-        if ip <= 0 or du <= 0:
-            await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
-            return
-    stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
-    await interaction.response.send_message(stats_text, ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "stats")
+        agent_id = None
+        bot_instance = get_active_bot()
+        if bot_instance is not None:
+            channel = getattr(interaction, "channel", None)
+            chan_id = getattr(channel, "id", None)
+            agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if agent_id:
+            span.set_attribute("discord.agent.id", agent_id)
+            ip, du = await ledger.get_balance_async(agent_id)
+            if ip <= 0 or du <= 0:
+                await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
+                return
+        stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
+        await send_interaction_response(interaction, stats_text, ephemeral=True)
 
 
 @bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "pause"}))
-    await interaction.response.send_message("pause", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "pause")
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "pause"}))
+        await send_interaction_response(interaction, "pause", ephemeral=True)
 
 
 @bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "resume"}))
-    await interaction.response.send_message("resume", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "resume")
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(type="control", data={"command": "resume"})
+        )
+        await send_interaction_response(interaction, "resume", ephemeral=True)
 
 
 @bot.tree.command(name="start")
 async def slash_start(interaction: Any) -> None:
     """Start the simulation via a control command."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    try:
-        await start_simulation(ctx)
-    except Exception as exc:
-        if bot_instance is not None:
-            embed = bot_instance.create_start_embed(False, str(exc))
-            await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message("start failed", ephemeral=True)
-    else:
-        if bot_instance is not None:
-            embed = bot_instance.create_start_embed(True)
-            await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message("start", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "start")
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        try:
+            await start_simulation(ctx)
+        except Exception as exc:
+            if bot_instance is not None:
+                embed = bot_instance.create_start_embed(False, str(exc))
+                await bot_instance.send_simulation_update(embed=embed)
+            await send_interaction_response(interaction, "start failed", ephemeral=True)
+        else:
+            if bot_instance is not None:
+                embed = bot_instance.create_start_embed(True)
+                await bot_instance.send_simulation_update(embed=embed)
+            await send_interaction_response(interaction, "start", ephemeral=True)
 
 
 @bot.tree.command(name="stop")
 async def slash_stop(interaction: Any) -> None:
     """Stop the simulation via a control command."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    try:
-        await stop_simulation(ctx)
-    except Exception as exc:
-        if bot_instance is not None:
-            embed = bot_instance.create_stop_embed(False, str(exc))
-            await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message("stop failed", ephemeral=True)
-    else:
-        if bot_instance is not None:
-            embed = bot_instance.create_stop_embed(True)
-            await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message("stop", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "stop")
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        try:
+            await stop_simulation(ctx)
+        except Exception as exc:
+            if bot_instance is not None:
+                embed = bot_instance.create_stop_embed(False, str(exc))
+                await bot_instance.send_simulation_update(embed=embed)
+            await send_interaction_response(interaction, "stop failed", ephemeral=True)
+        else:
+            if bot_instance is not None:
+                embed = bot_instance.create_stop_embed(True)
+                await bot_instance.send_simulation_update(embed=embed)
+            await send_interaction_response(interaction, "stop", ephemeral=True)
 
 
 @bot.tree.command(name="spawn")
@@ -984,27 +1027,27 @@ async def slash_spawn(interaction: Any, agent_id: str) -> None:
         if bot_instance is not None:
             embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
             await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message(
-            f"spawn {agent_id} failed", ephemeral=True
-        )
+        await interaction.response.send_message(f"spawn {agent_id} failed", ephemeral=True)
     else:
         if bot_instance is not None:
             embed = bot_instance.create_spawn_embed(agent_id, True)
             await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message(
-            f"spawn {agent_id}", ephemeral=True
-        )
+        await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
+
 
 
 @bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(type="control", data={"command": "set_speed", "value": value})
-    )
-    await interaction.response.send_message(f"speed {value}", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "set_speed")
+        span.set_attribute("discord.speed", value)
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(type="control", data={"command": "set_speed", "value": value})
+        )
+        await send_interaction_response(interaction, f"speed {value}", ephemeral=True)
 
 
 @bot.tree.command(name="speed")
@@ -1017,105 +1060,125 @@ async def slash_speed(interaction: Any, value: float) -> None:
 @bot.tree.command(name="kb")
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(
-            type="control",
-            data={
-                "command": "post_kb",
-                "text": text,
-                "author": str(getattr(interaction, "user", "human")),
-            },
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "kb")
+        span.set_attribute("discord.message.length", len(text))
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(
+                type="control",
+                data={
+                    "command": "post_kb",
+                    "text": text,
+                    "author": str(getattr(interaction, "user", "human")),
+                },
+            )
         )
-    )
-    await interaction.response.send_message("KB entry created", ephemeral=True)
+        await send_interaction_response(interaction, "KB entry created", ephemeral=True)
 
 
 @bot.tree.command(name="propose")
 async def slash_propose(interaction: Any, text: str) -> None:
     """Propose a law via the dashboard API."""
-    agent_id = None
-    bot_instance = get_active_bot()
-    if bot_instance is not None:
-        channel = getattr(interaction, "channel", None)
-        chan_id = getattr(channel, "id", None)
-        agent_id = bot_instance.channel_to_agent.get(chan_id)
-    if not agent_id:
-        await interaction.response.send_message("Unknown channel", ephemeral=True)
-        return
-    ip, du = await ledger.get_balance_async(agent_id)
-    if ip <= 0 or du <= 0:
-        await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
-        return
-    payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post("http://localhost:8000/api/governance/propose", json=payload)
-            data = json.loads(resp.text)
-            approved = data.get("approved", False)
-
-    except Exception:
-        approved = False
-    await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "propose")
+        span.set_attribute("discord.message.length", len(text))
+        agent_id = None
+        bot_instance = get_active_bot()
+        if bot_instance is not None:
+            channel = getattr(interaction, "channel", None)
+            chan_id = getattr(channel, "id", None)
+            agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if not agent_id:
+            await send_interaction_response(interaction, "Unknown channel", ephemeral=True)
+            return
+        span.set_attribute("discord.agent.id", agent_id)
+        ip, du = await ledger.get_balance_async(agent_id)
+        if ip <= 0 or du <= 0:
+            await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
+            return
+        payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "http://localhost:8000/api/governance/propose", json=payload
+                )
+                data = json.loads(resp.text)
+                approved = data.get("approved", False)
+        except Exception:
+            approved = False
+        await send_interaction_response(
+            interaction, "Approved" if approved else "Rejected", ephemeral=True
+        )
 
 
 @bot.tree.command(name="propose_law")
 async def slash_propose_law(interaction: Any, text: str, weights: str | None = None) -> None:
     """Propose a law via the dashboard API."""
-    agent_id = None
-    bot_instance = get_active_bot()
-    if bot_instance is not None:
-        channel = getattr(interaction, "channel", None)
-        chan_id = getattr(channel, "id", None)
-        agent_id = bot_instance.channel_to_agent.get(chan_id)
-    if not agent_id:
-        await interaction.response.send_message("Unknown channel", ephemeral=True)
-        return
-    ip, du = await ledger.get_balance_async(agent_id)
-    if ip <= 0 or du <= 0:
-        await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
-        return
-    payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
-    if weights:
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "propose_law")
+        span.set_attribute("discord.message.length", len(text))
+        agent_id = None
+        bot_instance = get_active_bot()
+        if bot_instance is not None:
+            channel = getattr(interaction, "channel", None)
+            chan_id = getattr(channel, "id", None)
+            agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if not agent_id:
+            await send_interaction_response(interaction, "Unknown channel", ephemeral=True)
+            return
+        span.set_attribute("discord.agent.id", agent_id)
+        ip, du = await ledger.get_balance_async(agent_id)
+        if ip <= 0 or du <= 0:
+            await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
+            return
+        payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
+        if weights:
+            try:
+                payload["vote_weights"] = json.loads(weights)
+            except Exception:
+                payload["vote_weights"] = None
         try:
-            payload["vote_weights"] = json.loads(weights)
+            async with httpx.AsyncClient() as client:
+                resp = await client.post("http://localhost:8000/api/propose_law", json=payload)
+                data = json.loads(resp.text)
+                approved = data.get("approved", False)
         except Exception:
-            payload["vote_weights"] = None
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post("http://localhost:8000/api/propose_law", json=payload)
-            data = json.loads(resp.text)
-            approved = data.get("approved", False)
-    except Exception:
-        approved = False
-    await interaction.response.send_message("Approved" if approved else "Rejected", ephemeral=True)
+            approved = False
+        await send_interaction_response(
+            interaction, "Approved" if approved else "Rejected", ephemeral=True
+        )
 
 
 @bot.tree.command(name="vote")
 async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     """Cast a manual vote on a proposal via the governance service."""
-    agent_id = None
-    bot_instance = get_active_bot()
-    if bot_instance is not None:
-        channel = getattr(interaction, "channel", None)
-        chan_id = getattr(channel, "id", None)
-        agent_id = bot_instance.channel_to_agent.get(chan_id)
-    if not agent_id:
-        await interaction.response.send_message("Unknown channel", ephemeral=True)
-        return
-    ip, du = await ledger.get_balance_async(agent_id)
-    if ip <= 0 or du <= 0:
-        await interaction.response.send_message("Insufficient IP/DU", ephemeral=True)
-        return
-    payload = {"agent_id": agent_id, "text": text, "approve": approve}
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post("http://localhost:8000/api/vote", json=payload)
-            data = json.loads(resp.text)
-            cast = data.get("vote", False)
-    except Exception:
-        cast = False
-    await interaction.response.send_message(
-        "Vote cast" if cast else "Vote rejected", ephemeral=True
-    )
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", "vote")
+        span.set_attribute("discord.message.length", len(text))
+        agent_id = None
+        bot_instance = get_active_bot()
+        if bot_instance is not None:
+            channel = getattr(interaction, "channel", None)
+            chan_id = getattr(channel, "id", None)
+            agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if not agent_id:
+            await send_interaction_response(interaction, "Unknown channel", ephemeral=True)
+            return
+        span.set_attribute("discord.agent.id", agent_id)
+        ip, du = await ledger.get_balance_async(agent_id)
+        if ip <= 0 or du <= 0:
+            await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
+            return
+        payload = {"agent_id": agent_id, "text": text, "approve": approve}
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post("http://localhost:8000/api/vote", json=payload)
+                data = json.loads(resp.text)
+                cast = data.get("vote", False)
+        except Exception:
+            cast = False
+        await send_interaction_response(
+            interaction, "Vote cast" if cast else "Vote rejected", ephemeral=True
+        )
