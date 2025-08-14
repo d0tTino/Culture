@@ -14,13 +14,13 @@ This runbook outlines routine operations for working with Culture.ai.
    VLLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2" VLLM_PORT=8001 scripts/start_vllm.sh
    export VLLM_API_BASE="http://localhost:$VLLM_PORT"
    ```
-   The vLLM server supports request batching for higher throughput. Tune
-   `VLLM_MAX_BATCH_TOKENS` and `VLLM_MAX_NUM_SEQS` to control the maximum
-   tokens and sequence count processed per batch. In internal tests, enabling
-   batching reduced average latency by ~30% compared to single-request
-   handling. Smaller, colon-delimited models (for example `mistral:latest`)
-   can still run via Ollama, which avoids GPU overhead for lightweight models.
-   Ollama can be used as a fallback backend:
+   `scripts/start_vllm.sh` enables continuous batching via
+   `--enable-chunked-prefill` and resolves models from the local Hugging Face
+   cache first (override with `VLLM_DOWNLOAD_DIR`). Adjust
+   `VLLM_MAX_BATCH_TOKENS` and `VLLM_MAX_NUM_SEQS` to control batch size.
+   Smaller, colon-delimited models (for example `mistral:latest`) can still run
+   via Ollama, which avoids GPU overhead for lightweight models. Ollama can be
+   used as a fallback backend:
    ```bash
    ollama pull mistral:latest
    ollama serve &
@@ -73,12 +73,14 @@ export VLLM_API_BASE="http://localhost:$VLLM_PORT"
 export LLM_API_BASE="$VLLM_API_BASE"  # overrides Ollama when set
 ```
 
-Run `scripts/benchmark_llm.py` after the server starts to compare vLLM and Ollama performance. The script reports average latency and request throughput:
+Run `scripts/benchmark_llm.py` after the server starts to compare vLLM and Ollama performance. The script reports average latency, throughput, and an approximate cost per million tokens:
 
-| Backend | Avg latency (s) | Throughput (req/s) |
-|---------|----------------:|-------------------:|
-| vLLM    | 0.25            | 4.00               |
-| Ollama  | 1.20            | 0.83               |
+| Backend | Avg latency (s) | Throughput (req/s) | Cost per 1M tokens* |
+|---------|----------------:|-------------------:|--------------------:|
+| vLLM    | 0.25            | 4.00               | ~$0 (local GPU)     |
+| Ollama  | 1.20            | 0.83               | ~$0 (local CPU)     |
+
+*Hardware and electricity costs not included; remote APIs would add per-token charges.
 
 Add `--output results.json` to persist the results for later analysis.
 
