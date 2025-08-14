@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
+from opentelemetry import trace
 from typing_extensions import Self
 
 from src.interfaces import metrics
 
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
+
+tracer = trace.get_tracer(__name__)
 
 
 class MultiLayerRetriever:
@@ -29,15 +33,40 @@ class MultiLayerRetriever:
         try:
             episodic: list[dict[str, Any]] = []
             if self.vector_store:
-                episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
+                with tracer.start_as_current_span("memory.episodic_retrieve") as span:
+                    span.set_attribute("llm.tokens.prompt", 0)
+                    span.set_attribute("llm.tokens.completion", 0)
+                    span.set_attribute("llm.tokens.total", 0)
+                    start = time.perf_counter()
+                    try:
+                        episodic = await self.vector_store.aretrieve_relevant_memories(
+                            agent_id, query, k
+                        )
+                    finally:
+                        span.set_attribute(
+                            "memory.latency_ms", (time.perf_counter() - start) * 1000
+                        )
 
             semantic: list[dict[str, Any]] = []
             if self.semantic_manager:
                 import asyncio
 
-                semantic = await asyncio.to_thread(
-                    self.semantic_manager.retrieve_context_with_scores, agent_id, query, k
-                )
+                with tracer.start_as_current_span("memory.semantic_retrieve") as span:
+                    span.set_attribute("llm.tokens.prompt", 0)
+                    span.set_attribute("llm.tokens.completion", 0)
+                    span.set_attribute("llm.tokens.total", 0)
+                    start = time.perf_counter()
+                    try:
+                        semantic = await asyncio.to_thread(
+                            self.semantic_manager.retrieve_context_with_scores,
+                            agent_id,
+                            query,
+                            k,
+                        )
+                    finally:
+                        span.set_attribute(
+                            "memory.latency_ms", (time.perf_counter() - start) * 1000
+                        )
 
             combined = episodic + semantic
             combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
@@ -53,7 +82,19 @@ class MultiLayerRetriever:
         try:
             episodic = []
             if self.vector_store:
-                episodic = await self.vector_store.aretrieve_relevant_memories(agent_id, query, k)
+                with tracer.start_as_current_span("memory.episodic_retrieve") as span:
+                    span.set_attribute("llm.tokens.prompt", 0)
+                    span.set_attribute("llm.tokens.completion", 0)
+                    span.set_attribute("llm.tokens.total", 0)
+                    start = time.perf_counter()
+                    try:
+                        episodic = await self.vector_store.aretrieve_relevant_memories(
+                            agent_id, query, k
+                        )
+                    finally:
+                        span.set_attribute(
+                            "memory.latency_ms", (time.perf_counter() - start) * 1000
+                        )
             if self.semantic_manager:
                 try:
                     await self.semantic_manager.run_nightly_job(agent_id, episodic)

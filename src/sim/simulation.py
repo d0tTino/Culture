@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import numpy as np
+from opentelemetry import trace
 from pydantic import ValidationError
 from typing_extensions import Self
 
@@ -45,6 +46,8 @@ from src.sim.version_vector import VersionVector
 from src.sim.world_map import WorldMap
 
 from .event_bus import get_event_bus
+
+tracer = trace.get_tracer(__name__)
 
 # Use TYPE_CHECKING to avoid circular import issues if Agent needs Simulation later
 if TYPE_CHECKING:
@@ -777,28 +780,38 @@ class Simulation:
         logger.info(f"  - IP: {current_agent_state.ip:.1f} (from {ip_start})")
         logger.info(f"  - DU: {current_agent_state.du:.1f} (from {du_start})")
 
-        event = log_event(
-            {
-                "type": "agent_action",
-                "agent_id": agent_id,
-                "step": self.current_step,
-                "action_intent": action_intent_str,
-                "ip": current_agent_state.ip,
-                "du": current_agent_state.du,
-            }
-        )
-        if event is None:
-            event = {
-                "type": "agent_action",
-                "agent_id": agent_id,
-                "step": self.current_step,
-                "action_intent": action_intent_str,
-                "ip": current_agent_state.ip,
-                "du": current_agent_state.du,
-            }
-            event["trace_hash"] = compute_trace_hash(event)
-        trace_hash = event["trace_hash"]
-        await emit_event(SimulationEvent(type="agent_action", data=event))
+        with tracer.start_as_current_span("simulation.agent_action") as span:
+            span.set_attribute("agent.id", agent_id)
+            span.set_attribute("simulation.step", self.current_step)
+            span.set_attribute("llm.tokens.prompt", 0)
+            span.set_attribute("llm.tokens.completion", 0)
+            span.set_attribute("llm.tokens.total", 0)
+            start = time.perf_counter()
+            try:
+                event = log_event(
+                    {
+                        "type": "agent_action",
+                        "agent_id": agent_id,
+                        "step": self.current_step,
+                        "action_intent": action_intent_str,
+                        "ip": current_agent_state.ip,
+                        "du": current_agent_state.du,
+                    }
+                )
+                if event is None:
+                    event = {
+                        "type": "agent_action",
+                        "agent_id": agent_id,
+                        "step": self.current_step,
+                        "action_intent": action_intent_str,
+                        "ip": current_agent_state.ip,
+                        "du": current_agent_state.du,
+                    }
+                    event["trace_hash"] = compute_trace_hash(event)
+                trace_hash = event["trace_hash"]
+                await emit_event(SimulationEvent(type="agent_action", data=event))
+            finally:
+                span.set_attribute("simulation.latency_ms", (time.perf_counter() - start) * 1000)
 
         if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
             snapshot = {
