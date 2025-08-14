@@ -203,15 +203,39 @@ class SimulationDiscordBot:
                 async def _tree_start(interaction: "discord.Interaction") -> None:
                     with tracer.start_as_current_span("discord.command") as span:
                         span.set_attribute("discord.command.name", "start")
-                        await start_simulation(self.context)
-                        await interaction.response.send_message("start", ephemeral=True)
+                        try:
+                            await start_simulation(self.context)
+                        except Exception as exc:
+                            embed = self.create_start_embed(False, str(exc))
+                            await self.send_simulation_update(embed=embed)
+                            await interaction.response.send_message(
+                                "start failed", ephemeral=True
+                            )
+                        else:
+                            embed = self.create_start_embed(True)
+                            await self.send_simulation_update(embed=embed)
+                            await interaction.response.send_message(
+                                "start", ephemeral=True
+                            )
 
                 @tree.command(name="stop")
                 async def _tree_stop(interaction: "discord.Interaction") -> None:
                     with tracer.start_as_current_span("discord.command") as span:
                         span.set_attribute("discord.command.name", "stop")
-                        await stop_simulation(self.context)
-                        await interaction.response.send_message("stop", ephemeral=True)
+                        try:
+                            await stop_simulation(self.context)
+                        except Exception as exc:
+                            embed = self.create_stop_embed(False, str(exc))
+                            await self.send_simulation_update(embed=embed)
+                            await interaction.response.send_message(
+                                "stop failed", ephemeral=True
+                            )
+                        else:
+                            embed = self.create_stop_embed(True)
+                            await self.send_simulation_update(embed=embed)
+                            await interaction.response.send_message(
+                                "stop", ephemeral=True
+                            )
 
                 @tree.command(name="spawn")
                 @app_commands.describe(agent_id="ID of the agent to spawn")
@@ -221,10 +245,20 @@ class SimulationDiscordBot:
                     with tracer.start_as_current_span("discord.command") as span:
                         span.set_attribute("discord.command.name", "spawn")
                         span.set_attribute("discord.agent.id", agent_id)
-                        await spawn_agent_command(agent_id, self.context)
-                        await interaction.response.send_message(
-                            f"spawn {agent_id}", ephemeral=True
-                        )
+                        try:
+                            await spawn_agent_command(agent_id, self.context)
+                        except Exception as exc:
+                            embed = self.create_spawn_embed(agent_id, False, str(exc))
+                            await self.send_simulation_update(embed=embed)
+                            await interaction.response.send_message(
+                                f"spawn {agent_id} failed", ephemeral=True
+                            )
+                        else:
+                            embed = self.create_spawn_embed(agent_id, True)
+                            await self.send_simulation_update(embed=embed)
+                            await interaction.response.send_message(
+                                f"spawn {agent_id}", ephemeral=True
+                            )
 
             @client.event
             async def on_ready(
@@ -428,6 +462,42 @@ class SimulationDiscordBot:
             except (RuntimeError, ValueError, TypeError) as e:
                 logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
                 return False
+
+    def create_start_embed(self: Self, success: bool, reason: str | None = None) -> Any:
+        """Create an embed indicating simulation start success or failure."""
+        title = "✅ Simulation Started" if success else "❌ Simulation Start Failed"
+        embed = discord.Embed(
+            title=title,
+            description=None if success else reason,
+            color=discord.Color.green() if success else discord.Color.red(),
+        )
+        return embed
+
+    def create_stop_embed(self: Self, success: bool, reason: str | None = None) -> Any:
+        """Create an embed indicating simulation stop success or failure."""
+        title = "🛑 Simulation Stopped" if success else "❌ Simulation Stop Failed"
+        embed = discord.Embed(
+            title=title,
+            description=None if success else reason,
+            color=discord.Color.green() if success else discord.Color.red(),
+        )
+        return embed
+
+    def create_spawn_embed(
+        self: Self, agent_id: str, success: bool, reason: str | None = None
+    ) -> Any:
+        """Create an embed indicating agent spawn success or failure."""
+        title = (
+            f"🚀 Agent {agent_id[:8]} Spawned"
+            if success
+            else f"❌ Failed to Spawn Agent {agent_id[:8]}"
+        )
+        embed = discord.Embed(
+            title=title,
+            description=None if success else reason,
+            color=discord.Color.green() if success else discord.Color.red(),
+        )
+        return embed
 
     def create_step_start_embed(self: Self, step: int) -> Any:
         """Creates an embed for simulation step start"""
@@ -870,8 +940,18 @@ async def slash_start(interaction: Any) -> None:
     """Start the simulation via a control command."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await start_simulation(ctx)
-    await interaction.response.send_message("start", ephemeral=True)
+    try:
+        await start_simulation(ctx)
+    except Exception as exc:
+        if bot_instance is not None:
+            embed = bot_instance.create_start_embed(False, str(exc))
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message("start failed", ephemeral=True)
+    else:
+        if bot_instance is not None:
+            embed = bot_instance.create_start_embed(True)
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message("start", ephemeral=True)
 
 
 @bot.tree.command(name="stop")
@@ -879,8 +959,18 @@ async def slash_stop(interaction: Any) -> None:
     """Stop the simulation via a control command."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await stop_simulation(ctx)
-    await interaction.response.send_message("stop", ephemeral=True)
+    try:
+        await stop_simulation(ctx)
+    except Exception as exc:
+        if bot_instance is not None:
+            embed = bot_instance.create_stop_embed(False, str(exc))
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message("stop failed", ephemeral=True)
+    else:
+        if bot_instance is not None:
+            embed = bot_instance.create_stop_embed(True)
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message("stop", ephemeral=True)
 
 
 @bot.tree.command(name="spawn")
@@ -888,8 +978,22 @@ async def slash_spawn(interaction: Any, agent_id: str) -> None:
     """Spawn a new agent in the simulation."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await spawn_agent_command(agent_id, ctx)
-    await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
+    try:
+        await spawn_agent_command(agent_id, ctx)
+    except Exception as exc:
+        if bot_instance is not None:
+            embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message(
+            f"spawn {agent_id} failed", ephemeral=True
+        )
+    else:
+        if bot_instance is not None:
+            embed = bot_instance.create_spawn_embed(agent_id, True)
+            await bot_instance.send_simulation_update(embed=embed)
+        await interaction.response.send_message(
+            f"spawn {agent_id}", ephemeral=True
+        )
 
 
 @bot.tree.command(name="set_speed")

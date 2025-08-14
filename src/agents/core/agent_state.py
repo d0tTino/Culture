@@ -598,7 +598,12 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
                     },
                 ),
             )
-        return base_model.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"})
+        return cast(
+            dict[str, Any],
+            base_model.dict(
+                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
+            ),
+        )
 
     @classmethod
     def from_dict(cls: type[Self], data: dict[str, Any]) -> "AgentState":

@@ -136,6 +136,12 @@ class Simulation:
 
         # Lock for concurrent access to message queues
         self._msg_lock = asyncio.Lock()
+        self._last_kb_time = 0.0
+        self._last_relay_time = 0.0
+        self._kb_cooldown = float(config.get_config("DISCORD_KB_RATE_LIMIT_SECONDS") or 1.0)
+        self._relay_cooldown = float(
+            config.get_config("DISCORD_MESSAGE_RATE_LIMIT_SECONDS") or 1.0
+        )
 
         # --- Store the simulation scenario ---
         self.scenario = scenario
@@ -303,7 +309,11 @@ class Simulation:
 
     async def _handle_human_command(self: Self, text: str) -> None:
         """Handle a human-issued command or prompt."""
+        now = time.monotonic()
         if text.startswith("/kb ") and self.knowledge_board:
+            if now - self._last_kb_time < self._kb_cooldown:
+                return
+            self._last_kb_time = now
             entry = text[4:].strip()
             if entry:
                 async with self.knowledge_board.lock:
@@ -314,6 +324,10 @@ class Simulation:
                         self.vector.to_dict(),
                     )
             return
+
+        if now - self._last_relay_time < self._relay_cooldown:
+            return
+        self._last_relay_time = now
 
         if not self.agents:
             return
