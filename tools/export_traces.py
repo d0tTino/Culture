@@ -33,7 +33,7 @@ def load_metrics(file: str | Path) -> dict[str, list[tuple[int, float]]]:
 
 
 def bundle_replay(trace_file: str | Path, bundle: str | Path) -> Path:
-    """Package logs, metrics and RNG seed into a single archive.
+    """Package logs, metrics, scenario metrics, and RNG seed into a single archive.
 
     Parameters
     ----------
@@ -49,6 +49,10 @@ def bundle_replay(trace_file: str | Path, bundle: str | Path) -> Path:
     """
     trace_path = Path(trace_file)
     metrics = load_metrics(trace_path)
+    scenario_metrics = {
+        key: metrics.get(key, [])
+        for key in ("coalitions", "sentiment", "collective_du", "collective_ip")
+    }
     seed: int | None = None
     with trace_path.open("r", encoding="utf-8") as fh:
         for line in fh:
@@ -62,6 +66,8 @@ def bundle_replay(trace_file: str | Path, bundle: str | Path) -> Path:
         shutil.copy(trace_path, tmp / "logs.jsonl")
         with (tmp / "metrics.json").open("w", encoding="utf-8") as mfh:
             json.dump(metrics, mfh)
+        with (tmp / "scenario_metrics.json").open("w", encoding="utf-8") as smfh:
+            json.dump(scenario_metrics, smfh)
         if seed is not None:
             with (tmp / "seed.txt").open("w", encoding="utf-8") as sfh:
                 sfh.write(str(seed))
