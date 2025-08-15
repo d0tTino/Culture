@@ -1,6 +1,8 @@
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable, Iterable, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -21,6 +23,14 @@ from tests.unit.memory.test_semantic_memory_manager import DummyDriver
 BenchFunc = Callable[[], Awaitable[Sequence[Any]]]
 BenchMetrics = dict[str, float]
 BenchFixture = Callable[[BenchFunc, Iterable[str], int], Awaitable[BenchMetrics]]
+
+
+@pytest.fixture
+def recall_fixture() -> dict[str, list[str]]:
+    """Load mapping of query to expected memory IDs."""
+    path = Path(__file__).parents[2] / "data" / "recall_fixture.json"
+    with path.open() as f:
+        return cast(dict[str, list[str]], json.load(f))
 
 
 @pytest.fixture
@@ -48,9 +58,11 @@ def recall_benchmark() -> BenchFixture:
 
 @pytest.fixture
 def benchmark_cases(
-    chroma_test_dir: Path, event_loop: asyncio.AbstractEventLoop
+    recall_fixture: dict[str, list[str]],
+    chroma_test_dir: Path,
+    event_loop: asyncio.AbstractEventLoop,
 ) -> list[tuple[BenchFunc, set[str]]]:
-    """Prepare 30 retrieval cases for benchmarking."""
+    """Prepare retrieval cases for benchmarking based on fixture data."""
 
     class _Embed:
         def __call__(self, input: list[str]) -> list[list[float]]:
@@ -67,22 +79,54 @@ def benchmark_cases(
     semantic = SemanticMemoryManager(vector, driver)
     service = MemoryService(vector, semantic)
 
-    relevant_ids = set()
+    def _add_memory(mid: str, content: str, step: int) -> None:
+        embedding = vector.get_embedding(content)
+        metadata = {
+            "agent_id": "agent",
+            "step": step,
+            "event_type": "thought",
+            "memory_type": "raw",
+            "timestamp": datetime.utcnow().isoformat(),
+            "retrieval_count": 0,
+            "usage_count": 0,
+            "last_retrieved_timestamp": "",
+            "accumulated_relevance_score": 0.0,
+            "retrieval_relevance_count": 0,
+        }
+        vector.collection.add(
+            ids=[mid],
+            embeddings=[embedding],
+            documents=[content],
+            metadatas=[metadata],
+        )
+
+    step = 0
+    for query, ids in recall_fixture.items():
+        for i, mid in enumerate(ids):
+            _add_memory(mid, f"{query} {i}", step)
+            step += 1
     for i in range(5):
-        mid = vector.add_memory("agent", i, "thought", f"cat {i}", memory_type="raw")
-        relevant_ids.add(mid)
-    for i in range(5):
-        vector.add_memory("agent", i + 5, "thought", f"dog {i}", memory_type="raw")
+        _add_memory(f"dog_{i}", f"dog {i}", step + i)
 
     event_loop.run_until_complete(service.run_semantic_job("agent"))
 
-    async def retrieval() -> Sequence[Any]:
-        return cast(
-            Sequence[Any],
-            await service.retrieve_relevant_memories("agent", "cat", k=5),
-        )
+    cases: list[tuple[BenchFunc, set[str]]] = []
 
-    return [(retrieval, relevant_ids) for _ in range(30)]
+    def make_retrieval(q: str) -> BenchFunc:
+        async def _retrieval() -> Sequence[Any]:
+            return cast(
+                Sequence[Any],
+                await service.retrieve_relevant_memories("agent", q, k=5),
+            )
+
+        return _retrieval
+
+    for query, ids in recall_fixture.items():
+        retrieval = make_retrieval(query)
+        for _ in range(30):
+            cases.append((retrieval, set(ids)))
+
+    return cases
 
 
 @pytest.mark.integration
