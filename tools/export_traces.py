@@ -9,31 +9,51 @@ import shutil
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import matplotlib.pyplot as plt
 
 
-def load_metrics(file: str | Path) -> dict[str, list[tuple[int, float]]]:
-    data: dict[str, list[tuple[int, float]]] = defaultdict(list)
+def iter_events(
+    file: str | Path, start: int = 0, end: int | None = None
+) -> Iterator[dict[str, Any]]:
+    """Yield events from ``file`` within the given tick range."""
     with Path(file).open("r", encoding="utf-8") as fh:
         for line in fh:
             obj: dict[str, Any] = json.loads(line)
-            if obj.get("type") != "evaluation":
+            tick = int(obj.get("tick", obj.get("step", 0)))
+            if tick < start:
                 continue
-            step = obj.get("step")
-            if not isinstance(step, int):
+            if end is not None and tick > end:
+                break
+            yield obj
+
+
+def load_metrics(
+    file: str | Path, start: int = 0, end: int | None = None
+) -> dict[str, list[tuple[int, float]]]:
+    data: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    for obj in iter_events(file, start, end):
+        if obj.get("type") != "evaluation":
+            continue
+        step = obj.get("step")
+        if not isinstance(step, int):
+            continue
+        for key, value in obj.items():
+            if key in {"type", "step", "trace_hash"}:
                 continue
-            for key, value in obj.items():
-                if key in {"type", "step", "trace_hash"}:
-                    continue
-                if isinstance(value, (int, float)):
-                    data[key].append((step, float(value)))
+            if isinstance(value, (int, float)):
+                data[key].append((step, float(value)))
     return data
 
 
-def bundle_replay(trace_file: str | Path, bundle: str | Path) -> Path:
-    """Package logs, metrics and RNG seed into a single archive.
+def bundle_replay(
+    trace_file: str | Path,
+    bundle: str | Path,
+    start: int = 0,
+    end: int | None = None,
+) -> Path:
+    """Package sliced logs, metrics and RNG seed into a single archive.
 
     Parameters
     ----------
@@ -48,18 +68,17 @@ def bundle_replay(trace_file: str | Path, bundle: str | Path) -> Path:
         Path to the created ``.tar.gz`` archive.
     """
     trace_path = Path(trace_file)
-    metrics = load_metrics(trace_path)
+    metrics = load_metrics(trace_path, start, end)
     seed: int | None = None
-    with trace_path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            obj = json.loads(line)
-            if "seed" in obj:
-                seed = obj["seed"]
-                break
-
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
-        shutil.copy(trace_path, tmp / "logs.jsonl")
+        logs_path = tmp / "logs.jsonl"
+        with logs_path.open("w", encoding="utf-8") as out:
+            for obj in iter_events(trace_path, start, end):
+                if seed is None and "seed" in obj:
+                    seed = obj["seed"]
+                out.write(json.dumps(obj))
+                out.write("\n")
         with (tmp / "metrics.json").open("w", encoding="utf-8") as mfh:
             json.dump(metrics, mfh)
         if seed is not None:
@@ -76,9 +95,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("traces", help="Path to JSONL trace file")
     parser.add_argument("--outdir", default="plots", help="Directory to store plots")
     parser.add_argument("--bundle", help="Output path for replay bundle (without extension)")
+    parser.add_argument("--start", type=int, default=0, help="First tick to include")
+    parser.add_argument("--end", type=int, help="Last tick to include")
     args = parser.parse_args(argv)
 
-    metrics = load_metrics(args.traces)
+    metrics = load_metrics(args.traces, args.start, args.end)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -97,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         plt.close()
 
     if args.bundle:
-        bundle_replay(args.traces, args.bundle)
+        bundle_replay(args.traces, args.bundle, args.start, args.end)
 
     return 0
 

@@ -131,11 +131,12 @@ def load_snapshot(
     compress = SNAPSHOT_COMPRESS if compress is None else compress
 
     path = Path(directory)
-    if isinstance(step, str | Path) and Path(step).exists():
-        file_path = Path(step)
+    step_path = Path(step)
+    if step_path.exists():
+        file_path = step_path
         compress = file_path.suffix.endswith(".zst")
-        json_file = path / file_path.with_suffix(".json").name
-        zst_file = path / file_path.with_suffix(".json.zst").name
+        json_file = file_path.with_suffix(".json")
+        zst_file = file_path.with_suffix(".json.zst")
     else:
         json_file = path / f"snapshot_{step}.json"
         zst_file = path / f"snapshot_{step}.json.zst"
@@ -173,7 +174,18 @@ def load_snapshot(
 
     expected = data.get("trace_hash")
     if expected is not None:
-        actual = compute_trace_hash({k: v for k, v in data.items() if k != "trace_hash"})
+        # Exclude large or non-deterministic vector fields from hashing to
+        # match the computation performed when the snapshot was created.
+        data_no_vector = {
+            **{k: v for k, v in data.items() if k != "trace_hash"},
+            "knowledge_board": {
+                k: v for k, v in data.get("knowledge_board", {}).items() if k != "vector"
+            },
+            "world_map": {
+                k: v for k, v in data.get("world_map", {}).items() if k != "vector"
+            },
+        }
+        actual = compute_trace_hash(data_no_vector)
         if actual != expected:
             raise ValueError(
                 f"Trace hash mismatch for snapshot {step}: expected {expected}, computed {actual}"

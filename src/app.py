@@ -331,6 +331,9 @@ def main() -> None:
         log_suppressed=args.log_suppressed_warnings,
     )
 
+    if args.seed is not None:
+        event_log.set_seed(args.seed)
+
     sim: Simulation
     meta: dict[str, object] | None = None
     if args.replay:
@@ -348,9 +351,7 @@ def main() -> None:
             out_path = Path(args.export_dataset)
             with out_path.open("w", encoding="utf-8") as fh:
                 after = (args.replay_start or 0) - 1
-                for ev in event_log.stream_events(
-                    after_step=after, end_step=args.replay_end
-                ):
+                for ev in event_log.stream_events(after_step=after, end_step=args.replay_end):
                     step = int(ev.get("step", 0))
                     if args.replay_start is not None and step < args.replay_start:
                         continue

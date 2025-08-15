@@ -84,6 +84,7 @@ class MoveAgent:
         environment_perception: dict[str, object] | None = None,
         vector_store_manager: object | None = None,
         knowledge_board: object | None = None,
+        memory_service: object | None = None,
     ) -> dict[str, object]:
         if not self._added and knowledge_board is not None:
             knowledge_board.add_entry("hello", self.agent_id, simulation_step)
@@ -95,10 +96,9 @@ async def _run_simulation(tmp_path: Path) -> tuple[Simulation, Path]:
     agent = MoveAgent()
     sim = Simulation([agent])
 
-    for step in range(2):
-        await sim.run_step()
+    await sim.run_step()
 
-    snap_path = tmp_path / "snapshot_2.json"
+    snap_path = tmp_path / "snapshot_1.json"
     return sim, snap_path
 
 

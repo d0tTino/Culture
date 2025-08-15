@@ -25,6 +25,13 @@ _producer: Any | None = None
 _last_hash: str | None = None
 _seed: int | None = None
 
+
+def set_seed(seed: int) -> None:
+    """Inject a stable seed value for event logging."""
+    global _seed
+    _seed = seed
+
+
 _consumer_conf = {
     "bootstrap.servers": _broker,
     "group.id": os.getenv("REPLAY_GROUP", "culture-replay"),
@@ -39,9 +46,7 @@ def _log_file(path: str | Path | None = None) -> Path:
     return Path(os.getenv("EVENT_LOG_PATH", "event_log.jsonl"))
 
 
-def _is_valid_event(
-    event: dict[str, Any], last_step: int, last_hash: str | None
-) -> bool:
+def _is_valid_event(event: dict[str, Any], last_step: int, last_hash: str | None) -> bool:
     """Check ``event`` ordering and integrity."""
     step = event.get("step", 0)
     if step <= last_step:
