@@ -10,6 +10,8 @@ from collections.abc import Generator, Iterable
 from pathlib import Path
 from typing import Any
 
+from opentelemetry import trace
+
 try:  # pragma: no cover - optional dependency
     from confluent_kafka import Consumer as KafkaConsumer
     from confluent_kafka import Producer as KafkaProducer
@@ -17,6 +19,8 @@ except Exception:  # pragma: no cover - fallback
     KafkaConsumer = KafkaProducer = Any
 
 from src.infra.snapshot import compute_trace_hash
+
+tracer = trace.get_tracer(__name__)
 
 _broker = os.getenv("REDPANDA_BROKER", "localhost:9092")
 _topic = os.getenv("REDPANDA_TOPIC", "culture.events")
@@ -166,38 +170,46 @@ def fetch_events(
     path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve events from the log after ``after_step``."""
+    source = "redpanda" if os.getenv("ENABLE_REDPANDA", "0") == "1" else "file"
+    with tracer.start_as_current_span("event_log.fetch_events") as span:
+        span.set_attribute("event.source", source)
+        span.set_attribute("tick.start", after_step)
+        if end_step is not None:
+            span.set_attribute("tick.end", end_step)
 
-    if os.getenv("ENABLE_REDPANDA", "0") != "1":
-        events = list(_iter_file_events(after_step, end_step, path=path))
-        return _filter_events(events, after_step=after_step)
+        if source == "file":
+            events = list(_iter_file_events(after_step, end_step, path=path))
+            return _filter_events(events, after_step=after_step)
 
-    raw_events: list[dict[str, Any]] = []
-    try:
-        consumer = KafkaConsumer(_consumer_conf)
-        consumer.subscribe([_topic])
-        while True:
-            msg = consumer.poll(0.1)
-            if msg is None:
-                break
-            if msg.error():
-                break
-            try:
-                event = json.loads(msg.value().decode("utf-8"))
-            except Exception:
-                continue
-            step = event.get("step", 0)
-            if step > after_step and (end_step is None or step <= end_step):
-                raw_events.append(event)
-    except Exception as exc:  # pragma: no cover - best effort
-        import logging
-
-        logging.getLogger(__name__).debug("Failed to fetch events: %s", exc)
-    finally:
+        raw_events: list[dict[str, Any]] = []
+        consumer: Any | None = None
         try:
-            consumer.close()
-        except Exception:  # pragma: no cover - ignore
-            pass
-    return _filter_events(raw_events, after_step=after_step)
+            consumer = KafkaConsumer(_consumer_conf)
+            consumer.subscribe([_topic])
+            while True:
+                msg = consumer.poll(0.1)
+                if msg is None:
+                    break
+                if msg.error():
+                    break
+                try:
+                    event = json.loads(msg.value().decode("utf-8"))
+                except Exception:
+                    continue
+                step = event.get("step", 0)
+                if step > after_step and (end_step is None or step <= end_step):
+                    raw_events.append(event)
+        except Exception as exc:  # pragma: no cover - best effort
+            import logging
+
+            logging.getLogger(__name__).debug("Failed to fetch events: %s", exc)
+        finally:
+            try:
+                if consumer is not None:
+                    consumer.close()
+            except Exception:  # pragma: no cover - ignore
+                pass
+        return _filter_events(raw_events, after_step=after_step)
 
 
 def stream_events(
@@ -208,41 +220,47 @@ def stream_events(
     path: str | Path | None = None,
 ) -> Generator[dict[str, Any], None, None]:
     """Yield events from the log or Redpanda until ``timeout`` of inactivity."""
+    source = "redpanda" if os.getenv("ENABLE_REDPANDA", "0") == "1" else "file"
+    with tracer.start_as_current_span("event_log.stream_events") as span:
+        span.set_attribute("event.source", source)
+        span.set_attribute("tick.start", after_step)
+        if end_step is not None:
+            span.set_attribute("tick.end", end_step)
 
-    if os.getenv("ENABLE_REDPANDA", "0") != "1":
-        yield from _filter_events(
-            _iter_file_events(after_step, end_step, path=path), after_step=after_step
-        )
-        return
+        if source == "file":
+            yield from _filter_events(
+                _iter_file_events(after_step, end_step, path=path), after_step=after_step
+            )
+            return
 
-    start = time.time()
-    consumer = KafkaConsumer(_consumer_conf)
-    consumer.subscribe([_topic])
-    last_step = after_step
-    last_hash: str | None = None
-    try:
-        while True:
-            msg = consumer.poll(0.1)
-            if msg is None:
-                if time.time() - start > timeout:
-                    break
-                continue
-            start = time.time()
-            if msg.error():
-                break
-            try:
-                event = json.loads(msg.value().decode("utf-8"))
-            except Exception:
-                continue
-            if _is_valid_event(event, last_step, last_hash):
-                last_step = event.get("step", last_step)
-                last_hash = event.get("trace_hash")
-                step = event.get("step", 0)
-                if end_step is not None and step > end_step:
-                    break
-                yield event
-    finally:
+        start = time.time()
+        consumer = KafkaConsumer(_consumer_conf)
+        consumer.subscribe([_topic])
+        last_step = after_step
+        last_hash: str | None = None
         try:
-            consumer.close()
-        except Exception:  # pragma: no cover - ignore
-            pass
+            while True:
+                msg = consumer.poll(0.1)
+                if msg is None:
+                    if time.time() - start > timeout:
+                        break
+                    continue
+                start = time.time()
+                if msg.error():
+                    break
+                try:
+                    event = json.loads(msg.value().decode("utf-8"))
+                except Exception:
+                    continue
+                if _is_valid_event(event, last_step, last_hash):
+                    last_step = event.get("step", last_step)
+                    last_hash = event.get("trace_hash")
+                    step = event.get("step", 0)
+                    if end_step is not None and step > end_step:
+                        break
+                    yield event
+        finally:
+            try:
+                consumer.close()
+            except Exception:  # pragma: no cover - ignore
+                pass

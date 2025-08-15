@@ -931,7 +931,17 @@ class Simulation:
             metrics: dict[str, Any] = {}
             for hook in self.evaluation_hooks:
                 try:
-                    metrics.update(hook(self, []) or {})
+                    with tracer.start_as_current_span(
+                        "simulation.evaluation_hook"
+                    ) as span:
+                        span.set_attribute(
+                            "hook.name", getattr(hook, "__name__", repr(hook))
+                        )
+                        span.set_attribute("simulation.step", self.current_step)
+                        result = hook(self, []) or {}
+                        for key, value in result.items():
+                            span.set_attribute(f"metric.{key}", value)
+                        metrics.update(result)
                 except Exception:  # pragma: no cover - defensive
                     logger.exception("Evaluation hook failed")
             metrics["beat"] = self.beats[self._beat_index]
@@ -1116,8 +1126,17 @@ class Simulation:
             metrics: dict[str, Any] = {}
             for hook in self.evaluation_hooks:
                 try:
-                    result = hook(self, events) or {}
-                    metrics.update(result)
+                    with tracer.start_as_current_span(
+                        "simulation.evaluation_hook"
+                    ) as span:
+                        span.set_attribute(
+                            "hook.name", getattr(hook, "__name__", repr(hook))
+                        )
+                        span.set_attribute("simulation.step", self.current_step)
+                        result = hook(self, events) or {}
+                        for key, value in result.items():
+                            span.set_attribute(f"metric.{key}", value)
+                        metrics.update(result)
                 except Exception:
                     logger.exception("Evaluation hook failed")
             if metrics:
