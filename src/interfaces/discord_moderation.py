@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 from src.interfaces.dashboard_backend import DEFAULT_CONTEXT, SimulationEvent
-from src.interfaces.discord_bot import bot, get_active_bot
+from src.interfaces.discord_bot import bot, get_active_bot, has_admin_permission
 from src.utils.policy import evaluate_with_opa
 
 _ACTION_COUNTS: dict[str, int] = {}
@@ -72,6 +72,9 @@ async def slash_reset_memory(interaction: Any, agent_id: str) -> None:
     """Reset the memory of an agent."""
     bot_instance = get_active_bot()
     ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+    if not has_admin_permission(getattr(interaction, "user", None)):
+        await interaction.response.send_message("unauthorized", ephemeral=True)
+        return
     if not await _rate_limit(getattr(interaction, "user", None), "reset_memory", agent_id):
         await ctx.get_event_queue().put(
             SimulationEvent(
