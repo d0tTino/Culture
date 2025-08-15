@@ -23,7 +23,8 @@ class DummyBot:
 
 class DummyInteraction:
     def __init__(self) -> None:
-        self.user = SimpleNamespace(id=123)
+        perms = SimpleNamespace(administrator=True)
+        self.user = SimpleNamespace(id=123, guild_permissions=perms)
         self.response = SimpleNamespace(send_message=AsyncMock())
 
 

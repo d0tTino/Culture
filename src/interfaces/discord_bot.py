@@ -871,7 +871,10 @@ if not hasattr(bot, "tree"):
     # implementation lacks the ``tree`` attribute (e.g. in unit tests).
     from types import SimpleNamespace
 
-    bot.tree = SimpleNamespace(command=lambda *args, **kwargs: (lambda fn: fn))  # type: ignore[assignment]
+    bot.tree = SimpleNamespace(
+        command=lambda *args, **kwargs: (lambda fn: fn),
+        add_check=lambda *a, **k: None,
+    )  # type: ignore[assignment]
 
 
 def get_llm_latency() -> float:
@@ -885,6 +888,65 @@ def get_kb_size() -> int:
 def get_active_bot(ctx: SimulationContext = DEFAULT_CONTEXT) -> "SimulationDiscordBot | None":
     """Return the active bot stored in the given context."""
     return cast("SimulationDiscordBot | None", ctx.sim_state.get("discord_bot"))
+
+
+# --- Command rate limiting -------------------------------------------------
+
+_COMMAND_COUNTS: dict[str, int] = {}
+_COMMAND_LOCKS: dict[str, asyncio.Lock] = {}
+_MAX_RATE: int = 5
+
+
+def has_admin_permission(user: Any) -> bool:
+    """Return True if the Discord user has administrator permissions."""
+    perms = getattr(getattr(user, "guild_permissions", None), "administrator", False)
+    return bool(perms)
+
+
+async def check_command_rate_limit(user: Any) -> bool:
+    """Increment and check the rate limit for the given user."""
+    user_id = str(getattr(user, "id", ""))
+    if not user_id:
+        return True
+    lock = _COMMAND_LOCKS.setdefault(user_id, asyncio.Lock())
+    async with lock:
+        count = _COMMAND_COUNTS.get(user_id, 0)
+        if count >= _MAX_RATE:
+            logger.warning("Rate limit exceeded for user %s", user_id)
+            return False
+        _COMMAND_COUNTS[user_id] = count + 1
+    return True
+
+
+def reset_command_counts(user_id: str | None = None) -> None:
+    """Reset stored command counts for a user or all users."""
+    if user_id is not None:
+        _COMMAND_COUNTS.pop(user_id, None)
+    else:
+        _COMMAND_COUNTS.clear()
+
+
+def set_max_rate(value: int) -> None:
+    """Set the maximum allowed commands per user."""
+    global _MAX_RATE
+    _MAX_RATE = max(1, int(value))
+
+
+async def _rate_limit_check(interaction: Any) -> bool:
+    """Global slash-command check enforcing per-user rate limits."""
+    if await check_command_rate_limit(getattr(interaction, "user", None)):
+        return True
+    try:
+        await send_interaction_response(
+            interaction, "rate limit exceeded", ephemeral=True
+        )
+    except Exception:  # pragma: no cover - best effort
+        pass
+    return False
+
+
+if hasattr(bot.tree, "add_check"):
+    bot.tree.add_check(_rate_limit_check)
 
 
 @bot.command(name="say")
@@ -1031,9 +1093,30 @@ async def slash_spawn(interaction: Any, agent_id: str) -> None:
     else:
         if bot_instance is not None:
             embed = bot_instance.create_spawn_embed(agent_id, True)
-            await bot_instance.send_simulation_update(embed=embed)
+        await bot_instance.send_simulation_update(embed=embed)
         await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
 
+
+@bot.tree.command(name="kill")
+async def slash_kill(interaction: Any) -> None:
+    """Shutdown the bot. Administrator only."""
+    if not has_admin_permission(getattr(interaction, "user", None)):
+        await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+        return
+    await send_interaction_response(interaction, "shutting down", ephemeral=True)
+    await bot.close()
+
+
+@bot.tree.command(name="set_max_rate")
+async def slash_set_max_rate(interaction: Any, value: int) -> None:
+    """Adjust the per-user command rate limit."""
+    if not has_admin_permission(getattr(interaction, "user", None)):
+        await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+        return
+    set_max_rate(value)
+    await send_interaction_response(
+        interaction, f"max rate set to {value}", ephemeral=True
+    )
 
 
 @bot.tree.command(name="set_speed")

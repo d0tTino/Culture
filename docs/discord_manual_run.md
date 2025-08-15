@@ -101,6 +101,19 @@ Applies an IP/DU penalty to the agent.
 All moderation commands are rate limited on a per-agent basis. Exceeding the
 limit automatically issues IP and DU penalties as a safety rail.
 
+### Administrative Commands
+
+```text
+/set_max_rate 10
+```
+Sets the maximum number of commands a user may invoke before being throttled.
+Requires administrator permissions.
+
+```text
+/kill
+```
+Shuts down the bot. Administrator only.
+
 ### Using Multiple Bot Tokens
 You can run the simulation with several Discord bot accounts. Tokens are stored
 in a PostgreSQL table named `discord_tokens` with columns `agent_id` and
