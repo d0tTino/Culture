@@ -68,6 +68,11 @@ RETRIEVAL_LATENCY_MS = Gauge(
     "retrieval_latency_ms", "Latency of retrieval operations in milliseconds"
 )
 P_AT_K = Gauge("p_at_k", "Precision at k for retrieval operations")
+RETRIEVAL_LATENCY_P95_MS = Gauge(
+    "retrieval_latency_p95_ms",
+    "95th percentile latency of retrieval operations in milliseconds",
+)
+RECALL_P5 = Gauge("recall_p5", "Average recall@5 across retrieval operations")
 
 # Human interaction metrics
 HUMAN_MESSAGES_TOTAL = Counter(
@@ -84,11 +89,14 @@ PROPOSAL_THROUGHPUT = Gauge("proposal_throughput", "Proposals processed per minu
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
 LLM_DU_PER_1K_TOKENS = Gauge("llm_du_per_1k_tokens", "DU cost per 1k tokens for the last LLM call")
-AGENT_REMAINING_DU = Gauge(
-    "agent_remaining_du", "Remaining DU balance per agent", ["agent_id"]
-)
+AGENT_REMAINING_DU = Gauge("agent_remaining_du", "Remaining DU balance per agent", ["agent_id"])
 AGENT_DU_PER_1K_TOKENS = Gauge(
     "agent_du_per_1k_tokens", "DU cost per 1k tokens per agent", ["agent_id"]
+)
+AGENT_LLM_LATENCY_P95_MS = Gauge(
+    "agent_llm_latency_p95_ms",
+    "95th percentile latency of recent LLM calls per agent in milliseconds",
+    ["agent_id"],
 )
 
 # Start the metrics HTTP server when this module is imported
@@ -153,6 +161,16 @@ def get_p_at_k() -> float:
     return float(P_AT_K._value.get())
 
 
+def get_retrieval_latency_p95_ms() -> float:
+    """Return the 95th percentile retrieval latency in milliseconds."""
+    return float(RETRIEVAL_LATENCY_P95_MS._value.get())
+
+
+def get_recall_p5() -> float:
+    """Return the average recall@5 across retrieval operations."""
+    return float(RECALL_P5._value.get())
+
+
 def get_human_messages() -> int:
     """Return the total human messages received."""
     return int(HUMAN_MESSAGES_TOTAL._value.get())
@@ -175,6 +193,7 @@ def get_proposal_throughput() -> float:
 
 __all__ = [
     "AGENT_DU_PER_1K_TOKENS",
+    "AGENT_LLM_LATENCY_P95_MS",
     "AGENT_REMAINING_DU",
     "AVERAGE_SENTIMENT",
     "COALITION_COUNT",
@@ -190,9 +209,11 @@ __all__ = [
     "MEMORY_RETRIEVALS_TOTAL",
     "MEMORY_RETRIEVAL_ERRORS_TOTAL",
     "PROPOSAL_THROUGHPUT",
-    "RAG_HIT_RATE",
-    "RETRIEVAL_LATENCY_MS",
     "P_AT_K",
+    "RAG_HIT_RATE",
+    "RECALL_P5",
+    "RETRIEVAL_LATENCY_MS",
+    "RETRIEVAL_LATENCY_P95_MS",
     "Counter",
     "Gauge",
     "get_average_sentiment",
@@ -206,12 +227,11 @@ __all__ = [
     "get_llm_latency_p95",
     "get_memory_retrieval_errors",
     "get_memory_retrievals",
-    "get_rag_hit_rate",
-    "get_retrieval_latency_ms",
     "get_p_at_k",
-    "get_coalition_count",
-    "get_average_sentiment",
     "get_proposal_throughput",
     "get_rag_hit_rate",
+    "get_recall_p5",
+    "get_retrieval_latency_ms",
+    "get_retrieval_latency_p95_ms",
     "start_http_server",
 ]

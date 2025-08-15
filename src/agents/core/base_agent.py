@@ -33,6 +33,7 @@ from src.infra import config
 from src.infra.async_dspy_manager import AsyncDSPyManager
 from src.infra.config import get_config
 from src.infra.llm_client import LLMClientInitError, get_ollama_client
+from src.sim.resource_manager import get_resource_manager
 
 from .embedding_utils import compute_embedding
 from .roles import ensure_profile
@@ -435,6 +436,10 @@ class Agent:
         # Log received perception data
         if environment_perception:
             logger.debug(f"  Received environment perception: {environment_perception}")
+
+        # Enforce per-turn DU budget cap before any LLM calls
+        budget_cap = min(self._state.du, float(get_config("MAX_DU_PER_TICK")))
+        get_resource_manager().set_du_budget(self.agent_id, budget_cap)
 
         # --- Retrieve previous thought ---
         for memory in self._state.short_term_memory:

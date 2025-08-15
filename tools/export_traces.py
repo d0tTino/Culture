@@ -55,6 +55,7 @@ def bundle_replay(
 ) -> Path:
     """Package sliced logs, metrics and RNG seed into a single archive.
 
+
     Parameters
     ----------
     trace_file:
@@ -69,6 +70,7 @@ def bundle_replay(
     """
     trace_path = Path(trace_file)
     metrics = load_metrics(trace_path, start, end)
+
     seed: int | None = None
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
@@ -81,6 +83,8 @@ def bundle_replay(
                 out.write("\n")
         with (tmp / "metrics.json").open("w", encoding="utf-8") as mfh:
             json.dump(metrics, mfh)
+        with (tmp / "scenario_metrics.json").open("w", encoding="utf-8") as smfh:
+            json.dump(scenario_metrics, smfh)
         if seed is not None:
             with (tmp / "seed.txt").open("w", encoding="utf-8") as sfh:
                 sfh.write(str(seed))
