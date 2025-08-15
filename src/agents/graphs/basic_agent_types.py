@@ -120,3 +120,4 @@ class AgentTurnState(TypedDict):
     collective_ip: float | None
     collective_du: float | None
     trace_hash: NotRequired[str]
+    token_budget: NotRequired[int]

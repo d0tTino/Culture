@@ -12,6 +12,7 @@ from src.agents.graphs.graph_nodes import (
     generate_thought_and_message_node,
     prepare_relationship_prompt_node,
     retrieve_and_summarize_memories_node,
+    retriever_node,
 )
 
 
@@ -56,12 +57,18 @@ async def test_retrieve_and_summarize_memories_node_no_manager() -> None:
 
 class DummyService:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str, int, int]] = []
+        self.calls: list[tuple[str | None, int | None]] = []
 
     async def get_context_pipeline(
-        self, agent_id: str, query: str = "", k: int = 5, semantic_limit: int = 2
+        self,
+        agent_id: str,
+        query: str = "",
+        k: int = 5,
+        semantic_limit: int = 2,
+        *,
+        token_budget: int | None = None,
     ) -> tuple[list[dict[str, str]], list[str]]:
-        self.calls.append((agent_id, query, k, semantic_limit))
+        self.calls.append((agent_id, token_budget))
         return [{"content": "m1"}, {"content": "m2"}], ["sem1"]
 
     def blend_with_recent_semantic(
@@ -88,9 +95,56 @@ async def test_retrieve_and_summarize_memories_node_with_manager() -> None:
         "current_role": "r",
     }
     out = await retrieve_and_summarize_memories_node(cast(object, state))
-    assert service.calls == [("a", "", 5, 2)]
+    assert service.calls == [("a", None)]
     assert out["rag_summary"] == "SUM\nsem1"
     assert out["memory_history_list"] == [{"content": "m1"}, {"content": "m2"}]
+
+
+class DummyRetrieverService:
+    def __init__(self) -> None:
+        self.calls: list[int | None] = []
+
+    async def get_context_pipeline(
+        self, agent_id: str, query: str = "", k: int = 5, semantic_limit: int = 2, *, token_budget: int | None = None
+    ) -> tuple[list[dict[str, str]], list[str]]:
+        self.calls.append(token_budget)
+        return (
+            [{"content": "one two three"}, {"content": "four five"}],
+            ["six seven"],
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_retriever_node_merges_and_truncates() -> None:
+    service = DummyRetrieverService()
+    state = {"agent_id": "a", "memory_service": service, "token_budget": 5}
+    out = await retriever_node(cast(object, state))
+    assert service.calls == [5]
+    assert out["memory_context"] == ["one two three", "four five"]
+    assert out["memory_history_list"] == [
+        {"content": "one two three"},
+        {"content": "four five"},
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_summarize_uses_pre_retrieved_context() -> None:
+    service = DummyService()
+    agent = DummyAgent()
+    state = {
+        "agent_id": "a",
+        "memory_service": service,
+        "agent_instance": agent,
+        "current_role": "r",
+        "memory_context": ["m1", "sem1"],
+        "memory_history_list": [{"content": "m1"}],
+    }
+    out = await retrieve_and_summarize_memories_node(cast(object, state))
+    assert service.calls == []
+    assert out["rag_summary"] == "SUM\nsem1"
+    assert out["memory_history_list"] == [{"content": "m1"}]
 
 
 @pytest.mark.asyncio

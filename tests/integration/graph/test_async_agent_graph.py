@@ -20,7 +20,13 @@ class DummyVectorStore:
 
 class DummyService:
     async def get_context_pipeline(
-        self, agent_id: str, query: str = "", k: int = 5, semantic_limit: int = 2
+        self,
+        agent_id: str,
+        query: str = "",
+        k: int = 5,
+        semantic_limit: int = 2,
+        *,
+        token_budget: int | None = None,
     ) -> tuple[list[dict[str, str]], list[str]]:
         return [{"content": "memory1"}], ["summary1"]
 
@@ -43,6 +49,7 @@ from src.agents.graphs.graph_nodes import (
     finalize_message_agent_node,
     generate_thought_and_message_node,
     retrieve_and_summarize_memories_node,
+    retriever_node,
 )
 from src.infra.async_dspy_manager import AsyncDSPyManager
 
@@ -139,6 +146,7 @@ async def test_dspy_call_timeout_in_graph(
     )
 
     async def dummy_ainvoke(state: AgentTurnState) -> AgentTurnState:
+        state.update(await retriever_node(state))
         state.update(await retrieve_and_summarize_memories_node(state))
         state.update(await generate_thought_and_message_node(state))
         state.update(await finalize_message_agent_node(state))

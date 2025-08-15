@@ -81,6 +81,38 @@ def prepare_relationship_prompt_node(state: AgentTurnState) -> dict[str, str]:
     return {"prompt_modifier": "Relationships:\n" + "\n".join(lines)}
 
 
+async def retriever_node(state: AgentTurnState) -> dict[str, Any]:
+    service = cast(MemoryService | None, state.get("memory_service"))
+    if service is None:
+        return {"memory_context": [], "memory_history_list": []}
+
+    token_budget = cast(int | None, state.get("token_budget"))
+    episodic, semantic = await service.get_context_pipeline(
+        state["agent_id"], token_budget=token_budget
+    )
+
+    tokens = 0
+    combined: list[str] = []
+    limited_episodic: list[dict[str, Any]] = []
+    for mem in episodic:
+        text = str(mem.get("content", ""))
+        t = len(text.split())
+        if token_budget is not None and tokens + t > token_budget:
+            break
+        limited_episodic.append(mem)
+        combined.append(text)
+        tokens += t
+
+    for summary in semantic:
+        t = len(summary.split())
+        if token_budget is not None and tokens + t > token_budget:
+            break
+        combined.append(summary)
+        tokens += t
+
+    return {"memory_context": combined, "memory_history_list": limited_episodic}
+
+
 async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[str, Any]:
     service = cast(MemoryService | None, state.get("memory_service"))
     if service is None:
@@ -89,16 +121,21 @@ async def retrieve_and_summarize_memories_node(state: AgentTurnState) -> dict[st
     agent = cast(SummaryAgent | None, state.get("agent_instance"))
     if not service or not agent:
         return {"rag_summary": "(No memory retrieval)", "memory_history_list": []}
+    memories = cast(list[dict[str, Any]], state.get("memory_history_list", []))
+    memories_content = cast(list[str], state.get("memory_context", []))
 
-    k = 5
-    semantic_limit = 2
-    memories, semantic = await service.get_context_pipeline(
-        state["agent_id"], query="", k=k, semantic_limit=semantic_limit
-    )
-    metrics.RAG_HIT_RATE.set(
-        (len(memories) + len(semantic)) / (k + semantic_limit) if (k + semantic_limit) else 0
-    )
-    memories_content = [m.get("content", "") for m in memories] + list(semantic)
+    if not memories_content:
+        k = 5
+        semantic_limit = 2
+        memories, semantic = await service.get_context_pipeline(
+            state["agent_id"], query="", k=k, semantic_limit=semantic_limit
+        )
+        metrics.RAG_HIT_RATE.set(
+            (len(memories) + len(semantic)) / (k + semantic_limit)
+            if (k + semantic_limit)
+            else 0
+        )
+        memories_content = [m.get("content", "") for m in memories] + list(semantic)
 
     agent_state = state.get("state")
     role_prompt = getattr(agent_state, "role_prompt", state.get("current_role", ""))
