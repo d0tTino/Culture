@@ -62,13 +62,17 @@ class IntentSelectorProgram:
         else:
             raise TypeError("lm must be a dspy.LM instance or callable")
 
-        dspy.settings.configure(lm=self.lm)
-        self._predict = dspy.Predict(IntentPrompt)
+        # Avoid configuring global DSPy settings repeatedly in async tests.
+        # Instead, build the predictor within a temporary context so each
+        # instance can supply its own LM without mutating shared state.
+        with dspy.context(lm=self.lm):
+            self._predict = dspy.Predict(IntentPrompt)
 
     def run(self: Self) -> str:
         """Return the chosen intent, falling back to raw LM output on errors."""
         try:
-            result = self._predict(question="What proposal should the agent make?")
+            with dspy.context(lm=self.lm):
+                result = self._predict(question="What proposal should the agent make?")
         except Exception as e:  # pragma: no cover - DSPy parsing errors
             raw: Any = self.lm("What proposal should the agent make?")
             if isinstance(raw, list):

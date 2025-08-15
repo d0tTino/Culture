@@ -802,32 +802,32 @@ class Simulation:
             span.set_attribute("llm.tokens.total", 0)
             start = time.perf_counter()
             try:
-                event = log_event(
-                    {
-                        "type": "agent_action",
-                        "agent_id": agent_id,
-                        "step": self.current_step,
-                        "action_intent": action_intent_str,
-                        "ip": current_agent_state.ip,
-                        "du": current_agent_state.du,
-                    }
-                )
+                kb_state = {
+                    k: v for k, v in self.knowledge_board.to_dict().items() if k != "vector"
+                }
+                wm_state = {k: v for k, v in self.world_map.to_dict().items() if k != "vector"}
+                payload = {
+                    "type": "agent_action",
+                    "agent_id": agent_id,
+                    "step": self.current_step,
+                    "action_intent": action_intent_str,
+                    "ip": current_agent_state.ip,
+                    "du": current_agent_state.du,
+                    "knowledge_board": kb_state,
+                    "world_map": wm_state,
+                }
+                event = log_event(payload)
                 if event is None:
-                    event = {
-                        "type": "agent_action",
-                        "agent_id": agent_id,
-                        "step": self.current_step,
-                        "action_intent": action_intent_str,
-                        "ip": current_agent_state.ip,
-                        "du": current_agent_state.du,
-                    }
-                    event["trace_hash"] = compute_trace_hash(event)
+                    event = {**payload}
+                    event["trace_hash"] = compute_trace_hash(payload)
                 trace_hash = event["trace_hash"]
                 await emit_event(SimulationEvent(type="agent_action", data=event))
             finally:
                 span.set_attribute("simulation.latency_ms", (time.perf_counter() - start) * 1000)
 
         if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
+            from src.infra.checkpoint import capture_rng_state
+
             snapshot = {
                 "step": self.current_step,
                 "collective_ip": self.collective_ip,
@@ -843,6 +843,8 @@ class Simulation:
                     }
                     for ag in self.agents
                 ],
+                "seed": self.seed,
+                "rng_state": capture_rng_state(),
                 "trace_hash": self._last_trace_hash,
             }
             snapshot_no_vector = {
@@ -1182,6 +1184,22 @@ class Simulation:
                     if "du" in event:
                         agent.state.du = float(event["du"])
                     break
+            kb = event.get("knowledge_board")
+            if isinstance(kb, dict):
+                from .knowledge_board import LoggingList
+
+                self.knowledge_board.entries = LoggingList(kb.get("entries", []))
+            wm = event.get("world_map")
+            if isinstance(wm, dict):
+                self.world_map.width = int(wm.get("width", self.world_map.width))
+                self.world_map.height = int(wm.get("height", self.world_map.height))
+                self.world_map.agent_positions = {
+                    k: tuple(v) for k, v in wm.get("agents", {}).items()
+                }
+                self.world_map.resources = wm.get("resources", {})
+                self.world_map.buildings = wm.get("buildings", {})
+                self.world_map.agent_resources = wm.get("agent_resources", {})
+                self.world_map.obstacles = set(wm.get("obstacles", []))
             step = event.get("step")
             if isinstance(step, int) and step > self.current_step:
                 self.current_step = step
@@ -1213,9 +1231,16 @@ class Simulation:
     @classmethod
     def from_snapshot(cls: type[Self], snapshot: dict[str, Any], seed: int | None = None) -> Self:
         """Create a ``Simulation`` instance from a snapshot dictionary."""
+        from src.agents.core.base_agent import Agent  # avoid circular import at module level
+
         agents_data = snapshot.get("agents", [])
         agents = [Agent(agent_id=a.get("agent_id", str(i))) for i, a in enumerate(agents_data)]
-        sim = cls(agents=agents, scenario="", seed=seed)
+        sim_seed = seed if seed is not None else snapshot.get("seed")
+        sim = cls(agents=agents, scenario="", seed=sim_seed)
+        if seed is None and snapshot.get("rng_state") is not None:
+            from src.infra.checkpoint import restore_rng_state
+
+            restore_rng_state(snapshot["rng_state"])
         sim.current_step = int(snapshot.get("step", 0))
         sim.collective_ip = float(snapshot.get("collective_ip", 0.0))
         sim.collective_du = float(snapshot.get("collective_du", 0.0))
@@ -1236,7 +1261,6 @@ class Simulation:
                 entry.get("content_full", ""),
                 entry.get("agent_id", "unknown"),
                 int(entry.get("step", 0)),
-                kb.get("vector"),
             )
         if isinstance(kb.get("vector"), dict):
             sim.knowledge_board.vector.clock.update(kb["vector"])

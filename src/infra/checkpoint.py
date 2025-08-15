@@ -76,13 +76,19 @@ def restore_rng_state(state: Any) -> None:
         random_state = state
 
     if random_state is not None:
-        random.setstate(random_state)
+        # JSON serialization converts tuples to lists; convert back recursively
+        def _to_tuple(obj: Any) -> Any:
+            if isinstance(obj, list):
+                return tuple(_to_tuple(x) for x in obj)
+            return obj
+
+        random.setstate(_to_tuple(random_state))
 
     if isinstance(state, dict) and "numpy" in state:
         try:  # pragma: no cover - optional dependency
             import numpy as np
 
-            np.random.set_state(state["numpy"])
+            np.random.set_state(_to_tuple(state["numpy"]))
         except ImportError:
             pass
 
