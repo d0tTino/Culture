@@ -9,8 +9,10 @@ IP/DU cost for the currently active agent.
 import asyncio
 import json
 import logging
+import time
 import typing
 from collections.abc import Awaitable
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import httpx
@@ -53,6 +55,37 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 message_sse_queue = dashboard_message_queue
+
+
+@contextmanager
+def command_span(name: str, interaction: Any, *, agent_id: str | None = None):
+    start = time.perf_counter()
+    with tracer.start_as_current_span("discord.command") as span:
+        span.set_attribute("discord.command.name", name)
+        channel = getattr(interaction, "channel", None)
+        span.set_attribute("discord.channel.id", getattr(channel, "id", None))
+        user = getattr(interaction, "user", None)
+        span.set_attribute("discord.user.id", getattr(user, "id", None))
+        if agent_id is not None:
+            span.set_attribute("discord.agent.id", agent_id)
+        try:
+            yield span
+        finally:
+            span.set_attribute("discord.latency_ms", (time.perf_counter() - start) * 1000)
+
+
+@contextmanager
+def message_span(message: Any):
+    start = time.perf_counter()
+    with tracer.start_as_current_span("discord.message") as span:
+        channel = getattr(message, "channel", None)
+        span.set_attribute("discord.channel.id", getattr(channel, "id", None))
+        user = getattr(message, "author", None)
+        span.set_attribute("discord.user.id", getattr(user, "id", None))
+        try:
+            yield span
+        finally:
+            span.set_attribute("discord.latency_ms", (time.perf_counter() - start) * 1000)
 
 
 async def send_interaction_response(interaction: Any, content: str, **kwargs: Any) -> None:
@@ -228,8 +261,7 @@ class SimulationDiscordBot:
 
                 @tree.command(name="start")
                 async def _tree_start(interaction: "discord.Interaction") -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "start")
+                    with command_span("start", interaction) as span:
                         try:
                             await start_simulation(self.context)
                         except Exception as exc:
@@ -243,8 +275,7 @@ class SimulationDiscordBot:
 
                 @tree.command(name="stop")
                 async def _tree_stop(interaction: "discord.Interaction") -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "stop")
+                    with command_span("stop", interaction) as span:
                         try:
                             await stop_simulation(self.context)
                         except Exception as exc:
@@ -256,13 +287,10 @@ class SimulationDiscordBot:
                             await self.send_simulation_update(embed=embed)
                             await interaction.response.send_message("stop", ephemeral=True)
 
-
                 @tree.command(name="spawn")
                 @app_commands.describe(agent_id="ID of the agent to spawn")
                 async def _tree_spawn(interaction: "discord.Interaction", agent_id: str) -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "spawn")
-                        span.set_attribute("discord.agent.id", agent_id)
+                    with command_span("spawn", interaction, agent_id=agent_id) as span:
                         try:
                             await spawn_agent_command(agent_id, self.context)
                         except Exception as exc:
@@ -284,8 +312,7 @@ class SimulationDiscordBot:
 
                 @tree.command(name="pause")
                 async def _tree_pause(interaction: "discord.Interaction") -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "pause")
+                    with command_span("pause", interaction) as span:
                         await self.event_queue.put(
                             SimulationEvent(type="control", data={"command": "pause"})
                         )
@@ -293,8 +320,7 @@ class SimulationDiscordBot:
 
                 @tree.command(name="resume")
                 async def _tree_resume(interaction: "discord.Interaction") -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "resume")
+                    with command_span("resume", interaction) as span:
                         await self.event_queue.put(
                             SimulationEvent(type="control", data={"command": "resume"})
                         )
@@ -303,9 +329,7 @@ class SimulationDiscordBot:
                 @tree.command(name="mute")
                 @app_commands.describe(agent_id="ID of the agent to mute")
                 async def _tree_mute(interaction: "discord.Interaction", agent_id: str) -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "mute")
-                        span.set_attribute("discord.agent.id", agent_id)
+                    with command_span("mute", interaction, agent_id=agent_id) as span:
                         await self.event_queue.put(
                             SimulationEvent(
                                 type="moderation",
@@ -317,9 +341,7 @@ class SimulationDiscordBot:
                 @tree.command(name="unmute")
                 @app_commands.describe(agent_id="ID of the agent to unmute")
                 async def _tree_unmute(interaction: "discord.Interaction", agent_id: str) -> None:
-                    with tracer.start_as_current_span("discord.command") as span:
-                        span.set_attribute("discord.command.name", "unmute")
-                        span.set_attribute("discord.agent.id", agent_id)
+                    with command_span("unmute", interaction, agent_id=agent_id) as span:
                         await self.event_queue.put(
                             SimulationEvent(
                                 type="moderation",
@@ -357,15 +379,13 @@ class SimulationDiscordBot:
 
             @client.event
             async def on_message(message: Any, client: Any = client) -> None:
-                with tracer.start_as_current_span("discord.on_message") as span:
+                with message_span(message) as span:
                     if getattr(message, "author", None) == client.user:
                         return
                     content = getattr(message, "content", "")
                     span.set_attribute("discord.message.length", len(content))
                     channel = getattr(message, "channel", None)
-                    span.set_attribute("discord.channel.id", getattr(channel, "id", None))
                     user = getattr(message, "author", None)
-                    span.set_attribute("discord.user.id", getattr(user, "id", None))
                     if not allow_message(content):
                         logger.debug("Message blocked by policy")
                         return
@@ -937,9 +957,7 @@ async def _rate_limit_check(interaction: Any) -> bool:
     if await check_command_rate_limit(getattr(interaction, "user", None)):
         return True
     try:
-        await send_interaction_response(
-            interaction, "rate limit exceeded", ephemeral=True
-        )
+        await send_interaction_response(interaction, "rate limit exceeded", ephemeral=True)
     except Exception:  # pragma: no cover - best effort
         pass
     return False
@@ -952,8 +970,7 @@ if hasattr(bot.tree, "add_check"):
 @bot.command(name="say")
 async def say(ctx: Any, *, message: str) -> None:
     """Echo a user-provided message for smoke testing."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "say")
+    with command_span("say", ctx) as span:
         await send_channel_message(ctx, content=f"Simulated message received: {message}")
 
 
@@ -961,8 +978,7 @@ async def say(ctx: Any, *, message: str) -> None:
 async def stats(ctx: Any) -> None:
     """Return basic runtime statistics."""
     stats_text = f"LLM latency: {get_llm_latency()} ms; KB size: {get_kb_size()}"
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "stats")
+    with command_span("stats", ctx) as span:
         span.set_attribute("discord.message.length", len(stats_text))
         await send_channel_message(ctx, content=stats_text)
 
@@ -970,8 +986,7 @@ async def stats(ctx: Any) -> None:
 @bot.tree.command(name="status")
 async def slash_status(interaction: Any) -> None:
     """Return IP/DU balance for the mapped agent."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "status")
+    with command_span("status", interaction) as span:
         agent_id = None
         bot_instance = get_active_bot()
         if bot_instance is not None:
@@ -994,8 +1009,7 @@ async def slash_status(interaction: Any) -> None:
 @bot.tree.command(name="stats")
 async def slash_stats(interaction: Any) -> None:
     """Return runtime metrics if the agent has resources."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "stats")
+    with command_span("stats", interaction) as span:
         agent_id = None
         bot_instance = get_active_bot()
         if bot_instance is not None:
@@ -1015,8 +1029,7 @@ async def slash_stats(interaction: Any) -> None:
 @bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "pause")
+    with command_span("pause", interaction) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
         await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "pause"}))
@@ -1026,8 +1039,7 @@ async def slash_pause(interaction: Any) -> None:
 @bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "resume")
+    with command_span("resume", interaction) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
         await ctx.get_event_queue().put(
@@ -1039,8 +1051,7 @@ async def slash_resume(interaction: Any) -> None:
 @bot.tree.command(name="start")
 async def slash_start(interaction: Any) -> None:
     """Start the simulation via a control command."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "start")
+    with command_span("start", interaction) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
         try:
@@ -1060,8 +1071,7 @@ async def slash_start(interaction: Any) -> None:
 @bot.tree.command(name="stop")
 async def slash_stop(interaction: Any) -> None:
     """Stop the simulation via a control command."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "stop")
+    with command_span("stop", interaction) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
         try:
@@ -1081,49 +1091,49 @@ async def slash_stop(interaction: Any) -> None:
 @bot.tree.command(name="spawn")
 async def slash_spawn(interaction: Any, agent_id: str) -> None:
     """Spawn a new agent in the simulation."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    try:
-        await spawn_agent_command(agent_id, ctx)
-    except Exception as exc:
-        if bot_instance is not None:
-            embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
-            await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message(f"spawn {agent_id} failed", ephemeral=True)
-    else:
-        if bot_instance is not None:
-            embed = bot_instance.create_spawn_embed(agent_id, True)
-        await bot_instance.send_simulation_update(embed=embed)
-        await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
+    with command_span("spawn", interaction, agent_id=agent_id) as span:
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        try:
+            await spawn_agent_command(agent_id, ctx)
+        except Exception as exc:
+            if bot_instance is not None:
+                embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
+                await bot_instance.send_simulation_update(embed=embed)
+            await interaction.response.send_message(f"spawn {agent_id} failed", ephemeral=True)
+        else:
+            if bot_instance is not None:
+                embed = bot_instance.create_spawn_embed(agent_id, True)
+                await bot_instance.send_simulation_update(embed=embed)
+            await interaction.response.send_message(f"spawn {agent_id}", ephemeral=True)
 
 
 @bot.tree.command(name="kill")
 async def slash_kill(interaction: Any) -> None:
     """Shutdown the bot. Administrator only."""
-    if not has_admin_permission(getattr(interaction, "user", None)):
-        await send_interaction_response(interaction, "unauthorized", ephemeral=True)
-        return
-    await send_interaction_response(interaction, "shutting down", ephemeral=True)
-    await bot.close()
+    with command_span("kill", interaction) as span:
+        if not has_admin_permission(getattr(interaction, "user", None)):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
+        await send_interaction_response(interaction, "shutting down", ephemeral=True)
+        await bot.close()
 
 
 @bot.tree.command(name="set_max_rate")
 async def slash_set_max_rate(interaction: Any, value: int) -> None:
     """Adjust the per-user command rate limit."""
-    if not has_admin_permission(getattr(interaction, "user", None)):
-        await send_interaction_response(interaction, "unauthorized", ephemeral=True)
-        return
-    set_max_rate(value)
-    await send_interaction_response(
-        interaction, f"max rate set to {value}", ephemeral=True
-    )
+    with command_span("set_max_rate", interaction) as span:
+        if not has_admin_permission(getattr(interaction, "user", None)):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
+        set_max_rate(value)
+        await send_interaction_response(interaction, f"max rate set to {value}", ephemeral=True)
 
 
 @bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "set_speed")
+    with command_span("set_speed", interaction) as span:
         span.set_attribute("discord.speed", value)
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
@@ -1136,15 +1146,15 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
 @bot.tree.command(name="speed")
 async def slash_speed(interaction: Any, value: float) -> None:
     """Alias for ``set_speed``."""
-    callback = cast(Callable[[Any, float], Awaitable[None]], slash_set_speed.callback)
-    await callback(interaction, value)
+    with command_span("speed", interaction) as span:
+        callback = cast(Callable[[Any, float], Awaitable[None]], slash_set_speed.callback)
+        await callback(interaction, value)
 
 
 @bot.tree.command(name="kb")
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "kb")
+    with command_span("kb", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
@@ -1164,8 +1174,7 @@ async def slash_kb(interaction: Any, text: str) -> None:
 @bot.tree.command(name="propose")
 async def slash_propose(interaction: Any, text: str) -> None:
     """Propose a law via the dashboard API."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "propose")
+    with command_span("propose", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         agent_id = None
         bot_instance = get_active_bot()
@@ -1199,8 +1208,7 @@ async def slash_propose(interaction: Any, text: str) -> None:
 @bot.tree.command(name="propose_law")
 async def slash_propose_law(interaction: Any, text: str, weights: str | None = None) -> None:
     """Propose a law via the dashboard API."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "propose_law")
+    with command_span("propose_law", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         agent_id = None
         bot_instance = get_active_bot()
@@ -1237,8 +1245,7 @@ async def slash_propose_law(interaction: Any, text: str, weights: str | None = N
 @bot.tree.command(name="vote")
 async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     """Cast a manual vote on a proposal via the governance service."""
-    with tracer.start_as_current_span("discord.command") as span:
-        span.set_attribute("discord.command.name", "vote")
+    with command_span("vote", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         agent_id = None
         bot_instance = get_active_bot()
