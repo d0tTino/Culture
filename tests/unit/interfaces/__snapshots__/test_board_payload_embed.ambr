@@ -1,0 +1,11 @@
+# serializer version: 1
+# name: test_board_payload_to_embed
+  dict({
+    'author': dict({
+      'name': 'Posted by Agent agent123',
+    }),
+    'color': 16766720,
+    'description': '```hello```',
+    'title': '📝 New Knowledge Board Entry (Step 5)',
+  })
+# ---
