@@ -145,7 +145,9 @@ def test_embed_creators(discord_module: object, monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_forward_agent_messages_embed(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_forward_agent_messages_embed(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class DummyEmbed:
         def __init__(self, *args: object, **kwargs: object) -> None:
             self.kwargs = kwargs
@@ -180,3 +182,96 @@ async def test_forward_agent_messages_embed(discord_module: object, monkeypatch:
     await asyncio.sleep(0)
     assert fake_send_simulation_update.kwargs["embed"] is not None
     assert fake_send_simulation_update.kwargs["content"] is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_span_emission(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    import src.interfaces.discord_bot as discord_module
+
+    class MockSpan:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.attributes: dict[str, object] = {}
+
+        def set_attribute(self, key: str, value: object) -> None:
+            self.attributes[key] = value
+
+        def __enter__(self) -> "MockSpan":
+            return self
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+            return None
+
+    class MockTracer:
+        def __init__(self) -> None:
+            self.spans: list[MockSpan] = []
+
+        def start_as_current_span(self, name: str) -> MockSpan:
+            span = MockSpan(name)
+            self.spans.append(span)
+            return span
+
+    tracer = MockTracer()
+    monkeypatch.setattr(discord_module, "tracer", tracer)
+    monkeypatch.setattr(discord_module, "allow_message", lambda c: True)
+    monkeypatch.setattr(discord_module, "evaluate_with_opa", AsyncMock(return_value=(True, "hi")))
+    monkeypatch.setattr(
+        discord_module.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0))
+    )
+    monkeypatch.setattr(discord_module.metrics.HUMAN_MESSAGES_TOTAL, "inc", lambda: None)
+    monkeypatch.setattr(discord_module.config, "get_config", lambda k: None)
+    monkeypatch.setattr(discord_module, "send_interaction_response", AsyncMock())
+
+    class DummyClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.user = SimpleNamespace(id=0)
+            self.handlers: dict[str, object] = {}
+
+        def event(self, fn: object) -> object:
+            self.handlers[getattr(fn, "__name__", "")] = fn
+            return fn
+
+        def get_channel(self, channel_id: int) -> SimpleNamespace:
+            return SimpleNamespace(id=channel_id, send=AsyncMock())
+
+    monkeypatch.setattr(discord_module.discord, "Client", DummyClient)
+
+    bot = await discord_module.SimulationDiscordBot.create(
+        "token", 123, context=discord_module.DEFAULT_CONTEXT
+    )
+    bot.is_ready = True
+    bot.channel_to_agent[123] = "agent1"
+    bot.event_queue = asyncio.Queue()
+    message = SimpleNamespace(
+        author=SimpleNamespace(id=7),
+        channel=SimpleNamespace(id=123, send=AsyncMock()),
+        content="hello",
+    )
+    await bot.clients["token"].handlers["on_message"](message)
+
+    span = tracer.spans[0]
+    assert span.name == "discord.message"
+    assert span.attributes["discord.channel.id"] == 123
+    assert span.attributes["discord.user.id"] == 7
+    assert span.attributes["discord.agent.id"] == "agent1"
+    assert "discord.latency_ms" in span.attributes
+
+    tracer.spans.clear()
+    monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
+    interaction = SimpleNamespace(
+        channel=SimpleNamespace(id=123),
+        user=SimpleNamespace(id=7),
+        response=SimpleNamespace(send_message=AsyncMock()),
+    )
+    await discord_module.slash_status(interaction)
+
+    span = tracer.spans[0]
+    assert span.name == "discord.command"
+    assert span.attributes["discord.command.name"] == "status"
+    assert span.attributes["discord.channel.id"] == 123
+    assert span.attributes["discord.user.id"] == 7
+    assert span.attributes["discord.agent.id"] == "agent1"
+    assert "discord.latency_ms" in span.attributes
