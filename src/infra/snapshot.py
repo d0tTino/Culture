@@ -131,8 +131,12 @@ def load_snapshot(
     compress = SNAPSHOT_COMPRESS if compress is None else compress
 
     path = Path(directory)
-    step_path = Path(step)
-    if step_path.exists():
+    try:
+        step_path = Path(step)  # type: ignore[arg-type]
+    except TypeError:
+        step_path = None
+
+    if step_path is not None and step_path.exists():
         file_path = step_path
         compress = file_path.suffix.endswith(".zst")
         json_file = file_path.with_suffix(".json")
@@ -176,15 +180,19 @@ def load_snapshot(
     if expected is not None:
         # Exclude large or non-deterministic vector fields from hashing to
         # match the computation performed when the snapshot was created.
-        data_no_vector = {
-            **{k: v for k, v in data.items() if k != "trace_hash"},
-            "knowledge_board": {
-                k: v for k, v in data.get("knowledge_board", {}).items() if k != "vector"
-            },
-            "world_map": {
-                k: v for k, v in data.get("world_map", {}).items() if k != "vector"
-            },
-        }
+        data_no_vector = {k: v for k, v in data.items() if k != "trace_hash"}
+        if "knowledge_board" in data_no_vector:
+            data_no_vector["knowledge_board"] = {
+                k: v
+                for k, v in data.get("knowledge_board", {}).items()
+                if k != "vector"
+            }
+        if "world_map" in data_no_vector:
+            data_no_vector["world_map"] = {
+                k: v
+                for k, v in data.get("world_map", {}).items()
+                if k != "vector"
+            }
         actual = compute_trace_hash(data_no_vector)
         if actual != expected:
             raise ValueError(
