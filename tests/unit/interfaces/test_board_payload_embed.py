@@ -1,10 +1,12 @@
+from typing import Any
+
+import pytest
+
 from src.interfaces.dashboard_backend import board_payload_to_embed
 
 
-def test_board_payload_to_embed() -> None:
+@pytest.mark.unit
+def test_board_payload_to_embed(snapshot: Any) -> None:
     payload = {"agent_id": "agent12345678", "content": "hello", "step": 5}
     embed = board_payload_to_embed(payload)
-    assert embed["title"] == "📝 New Knowledge Board Entry (Step 5)"
-    assert embed["description"] == "```hello```"
-    assert embed["color"] == 0xFFD700
-    assert embed["author"] == {"name": "Posted by Agent agent1234"}
+    assert embed == snapshot

@@ -11,7 +11,7 @@ import json
 import logging
 import time
 import typing
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
@@ -58,7 +58,7 @@ message_sse_queue = dashboard_message_queue
 
 
 @contextmanager
-def command_span(name: str, interaction: Any, *, agent_id: str | None = None):
+def command_span(name: str, interaction: Any, *, agent_id: str | None = None) -> Iterator[Any]:
     start = time.perf_counter()
     with tracer.start_as_current_span("discord.command") as span:
         span.set_attribute("discord.command.name", name)
@@ -75,7 +75,7 @@ def command_span(name: str, interaction: Any, *, agent_id: str | None = None):
 
 
 @contextmanager
-def message_span(message: Any):
+def message_span(message: Any) -> Iterator[Any]:
     start = time.perf_counter()
     with tracer.start_as_current_span("discord.message") as span:
         channel = getattr(message, "channel", None)
@@ -113,6 +113,44 @@ async def send_channel_message(
             logger.warning(
                 f"Attempted to send message to channel {chan_id} of type {type(channel).__name__}, which does not support .send()"
             )
+
+
+def embed_from_payload(payload: dict[str, Any]) -> Any:
+    """Create a ``discord.Embed`` from a payload dictionary."""
+    embed = discord.Embed(
+        title=payload.get("title"),
+        description=payload.get("description"),
+        color=payload.get("color"),
+    )
+    author = payload.get("author")
+    if author:
+        try:
+            embed.set_author(**author)
+        except Exception:  # pragma: no cover - best effort
+            pass
+    for field in payload.get("fields", []):
+        try:
+            embed.add_field(
+                name=field.get("name"),
+                value=field.get("value"),
+                inline=field.get("inline", True),
+            )
+        except Exception:  # pragma: no cover - best effort
+            pass
+    return embed
+
+
+def board_payload_to_embed(payload: dict[str, Any]) -> dict[str, Any]:
+    """Map a knowledge board payload to Discord embed fields."""
+    agent_id = str(payload.get("agent_id", ""))
+    content = str(payload.get("content", ""))
+    step = int(payload.get("step", 0))
+    return {
+        "title": f"📝 New Knowledge Board Entry (Step {step})",
+        "description": f"```{content}```",
+        "color": 0xFFD700,
+        "author": {"name": f"Posted by Agent {agent_id[:8]}"},
+    }
 
 
 def notify_budget_exceeded(agent_id: str, required: float, remaining: float) -> None:
@@ -493,8 +531,11 @@ class SimulationDiscordBot:
                 if not channel:
                     logger.warning(f"Could not find Discord channel with ID: {chan_id}")
                     return False
-                if embed:
-                    await send_channel_message(channel, embed=embed)
+                embed_obj = embed
+                if isinstance(embed_obj, dict):
+                    embed_obj = embed_from_payload(embed_obj)
+                if embed_obj:
+                    await send_channel_message(channel, embed=embed_obj)
                     logger.debug("Sent Discord embed update")
                     return True
                 elif content:
@@ -564,14 +605,13 @@ class SimulationDiscordBot:
         return embed
 
     def create_knowledge_board_embed(self: Self, agent_id: str, content: str, step: int) -> Any:
-        """Creates an embed for Knowledge Board posts"""
-        embed = discord.Embed(
-            title=f"📝 New Knowledge Board Entry (Step {step})",
-            description=f"```{content}```",
-            color=discord.Color.gold(),
-        )
-        embed.set_author(name=f"Posted by Agent {agent_id[:8]}")
-        return embed
+        """Creates an embed for Knowledge Board posts."""
+        payload = {
+            "agent_id": agent_id,
+            "content": content,
+            "step": step,
+        }
+        return embed_from_payload(board_payload_to_embed(payload))
 
     def create_role_change_embed(
         self: Self, agent_id: str, old_role: str, new_role: str, step: int
@@ -777,32 +817,10 @@ class SimulationDiscordBot:
                         if aid == recipient:
                             recipient = uid
                             break
-                embed = None
-                if msg.extra and msg.extra.get("embed"):
-                    data = msg.extra.get("embed", {})
-                    embed = discord.Embed(
-                        title=data.get("title"),
-                        description=data.get("description"),
-                        color=data.get("color"),
-                    )
-                    author = data.get("author")
-                    if author:
-                        try:
-                            embed.set_author(**author)
-                        except Exception:  # pragma: no cover - best effort
-                            pass
-                    for field in data.get("fields", []):
-                        try:
-                            embed.add_field(
-                                name=field.get("name"),
-                                value=field.get("value"),
-                                inline=field.get("inline", True),
-                            )
-                        except Exception:  # pragma: no cover - best effort
-                            pass
+                embed_payload = msg.extra.get("embed") if msg.extra else None
                 await self.send_simulation_update(
-                    content=None if embed else msg.content,
-                    embed=embed,
+                    content=None if embed_payload else msg.content,
+                    embed=embed_payload,
                     agent_id=msg.agent_id,
                     recipient=recipient,
                 )
