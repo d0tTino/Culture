@@ -331,6 +331,10 @@ def main() -> None:
         log_suppressed=args.log_suppressed_warnings,
     )
 
+    if args.seed is None and args.replay:
+        stored = event_log.get_seed()
+        if stored is not None:
+            args.seed = stored
     if args.seed is not None:
         event_log.set_seed(args.seed)
 
