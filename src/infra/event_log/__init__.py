@@ -28,12 +28,42 @@ _topic = os.getenv("REDPANDA_TOPIC", "culture.events")
 _producer: Any | None = None
 _last_hash: str | None = None
 _seed: int | None = None
+_header_written: bool = False
 
 
 def set_seed(seed: int) -> None:
     """Inject a stable seed value for event logging."""
     global _seed
     _seed = seed
+
+
+def get_log_header(path: str | Path | None = None) -> dict[str, Any]:
+    """Return the header information from the event log if present."""
+    file = _log_file(path)
+    if not file.exists():
+        return {}
+    try:
+        with file.open("r", encoding="utf-8") as fh:
+            first = fh.readline().strip()
+        header = json.loads(first)
+        if isinstance(header, dict) and header.get("type") == "header":
+            return header
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return {}
+
+
+def get_seed(path: str | Path | None = None) -> int | None:
+    """Return the seed from the event log header if available."""
+    global _seed
+    if _seed is not None:
+        return _seed
+    header = get_log_header(path)
+    seed = header.get("seed") if isinstance(header, dict) else None
+    if isinstance(seed, int):
+        _seed = seed
+        return seed
+    return None
 
 
 _consumer_conf = {
@@ -48,6 +78,46 @@ def _log_file(path: str | Path | None = None) -> Path:
     if path is not None:
         return Path(path)
     return Path(os.getenv("EVENT_LOG_PATH", "event_log.jsonl"))
+
+
+def _ensure_header(path: str | Path | None = None) -> None:
+    """Write the log header containing the simulation seed if missing."""
+    global _header_written, _seed
+    if _header_written:
+        return
+    file = _log_file(path)
+    if _seed is None:
+        try:
+            _seed = random.getstate()[1][0]
+        except Exception:  # pragma: no cover - fallback
+            _seed = 0
+    header = {"type": "header", "seed": _seed}
+    try:  # pragma: no cover - best effort
+        if file.exists():
+            with file.open("r", encoding="utf-8") as fh:
+                first = fh.readline().strip()
+            try:
+                existing = json.loads(first)
+            except Exception:
+                existing = {}
+            if existing.get("type") == "header" and "seed" in existing:
+                _header_written = True
+                return
+        file.parent.mkdir(parents=True, exist_ok=True)
+        if not file.exists() or file.stat().st_size == 0:
+            with file.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(header))
+                fh.write("\n")
+        _header_written = True
+        if os.getenv("ENABLE_REDPANDA", "0") == "1":
+            try:
+                producer = _get_producer()
+                producer.produce(_topic, json.dumps(header).encode("utf-8"))
+                producer.poll(0)
+            except Exception:
+                pass
+    except Exception:  # pragma: no cover - ignore
+        pass
 
 
 def _is_valid_event(event: dict[str, Any], last_step: int, last_hash: str | None) -> bool:
@@ -118,6 +188,7 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
     """Log an event to the append-only file and Redpanda if enabled."""
 
     global _last_hash
+    _ensure_header()
 
     if "trace_hash" in event:
         event = {**event}
