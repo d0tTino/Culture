@@ -1104,6 +1104,22 @@ class Simulation:
             "collective_du": self.collective_du,
         }
 
+    def register_named_evaluation_hooks(self: Self, hook_names: list[str]) -> None:
+        """Register evaluation hooks by symbolic ``hook_names``.
+
+        Each name is looked up in :data:`EVALUATION_HOOKS`; unknown names are ignored
+        with a warning. The default ``_collect_metrics`` hook is removed before
+        registering the provided hooks to avoid duplicate metric entries.
+        """
+
+        self.evaluation_hooks = []
+        for name in hook_names:
+            hook = EVALUATION_HOOKS.get(name)
+            if hook is None:
+                logger.warning("Unknown evaluation hook '%s'", name)
+                continue
+            self.add_evaluation_hook(hook)
+
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
         if not self.agents:
@@ -1473,6 +1489,46 @@ class Simulation:
     #      """Updates the global environment state after agent actions."""
     #      # To be implemented
     #      pass
+
+
+def _hook_coalitions(sim: "Simulation", _events: list[Any]) -> dict[str, Any]:
+    """Return the number of active coalitions (projects with >1 member)."""
+
+    coalition_count = sum(
+        1 for proj in sim.projects.values() if len(proj.get("members", [])) > 1
+    )
+    return {"coalitions": coalition_count}
+
+
+def _hook_sentiment(sim: "Simulation", _events: list[Any]) -> dict[str, Any]:
+    """Return the average sentiment (mood level) across agents."""
+
+    avg_sentiment = (
+        sum(agent.state.mood_level for agent in sim.agents) / len(sim.agents)
+        if sim.agents
+        else 0.0
+    )
+    return {"sentiment": avg_sentiment}
+
+
+def _hook_collective_du(sim: "Simulation", _events: list[Any]) -> dict[str, Any]:
+    """Return the collective DU across all agents."""
+
+    return {"collective_du": sim.collective_du}
+
+
+def _hook_collective_ip(sim: "Simulation", _events: list[Any]) -> dict[str, Any]:
+    """Return the collective IP across all agents."""
+
+    return {"collective_ip": sim.collective_ip}
+
+
+EVALUATION_HOOKS: dict[str, Callable[["Simulation", list[Any]], dict[str, Any] | None]] = {
+    "coalitions": _hook_coalitions,
+    "sentiment": _hook_sentiment,
+    "collective_du": _hook_collective_du,
+    "collective_ip": _hook_collective_ip,
+}
 
 
 def parse_args() -> argparse.Namespace:
