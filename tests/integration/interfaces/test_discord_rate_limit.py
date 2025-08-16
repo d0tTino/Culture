@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
@@ -28,6 +28,8 @@ async def test_mute_unmute_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discord_moderation.time, "monotonic", lambda: 0.0)
     discord_moderation._ACTION_COUNTS.clear()
     discord_moderation._COOLDOWNS.clear()
+    mock_reward = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
     interaction = DummyInteraction()
 
     await discord_moderation.slash_mute.callback(interaction, "agent1")
@@ -50,6 +52,12 @@ async def test_mute_unmute_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
         "du": discord_moderation._DU_PENALTY,
     }
     assert events[3].data == {"command": "unmute", "agent_id": "agent1"}
+    mock_reward.assert_called_once_with(
+        "agent1",
+        -discord_moderation._IP_PENALTY,
+        -discord_moderation._DU_PENALTY,
+        "rate_limit_violation",
+    )
 
 
 @pytest.mark.integration
@@ -65,6 +73,8 @@ async def test_reset_memory_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discord_moderation.time, "monotonic", lambda: 0.0)
     discord_moderation._ACTION_COUNTS.clear()
     discord_moderation._COOLDOWNS.clear()
+    mock_reward = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
     interaction = DummyInteraction()
 
     await discord_moderation.slash_reset_memory.callback(interaction, "agent1")
@@ -88,3 +98,9 @@ async def test_reset_memory_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
         "ip": discord_moderation._IP_PENALTY,
         "du": discord_moderation._DU_PENALTY,
     }
+    mock_reward.assert_called_once_with(
+        "agent1",
+        -discord_moderation._IP_PENALTY,
+        -discord_moderation._DU_PENALTY,
+        "rate_limit_violation",
+    )

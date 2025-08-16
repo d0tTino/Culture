@@ -99,7 +99,19 @@ Clears an agent's memory.
 Applies an IP/DU penalty to the agent.
 
 All moderation commands are rate limited on a per-agent basis. Exceeding the
-limit automatically issues IP and DU penalties as a safety rail.
+limit automatically issues IP and DU penalties as a safety rail and records the
+deduction in the ledger. For example:
+
+```text
+/mute agent_4
+/mute agent_4
+```
+The second call returns:
+
+```text
+rate limited
+```
+and `agent_4` loses IP and DU according to the configured penalty values.
 
 ### Administrative Commands
 
