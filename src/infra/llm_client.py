@@ -575,9 +575,15 @@ def _create_vllm_client() -> OllamaClientProtocol:
                     usage = cast(JSONDict, data.get("usage", {}))
                     prompt_tokens = int(usage.get("prompt_tokens", 0))
                     completion_tokens = int(usage.get("completion_tokens", 0))
+                    total_tokens = prompt_tokens + completion_tokens
                     span.set_attribute("llm.tokens.prompt", prompt_tokens)
                     span.set_attribute("llm.tokens.completion", completion_tokens)
-                    span.set_attribute("llm.tokens.total", prompt_tokens + completion_tokens)
+                    span.set_attribute("llm.tokens.total", total_tokens)
+                    base_price = float(get_config("GAS_PRICE_PER_CALL") or 0.0)
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN") or 0.0)
+                    du_cost = base_price + token_price * total_tokens
+                    span.set_attribute("llm.du.tokens", total_tokens)
+                    span.set_attribute("llm.du.cost", du_cost)
                     choices = cast(list[JSONDict], data.get("choices", []))
                     message = cast(JSONDict, choices[0].get("message", {})) if choices else {}
                     return {
@@ -585,7 +591,10 @@ def _create_vllm_client() -> OllamaClientProtocol:
                         "usage": usage,
                     }
                 finally:
-                    span.set_attribute("llm.latency_ms", (time.perf_counter() - start_time) * 1000)
+                    latency_ms = (time.perf_counter() - start_time) * 1000
+                    span.set_attribute("llm.latency_ms", latency_ms)
+                    metrics.LLM_CALLS_TOTAL.inc()
+                    metrics.LLM_LATENCY_MS.set(latency_ms)
 
         async def async_chat_batch(
             self: _Client,
@@ -641,12 +650,21 @@ def _create_vllm_client() -> OllamaClientProtocol:
                         prompt_tokens += int(usage.get("prompt_tokens", 0))
                         completion_tokens += int(usage.get("completion_tokens", 0))
                         outputs.append({"message": cast(LLMMessage, message), "usage": usage})
+                    total_tokens = prompt_tokens + completion_tokens
                     span.set_attribute("llm.tokens.prompt", prompt_tokens)
                     span.set_attribute("llm.tokens.completion", completion_tokens)
-                    span.set_attribute("llm.tokens.total", prompt_tokens + completion_tokens)
+                    span.set_attribute("llm.tokens.total", total_tokens)
+                    base_price = float(get_config("GAS_PRICE_PER_CALL") or 0.0)
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN") or 0.0)
+                    du_cost = base_price * len(results) + token_price * total_tokens
+                    span.set_attribute("llm.du.tokens", total_tokens)
+                    span.set_attribute("llm.du.cost", du_cost)
                     return outputs
                 finally:
-                    span.set_attribute("llm.latency_ms", (time.perf_counter() - start_time) * 1000)
+                    latency_ms = (time.perf_counter() - start_time) * 1000
+                    span.set_attribute("llm.latency_ms", latency_ms)
+                    metrics.LLM_CALLS_TOTAL.inc()
+                    metrics.LLM_LATENCY_MS.set(latency_ms)
 
         def chat(
             self: _Client,
@@ -674,7 +692,60 @@ def _create_vllm_client() -> OllamaClientProtocol:
 
 
 def _create_ollama_client() -> OllamaClientProtocol:
-    return cast(OllamaClientProtocol, ollama.Client(host=LLM_API_BASE))
+    class _Client:
+        def __init__(self: _Client) -> None:
+            self._client = ollama.Client(host=LLM_API_BASE)
+
+        def chat(
+            self: _Client,
+            model: str,
+            messages: list[LLMMessage],
+            options: dict[str, Any] | None = None,
+        ) -> LLMChatResponse:
+            with tracer.start_as_current_span("llm.request") as span:
+                span.set_attribute("llm.model", model)
+                start_time = time.perf_counter()
+                try:
+                    result = cast(
+                        JSONDict,
+                        self._client.chat(model=model, messages=messages, options=options),
+                    )
+                    prompt_tokens = int(
+                        result.get("prompt_eval_count") or result.get("prompt_tokens", 0)
+                    )
+                    completion_tokens = int(
+                        result.get("eval_count") or result.get("completion_tokens", 0)
+                    )
+                    total_tokens = prompt_tokens + completion_tokens
+                    span.set_attribute("llm.tokens.prompt", prompt_tokens)
+                    span.set_attribute("llm.tokens.completion", completion_tokens)
+                    span.set_attribute("llm.tokens.total", total_tokens)
+                    base_price = float(get_config("GAS_PRICE_PER_CALL") or 0.0)
+                    token_price = float(get_config("GAS_PRICE_PER_TOKEN") or 0.0)
+                    du_cost = base_price + token_price * total_tokens
+                    span.set_attribute("llm.du.tokens", total_tokens)
+                    span.set_attribute("llm.du.cost", du_cost)
+                    usage: JSONDict = {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                    }
+                    message = cast(LLMMessage, result.get("message", {}))
+                    return {"message": message, "usage": usage}
+                finally:
+                    latency_ms = (time.perf_counter() - start_time) * 1000
+                    span.set_attribute("llm.latency_ms", latency_ms)
+                    metrics.LLM_CALLS_TOTAL.inc()
+                    metrics.LLM_LATENCY_MS.set(latency_ms)
+
+        async def async_chat(
+            self: _Client,
+            model: str,
+            messages: list[LLMMessage],
+            options: dict[str, Any] | None = None,
+        ) -> LLMChatResponse:
+            return await asyncio.to_thread(self.chat, model, messages, options)
+
+    return _Client()
 
 
 client: OllamaClientProtocol | None = None
