@@ -266,7 +266,7 @@ async def test_span_emission(monkeypatch: pytest.MonkeyPatch) -> None:
         user=SimpleNamespace(id=7),
         response=SimpleNamespace(send_message=AsyncMock()),
     )
-    await discord_module.slash_status(interaction)
+    await discord_module.slash_status.callback(interaction)
 
     span = tracer.spans[0]
     assert span.name == "discord.command"
