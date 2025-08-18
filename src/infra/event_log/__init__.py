@@ -101,6 +101,10 @@ def _ensure_header(path: str | Path | None = None) -> None:
             except Exception:
                 existing = {}
             if existing.get("type") == "header" and "seed" in existing:
+                # Populate the cached seed from the existing header to ensure
+                # subsequent ``log_event`` calls embed the same seed value.
+                if _seed is None and isinstance(existing.get("seed"), int):
+                    _seed = existing["seed"]
                 _header_written = True
                 return
         file.parent.mkdir(parents=True, exist_ok=True)

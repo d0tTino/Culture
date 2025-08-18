@@ -334,6 +334,7 @@ def main() -> None:
     if args.seed is None and args.replay:
         stored = event_log.get_seed()
         if stored is not None:
+            logging.info("Using seed %s from event log", stored)
             args.seed = stored
     if args.seed is not None:
         event_log.set_seed(args.seed)
