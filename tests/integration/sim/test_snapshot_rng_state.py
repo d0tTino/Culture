@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import pytest
 
 from src.infra import event_log
-from src.infra.snapshot import load_snapshot
 from src.sim.simulation import Simulation
 
 
@@ -70,15 +69,13 @@ async def test_snapshot_rng_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     await sim.run_step()
     original_ip = sim.agents[0].state.ip
 
-    # Replay from snapshot_2 and run step 3 again
-    monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "replay_events.jsonl"))
+    # Replay from snapshot_2 using the stored seed and event log
     event_log._last_hash = None
     event_log._seed = None
-    event_log.set_seed(event_log.get_seed(str(tmp_path / "events.jsonl")) or seed)
-
-    snap = load_snapshot(snap_path)
-    sim_replay = Simulation.from_snapshot(snap)
-    await sim_replay.run_step()
-    replay_ip = sim_replay.agents[0].state.ip
+    stored = event_log.get_seed(str(tmp_path / "events.jsonl")) or seed
+    replay = Simulation.replay_from_snapshot(
+        snap_path, start_step=3, end_step=3, seed=stored
+    )
+    replay_ip = replay.agents[0].state.ip
 
     assert replay_ip == original_ip
