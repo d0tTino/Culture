@@ -173,9 +173,7 @@ class Ledger:
             ),
         )
         self.conn.commit()
-        row = cur.execute(
-            "SELECT du FROM agent_balances WHERE agent_id=?", (agent_id,)
-        ).fetchone()
+        row = cur.execute("SELECT du FROM agent_balances WHERE agent_id=?", (agent_id,)).fetchone()
         du_balance = float(row[0]) if row else 0.0
         self._agent_du_balance[agent_id] = du_balance
         try:  # pragma: no cover - optional dependency
@@ -739,9 +737,15 @@ def log_reward(agent_id: str, delta_ip: float, delta_du: float, reason: str) -> 
         logging.getLogger(__name__).debug("Ledger logging failed", exc_info=True)
 
 
+def log_penalty(agent_id: str, ip: float, du: float, reason: str) -> None:
+    """Safely log a DU/IP penalty to the ledger."""
+    log_reward(agent_id, -abs(ip), -abs(du), reason)
+
+
 __all__ = [
     "Ledger",
     "ledger",
     "log_reward",
+    "log_penalty",
     "run_auction",
 ]

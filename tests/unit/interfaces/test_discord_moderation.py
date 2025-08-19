@@ -74,31 +74,29 @@ async def test_rate_limit_includes_agent_id(monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_slash_mute_per_agent(
+async def test_slash_mute_per_user(
     monkeypatch: pytest.MonkeyPatch,
     bot: DummyBot,
     interaction_factory: Callable[[], DummyInteraction],
 ) -> None:
-    async def fake_eval(content: str) -> tuple[bool, str]:
-        if content == "123:mute:agent1":
-            return False, ""
+    async def allow_eval(content: str) -> tuple[bool, str]:
         return True, ""
 
-    monkeypatch.setattr(discord_moderation, "evaluate_with_opa", fake_eval)
-    mock_reward = MagicMock()
-    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
+    monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
+    mock_penalty = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_penalty", mock_penalty)
 
     interaction1 = interaction_factory()
     await discord_moderation.slash_mute.callback(interaction1, "agent1")
-    interaction1.response.send_message.assert_awaited_once_with("rate limited", ephemeral=True)
+    interaction1.response.send_message.assert_awaited_once_with("muted", ephemeral=True)
 
     interaction2 = interaction_factory()
     await discord_moderation.slash_mute.callback(interaction2, "agent2")
-    interaction2.response.send_message.assert_awaited_once_with("muted", ephemeral=True)
-    mock_reward.assert_called_once_with(
-        "agent1",
-        -discord_moderation._IP_PENALTY,
-        -discord_moderation._DU_PENALTY,
+    interaction2.response.send_message.assert_awaited_once_with("rate limited", ephemeral=True)
+    mock_penalty.assert_called_once_with(
+        "agent2",
+        discord_moderation._IP_PENALTY,
+        discord_moderation._DU_PENALTY,
         "rate_limit_violation",
     )
 
@@ -112,14 +110,14 @@ async def test_slash_mute_flow(
         return True, ""
 
     monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
-    mock_reward = MagicMock()
-    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
+    mock_penalty = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_penalty", mock_penalty)
     await discord_moderation.slash_mute.callback(interaction, "agent1")
     interaction.response.send_message.assert_awaited_once_with("muted", ephemeral=True)
     event = await bot.context.get_event_queue().get()
     assert event.type == "moderation"
     assert event.data == {"command": "mute", "agent_id": "agent1"}
-    mock_reward.assert_not_called()
+    mock_penalty.assert_not_called()
 
 
 @pytest.mark.unit
@@ -131,8 +129,8 @@ async def test_slash_penalty_flow(
         return True, ""
 
     monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
-    mock_reward = MagicMock()
-    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
+    mock_penalty = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_penalty", mock_penalty)
     await discord_moderation.slash_penalty.callback(interaction, "agent1", 1.0, 2.0)
     interaction.response.send_message.assert_awaited_once_with("penalty applied", ephemeral=True)
     event = await bot.context.get_event_queue().get()
@@ -143,7 +141,7 @@ async def test_slash_penalty_flow(
         "ip": 1.0,
         "du": 2.0,
     }
-    mock_reward.assert_called_once_with("agent1", -1.0, -2.0, "moderation_penalty")
+    mock_penalty.assert_called_once_with("agent1", 1.0, 2.0, "moderation_penalty")
 
 
 @pytest.mark.unit
@@ -155,14 +153,14 @@ async def test_slash_reset_memory_flow(
         return True, ""
 
     monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
-    mock_reward = MagicMock()
-    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
+    mock_penalty = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_penalty", mock_penalty)
     await discord_moderation.slash_reset_memory.callback(interaction, "agent1")
     interaction.response.send_message.assert_awaited_once_with("memory reset", ephemeral=True)
     event = await bot.context.get_event_queue().get()
     assert event.type == "moderation"
     assert event.data == {"command": "reset_memory", "agent_id": "agent1"}
-    mock_reward.assert_not_called()
+    mock_penalty.assert_not_called()
 
 
 @pytest.mark.unit
@@ -174,14 +172,14 @@ async def test_slash_unmute_flow(
         return True, ""
 
     monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
-    mock_reward = MagicMock()
-    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
+    mock_penalty = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_penalty", mock_penalty)
     await discord_moderation.slash_unmute.callback(interaction, "agent1")
     interaction.response.send_message.assert_awaited_once_with("unmuted", ephemeral=True)
     event = await bot.context.get_event_queue().get()
     assert event.type == "moderation"
     assert event.data == {"command": "unmute", "agent_id": "agent1"}
-    mock_reward.assert_not_called()
+    mock_penalty.assert_not_called()
 
 
 @pytest.mark.unit
@@ -199,13 +197,13 @@ async def test_rate_limit_counts_and_violation(
         return True, ""
 
     monkeypatch.setattr(discord_moderation, "evaluate_with_opa", allow_eval)
-    mock_reward = MagicMock()
-    monkeypatch.setattr(discord_moderation, "log_reward", mock_reward)
+    mock_penalty = MagicMock()
+    monkeypatch.setattr(discord_moderation, "log_penalty", mock_penalty)
 
     interaction1 = interaction_factory()
     await discord_moderation.slash_mute.callback(interaction1, "agent1")
     await bot.context.get_event_queue().get()
-    assert discord_moderation._ACTION_COUNTS["123:mute:agent1"] == 1
+    assert discord_moderation._ACTION_COUNTS["123:mute"] == 1
 
     interaction2 = interaction_factory()
     await discord_moderation.slash_mute.callback(interaction2, "agent1")
@@ -219,10 +217,10 @@ async def test_rate_limit_counts_and_violation(
         "ip": discord_moderation._IP_PENALTY,
         "du": discord_moderation._DU_PENALTY,
     }
-    assert discord_moderation._ACTION_COUNTS["123:mute:agent1"] == 2
-    mock_reward.assert_called_once_with(
+    assert discord_moderation._ACTION_COUNTS["123:mute"] == 2
+    mock_penalty.assert_called_once_with(
         "agent1",
-        -discord_moderation._IP_PENALTY,
-        -discord_moderation._DU_PENALTY,
+        discord_moderation._IP_PENALTY,
+        discord_moderation._DU_PENALTY,
         "rate_limit_violation",
     )
