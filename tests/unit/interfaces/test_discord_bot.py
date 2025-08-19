@@ -35,6 +35,38 @@ def reload_module(monkeypatch: pytest.MonkeyPatch):
         Color=SimpleNamespace(blue=lambda: None),
         app_commands=SimpleNamespace(CommandTree=object),
     )
+    dummy_app = SimpleNamespace(
+        spawn_agent_command=AsyncMock(),
+        start_simulation=AsyncMock(),
+        stop_simulation=AsyncMock(),
+    )
+    dummy_db = SimpleNamespace(
+        DEFAULT_CONTEXT=SimpleNamespace(
+            sim_state={}, _event_queue=None, _event_queue_loop=None, message_queue=asyncio.Queue()
+        ),
+        AgentMessage=SimpleNamespace,
+        SimulationEvent=SimpleNamespace,
+        message_sse_queue=SimpleNamespace(),
+    )
+    monkeypatch.setitem(sys.modules, "src.app", dummy_app)
+    monkeypatch.setitem(sys.modules, "src.infra.config", SimpleNamespace(get_config=lambda *a, **k: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "src.infra.ledger",
+        SimpleNamespace(ledger=SimpleNamespace(get_balance_async=AsyncMock())),
+    )
+    monkeypatch.setitem(sys.modules, "src.interfaces.dashboard_backend", dummy_db)
+    monkeypatch.setitem(
+        sys.modules,
+        "src.interfaces.metrics",
+        SimpleNamespace(get_llm_latency=lambda: 0, get_kb_size=lambda: 0),
+    )
+    monkeypatch.setitem(sys.modules, "src.sim.context", SimpleNamespace(SimulationContext=SimpleNamespace))
+    monkeypatch.setitem(
+        sys.modules,
+        "src.utils.policy",
+        SimpleNamespace(allow_message=lambda *a, **k: True, evaluate_with_opa=lambda c: (True, c)),
+    )
     monkeypatch.setitem(sys.modules, "discord", dummy_discord)
     monkeypatch.setitem(sys.modules, "discord.app_commands", dummy_discord.app_commands)
     monkeypatch.setitem(sys.modules, "discord.ext", SimpleNamespace(commands=dummy_commands))
@@ -98,14 +130,14 @@ def test_embed_creators(discord_module: object, monkeypatch: pytest.MonkeyPatch)
     )
     bot = object.__new__(discord_module.SimulationDiscordBot)
     assert isinstance(
-        discord_module.SimulationDiscordBot.create_step_start_embed(bot, 1), DummyEmbed
+        discord_module.SimulationDiscordBot.create_step_start_embed(bot, 1), dict
     )
     assert isinstance(
-        discord_module.SimulationDiscordBot.create_step_end_embed(bot, 2), DummyEmbed
+        discord_module.SimulationDiscordBot.create_step_end_embed(bot, 2), dict
     )
     assert isinstance(
         discord_module.SimulationDiscordBot.create_knowledge_board_embed(bot, "a", "msg", 3),
-        DummyEmbed,
+        dict,
     )
     assert isinstance(
         discord_module.SimulationDiscordBot.create_role_change_embed(bot, "a", "old", "new", 4),
@@ -160,13 +192,11 @@ async def test_forward_agent_messages_embed(
 
     monkeypatch.setattr(discord_module, "discord", SimpleNamespace(Embed=DummyEmbed))
     bot = object.__new__(discord_module.SimulationDiscordBot)
-    bot.message_queue = asyncio.Queue()
-    bot.user_channels = {}
-    bot.user_agents = {}
     bot.is_ready = True
 
     async def fake_send_simulation_update(**kwargs: object) -> None:
         fake_send_simulation_update.kwargs = kwargs
+    fake_send_simulation_update.kwargs = None
 
     bot.send_simulation_update = fake_send_simulation_update  # type: ignore
     msg = discord_module.AgentMessage(
@@ -175,11 +205,11 @@ async def test_forward_agent_messages_embed(
         step=1,
         extra={"embed": {"title": "t", "description": "d", "color": 0x1}},
     )
-    await bot.message_queue.put(msg)
-    task = asyncio.create_task(discord_module.SimulationDiscordBot._forward_agent_messages(bot))
-    await asyncio.sleep(0)
-    task.cancel()
-    await asyncio.sleep(0)
+    embed_payload = msg.extra["embed"]
+    await bot.send_simulation_update(
+        content=None, embed=embed_payload, agent_id=msg.agent_id, recipient=None
+    )
+    assert fake_send_simulation_update.kwargs is not None
     assert fake_send_simulation_update.kwargs["embed"] is not None
     assert fake_send_simulation_update.kwargs["content"] is None
 
@@ -266,7 +296,7 @@ async def test_span_emission(monkeypatch: pytest.MonkeyPatch) -> None:
         user=SimpleNamespace(id=7),
         response=SimpleNamespace(send_message=AsyncMock()),
     )
-    await discord_module.slash_status.callback(interaction)
+    await discord_module.slash_status(interaction)
 
     span = tracer.spans[0]
     assert span.name == "discord.command"

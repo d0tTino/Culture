@@ -153,6 +153,25 @@ def board_payload_to_embed(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def simulation_event_to_embed(event: SimulationEvent) -> dict[str, Any] | None:
+    """Convert a :class:`SimulationEvent` into an embed payload."""
+    data = event.data or {}
+    step = int(data.get("step", 0))
+    if event.type == "step_start":
+        return {
+            "title": f"📊 Simulation Step {step} Started",
+            "color": 0x0000FF,
+        }
+    if event.type == "step_end":
+        return {
+            "title": f"✅ Simulation Step {step} Completed",
+            "color": 0x00FF00,
+        }
+    if event.type == "knowledge_board":
+        return board_payload_to_embed(data)
+    return None
+
+
 def notify_budget_exceeded(agent_id: str, required: float, remaining: float) -> None:
     """Notify via Discord when an agent exceeds its DU budget."""
     msg = (
@@ -554,64 +573,61 @@ class SimulationDiscordBot:
                 logger.error(f"Unexpected error sending Discord message: {e}", exc_info=True)
                 return False
 
-    def create_start_embed(self: Self, success: bool, reason: str | None = None) -> Any:
-        """Create an embed indicating simulation start success or failure."""
-        title = "✅ Simulation Started" if success else "❌ Simulation Start Failed"
-        embed = discord.Embed(
-            title=title,
-            description=None if success else reason,
-            color=discord.Color.green() if success else discord.Color.red(),
-        )
-        return embed
+    def create_start_embed(self: Self, success: bool, reason: str | None = None) -> dict[str, Any]:
+        """Create an embed payload indicating simulation start success or failure."""
+        return {
+            "title": "✅ Simulation Started" if success else "❌ Simulation Start Failed",
+            "description": None if success else reason,
+            "color": 0x00FF00 if success else 0xFF0000,
+        }
 
-    def create_stop_embed(self: Self, success: bool, reason: str | None = None) -> Any:
-        """Create an embed indicating simulation stop success or failure."""
-        title = "🛑 Simulation Stopped" if success else "❌ Simulation Stop Failed"
-        embed = discord.Embed(
-            title=title,
-            description=None if success else reason,
-            color=discord.Color.green() if success else discord.Color.red(),
-        )
-        return embed
+    def create_stop_embed(self: Self, success: bool, reason: str | None = None) -> dict[str, Any]:
+        """Create an embed payload indicating simulation stop success or failure."""
+        return {
+            "title": "🛑 Simulation Stopped" if success else "❌ Simulation Stop Failed",
+            "description": None if success else reason,
+            "color": 0x00FF00 if success else 0xFF0000,
+        }
 
     def create_spawn_embed(
         self: Self, agent_id: str, success: bool, reason: str | None = None
-    ) -> Any:
-        """Create an embed indicating agent spawn success or failure."""
+    ) -> dict[str, Any]:
+        """Create an embed payload indicating agent spawn success or failure."""
         title = (
             f"🚀 Agent {agent_id[:8]} Spawned"
             if success
             else f"❌ Failed to Spawn Agent {agent_id[:8]}"
         )
-        embed = discord.Embed(
-            title=title,
-            description=None if success else reason,
-            color=discord.Color.green() if success else discord.Color.red(),
-        )
-        return embed
+        return {
+            "title": title,
+            "description": None if success else reason,
+            "color": 0x00FF00 if success else 0xFF0000,
+        }
 
-    def create_step_start_embed(self: Self, step: int) -> Any:
-        """Creates an embed for simulation step start"""
-        embed = discord.Embed(
-            title=f"📊 Simulation Step {step} Started", color=discord.Color.blue()
-        )
-        return embed
+    def create_step_start_embed(self: Self, step: int) -> dict[str, Any]:
+        """Create an embed payload for simulation step start."""
+        return {
+            "title": f"📊 Simulation Step {step} Started",
+            "color": 0x0000FF,
+        }
 
-    def create_step_end_embed(self: Self, step: int) -> Any:
-        """Creates an embed for simulation step end"""
-        embed = discord.Embed(
-            title=f"✅ Simulation Step {step} Completed", color=discord.Color.green()
-        )
-        return embed
+    def create_step_end_embed(self: Self, step: int) -> dict[str, Any]:
+        """Create an embed payload for simulation step end."""
+        return {
+            "title": f"✅ Simulation Step {step} Completed",
+            "color": 0x00FF00,
+        }
 
-    def create_knowledge_board_embed(self: Self, agent_id: str, content: str, step: int) -> Any:
-        """Creates an embed for Knowledge Board posts."""
+    def create_knowledge_board_embed(
+        self: Self, agent_id: str, content: str, step: int
+    ) -> dict[str, Any]:
+        """Create an embed payload for Knowledge Board posts."""
         payload = {
             "agent_id": agent_id,
             "content": content,
             "step": step,
         }
-        return embed_from_payload(board_payload_to_embed(payload))
+        return board_payload_to_embed(payload)
 
     def create_role_change_embed(
         self: Self, agent_id: str, old_role: str, new_role: str, step: int
