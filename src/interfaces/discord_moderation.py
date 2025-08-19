@@ -1,10 +1,10 @@
-"""Discord moderation commands with OPA-based rate limiting."""
+"""Discord moderation commands with OPA-based per-user rate limiting."""
 
 import time
 from functools import wraps
 from typing import Any, Callable
 
-from src.infra.ledger import log_reward
+from src.infra.ledger import log_penalty
 from src.interfaces.dashboard_backend import DEFAULT_CONTEXT, SimulationEvent
 from src.interfaces.discord_bot import bot, get_active_bot, has_admin_permission
 from src.utils.policy import evaluate_with_opa
@@ -24,8 +24,6 @@ async def _rate_limit(user: Any, action: str, agent_id: str | None = None) -> bo
         opa_key += f":{agent_id}"
 
     count_key = f"{user_id}:{action}"
-    if agent_id is not None:
-        count_key += f":{agent_id}"
     _ACTION_COUNTS[count_key] = _ACTION_COUNTS.get(count_key, 0) + 1
 
     now = time.monotonic()
@@ -65,7 +63,7 @@ def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callabl
                     )
                 )
                 try:  # pragma: no cover - best effort
-                    log_reward(agent_id, -_IP_PENALTY, -_DU_PENALTY, "rate_limit_violation")
+                    log_penalty(agent_id, _IP_PENALTY, _DU_PENALTY, "rate_limit_violation")
                 except Exception:
                     pass
                 await interaction.response.send_message("rate limited", ephemeral=True)
@@ -117,7 +115,7 @@ async def slash_penalty(interaction: Any, agent_id: str, ip: float = 0.0, du: fl
         )
     )
     try:  # pragma: no cover - best effort
-        log_reward(agent_id, -abs(ip), -abs(du), "moderation_penalty")
+        log_penalty(agent_id, abs(ip), abs(du), "moderation_penalty")
     except Exception:
         pass
     await interaction.response.send_message("penalty applied", ephemeral=True)
