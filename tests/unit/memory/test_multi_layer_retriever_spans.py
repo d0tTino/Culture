@@ -2,6 +2,8 @@ import pytest
 
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 
+pytestmark = pytest.mark.unit
+
 
 class MockSpan:
     def __init__(self, name):
@@ -46,9 +48,11 @@ async def test_retrieve_tracing(monkeypatch):
     assert len(result) == 2
 
     span_names = [s.name for s in tracer.spans]
+    assert "memory.retrieve" in span_names
     assert "memory.episodic_retrieve" in span_names
     assert "memory.semantic_retrieve" in span_names
     for span in tracer.spans:
-        assert span.attributes["llm.tokens.prompt"] == 0
-        assert span.attributes["llm.tokens.completion"] == 0
         assert "memory.latency_ms" in span.attributes
+        if span.name != "memory.retrieve":
+            assert span.attributes["llm.tokens.prompt"] == 0
+            assert span.attributes["llm.tokens.completion"] == 0
