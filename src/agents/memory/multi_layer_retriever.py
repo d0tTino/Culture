@@ -38,6 +38,7 @@ class MultiLayerRetriever:
             span.set_attribute("memory.agent_id", agent_id)
             span.set_attribute("memory.query.length", len(query))
             span.set_attribute("memory.k", k)
+            start_total = time.perf_counter()
             try:
                 episodic: list[dict[str, Any]] = []
                 if self.vector_store:
@@ -80,24 +81,48 @@ class MultiLayerRetriever:
                                 (time.perf_counter() - start) * 1000,
                             )
 
-                combined = episodic + semantic
-                combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
+                combined: list[dict[str, Any]] = []
                 if token_budget is not None:
-                    limited: list[dict[str, Any]] = []
+                    e_idx = s_idx = 0
                     tokens = 0
-                    for mem in combined:
-                        text = str(mem.get("content", ""))
-                        tokens += len(text.split())
-                        if tokens > token_budget:
+                    while tokens < token_budget and (
+                        e_idx < len(episodic) or s_idx < len(semantic)
+                    ):
+                        e_mem = episodic[e_idx] if e_idx < len(episodic) else None
+                        s_mem = semantic[s_idx] if s_idx < len(semantic) else None
+                        choose_semantic = False
+                        if s_mem is not None and (
+                            e_mem is None
+                            or s_mem.get("relevance_score", 0.0)
+                            > e_mem.get("relevance_score", 0.0)
+                        ):
+                            choose_semantic = True
+                        mem = s_mem if choose_semantic else e_mem
+                        if mem is None:
                             break
-                        limited.append(mem)
-                    combined = limited
+                        mem_tokens = len(str(mem.get("content", "")).split())
+                        if tokens + mem_tokens > token_budget:
+                            break
+                        combined.append(mem)
+                        tokens += mem_tokens
+                        if choose_semantic:
+                            s_idx += 1
+                        else:
+                            e_idx += 1
+                else:
+                    combined = episodic + semantic
+
+                combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
                 metrics.MEMORY_RETRIEVALS_TOTAL.inc()
                 span.set_attribute("memory.results", len(combined))
                 return combined[:k]
             except Exception:
                 metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
                 raise
+            finally:
+                span.set_attribute(
+                    "memory.latency_ms", (time.perf_counter() - start_total) * 1000
+                )
 
     async def retrieve_and_update_semantic(
         self: Self, agent_id: str, query: str = "", k: int = 5
@@ -106,6 +131,7 @@ class MultiLayerRetriever:
             span.set_attribute("memory.agent_id", agent_id)
             span.set_attribute("memory.query.length", len(query))
             span.set_attribute("memory.k", k)
+            start_total = time.perf_counter()
             try:
                 episodic = []
                 if self.vector_store:
@@ -139,6 +165,10 @@ class MultiLayerRetriever:
             except Exception:
                 metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
                 raise
+            finally:
+                span.set_attribute(
+                    "memory.latency_ms", (time.perf_counter() - start_total) * 1000
+                )
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         if not self.semantic_manager:
