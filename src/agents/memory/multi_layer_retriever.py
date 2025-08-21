@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+import tiktoken
 from opentelemetry import trace
 from typing_extensions import Self
 
@@ -23,9 +24,11 @@ class MultiLayerRetriever:
         self: Self,
         vector_store: ChromaVectorStoreManager | None = None,
         semantic_manager: SemanticMemoryManager | None = None,
+        tokenizer: tiktoken.Encoding | None = None,
     ) -> None:
         self.vector_store = vector_store
         self.semantic_manager = semantic_manager
+        self.tokenizer = tokenizer or tiktoken.get_encoding("cl100k_base")
 
     async def retrieve(
         self: Self,
@@ -100,7 +103,8 @@ class MultiLayerRetriever:
                         mem = s_mem if choose_semantic else e_mem
                         if mem is None:
                             break
-                        mem_tokens = len(str(mem.get("content", "")).split())
+                        text = str(mem.get("content", ""))
+                        mem_tokens = len(self.tokenizer.encode(text))
                         if tokens + mem_tokens > token_budget:
                             break
                         combined.append(mem)

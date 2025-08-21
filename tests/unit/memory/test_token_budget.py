@@ -1,4 +1,5 @@
 import pytest
+import tiktoken
 
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
@@ -24,8 +25,9 @@ class DummySemantic:
 
 @pytest.mark.asyncio
 async def test_retriever_respects_token_budget() -> None:
-    retriever = MultiLayerRetriever(DummyVectorStore(), DummySemantic())
-    results = await retriever.retrieve("agent", "q", k=10, token_budget=5)
+    tokenizer = tiktoken.get_encoding("cl100k_base")
+    retriever = MultiLayerRetriever(DummyVectorStore(), DummySemantic(), tokenizer)
+    results = await retriever.retrieve("agent", "q", k=10, token_budget=6)
     assert [r["content"] for r in results] == ["episodic one", "semantic one"]
 
 
