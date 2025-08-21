@@ -30,3 +30,31 @@ The following built-in hooks are available:
 Results from each hook are recorded in the metrics registry and written to the
 simulation event log at the end of every beat, enabling downstream analysis or
 plotting.
+
+## Running and replaying `signature_demo`
+
+1. Run the scenario and generate snapshots and an event log (default
+   `event_log.jsonl`):
+
+   ```bash
+   python src/app.py --scenario scenarios/signature_demo.yaml --seed 42
+   ```
+
+2. Package the run’s artifacts for sharing or replay:
+
+   ```bash
+   python scripts/export_traces.py --events event_log.jsonl \
+       --snapshots-dir snapshots -o traces.jsonl --bundle signature_demo.zip
+   ```
+
+   The resulting `signature_demo.zip` contains the event log, snapshots,
+   metrics, and exported traces.
+
+3. Replay the bundled run:
+
+   ```bash
+   unzip signature_demo.zip -d demo_run
+   python src/app.py --replay demo_run/snapshots/snapshot_0.json --seed 42
+   ```
+
+   Adjust `--replay-start` and `--replay-end` to slice the run if desired.

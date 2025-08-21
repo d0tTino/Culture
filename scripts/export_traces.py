@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Export snapshots or Redpanda event logs to a JSONL dataset."""
+"""Export snapshots or event logs and optionally bundle run artifacts."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import tempfile
+from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -62,32 +65,77 @@ def iter_events(
     after = (start_tick or 0) - 1
 
     if from_redpanda:
-        yield from event_log.stream_events(
-            after_step=after, timeout=1.0, end_step=end_tick
-        )
+        yield from event_log.stream_events(after_step=after, timeout=1.0, end_step=end_tick)
         return
 
     if file is None:
         raise ValueError("Event file path required when not using --redpanda")
 
-    yield from event_log.stream_events(
-        after_step=after, timeout=0.0, end_step=end_tick, path=file
-    )
+    yield from event_log.stream_events(after_step=after, timeout=0.0, end_step=end_tick, path=file)
+
+
+def load_metrics(file: str | Path) -> dict[str, list[tuple[int, float]]]:
+    """Extract evaluation metrics from a trace log."""
+
+    data: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    with Path(file).open("r", encoding="utf-8") as fh:
+        for line in fh:
+            obj: dict[str, Any] = json.loads(line)
+            if obj.get("type") != "evaluation":
+                continue
+            step = obj.get("step")
+            if not isinstance(step, int):
+                continue
+            for key, value in obj.items():
+                if key in {"type", "step", "trace_hash"}:
+                    continue
+                if isinstance(value, (int, float)):
+                    data[key].append((step, float(value)))
+    return data
+
+
+def bundle_run(
+    traces: str | Path,
+    bundle: str | Path,
+    *,
+    snapshots_dir: str | Path | None = None,
+    events_file: str | Path | None = None,
+) -> Path:
+    """Bundle traces, snapshots, and metrics into a zip archive."""
+
+    trace_path = Path(traces)
+    metrics = load_metrics(trace_path)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        shutil.copy2(trace_path, tmp / trace_path.name)
+        if events_file:
+            ev_path = Path(events_file)
+            shutil.copy2(ev_path, tmp / ev_path.name)
+        if snapshots_dir:
+            shutil.copytree(Path(snapshots_dir), tmp / "snapshots")
+        with (tmp / "metrics.json").open("w", encoding="utf-8") as mfh:
+            json.dump(metrics, mfh)
+        archive = shutil.make_archive(str(Path(bundle).with_suffix("")), "zip", tmp)
+    return Path(archive)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Export traces to JSONL dataset")
+    parser = argparse.ArgumentParser(
+        description="Export traces to JSONL dataset and bundle run artifacts"
+    )
     src_group = parser.add_mutually_exclusive_group(required=True)
     src_group.add_argument("--snapshots", help="Snapshot directory to read")
     src_group.add_argument("--events", help="Path to event log file")
     src_group.add_argument("--redpanda", action="store_true", help="Fetch events from Redpanda")
     parser.add_argument("-o", "--output", help="Output JSONL file (default: stdout)")
     parser.add_argument("--agent", help="Only include events for this agent_id")
+    parser.add_argument("--replay-start", type=int, help="First tick to include (inclusive)")
+    parser.add_argument("--replay-end", type=int, help="Last tick to include (inclusive)")
+    parser.add_argument("--bundle", help="Zip archive to create containing run artifacts")
     parser.add_argument(
-        "--replay-start", type=int, help="First tick to include (inclusive)"
-    )
-    parser.add_argument(
-        "--replay-end", type=int, help="Last tick to include (inclusive)"
+        "--snapshots-dir",
+        help="Snapshot directory to include in bundle when reading from events",
     )
     args = parser.parse_args(argv)
 
@@ -118,6 +166,17 @@ def main(argv: list[str] | None = None) -> int:
         out.write("\n")
     if args.output:
         out.close()
+
+    if args.bundle:
+        if not args.output:
+            parser.error("--output is required when using --bundle")
+        bundle_run(
+            args.output,
+            args.bundle,
+            snapshots_dir=args.snapshots_dir or args.snapshots,
+            events_file=args.events,
+        )
+
     return 0
 
 
