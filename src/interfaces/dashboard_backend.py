@@ -684,15 +684,27 @@ async def api_token_balances() -> Response:
     return JSONResponse({"agents": agents})
 
 
+def _cost_metrics_data() -> dict[str, float]:
+    """Collect DU cost and latency metrics."""
+
+    return {
+        "du_per_1k_tokens": metrics.get_du_per_1k_tokens(),
+        "llm_latency_p95_ms": metrics.get_llm_latency_p95(),
+    }
+
+
 @app.get("/api/cost_metrics")
 async def api_cost_metrics() -> Response:
     """Return DU cost and latency metrics for dashboards."""
 
-    data = {
-        "du_per_1k_tokens": metrics.get_du_per_1k_tokens(),
-        "llm_latency_p95_ms": metrics.get_llm_latency_p95(),
-    }
-    return JSONResponse(data)
+    return JSONResponse(_cost_metrics_data())
+
+
+@app.get("/api/observability_metrics")
+async def api_observability_metrics() -> Response:
+    """Return DU cost and latency metrics for dashboards."""
+
+    return JSONResponse(_cost_metrics_data())
 
 
 @app.get("/api/auctions")
