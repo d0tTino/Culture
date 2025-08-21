@@ -383,6 +383,37 @@ class SimulationDiscordBot:
                         )
                         await interaction.response.send_message("resume", ephemeral=True)
 
+                @tree.command(name="pause_all")
+                async def _tree_pause_all(interaction: "discord.Interaction") -> None:
+                    with command_span("pause_all", interaction) as span:
+                        if not has_admin_permission(getattr(interaction, "user", None)):
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
+                            return
+                        await self.event_queue.put(
+                            SimulationEvent(type="control", data={"command": "pause_all"})
+                        )
+                        await interaction.response.send_message("pause all", ephemeral=True)
+
+                @tree.command(name="kill_agent")
+                @app_commands.describe(agent_id="ID of the agent to kill")
+                async def _tree_kill_agent(
+                    interaction: "discord.Interaction", agent_id: str
+                ) -> None:
+                    with command_span("kill_agent", interaction, agent_id=agent_id) as span:
+                        if not has_admin_permission(getattr(interaction, "user", None)):
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
+                            return
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="control",
+                                data={
+                                    "command": "kill_agent",
+                                    "agent_id": agent_id,
+                                },
+                            )
+                        )
+                        await interaction.response.send_message("killed", ephemeral=True)
+
                 @tree.command(name="mute")
                 @app_commands.describe(agent_id="ID of the agent to mute")
                 async def _tree_mute(interaction: "discord.Interaction", agent_id: str) -> None:
@@ -1080,6 +1111,37 @@ async def slash_resume(interaction: Any) -> None:
             SimulationEvent(type="control", data={"command": "resume"})
         )
         await send_interaction_response(interaction, "resume", ephemeral=True)
+
+
+@bot.tree.command(name="pause_all")
+async def slash_pause_all(interaction: Any) -> None:
+    """Pause all activity in the simulation. Administrator only."""
+    with command_span("pause_all", interaction) as span:
+        if not has_admin_permission(getattr(interaction, "user", None)):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(type="control", data={"command": "pause_all"})
+        )
+        await send_interaction_response(interaction, "pause all", ephemeral=True)
+
+
+@bot.tree.command(name="kill_agent")
+@app_commands.describe(agent_id="ID of the agent to kill")
+async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
+    """Remove an agent from the simulation. Administrator only."""
+    with command_span("kill_agent", interaction, agent_id=agent_id) as span:
+        if not has_admin_permission(getattr(interaction, "user", None)):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(type="control", data={"command": "kill_agent", "agent_id": agent_id})
+        )
+        await send_interaction_response(interaction, "killed", ephemeral=True)
 
 
 @bot.tree.command(name="start")
