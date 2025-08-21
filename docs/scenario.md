@@ -53,10 +53,18 @@ This lightweight scenario highlights evaluation hooks for common group metrics.
    python tools/export_traces.py data/traces.jsonl --outdir plots --bundle run_bundle
    ```
 
+### Prompts
+
+- **Proposal** – "Kick off the project by proposing a plan for everyone to sign."
+- **Critique** – "Review and refine the proposal, noting strengths and weaknesses."
+- **Vote** – "Decide whether to adopt the proposal."
+- **Deliverable** – "Summarize the approved plan and outline next steps."
+
 ### Expected Arc
 
-1. **Introduction** – agents share initial perspectives and set intent.
-2. **Collaboration** – members coordinate to sign onto a shared plan.
-3. **Resolution** – the group finalizes the plan and reflects on the process.
+1. **Proposal** – agents introduce an initial plan.
+2. **Critique** – members challenge and refine the idea.
+3. **Vote** – the group decides on adopting the plan.
+4. **Deliverable** – the final plan is summarized and shared.
 
-Evaluation hooks record coalition counts, sentiment, and collective DU/IP curves for analysis.
+Evaluation hooks record coalition counts, sentiment trends, and collective DU/IP usage for analysis.

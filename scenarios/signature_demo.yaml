@@ -3,9 +3,19 @@ description: Demo scenario showcasing evaluation hooks for coalition and sentime
 goal: Agents collaborate to sign a shared plan while monitoring group dynamics
 steps: 30
 beats:
-  - introduction
-  - collaboration
-  - resolution
+  - proposal
+  - critique
+  - vote
+  - deliverable
+prompts:
+  proposal: >-
+    Kick off the project by proposing a plan for everyone to sign.
+  critique: >-
+    Review and refine the proposal, noting strengths and weaknesses.
+  vote: >-
+    Decide whether to adopt the proposal.
+  deliverable: >-
+    Summarize the approved plan and outline next steps.
 evaluation_hooks:
   - coalitions
   - sentiment
