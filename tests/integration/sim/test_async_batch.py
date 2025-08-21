@@ -93,3 +93,78 @@ async def test_events_enqueued_during_run_step() -> None:
     assert evt.data["agent_id"] == "agent1"
     assert evt.data["step"] == 1
     await _clear_event_queue()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_async_batch_stress(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure vLLM async batching handles many concurrent requests."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.infra import config, llm_client
+
+    captured_urls: list[str] = []
+
+    async def fake_post(url: str, json: dict[str, Any], timeout: float | None = None) -> MagicMock:
+        captured_urls.append(url)
+        responses = [
+            {
+                "choices": [{"message": {"content": f"resp{i}"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            }
+            for i, _ in enumerate(json["requests"])
+        ]
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.text = json_module.dumps({"responses": responses})
+        return resp
+
+    # Configure vLLM client
+    monkeypatch.setattr(llm_client, "LLM_API_BASE", "http://vllm:8001")
+    monkeypatch.setattr(llm_client, "VLLM_API_BASE", "http://vllm:8001")
+    monkeypatch.setattr(llm_client, "USE_VLLM", True)
+    monkeypatch.setattr(config.settings, "LLM_API_BASE", "http://vllm:8001")  # type: ignore[attr-defined]
+    monkeypatch.setattr(config.settings, "VLLM_API_BASE", "http://vllm:8001")  # type: ignore[attr-defined]
+    monkeypatch.setitem(config._CONFIG, "LLM_API_BASE", "http://vllm:8001")
+    monkeypatch.setitem(config._CONFIG, "VLLM_API_BASE", "http://vllm:8001")
+    monkeypatch.setattr(llm_client, "client", llm_client._create_vllm_client())  # type: ignore[attr-defined]
+
+    # Patch DU accounting
+    monkeypatch.setattr(llm_client.ledger, "calculate_gas_price", lambda agent_id: (0.1, 0.0))
+    monkeypatch.setattr(llm_client.ledger, "log_change", lambda *a, **k: None)
+
+    class DummyRM:
+        def __init__(self) -> None:
+            self.ensure_calls: list[tuple[str, float]] = []
+
+        def ensure_du_budget(self, agent_id: str, amt: float) -> None:
+            self.ensure_calls.append((agent_id, amt))
+
+        def charge_du(self, agent_id: str, amt: float) -> None:
+            pass
+
+    dummy_rm = DummyRM()
+    monkeypatch.setattr("src.sim.resource_manager.get_resource_manager", lambda: dummy_rm)
+
+    import json as json_module
+
+    monkeypatch.setattr(
+        "src.infra.llm_client.httpx.AsyncClient.post",
+        AsyncMock(side_effect=fake_post),
+    )
+
+    llm = llm_client.LLMClient(
+        llm_client.LLMClientConfig(batch_size=5, batch_timeout=0.01, model_name="m")
+    )
+
+    async def _call(i: int) -> str:
+        state = SimpleNamespace(agent_id=f"a{i}", du=10.0)
+        resp = await llm.chat(model="m", messages=[], agent_state=state)
+        return resp["message"]["content"]
+
+    results = await asyncio.gather(*[_call(i) for i in range(20)])
+
+    assert len(results) == 20
+    assert all(r.startswith("resp") for r in results)
+    assert all(url.endswith("/v1/async_batch") for url in captured_urls)
+    assert len(dummy_rm.ensure_calls) == 20
