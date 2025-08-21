@@ -70,6 +70,18 @@ Each agent exposes its remaining DU balance and efficiency via Prometheus gauges
 Create Grafana panels with queries such as `agent_remaining_du` or `agent_du_per_1k_tokens`
 to alert when budgets run low or spike unexpectedly.
 
+### Dashboard Cost Metrics Endpoint
+
+The dashboard backend provides `/api/observability_metrics` for quick visibility into
+LLM usage. The endpoint returns:
+
+- `du_per_1k_tokens` – average digital units spent per 1,000 tokens. Lower values
+  indicate more efficient usage of the DU budget.
+- `llm_latency_p95_ms` – 95th percentile latency of recent LLM calls in milliseconds,
+  useful for spotting tail latency issues.
+
+These metrics can be fetched directly by the UI or external monitoring systems.
+
 ## 4. Running Grafana Locally
 
 If you want to run Grafana locally for quick testing, you can use Docker. The default login is `admin`/`admin`:
