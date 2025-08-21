@@ -426,12 +426,14 @@ class LLMClient:
         except asyncio.CancelledError:  # pragma: no cover - timing dependent
             pass
 
+    @async_charge_du_cost
     @async_monitor_llm_call(model_param="model", context="ollama_chat")
     async def chat(
         self: LLMClient,
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
+        agent_state: AgentState | None = None,
     ) -> LLMChatResponse:
         if (
             ":" in model
@@ -459,8 +461,16 @@ class LLMClient:
         model: str,
         messages: list[LLMMessage],
         options: dict[str, Any] | None = None,
+        agent_state: AgentState | None = None,
     ) -> LLMChatResponse:
-        return asyncio.run(self.chat(model=model, messages=messages, options=options))
+        return asyncio.run(
+            self.chat(
+                model=model,
+                messages=messages,
+                options=options,
+                agent_state=agent_state,
+            )
+        )
 
 
 # Mock implementation variables and functions
@@ -625,7 +635,7 @@ def _create_vllm_client() -> OllamaClientProtocol:
                 start_time = time.perf_counter()
                 try:
                     base = VLLM_API_BASE or LLM_API_BASE
-                    url = f"{base.rstrip('/')}/v1/batch"
+                    url = f"{base.rstrip('/')}/v1/async_batch"
                     import importlib
                     import json as _json
 
