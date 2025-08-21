@@ -39,18 +39,44 @@ class DummyInteraction:
         self.response = SimpleNamespace(send_message=AsyncMock())
 
 
+class DummyAdminInteraction(DummyInteraction):
+    def __init__(self) -> None:
+        super().__init__()
+        self.user = SimpleNamespace(guild_permissions=SimpleNamespace(administrator=True))
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_control_commands(monkeypatch: pytest.MonkeyPatch) -> None:
     queue: asyncio.Queue[db.SimulationEvent | None] = asyncio.Queue()
-    monkeypatch.setattr(db, "get_event_queue", lambda: queue)
+
+    class DummyBus:
+        def __init__(self) -> None:
+            self.queue = queue
+
+        def subscribe(self) -> asyncio.Queue[db.SimulationEvent | None]:
+            return self.queue
+
+        def unsubscribe(self, q: asyncio.Queue[db.SimulationEvent | None]) -> None:
+            return None
+
+        async def publish(self, event: db.SimulationEvent | None) -> None:
+            await self.queue.put(event)
+
+        def shutdown(self) -> None:
+            return None
+
+    dummy_bus = DummyBus()
+
+    import src.sim.context as ctx_mod
+    import src.sim.event_bus as eb_mod
     import src.sim.simulation as sim_mod
 
-    monkeypatch.setattr(sim_mod, "get_event_queue", lambda: queue)
-    from src.interfaces import discord_bot as bot
+    monkeypatch.setattr(eb_mod, "get_event_bus", lambda: dummy_bus)
+    monkeypatch.setattr(ctx_mod, "get_event_bus", lambda: dummy_bus)
+    monkeypatch.setattr(sim_mod, "get_event_bus", lambda: dummy_bus)
 
-    monkeypatch.setattr(bot, "event_queue", queue)
-    monkeypatch.setattr(bot, "get_event_queue", lambda: queue)
+    from src.interfaces import discord_bot as bot
 
     agent = DummyAgent("A")
     sim = Simulation([agent])
@@ -64,9 +90,14 @@ async def test_control_commands(monkeypatch: pytest.MonkeyPatch) -> None:
     await asyncio.sleep(0.05)
     assert sim.paused is False
 
-    await bot.slash_set_speed.callback(DummyInteraction(), value=2.5)
-    await asyncio.sleep(0.05)
+    await sim.handle_control_command({"command": "pause_all"})
+    assert sim.paused is True
+
+    await sim.handle_control_command({"command": "kill_agent", "agent_id": "A"})
+    assert agent.state.is_alive is False
+
+    await sim.handle_control_command({"command": "set_speed", "value": 2.5})
     assert sim.speed == pytest.approx(2.5)
 
     sim.close()
-    await queue.put(None)
+    dummy_bus.shutdown()

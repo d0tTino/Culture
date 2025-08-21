@@ -61,3 +61,13 @@ Use `/stats` to verify the agent is responsive:
 ```
 
 An ephemeral reply shows the current latency and Knowledge Board size.
+
+## Moderation Workflow
+
+Administrators can moderate the simulation directly from Discord using the following commands:
+
+- `/mute <agent_id>` and `/unmute <agent_id>` – temporarily block or restore an agent's ability to post messages.
+- `/pause_all` – halt all agent turns until `/resume` is issued. Requires administrator permissions.
+- `/kill_agent <agent_id>` – permanently remove an agent from the simulation. Administrator only.
+
+These tools allow moderators to quickly intervene when agents misbehave or when the simulation needs to be frozen for review.

@@ -426,6 +426,14 @@ class Simulation:
             self.paused = True
         elif action == "resume":
             self.paused = False
+        elif action == "pause_all":
+            self.paused = True
+            kernel = getattr(self, "event_kernel", None)
+            if kernel is not None and hasattr(kernel, "pause"):
+                try:
+                    kernel.pause()
+                except Exception:  # pragma: no cover - best effort
+                    logger.debug("Kernel pause failed", exc_info=True)
         elif action == "start":
             self.paused = False
         elif action == "stop":
@@ -441,6 +449,16 @@ class Simulation:
                     await self.spawn_agent(new_agent)
                 except Exception:
                     logger.error("Failed to spawn agent %s", agent_id, exc_info=True)
+        elif action == "kill_agent":
+            agent_id = cmd.get("agent_id")
+            if agent_id:
+                agent = next((a for a in self.agents if a.agent_id == str(agent_id)), None)
+                if agent is not None:
+                    await self.retire_agent(agent)
+                    try:
+                        self.agents.remove(agent)
+                    except ValueError:  # pragma: no cover - defensive
+                        pass
         elif action == "set_speed":
             try:
                 self.speed = float(cmd.get("value", 1))
@@ -931,12 +949,8 @@ class Simulation:
             metrics: dict[str, Any] = {}
             for hook in self.evaluation_hooks:
                 try:
-                    with tracer.start_as_current_span(
-                        "simulation.evaluation_hook"
-                    ) as span:
-                        span.set_attribute(
-                            "hook.name", getattr(hook, "__name__", repr(hook))
-                        )
+                    with tracer.start_as_current_span("simulation.evaluation_hook") as span:
+                        span.set_attribute("hook.name", getattr(hook, "__name__", repr(hook)))
                         span.set_attribute("simulation.step", self.current_step)
                         result = hook(self, []) or {}
                         for key, value in result.items():
@@ -1142,12 +1156,8 @@ class Simulation:
             metrics: dict[str, Any] = {}
             for hook in self.evaluation_hooks:
                 try:
-                    with tracer.start_as_current_span(
-                        "simulation.evaluation_hook"
-                    ) as span:
-                        span.set_attribute(
-                            "hook.name", getattr(hook, "__name__", repr(hook))
-                        )
+                    with tracer.start_as_current_span("simulation.evaluation_hook") as span:
+                        span.set_attribute("hook.name", getattr(hook, "__name__", repr(hook)))
                         span.set_attribute("simulation.step", self.current_step)
                         result = hook(self, events) or {}
                         for key, value in result.items():
@@ -1494,9 +1504,7 @@ class Simulation:
 def _hook_coalitions(sim: "Simulation", _events: list[Any]) -> dict[str, Any]:
     """Return the number of active coalitions (projects with >1 member)."""
 
-    coalition_count = sum(
-        1 for proj in sim.projects.values() if len(proj.get("members", [])) > 1
-    )
+    coalition_count = sum(1 for proj in sim.projects.values() if len(proj.get("members", [])) > 1)
     return {"coalitions": coalition_count}
 
 
