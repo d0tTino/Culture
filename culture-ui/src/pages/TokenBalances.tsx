@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { fetchObservabilityMetrics } from '../lib/api'
 import { registerWidget } from '../lib/widgetRegistry'
 
 interface BalanceInfo {
@@ -9,6 +10,10 @@ interface BalanceInfo {
 
 export default function TokenBalances() {
   const [data, setData] = useState<Record<string, BalanceInfo>>({})
+  const [metrics, setMetrics] = useState({
+    agent_du_per_1k_tokens: {} as Record<string, number>,
+    agent_llm_latency_p95_ms: {} as Record<string, number>,
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -21,7 +26,20 @@ export default function TokenBalances() {
         /* ignore */
       }
     }
+    async function loadMetrics() {
+      try {
+        const m = await fetchObservabilityMetrics()
+        if (!cancelled)
+          setMetrics({
+            agent_du_per_1k_tokens: m.agent_du_per_1k_tokens || {},
+            agent_llm_latency_p95_ms: m.agent_llm_latency_p95_ms || {},
+          })
+      } catch {
+        /* ignore */
+      }
+    }
     void load()
+    void loadMetrics()
     return () => {
       cancelled = true
     }
@@ -37,6 +55,8 @@ export default function TokenBalances() {
             <th className="border px-2">IP</th>
             <th className="border px-2">DU</th>
             <th className="border px-2">Tokens</th>
+            <th className="border px-2">DU/1k</th>
+            <th className="border px-2">Latency</th>
           </tr>
         </thead>
         <tbody>
@@ -49,6 +69,12 @@ export default function TokenBalances() {
                 {Object.entries(info.tokens || {})
                   .map(([tok, amt]) => `${tok}:${amt}`)
                   .join(', ')}
+              </td>
+              <td className="border px-2">
+                {metrics.agent_du_per_1k_tokens[id] ?? 'n/a'}
+              </td>
+              <td className="border px-2">
+                {metrics.agent_llm_latency_p95_ms[id] ?? 'n/a'}
               </td>
             </tr>
           ))}
