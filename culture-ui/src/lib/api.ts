@@ -80,6 +80,8 @@ export async function registerWidgetBackend(widget: WidgetRegistration): Promise
 export interface ObservabilityMetrics {
   du_per_1k_tokens: number
   llm_latency_p95_ms: number
+  agent_du_per_1k_tokens: Record<string, number>
+  agent_llm_latency_p95_ms: Record<string, number>
 }
 
 export async function fetchObservabilityMetrics(): Promise<ObservabilityMetrics> {
@@ -91,5 +93,7 @@ export async function displayObservabilityMetrics(): Promise<void> {
   const metrics = await fetchObservabilityMetrics()
   console.log('DU/1k tokens:', metrics.du_per_1k_tokens)
   console.log('p95 latency (ms):', metrics.llm_latency_p95_ms)
+  console.log('Agent DU/1k tokens:', metrics.agent_du_per_1k_tokens)
+  console.log('Agent p95 latency (ms):', metrics.agent_llm_latency_p95_ms)
 }
 
