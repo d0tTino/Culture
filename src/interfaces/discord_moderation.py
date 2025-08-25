@@ -41,7 +41,12 @@ def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callabl
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(interaction: Any, agent_id: str, *args: Any, **kwargs: Any) -> Any:
+        async def wrapper(interaction: Any, *args: Any, **kwargs: Any) -> Any:
+            agent_id: str | None = None
+            if args:
+                agent_id = args[0]
+            elif "agent_id" in kwargs:
+                agent_id = str(kwargs.get("agent_id"))
             bot_instance = get_active_bot()
             ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
             if not await _rate_limit(getattr(interaction, "user", None), action, agent_id):
@@ -68,7 +73,7 @@ def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callabl
                     pass
                 await interaction.response.send_message("rate limited", ephemeral=True)
                 return None
-            return await func(interaction, agent_id, *args, **kwargs)
+            return await func(interaction, *args, **kwargs)
 
         return wrapper
 
