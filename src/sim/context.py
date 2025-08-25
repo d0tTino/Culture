@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .event_bus import get_event_bus
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from src.interfaces.dashboard_backend import SimulationEvent
 
 
 @dataclass
@@ -21,10 +24,10 @@ class SimulationContext:
         }
     )
     message_queue: asyncio.Queue[Any] = field(default_factory=lambda: asyncio.Queue(maxsize=1000))
-    _event_queue: asyncio.Queue[Any] | None = field(default=None, init=False)
+    _event_queue: asyncio.Queue[SimulationEvent | None] | None = field(default=None, init=False)
     _event_queue_loop: asyncio.AbstractEventLoop | None = field(default=None, init=False)
 
-    def get_event_queue(self: SimulationContext) -> asyncio.Queue[Any]:
+    def get_event_queue(self: SimulationContext) -> asyncio.Queue[SimulationEvent | None]:
         """Return an event queue bound to the current loop."""
         bus = get_event_bus()
         try:
