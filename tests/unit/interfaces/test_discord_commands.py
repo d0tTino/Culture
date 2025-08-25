@@ -19,15 +19,28 @@ class DummyBot:
 
 def reload_module(monkeypatch: pytest.MonkeyPatch):
     dummy_commands = SimpleNamespace(Bot=DummyBot)
+    class DummyCommandTree:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def command(self, *a: object, **k: object) -> Callable[[Callable[..., object]], Callable[..., object]]:
+            return lambda f: f
+
+        def add_check(self, *a: object, **k: object) -> None:
+            return None
+
     dummy_discord = SimpleNamespace(
         Intents=SimpleNamespace(default=lambda: SimpleNamespace(message_content=True)),
         Client=object,
-        Embed=object,
+        Embed=lambda *a, **k: None,
         TextChannel=object,
         Thread=object,
         DiscordException=Exception,
-        Color=SimpleNamespace(green=lambda: None, red=lambda: None),
-        app_commands=SimpleNamespace(CommandTree=object),
+        Color=SimpleNamespace(green=lambda: 0, red=lambda: 0),
+        app_commands=SimpleNamespace(
+            CommandTree=DummyCommandTree,
+            describe=lambda *a, **k: (lambda f: f),
+        ),
     )
     monkeypatch.setitem(sys.modules, "discord", dummy_discord)
     monkeypatch.setitem(sys.modules, "discord.app_commands", dummy_discord.app_commands)
@@ -56,14 +69,15 @@ async def test_slash_start_broadcasts_success_embed(discord_module: object, monk
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
-        create_start_embed=MagicMock(return_value="embed"),
+        create_start_embed=MagicMock(return_value={}),
+        channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
     monkeypatch.setattr(discord_module, "start_simulation", AsyncMock())
     interaction = DummyInteraction()
     await discord_module.slash_start(interaction)
     bot.create_start_embed.assert_called_once_with(True)
-    bot.send_simulation_update.assert_awaited_once_with(embed="embed")
+    bot.send_simulation_update.assert_awaited_once_with(embed={})
 
 
 @pytest.mark.unit
@@ -72,7 +86,8 @@ async def test_slash_start_broadcasts_failure_embed(discord_module: object, monk
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
-        create_start_embed=MagicMock(return_value="embed"),
+        create_start_embed=MagicMock(return_value={}),
+        channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
     monkeypatch.setattr(discord_module, "start_simulation", AsyncMock(side_effect=RuntimeError("boom")))
@@ -81,7 +96,7 @@ async def test_slash_start_broadcasts_failure_embed(discord_module: object, monk
     bot.create_start_embed.assert_called_once()
     args = bot.create_start_embed.call_args[0]
     assert args[0] is False and "boom" in args[1]
-    bot.send_simulation_update.assert_awaited_once_with(embed="embed")
+    bot.send_simulation_update.assert_awaited_once_with(embed={})
 
 
 @pytest.mark.unit
@@ -90,14 +105,15 @@ async def test_slash_stop_broadcasts_success_embed(discord_module: object, monke
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
-        create_stop_embed=MagicMock(return_value="embed"),
+        create_stop_embed=MagicMock(return_value={}),
+        channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
     monkeypatch.setattr(discord_module, "stop_simulation", AsyncMock())
     interaction = DummyInteraction()
     await discord_module.slash_stop(interaction)
     bot.create_stop_embed.assert_called_once_with(True)
-    bot.send_simulation_update.assert_awaited_once_with(embed="embed")
+    bot.send_simulation_update.assert_awaited_once_with(embed={})
 
 
 @pytest.mark.unit
@@ -106,14 +122,15 @@ async def test_slash_spawn_broadcasts_success_embed(discord_module: object, monk
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
-        create_spawn_embed=MagicMock(return_value="embed"),
+        create_spawn_embed=MagicMock(return_value={}),
+        channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
     monkeypatch.setattr(discord_module, "spawn_agent_command", AsyncMock())
     interaction = DummyInteraction()
     await discord_module.slash_spawn(interaction, "agent")
     bot.create_spawn_embed.assert_called_once_with("agent", True)
-    bot.send_simulation_update.assert_awaited_once_with(embed="embed")
+    bot.send_simulation_update.assert_awaited_once_with(embed={})
 
 
 @pytest.mark.unit
@@ -122,7 +139,8 @@ async def test_slash_spawn_broadcasts_failure_embed(discord_module: object, monk
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
-        create_spawn_embed=MagicMock(return_value="embed"),
+        create_spawn_embed=MagicMock(return_value={}),
+        channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
     monkeypatch.setattr(discord_module, "spawn_agent_command", AsyncMock(side_effect=RuntimeError("bad")))
@@ -131,7 +149,7 @@ async def test_slash_spawn_broadcasts_failure_embed(discord_module: object, monk
     bot.create_spawn_embed.assert_called_once()
     args = bot.create_spawn_embed.call_args[0]
     assert args[0] == "agent" and args[1] is False
-    bot.send_simulation_update.assert_awaited_once_with(embed="embed")
+    bot.send_simulation_update.assert_awaited_once_with(embed={})
 
 
 @pytest.mark.unit

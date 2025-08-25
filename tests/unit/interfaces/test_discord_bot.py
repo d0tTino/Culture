@@ -25,15 +25,28 @@ class DummyBot:
 
 def reload_module(monkeypatch: pytest.MonkeyPatch):
     dummy_commands = SimpleNamespace(Bot=DummyBot)
+    class DummyCommandTree:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def command(self, *a: object, **k: object) -> Callable[[Callable[..., object]], Callable[..., object]]:
+            return lambda f: f
+
+        def add_check(self, *a: object, **k: object) -> None:
+            return None
+
     dummy_discord = SimpleNamespace(
         Intents=SimpleNamespace(default=lambda: SimpleNamespace(message_content=True)),
         Client=object,
-        Embed=object,
+        Embed=lambda *a, **k: None,
         TextChannel=object,
         Thread=object,
         DiscordException=Exception,
-        Color=SimpleNamespace(blue=lambda: None),
-        app_commands=SimpleNamespace(CommandTree=object),
+        Color=SimpleNamespace(blue=lambda: 0, green=lambda: 0, gold=lambda: 0, purple=lambda: 0, red=lambda: 0),
+        app_commands=SimpleNamespace(
+            CommandTree=DummyCommandTree,
+            describe=lambda *a, **k: (lambda f: f),
+        ),
     )
     dummy_app = SimpleNamespace(
         spawn_agent_command=AsyncMock(),
@@ -49,11 +62,16 @@ def reload_module(monkeypatch: pytest.MonkeyPatch):
         message_sse_queue=SimpleNamespace(),
     )
     monkeypatch.setitem(sys.modules, "src.app", dummy_app)
-    monkeypatch.setitem(sys.modules, "src.infra.config", SimpleNamespace(get_config=lambda *a, **k: None))
+    monkeypatch.setitem(
+        sys.modules, "src.infra.config", SimpleNamespace(get_config=lambda *a, **k: None)
+    )
     monkeypatch.setitem(
         sys.modules,
         "src.infra.ledger",
-        SimpleNamespace(ledger=SimpleNamespace(get_balance_async=AsyncMock())),
+        SimpleNamespace(
+            ledger=SimpleNamespace(get_balance_async=AsyncMock()),
+            log_penalty=lambda *a, **k: None,
+        ),
     )
     monkeypatch.setitem(sys.modules, "src.interfaces.dashboard_backend", dummy_db)
     monkeypatch.setitem(
@@ -61,7 +79,9 @@ def reload_module(monkeypatch: pytest.MonkeyPatch):
         "src.interfaces.metrics",
         SimpleNamespace(get_llm_latency=lambda: 0, get_kb_size=lambda: 0),
     )
-    monkeypatch.setitem(sys.modules, "src.sim.context", SimpleNamespace(SimulationContext=SimpleNamespace))
+    monkeypatch.setitem(
+        sys.modules, "src.sim.context", SimpleNamespace(SimulationContext=SimpleNamespace)
+    )
     monkeypatch.setitem(
         sys.modules,
         "src.utils.policy",
@@ -129,12 +149,8 @@ def test_embed_creators(discord_module: object, monkeypatch: pytest.MonkeyPatch)
         discord_module, "discord", SimpleNamespace(Embed=DummyEmbed, Color=dummy_color)
     )
     bot = object.__new__(discord_module.SimulationDiscordBot)
-    assert isinstance(
-        discord_module.SimulationDiscordBot.create_step_start_embed(bot, 1), dict
-    )
-    assert isinstance(
-        discord_module.SimulationDiscordBot.create_step_end_embed(bot, 2), dict
-    )
+    assert isinstance(discord_module.SimulationDiscordBot.create_step_start_embed(bot, 1), dict)
+    assert isinstance(discord_module.SimulationDiscordBot.create_step_end_embed(bot, 2), dict)
     assert isinstance(
         discord_module.SimulationDiscordBot.create_knowledge_board_embed(bot, "a", "msg", 3),
         dict,
@@ -196,6 +212,7 @@ async def test_forward_agent_messages_embed(
 
     async def fake_send_simulation_update(**kwargs: object) -> None:
         fake_send_simulation_update.kwargs = kwargs
+
     fake_send_simulation_update.kwargs = None
 
     bot.send_simulation_update = fake_send_simulation_update  # type: ignore
