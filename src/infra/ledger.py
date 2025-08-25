@@ -5,9 +5,34 @@ import logging
 import sqlite3
 import time
 from collections.abc import Callable
+from functools import wraps
 from pathlib import Path
 
+from opentelemetry import trace
+
 from .settings import settings
+
+tracer = trace.get_tracer(__name__)
+
+
+def traced(func: Callable[..., object]) -> Callable[..., object]:
+    """Wrap ``func`` execution in an OpenTelemetry span."""
+
+    if asyncio.iscoroutinefunction(func):
+        @wraps(func)
+        async def async_wrapper(*args: object, **kwargs: object) -> object:
+            with tracer.start_as_current_span(func.__qualname__):
+                return await func(*args, **kwargs)
+
+        return async_wrapper
+
+    @wraps(func)
+    def sync_wrapper(*args: object, **kwargs: object) -> object:
+        with tracer.start_as_current_span(func.__qualname__):
+            return func(*args, **kwargs)
+
+    return sync_wrapper
+
 
 # Skip self argument annotation warnings for class methods
 
@@ -193,6 +218,7 @@ class Ledger:
         except Exception:
             pass
 
+    @traced
     def log_change(
         self,
         agent_id: str,
@@ -230,6 +256,7 @@ class Ledger:
                     exc_info=True,
                 )
 
+    @traced
     def stake_du(self, agent_id: str, amount: float) -> None:
         """Stake DU for ``agent_id`` and record the transaction."""
         if amount <= 0:
@@ -247,6 +274,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def unstake_du(self, agent_id: str, amount: float) -> None:
         """Unstake DU for ``agent_id`` and record the transaction."""
         if amount <= 0:
@@ -268,6 +296,7 @@ class Ledger:
         row = cur.fetchone()
         return float(row[0]) if row else 0.0
 
+    @traced
     def stake_ip(self, agent_id: str, amount: float) -> None:
         """Stake IP for ``agent_id`` and record the transaction."""
         if amount <= 0:
@@ -285,6 +314,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def unstake_ip(self, agent_id: str, amount: float) -> None:
         """Unstake IP for ``agent_id`` and record the transaction."""
         if amount <= 0:
@@ -306,6 +336,7 @@ class Ledger:
         row = cur.fetchone()
         return float(row[0]) if row else 0.0
 
+    @traced
     def stake_du_for_action(self, agent_id: str, action_id: str, amount: float) -> None:
         """Stake DU for a specific action."""
         if amount <= 0:
@@ -323,6 +354,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def claim_action_refund(self, agent_id: str, action_id: str) -> None:
         """Refund staked DU for an action back to the agent."""
         cur = self.conn.cursor()
@@ -339,6 +371,7 @@ class Ledger:
             )
             self.conn.commit()
 
+    @traced
     def set_gas_prices(
         self, per_call: float | None = None, per_token: float | None = None
     ) -> None:
@@ -348,6 +381,7 @@ class Ledger:
         if per_token is not None:
             self.gas_price_per_token = float(per_token)
 
+    @traced
     def calculate_gas_price(self, agent_id: str, window: int = 10) -> tuple[float, float]:
         """Adjust gas prices based on recent DU burn rate."""
         burn_rate = self.get_du_burn_rate(agent_id, window)
@@ -391,6 +425,7 @@ class Ledger:
             return 0.0
         return sum(spent) / len(spent)
 
+    @traced
     def get_balance(self, agent_id: str) -> tuple[float, float]:
         """Return the current balance for ``agent_id``."""
         cur = self.conn.execute("SELECT ip, du FROM agent_balances WHERE agent_id=?", (agent_id,))
@@ -399,6 +434,7 @@ class Ledger:
             return float(row[0]), float(row[1])
         return 0.0, 0.0
 
+    @traced
     def get_transactions(self, agent_id: str, limit: int | None = None) -> list[dict[str, object]]:
         """Return recent transactions for ``agent_id``."""
         cur = self.conn.cursor()
@@ -428,6 +464,7 @@ class Ledger:
         """Asynchronous wrapper around :meth:`get_transactions`."""
         return await asyncio.to_thread(self.get_transactions, agent_id, limit)
 
+    @traced
     def add_tokens(self, agent_id: str, token: str, amount: int) -> None:
         if amount <= 0:
             return
@@ -443,6 +480,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def remove_tokens(self, agent_id: str, token: str, amount: int) -> None:
         if amount <= 0:
             return
@@ -457,6 +495,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def get_tokens(self, agent_id: str, token: str) -> int:
         cur = self.conn.execute(
             "SELECT amount FROM agent_tokens WHERE agent_id=? AND token=?",
@@ -465,6 +504,7 @@ class Ledger:
         row = cur.fetchone()
         return int(row[0]) if row else 0
 
+    @traced
     def record_genealogy(self, parent_id: str, child_id: str) -> None:
         """Record a parent/child relationship."""
         cur = self.conn.cursor()
@@ -474,6 +514,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def record_law_proposal(
         self,
         proposer_id: str,
@@ -502,6 +543,7 @@ class Ledger:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    @traced
     def get_law_proposals(self, limit: int | None = None) -> list[dict[str, object]]:
         """Return stored law proposals."""
         cur = self.conn.cursor()
@@ -526,6 +568,7 @@ class Ledger:
     # Quest management
     # -------------------------------------------------------------
 
+    @traced
     def record_quest(
         self,
         quest_id: int,
@@ -545,6 +588,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def update_quest(
         self,
         quest_id: int,
@@ -569,6 +613,7 @@ class Ledger:
             )
             self.conn.commit()
 
+    @traced
     def get_quests(self) -> list[dict[str, object]]:
         """Return all stored quests."""
         cur = self.conn.execute(
@@ -590,6 +635,7 @@ class Ledger:
     # Auction management
     # -------------------------------------------------------------
 
+    @traced
     def open_auction(self, item: str) -> int:
         """Create a new auction and return its ID."""
         cur = self.conn.cursor()
@@ -597,6 +643,7 @@ class Ledger:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    @traced
     def place_bid(self, auction_id: int, agent_id: str, amount: float) -> None:
         """Place a bid by staking DU."""
         if amount <= 0:
@@ -609,6 +656,7 @@ class Ledger:
         )
         self.conn.commit()
 
+    @traced
     def resolve_auction(self, auction_id: int) -> tuple[str | None, float]:
         """Resolve an auction, returning the winning agent and amount."""
         cur = self.conn.cursor()
@@ -649,6 +697,7 @@ class Ledger:
     # Async helpers and atomic operations
     # -------------------------------------------------------------
 
+    @traced
     async def log_change_async(
         self,
         agent_id: str,
@@ -669,10 +718,12 @@ class Ledger:
             gas_price_per_token,
         )
 
+    @traced
     async def get_balance_async(self, agent_id: str) -> tuple[float, float]:
         """Return the balance for ``agent_id`` asynchronously."""
         return await asyncio.to_thread(self.get_balance, agent_id)
 
+    @traced
     async def spend(
         self,
         agent_id: str,
@@ -693,6 +744,7 @@ class Ledger:
         )
         return await self.get_balance_async(agent_id)
 
+    @traced
     async def reward(
         self,
         agent_id: str,
@@ -717,6 +769,7 @@ class Ledger:
 ledger = Ledger()
 
 
+@traced
 def run_auction(item: str, agent_id: str, amount: float) -> None:
     """Safely run an auction for ``item`` with a single bid from ``agent_id``."""
     if amount <= 0:
@@ -729,6 +782,7 @@ def run_auction(item: str, agent_id: str, amount: float) -> None:
         logging.getLogger(__name__).debug("Ledger auction failed", exc_info=True)
 
 
+@traced
 def log_reward(agent_id: str, delta_ip: float, delta_du: float, reason: str) -> None:
     """Safely log a reward or penalty to the ledger."""
     try:  # pragma: no cover - optional
@@ -737,6 +791,7 @@ def log_reward(agent_id: str, delta_ip: float, delta_du: float, reason: str) -> 
         logging.getLogger(__name__).debug("Ledger logging failed", exc_info=True)
 
 
+@traced
 def log_penalty(agent_id: str, ip: float, du: float, reason: str) -> None:
     """Safely log a DU/IP penalty to the ledger."""
     log_reward(agent_id, -abs(ip), -abs(du), reason)
@@ -745,7 +800,7 @@ def log_penalty(agent_id: str, ip: float, du: float, reason: str) -> None:
 __all__ = [
     "Ledger",
     "ledger",
-    "log_reward",
     "log_penalty",
+    "log_reward",
     "run_auction",
 ]
