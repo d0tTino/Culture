@@ -8,7 +8,9 @@ pytestmark = pytest.mark.unit
 
 
 class DummyVectorStore:
-    async def aretrieve_relevant_memories(self, agent_id: str, query: str, k: int) -> list[dict[str, str]]:
+    async def aretrieve_relevant_memories(
+        self, agent_id: str, query: str, k: int
+    ) -> list[dict[str, str]]:
         return [
             {"content": "episodic one", "relevance_score": 0.9},
             {"content": "episodic two", "relevance_score": 0.8},
@@ -16,7 +18,9 @@ class DummyVectorStore:
 
 
 class DummySemantic:
-    def retrieve_context_with_scores(self, agent_id: str, query: str, k: int) -> list[dict[str, str]]:
+    def retrieve_context_with_scores(
+        self, agent_id: str, query: str, k: int
+    ) -> list[dict[str, str]]:
         return [
             {"content": "semantic one", "relevance_score": 0.85},
             {"content": "semantic two", "relevance_score": 0.7},
@@ -29,6 +33,14 @@ async def test_retriever_respects_token_budget() -> None:
     retriever = MultiLayerRetriever(DummyVectorStore(), DummySemantic(), tokenizer)
     results = await retriever.retrieve("agent", "q", k=10, token_budget=6)
     assert [r["content"] for r in results] == ["episodic one", "semantic one"]
+
+
+@pytest.mark.asyncio
+async def test_retriever_stops_when_token_cap_reached() -> None:
+    tokenizer = tiktoken.get_encoding("cl100k_base")
+    retriever = MultiLayerRetriever(DummyVectorStore(), DummySemantic(), tokenizer)
+    results = await retriever.retrieve("agent", "q", k=10, token_budget=5)
+    assert [r["content"] for r in results] == ["episodic one"]
 
 
 @pytest.mark.asyncio
