@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from src.governance.law_board import law_board
 from src.governance.service import governance
+from src.infra import event_log
 from src.infra.ledger import ledger
 from src.infra.snapshot import load_snapshot
 from src.interfaces import metrics
@@ -766,6 +767,35 @@ async def api_memory_snapshot(step: int) -> Response:
     return resp
 
 
+@app.get("/api/flagged_messages")
+async def api_flagged_messages(limit: int = 20) -> Response:
+    """Return flagged messages with snapshot references."""
+
+    events = await asyncio.to_thread(event_log.fetch_events)
+    flagged = [e for e in events if e.get("type") == "flagged_message"]
+    flagged = flagged[-limit:]
+    messages: list[dict[str, Any]] = []
+    for evt in flagged:
+        step = int(evt.get("step", evt.get("tick", 0)))
+        msg = str(evt.get("message", ""))
+        try:
+            event_log.store_replay_slice(step, step, directory=SNAPSHOT_DIR)
+        except Exception:  # pragma: no cover - best effort
+            pass
+        messages.append(
+            {
+                "step": step,
+                "message": msg,
+                "snapshot": f"snapshot_{step}.json",
+            }
+        )
+
+    resp = JSONResponse({"messages": messages})
+    if not hasattr(resp, "status_code"):
+        resp.status_code = 200
+    return resp
+
+
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -928,6 +958,7 @@ __all__ = [
     "VotesResponse",
     "api_agent_stats",
     "api_auctions",
+    "api_flagged_messages",
     "api_get_laws",
     "api_get_proposals",
     "api_get_votes",

@@ -339,3 +339,23 @@ def stream_events(
                 consumer.close()
             except Exception:  # pragma: no cover - ignore
                 pass
+
+
+def store_replay_slice(
+    start_step: int, end_step: int, directory: str | Path | None = None
+) -> Path:
+    """Persist events between ``start_step`` and ``end_step`` inclusive.
+
+    The slice is saved as ``replay_<start>_<end>.jsonl`` in ``directory`` and
+    can later be used for replaying portions of the simulation.
+    """
+
+    events = fetch_events(after_step=start_step - 1, end_step=end_step)
+    dest_dir = Path(directory) if directory is not None else _log_file().parent
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"replay_{start_step}_{end_step}.jsonl"
+    with out.open("w", encoding="utf-8") as fh:
+        for event in events:
+            fh.write(json.dumps(event))
+            fh.write("\n")
+    return out
