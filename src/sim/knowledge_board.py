@@ -11,6 +11,7 @@ from typing_extensions import Self
 
 from src.infra import config
 from src.interfaces import metrics
+from src.shared.telemetry import trace_agent_action
 
 from .version_vector import VersionVector
 
@@ -85,17 +86,18 @@ class KnowledgeBoard:
         if max_entries <= 0:
             raise ValueError("max_entries must be positive")
 
-        # Return the display_content for the most recent entries, up to max_entries
-        recent_entries = (
-            [entry["content_display"] for entry in self.entries[-max_entries:]]
-            if self.entries
-            else []
-        )
-        logger.debug(
-            "KnowledgeBoard: Returning "
-            f"{len(recent_entries)} entries (of {len(self.entries)} total)"
-        )
-        return recent_entries
+        with trace_agent_action("knowledge_board.get_state", max_entries=max_entries):
+            # Return the display_content for the most recent entries, up to max_entries
+            recent_entries = (
+                [entry["content_display"] for entry in self.entries[-max_entries:]]
+                if self.entries
+                else []
+            )
+            logger.debug(
+                "KnowledgeBoard: Returning "
+                f"{len(recent_entries)} entries (of {len(self.entries)} total)"
+            )
+            return recent_entries
 
     def get_full_entries(self: Self) -> list[dict[str, Any]]:
         """Returns a copy of all entries on the board."""
@@ -120,32 +122,36 @@ class KnowledgeBoard:
         if max_entries <= 0:
             raise ValueError("max_entries must be positive")
 
-        if not self.entries:
-            return ["(Knowledge Board is empty)"]
+        with trace_agent_action(
+            "knowledge_board.get_recent_entries_for_prompt",
+            max_entries=max_entries,
+        ):
+            if not self.entries:
+                return ["(Knowledge Board is empty)"]
 
-        # Get the most recent entries (up to max_entries)
-        # Entries are appended, so the most recent are at the end of the list.
-        recent_raw_entries = self.entries[-max_entries:]
+            # Get the most recent entries (up to max_entries)
+            # Entries are appended, so the most recent are at the end of the list.
+            recent_raw_entries = self.entries[-max_entries:]
 
-        formatted_entries = []
-        for entry in recent_raw_entries:
-            step = entry.get("step", "N/A")
-            agent_id = entry.get("agent_id", "Unknown Agent")
-            content_summary = entry.get("content_summary") or entry.get(
-                "content_full",
-                "N/A",
-            )
-            # Cast to string so None or other non-string values don't raise
-            # errors when we check the length for truncation
-            content_summary = str(content_summary)
-            # Truncate content for brevity in prompt if necessary
-            max_content_len = 150  # Example max length
-            if len(content_summary) > max_content_len:
-                content_summary = content_summary[:max_content_len] + "..."
+            formatted_entries = []
+            for entry in recent_raw_entries:
+                step = entry.get("step", "N/A")
+                agent_id = entry.get("agent_id", "Unknown Agent")
+                content_summary = entry.get("content_summary") or entry.get(
+                    "content_full",
+                    "N/A",
+                )
+                # Cast to string so None or other non-string values don't raise
+                # errors when we check the length for truncation
+                content_summary = str(content_summary)
+                # Truncate content for brevity in prompt if necessary
+                max_content_len = 150  # Example max length
+                if len(content_summary) > max_content_len:
+                    content_summary = content_summary[:max_content_len] + "..."
 
-            formatted_entries.append(f"[Step {step}, {agent_id}]: {content_summary}")
+                formatted_entries.append(f"[Step {step}, {agent_id}]: {content_summary}")
 
-        return formatted_entries
+            return formatted_entries
 
     def add_entry(
         self: Self,
@@ -166,53 +172,54 @@ class KnowledgeBoard:
             bool: True if the entry was successfully added, False otherwise.
         """
         try:
-            entry_id = str(
-                uuid.uuid5(uuid.NAMESPACE_OID, f"{agent_id}:{step}:{entry}")
-            )  # Deterministic ID for testing
-            formatted_content = (
-                f"Step {step} (Agent: {agent_id}): {entry}"  # Keep this for display
-            )
-
-            new_entry_dict = {
-                "entry_id": entry_id,
-                "step": step,
-                "agent_id": agent_id,  # Store original proposer ID
-                "content_full": entry,  # Store raw entry
-                "content_display": formatted_content,  # Store formatted entry for display
-            }
-            self.entries.append(new_entry_dict)  # Append first
-            if vector is not None:
-                self.vector.merge(VersionVector(vector))
-            else:
-                self.vector.increment(agent_id)
-
-            # Enforce maximum board size
-            max_entries = int(config.MAX_KB_ENTRIES)
-            if len(self.entries) > max_entries:
-                excess = len(self.entries) - max_entries
-                del self.entries[:excess]
-                logger.info(
-                    "KnowledgeBoard: pruned %s old entries to maintain max size %s",
-                    excess,
-                    max_entries,
+            with trace_agent_action("knowledge_board.add_entry", agent_id=agent_id, step=step):
+                entry_id = str(
+                    uuid.uuid5(uuid.NAMESPACE_OID, f"{agent_id}:{step}:{entry}")
+                )  # Deterministic ID for testing
+                formatted_content = (
+                    f"Step {step} (Agent: {agent_id}): {entry}"  # Keep this for display
                 )
 
-            metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+                new_entry_dict = {
+                    "entry_id": entry_id,
+                    "step": step,
+                    "agent_id": agent_id,  # Store original proposer ID
+                    "content_full": entry,  # Store raw entry
+                    "content_display": formatted_content,  # Store formatted entry for display
+                }
+                self.entries.append(new_entry_dict)  # Append first
+                if vector is not None:
+                    self.vector.merge(VersionVector(vector))
+                else:
+                    self.vector.increment(agent_id)
 
-            logger.info(  # Log after append
-                f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "
-                f"New board size: {len(self.entries)}. Instance ID: {id(self)}. Entries list ID: {id(self.entries)}"
-            )
-            logger.debug(
-                f"KB_ADD_ENTRY_CONTENT_DEBUG: Instance ID {id(self)}, Entries list ID {id(self.entries)}, Content via list(): {list(self.entries)}, Direct repr: {self.entries!r}"
-            )
+                # Enforce maximum board size
+                max_entries = int(config.MAX_KB_ENTRIES)
+                if len(self.entries) > max_entries:
+                    excess = len(self.entries) - max_entries
+                    del self.entries[:excess]
+                    logger.info(
+                        "KnowledgeBoard: pruned %s old entries to maintain max size %s",
+                        excess,
+                        max_entries,
+                    )
 
-            # Optional: Limit board size if needed (e.g., keep only last 100 entries)
-            # max_board_size = 100
-            # if len(self.entries) > max_board_size:
-            #     self.entries = self.entries[-max_board_size:]
+                metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
-            return True
+                logger.info(  # Log after append
+                    f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "
+                    f"New board size: {len(self.entries)}. Instance ID: {id(self)}. Entries list ID: {id(self.entries)}"
+                )
+                logger.debug(
+                    f"KB_ADD_ENTRY_CONTENT_DEBUG: Instance ID {id(self)}, Entries list ID {id(self.entries)}, Content via list(): {list(self.entries)}, Direct repr: {self.entries!r}"
+                )
+
+                # Optional: Limit board size if needed (e.g., keep only last 100 entries)
+                # max_board_size = 100
+                # if len(self.entries) > max_board_size:
+                #     self.entries = self.entries[-max_board_size:]
+
+                return True
         except Exception as e:
             logger.error(f"Failed to add entry to knowledge board: {e}")
             return False
