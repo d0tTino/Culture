@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable, Mapping
+from typing import cast
 
 from pydantic import BaseModel
 
@@ -124,7 +126,7 @@ def get_quests() -> list[Quest]:
     """
 
     try:
-        rows = ledger.get_quests()
+        rows = cast(Iterable[Mapping[str, object]], ledger.get_quests())
         return [Quest(**r) for r in rows]
     except Exception:  # pragma: no cover - defensive
         return list(QUESTS)

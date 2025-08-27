@@ -1,7 +1,6 @@
-
 import pytest
 
-from src.infra.event_log import fetch_events, stream_events
+from src.infra.event_log import fetch_events, log_event, stream_events
 
 
 class MockSpan:
@@ -64,6 +63,24 @@ def test_fetch_events_tracing(monkeypatch, tmp_path, use_redpanda):
     assert span.attributes["tick.end"] == 5
     expected_source = "redpanda" if use_redpanda else "file"
     assert span.attributes["event.source"] == expected_source
+
+
+@pytest.mark.unit
+def test_log_event_tracing(monkeypatch, tmp_path):
+    tracer = MockTracer()
+    monkeypatch.setattr("src.infra.event_log.tracer", tracer)
+    monkeypatch.setenv("ENABLE_REDPANDA", "0")
+    log_file = tmp_path / "event_log.jsonl"
+    monkeypatch.setenv("EVENT_LOG_PATH", str(log_file))
+
+    event = {"type": "test", "step": 7}
+    log_event(event)
+
+    span = tracer.spans[0]
+    assert span.name == "event_log.log_event"
+    assert span.attributes["event.type"] == "test"
+    assert span.attributes["step"] == 7
+    assert span.attributes["log.file_path"] == str(log_file)
 
 
 @pytest.mark.unit

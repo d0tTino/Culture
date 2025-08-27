@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
-from collections.abc import Iterable
+from collections.abc import Awaitable, Iterable
 from typing import cast
 
 from typing_extensions import Self
@@ -110,11 +110,11 @@ class GovernanceService:
                     staked = 0.0
                 weights.append(quadratic_vote_weight(base_ip, staked))
         else:
-            start_balances = await asyncio.gather(
-                *[ledger.get_balance_async(a.agent_id) for a in agents],
-                return_exceptions=True,
-            )
-            spend_tasks = []
+            balance_tasks: list[Awaitable[tuple[float, float]]] = [
+                ledger.get_balance_async(a.agent_id) for a in agents
+            ]
+            start_balances = await asyncio.gather(*balance_tasks, return_exceptions=True)
+            spend_tasks: list[Awaitable[tuple[float, float]]] = []
             for a in agents:
                 w = int(vote_weights.get(a.agent_id, 1))
                 weights.append(float(w))
