@@ -232,7 +232,7 @@ def notify_budget_exceeded(agent_id: str, required: float, remaining: float) -> 
     bot_instance = get_active_bot()
     if bot_instance is not None:
         try:
-            asyncio.create_task(bot_instance.send_simulation_update(embed=embed))
+            asyncio.create_task(bot_instance.send_simulation_update(embed=embed))  # noqa: RUF006
         except Exception:  # pragma: no cover - best effort
             logger.exception("Failed to send budget exceeded embed")
 
@@ -522,6 +522,18 @@ class SimulationDiscordBot:
                             )
                         )
                         await interaction.response.send_message("unmuted", ephemeral=True)
+
+                @tree.command(name="nudge")
+                @app_commands.describe(prompt="Prompt to nudge the simulation")
+                async def _tree_nudge(
+                    interaction: "discord.Interaction", prompt: str
+                ) -> None:
+                    with command_span("nudge", interaction) as span:
+                        span.set_attribute("discord.message.length", len(prompt))
+                        await self.event_queue.put(
+                            SimulationEvent(type="nudge", data={"prompt": prompt})
+                        )
+                        await interaction.response.send_message("nudge sent", ephemeral=True)
 
             @client.event
             async def on_ready(
@@ -1270,6 +1282,20 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
             SimulationEvent(type="control", data={"command": "kill_agent", "agent_id": agent_id})
         )
         await send_interaction_response(interaction, "killed", ephemeral=True)
+
+
+@bot.tree.command(name="nudge")
+@app_commands.describe(prompt="Prompt to nudge the simulation")
+async def slash_nudge(interaction: Any, prompt: str) -> None:
+    """Send a custom prompt to the simulation."""
+    with command_span("nudge", interaction) as span:
+        span.set_attribute("discord.message.length", len(prompt))
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(type="nudge", data={"prompt": prompt})
+        )
+        await send_interaction_response(interaction, "nudge sent", ephemeral=True)
 
 
 @bot.tree.command(name="start")
