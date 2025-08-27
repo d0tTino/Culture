@@ -194,48 +194,54 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
     global _last_hash
     _ensure_header()
 
-    if "trace_hash" in event:
-        event = {**event}
-        event.pop("trace_hash", None)
-    from src.infra.checkpoint import capture_rng_state
+    with tracer.start_as_current_span("event_log.log_event") as span:
+        span.set_attribute("event.type", event.get("type"))
+        span.set_attribute("step", event.get("step"))
 
-    global _seed
-    if _seed is None:
-        try:
-            _seed = random.getstate()[1][0]
-        except Exception:  # pragma: no cover - fallback
-            _seed = 0
-
-    event = {**event, "rng_state": capture_rng_state(), "seed": _seed}
-    if "step" in event and "tick" not in event:
-        event["tick"] = event["step"]
-    if _last_hash is not None:
-        event["prev_hash"] = _last_hash
-    event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
-    _last_hash = event_with_hash["trace_hash"]
-
-    # Append to local log file
-    try:  # pragma: no cover - best effort
         path = _log_file()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(event_with_hash))
-            fh.write("\n")
-    except Exception:  # pragma: no cover - ignore
-        pass
+        span.set_attribute("log.file_path", str(path))
 
-    if os.getenv("ENABLE_REDPANDA", "0") != "1":
+        if "trace_hash" in event:
+            event = {**event}
+            event.pop("trace_hash", None)
+        from src.infra.checkpoint import capture_rng_state
+
+        global _seed
+        if _seed is None:
+            try:
+                _seed = random.getstate()[1][0]
+            except Exception:  # pragma: no cover - fallback
+                _seed = 0
+
+        event = {**event, "rng_state": capture_rng_state(), "seed": _seed}
+        if "step" in event and "tick" not in event:
+            event["tick"] = event["step"]
+        if _last_hash is not None:
+            event["prev_hash"] = _last_hash
+        event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
+        _last_hash = event_with_hash["trace_hash"]
+
+        # Append to local log file
+        try:  # pragma: no cover - best effort
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(event_with_hash))
+                fh.write("\n")
+        except Exception:  # pragma: no cover - ignore
+            pass
+
+        if os.getenv("ENABLE_REDPANDA", "0") != "1":
+            return event_with_hash
+        try:  # pragma: no cover - best effort
+            payload = json.dumps(event_with_hash).encode("utf-8")
+            producer = _get_producer()
+            producer.produce(_topic, payload)
+            producer.poll(0)
+        except Exception as exc:  # pragma: no cover - best effort
+            import logging
+
+            logging.getLogger(__name__).debug("Failed to log event: %s", exc)
         return event_with_hash
-    try:  # pragma: no cover - best effort
-        payload = json.dumps(event_with_hash).encode("utf-8")
-        producer = _get_producer()
-        producer.produce(_topic, payload)
-        producer.poll(0)
-    except Exception as exc:  # pragma: no cover - best effort
-        import logging
-
-        logging.getLogger(__name__).debug("Failed to log event: %s", exc)
-    return event_with_hash
 
 
 def fetch_events(

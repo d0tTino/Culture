@@ -4,9 +4,10 @@ import asyncio
 import logging
 import sqlite3
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from pathlib import Path
+from typing import ParamSpec, TypeVar, cast, overload
 
 from opentelemetry import trace
 
@@ -15,21 +16,34 @@ from .settings import settings
 tracer = trace.get_tracer(__name__)
 
 
-def traced(func: Callable[..., object]) -> Callable[..., object]:
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+@overload
+def traced(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]: ...
+
+
+@overload
+def traced(func: Callable[P, R]) -> Callable[P, R]: ...
+
+
+def traced(func: Callable[P, Awaitable[R] | R]) -> Callable[P, Awaitable[R] | R]:
     """Wrap ``func`` execution in an OpenTelemetry span."""
 
     if asyncio.iscoroutinefunction(func):
+
         @wraps(func)
-        async def async_wrapper(*args: object, **kwargs: object) -> object:
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             with tracer.start_as_current_span(func.__qualname__):
-                return await func(*args, **kwargs)
+                return await cast(Callable[P, Awaitable[R]], func)(*args, **kwargs)
 
         return async_wrapper
 
     @wraps(func)
-    def sync_wrapper(*args: object, **kwargs: object) -> object:
+    def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         with tracer.start_as_current_span(func.__qualname__):
-            return func(*args, **kwargs)
+            return cast(Callable[P, R], func)(*args, **kwargs)
 
     return sync_wrapper
 
@@ -721,7 +735,8 @@ class Ledger:
     @traced
     async def get_balance_async(self, agent_id: str) -> tuple[float, float]:
         """Return the balance for ``agent_id`` asynchronously."""
-        return await asyncio.to_thread(self.get_balance, agent_id)
+        result = await asyncio.to_thread(self.get_balance, agent_id)
+        return cast(tuple[float, float], result)
 
     @traced
     async def spend(
