@@ -1,6 +1,8 @@
+import asyncio
 import importlib
 import sys
 from types import SimpleNamespace
+from typing import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -190,3 +192,21 @@ async def test_message_relay_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None
     await sim._handle_human_command("hello")
     await sim._handle_human_command("hello again")
     ledger_module.ledger.spend.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slash_nudge_enqueues_event(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    queue: asyncio.Queue = asyncio.Queue()
+    ctx = SimpleNamespace(get_event_queue=lambda: queue)
+    bot = SimpleNamespace(context=ctx)
+    monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
+    interaction = DummyInteraction()
+    await discord_module.slash_nudge(interaction, "hi there")
+    event = await queue.get()
+    assert event.type == "nudge" and event.data == {"prompt": "hi there"}
+    interaction.response.send_message.assert_awaited_once_with(
+        "nudge sent", ephemeral=True
+    )
