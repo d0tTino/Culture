@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import tiktoken
 from typing_extensions import Self
 
 from src.interfaces import metrics
@@ -23,11 +24,13 @@ class MemoryService:
         vector_store: ChromaVectorStoreManager | None = None,
         semantic_manager: SemanticMemoryManager | None = None,
         level3_manager: Level3SummaryManager | None = None,
+        tokenizer: tiktoken.Encoding | None = None,
     ) -> None:
         self.vector_store = vector_store
         self.semantic_manager = semantic_manager
         self.level3_manager = level3_manager
-        self.retriever = MultiLayerRetriever(vector_store, semantic_manager)
+        self.tokenizer = tokenizer or tiktoken.get_encoding("cl100k_base")
+        self.retriever = MultiLayerRetriever(vector_store, semantic_manager, self.tokenizer)
 
     def add_memory(
         self: Self,
@@ -40,9 +43,7 @@ class MemoryService:
     ) -> str:
         if not self.vector_store:
             return ""
-        with trace_agent_action(
-            "memory.add_memory", agent_id=agent_id, event_type=event_type
-        ):
+        with trace_agent_action("memory.add_memory", agent_id=agent_id, event_type=event_type):
             return self.vector_store.add_memory(
                 agent_id, step, event_type, content, memory_type, metadata
             )
@@ -149,11 +150,12 @@ class MemoryService:
                 long_term = self.get_long_term_summaries(agent_id, long_term_limit)
 
             if token_budget is not None:
+                tokenizer = self.tokenizer
                 tokens = 0
                 limited_episodic: list[dict[str, Any]] = []
                 for mem in episodic:
                     text = str(mem.get("content", ""))
-                    t = len(text.split())
+                    t = len(tokenizer.encode(text))
                     if tokens + t > token_budget:
                         break
                     limited_episodic.append(mem)
@@ -162,7 +164,7 @@ class MemoryService:
 
                 limited_semantic: list[str] = []
                 for summary in semantic:
-                    t = len(summary.split())
+                    t = len(tokenizer.encode(summary))
                     if tokens + t > token_budget:
                         break
                     limited_semantic.append(summary)
@@ -172,7 +174,7 @@ class MemoryService:
                 if long_term:
                     limited_long_term: list[str] = []
                     for summary in long_term:
-                        t = len(summary.split())
+                        t = len(tokenizer.encode(summary))
                         if tokens + t > token_budget:
                             break
                         limited_long_term.append(summary)

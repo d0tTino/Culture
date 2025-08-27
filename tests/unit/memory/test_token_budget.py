@@ -48,10 +48,10 @@ async def test_context_pipeline_respects_token_budget(monkeypatch: pytest.Monkey
     service = MemoryService()
 
     async def fake_retrieve(agent_id: str, query: str, k: int) -> list[dict[str, str]]:
-        return [{"content": "one"}, {"content": "two"}, {"content": "three four"}]
+        return [{"content": "hello-world"}, {"content": "two"}, {"content": "three"}]
 
     def fake_semantic(agent_id: str, limit: int) -> list[str]:
-        return ["alpha", "beta"]
+        return ["alpha-beta", "gamma"]
 
     monkeypatch.setattr(service, "retrieve_episodic_and_update_semantic", fake_retrieve)
     monkeypatch.setattr(service, "get_recent_semantic_summaries", fake_semantic)
@@ -59,5 +59,5 @@ async def test_context_pipeline_respects_token_budget(monkeypatch: pytest.Monkey
     episodic, semantic = await service.get_context_pipeline(
         "agent", token_budget=3, semantic_limit=2
     )
-    assert [m["content"] for m in episodic] == ["one", "two"]
-    assert semantic == ["alpha"]
+    assert [m["content"] for m in episodic] == ["hello-world", "two"]
+    assert semantic == []
