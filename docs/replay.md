@@ -28,3 +28,21 @@ python tools/export_traces.py traces.jsonl --start 11 --end 20
 ```
 
 This produces plots and optional replay bundles containing only the selected range of events.
+
+## Logging misbehavior
+
+Misbehavior events can be recorded separately for audit purposes:
+
+```python
+from src.infra import event_log
+
+event_log.log_misbehavior({"step": 42, "detail": "unexpected action"})
+```
+
+These entries include the simulation seed, previous event hash and a trace hash.
+They can be retrieved via `fetch_events`:
+
+```python
+mis = event_log.fetch_events(event_type="misbehavior")
+```
+

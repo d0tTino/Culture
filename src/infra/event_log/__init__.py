@@ -244,13 +244,27 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
         return event_with_hash
 
 
+def log_misbehavior(event: dict[str, Any]) -> dict[str, Any]:
+    """Log a misbehavior event and record a dedicated span."""
+
+    mis_event = {**event, "type": "misbehavior"}
+    with tracer.start_as_current_span("event_log.misbehavior") as span:
+        span.set_attribute("event.type", "misbehavior")
+        span.set_attribute("step", mis_event.get("step"))
+    return log_event(mis_event)
+
+
 def fetch_events(
     after_step: int = 0,
     *,
     end_step: int | None = None,
     path: str | Path | None = None,
+    event_type: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Retrieve events from the log after ``after_step``."""
+    """Retrieve events from the log after ``after_step``.
+
+    Specify ``event_type`` to return only events of the given type.
+    """
     source = "redpanda" if os.getenv("ENABLE_REDPANDA", "0") == "1" else "file"
     with tracer.start_as_current_span("event_log.fetch_events") as span:
         span.set_attribute("event.source", source)
@@ -260,7 +274,10 @@ def fetch_events(
 
         if source == "file":
             events = list(_iter_file_events(after_step, end_step, path=path))
-            return _filter_events(events, after_step=after_step)
+            events = _filter_events(events, after_step=after_step)
+            if event_type is not None:
+                events = [ev for ev in events if ev.get("type") == event_type]
+            return events
 
         raw_events: list[dict[str, Any]] = []
         consumer: Any | None = None
@@ -290,7 +307,10 @@ def fetch_events(
                     consumer.close()
             except Exception:  # pragma: no cover - ignore
                 pass
-        return _filter_events(raw_events, after_step=after_step)
+        events = _filter_events(raw_events, after_step=after_step)
+        if event_type is not None:
+            events = [ev for ev in events if ev.get("type") == event_type]
+        return events
 
 
 def stream_events(

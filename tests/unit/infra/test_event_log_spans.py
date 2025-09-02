@@ -1,3 +1,6 @@
+import sys
+from types import SimpleNamespace
+
 import pytest
 
 from src.infra.event_log import fetch_events, log_event, stream_events
@@ -72,6 +75,11 @@ def test_log_event_tracing(monkeypatch, tmp_path):
     monkeypatch.setenv("ENABLE_REDPANDA", "0")
     log_file = tmp_path / "event_log.jsonl"
     monkeypatch.setenv("EVENT_LOG_PATH", str(log_file))
+    monkeypatch.setitem(
+        sys.modules,
+        "src.infra.checkpoint",
+        SimpleNamespace(capture_rng_state=lambda: {}),
+    )
 
     event = {"type": "test", "step": 7}
     log_event(event)
