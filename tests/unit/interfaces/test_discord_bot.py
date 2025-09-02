@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import sys
 from types import SimpleNamespace
+from typing import Callable
 from unittest.mock import AsyncMock
 
 import pytest
