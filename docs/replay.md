@@ -40,9 +40,12 @@ event_log.log_misbehavior({"step": 42, "detail": "unexpected action"})
 ```
 
 These entries include the simulation seed, previous event hash and a trace hash.
-They can be retrieved via `fetch_events`:
+They are excluded from normal `fetch_events` results. Retrieve them with
+`event_type="misbehavior"` or include them alongside other events by setting
+`include_misbehavior=True`:
 
 ```python
 mis = event_log.fetch_events(event_type="misbehavior")
+all_events = event_log.fetch_events(include_misbehavior=True)
 ```
 
