@@ -1,3 +1,5 @@
+"""Integration test verifying deterministic replay of event log slices."""
+
 import json
 from pathlib import Path
 
