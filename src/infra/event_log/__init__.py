@@ -251,7 +251,11 @@ def log_misbehavior(event: dict[str, Any]) -> dict[str, Any]:
     with tracer.start_as_current_span("event_log.misbehavior") as span:
         span.set_attribute("event.type", "misbehavior")
         span.set_attribute("step", mis_event.get("step"))
-    return log_event(mis_event)
+        logged = log_event(mis_event)
+        span.set_attribute("seed", logged.get("seed"))
+        span.set_attribute("prev_hash", logged.get("prev_hash"))
+        span.set_attribute("trace_hash", logged.get("trace_hash"))
+        return logged
 
 
 def fetch_events(
@@ -260,10 +264,13 @@ def fetch_events(
     end_step: int | None = None,
     path: str | Path | None = None,
     event_type: str | None = None,
+    include_misbehavior: bool = False,
 ) -> list[dict[str, Any]]:
     """Retrieve events from the log after ``after_step``.
 
-    Specify ``event_type`` to return only events of the given type.
+    Specify ``event_type`` to return only events of the given type. By default,
+    misbehavior events are filtered out. Set ``include_misbehavior`` to
+    ``True`` to include them in the results.
     """
     source = "redpanda" if os.getenv("ENABLE_REDPANDA", "0") == "1" else "file"
     with tracer.start_as_current_span("event_log.fetch_events") as span:
@@ -277,6 +284,8 @@ def fetch_events(
             events = _filter_events(events, after_step=after_step)
             if event_type is not None:
                 events = [ev for ev in events if ev.get("type") == event_type]
+            elif not include_misbehavior:
+                events = [ev for ev in events if ev.get("type") != "misbehavior"]
             return events
 
         raw_events: list[dict[str, Any]] = []
@@ -310,6 +319,8 @@ def fetch_events(
         events = _filter_events(raw_events, after_step=after_step)
         if event_type is not None:
             events = [ev for ev in events if ev.get("type") == event_type]
+        elif not include_misbehavior:
+            events = [ev for ev in events if ev.get("type") != "misbehavior"]
         return events
 
 
