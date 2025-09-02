@@ -16,6 +16,11 @@ evaluation_hooks:
   - sentiment
   - collective_du
   - collective_ip
+evaluation_targets:
+  coalitions:
+    max_count: 0
+  sentiment:
+    max_variance: 0.1
 ```
 
 The following built-in hooks are available:
@@ -26,6 +31,16 @@ The following built-in hooks are available:
 | `sentiment`     | Average agent mood level. |
 | `collective_du` | Total DU (durability units) across agents. |
 | `collective_ip` | Total IP (influence points) across agents. |
+
+## Evaluation targets
+
+Use the optional `evaluation_targets` block to declare bounds for each metric. These
+targets help flag runs that deviate from expected group dynamics.
+
+| Hook       | Target field    | Description |
+|------------|-----------------|-------------|
+| `coalitions` | `max_count`     | Maximum allowed number of multi-member projects. |
+| `sentiment`  | `max_variance`  | Maximum permitted variance in agent sentiment. |
 
 Results from each hook are recorded in the metrics registry and written to the
 simulation event log at the end of every beat, enabling downstream analysis or

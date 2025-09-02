@@ -21,3 +21,8 @@ evaluation_hooks:
   - sentiment
   - collective_du
   - collective_ip
+evaluation_targets:
+  coalitions:
+    max_count: 0
+  sentiment:
+    max_variance: 0.0
