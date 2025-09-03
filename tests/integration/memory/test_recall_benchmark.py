@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+import pytest_asyncio
 
 pytest.importorskip("sklearn")
 pytest.importorskip("chromadb")
@@ -129,19 +130,34 @@ def benchmark_cases(
     return cases
 
 
-@pytest.mark.integration
-@pytest.mark.asyncio
-@pytest.mark.memory
-async def test_recall_benchmark(
+@pytest_asyncio.fixture
+async def benchmark_results(
     recall_benchmark: BenchFixture, benchmark_cases: list[tuple[BenchFunc, set[str]]]
-) -> None:
+) -> tuple[list[float], list[float]]:
     latencies: list[float] = []
     precisions: list[float] = []
     for retrieval, relevant_ids in benchmark_cases:
         stats = await recall_benchmark(retrieval, relevant_ids, 5)
         precisions.append(stats["p_at_k"])
         latencies.append(stats["latency"])
-    avg_p5 = sum(precisions) / len(precisions)
-    latency_p95 = p95(latencies) * 1000.0  # convert to milliseconds
-    assert avg_p5 >= 0.7
-    assert latency_p95 <= 50
+    return latencies, precisions
+
+
+@pytest_asyncio.fixture
+async def p_at_5(benchmark_results: tuple[list[float], list[float]]) -> float:
+    _, precisions = benchmark_results
+    return sum(precisions) / len(precisions)
+
+
+@pytest_asyncio.fixture
+async def latency_p95_ms(benchmark_results: tuple[list[float], list[float]]) -> float:
+    latencies, _ = benchmark_results
+    return p95(latencies) * 1000.0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.memory
+async def test_recall_benchmark(p_at_5: float, latency_p95_ms: float) -> None:
+    assert p_at_5 >= 0.7
+    assert latency_p95_ms <= 50
