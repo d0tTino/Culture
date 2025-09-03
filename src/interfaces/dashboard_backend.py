@@ -796,6 +796,35 @@ async def api_flagged_messages(limit: int = 20) -> Response:
     return resp
 
 
+@app.get("/api/misbehavior")
+async def api_misbehavior(limit: int = 20) -> Response:
+    """Return misbehavior events with replay slice paths."""
+
+    events = await asyncio.to_thread(event_log.fetch_events, event_type="misbehavior")
+    events = events[-limit:]
+    mis_events: list[dict[str, Any]] = []
+    for evt in events:
+        step = int(evt.get("step", evt.get("tick", 0)))
+        agent_id = str(evt.get("agent_id", ""))
+        reason = str(evt.get("reason", ""))
+        path = evt.get("replay_path")
+        if not isinstance(path, str) or not path:
+            try:
+                slice_path = event_log.store_replay_slice(step, step, directory=SNAPSHOT_DIR)
+                path = str(slice_path)
+            except Exception:  # pragma: no cover - best effort
+                path = ""
+        event_data = {"step": step, "agent_id": agent_id, "reason": reason}
+        if path:
+            event_data["replay_path"] = path
+        mis_events.append(event_data)
+
+    resp = JSONResponse({"events": mis_events})
+    if not hasattr(resp, "status_code"):
+        resp.status_code = 200
+    return resp
+
+
 async def register_widget(widget: dict[str, Any]) -> Response:
     """Register a widget provided by the UI or a plugin."""
     name = widget.get("name")
@@ -966,6 +995,7 @@ __all__ = [
     "api_memory",
     "api_memory_snapshot",
     "api_memory_snapshots",
+    "api_misbehavior",
     "api_propose_law",
     "api_recent_proposals",
     "api_stake_ip",
