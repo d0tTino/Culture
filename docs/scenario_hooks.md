@@ -48,6 +48,15 @@ plotting.
 
 ## Running and replaying `signature_demo`
 
+Run the demo and automatically export its event log and metrics:
+
+```bash
+python scripts/run_signature_demo.py
+```
+
+The script writes `event_log.jsonl` and `metrics.json` to
+`results/signature_demo/`.
+
 1. Run the scenario and generate snapshots and an event log (default
    `event_log.jsonl`):
 
