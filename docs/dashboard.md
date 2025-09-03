@@ -1,26 +1,31 @@
-# Dashboard
+# Dashboard API
 
-## Misbehavior feed
+## Misbehavior Feed
 
-The dashboard backend exposes a `GET /api/misbehavior` endpoint for auditing
-misbehavior events. It accepts an optional `limit` query parameter (default
-`20`) to cap the number of returned records; non-positive values yield an empty
-list. Each entry contains:
+The dashboard backend exposes `/api/misbehavior` to retrieve recent misbehavior events recorded during simulation runs.
 
-- `step`: Simulation tick when the event occurred.
-- `detail`: Description of the misbehavior.
-- `replay`: Filename of a replay slice covering the step.
+### Endpoint
 
-Example response:
+`GET /api/misbehavior?limit=20`
+
+- `limit` *(optional)*: maximum number of events to return. Defaults to 20.
+
+### Response
+
 
 ```json
 {
   "events": [
     {
       "step": 42,
-      "detail": "unexpected action",
-      "replay": "replay_42_42.jsonl"
+      "agent_id": "abc123",
+      "reason": "unauthorized action",
+      "replay_path": "replay_42_42.jsonl"
     }
   ]
 }
 ```
+
+Each object contains the simulation `step`, the offending `agent_id`, the `reason` for the misbehavior, and a `replay_path` pointing to a replay slice containing events around that step.
+
+
