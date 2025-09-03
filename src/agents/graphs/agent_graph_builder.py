@@ -38,7 +38,6 @@ from .graph_nodes import (
     generate_thought_and_message_node,
     prepare_relationship_prompt_node,
     retrieve_and_summarize_memories_node,
-    retriever_node,
 )
 from .interaction_handlers import (
     handle_ask_clarification_node,
@@ -51,6 +50,7 @@ from .interaction_handlers import (
     handle_propose_idea_node,
     handle_send_direct_message_node,  # - imported for future use
 )
+from .retriever_node import retriever_node
 
 
 def route_action_intent(state: AgentTurnState) -> str:
