@@ -21,12 +21,13 @@ from opentelemetry import trace
 from typing_extensions import Self
 
 from src.app import spawn_agent_command, start_simulation, stop_simulation
-from src.infra import config
+from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
 from src.interfaces.dashboard_backend import (
     DEFAULT_CONTEXT,
+    SNAPSHOT_DIR,
     AgentMessage,
     SimulationEvent,
 )
@@ -525,9 +526,7 @@ class SimulationDiscordBot:
 
                 @tree.command(name="nudge")
                 @app_commands.describe(prompt="Prompt to nudge the simulation")
-                async def _tree_nudge(
-                    interaction: "discord.Interaction", prompt: str
-                ) -> None:
+                async def _tree_nudge(interaction: "discord.Interaction", prompt: str) -> None:
                     with command_span("nudge", interaction) as span:
                         span.set_attribute("discord.message.length", len(prompt))
                         await self.event_queue.put(
@@ -1139,6 +1138,29 @@ if hasattr(bot.tree, "add_check"):
     bot.tree.add_check(_rate_limit_check)
 
 
+async def record_misbehavior(interaction: Any, agent_id: str, reason: str) -> None:
+    """Record a misbehavior event and capture a replay slice."""
+    bot_instance = get_active_bot()
+    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+    sim = ctx.sim_state.get("simulation")
+    step = int(getattr(sim, "current_step", 0))
+    path: str | None = None
+    try:
+        slice_path = event_log.store_replay_slice(step, step, directory=SNAPSHOT_DIR)
+    except Exception:  # pragma: no cover - best effort
+        slice_path = None
+    if slice_path is not None:
+        path = str(slice_path)
+    event: dict[str, Any] = {"step": step, "agent_id": agent_id, "reason": reason}
+    if path is not None:
+        event["replay_path"] = path
+    try:  # pragma: no cover - best effort
+        event_log.log_misbehavior(event)
+    except Exception:
+        pass
+    await ctx.get_event_queue().put(SimulationEvent(type="misbehavior", data=event))
+    await send_interaction_response(interaction, "misbehavior recorded", ephemeral=True)
+
 
 _MOD_ACTION_COUNTS: dict[str, int] = {}
 _MOD_COOLDOWNS: dict[str, float] = {}
@@ -1292,9 +1314,7 @@ async def slash_nudge(interaction: Any, prompt: str) -> None:
         span.set_attribute("discord.message.length", len(prompt))
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(type="nudge", data={"prompt": prompt})
-        )
+        await ctx.get_event_queue().put(SimulationEvent(type="nudge", data={"prompt": prompt}))
         await send_interaction_response(interaction, "nudge sent", ephemeral=True)
 
 
@@ -1577,3 +1597,19 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
         await send_interaction_response(
             interaction, "Vote cast" if cast else "Vote rejected", ephemeral=True
         )
+
+
+@bot.tree.command(name="misbehavior_log")
+async def slash_misbehavior_log(interaction: Any, limit: int = 20) -> None:
+    """Return last ``limit`` misbehavior events."""
+    events = await asyncio.to_thread(event_log.fetch_events, event_type="misbehavior")
+    events = events[-limit:]
+    lines = []
+    for evt in events:
+        step = evt.get("step")
+        agent = evt.get("agent_id")
+        reason = evt.get("reason")
+        path = evt.get("replay_path")
+        lines.append(f"{step}: {agent} - {reason} ({path})")
+    msg = "\n".join(lines) if lines else "no misbehavior"
+    await send_interaction_response(interaction, msg, ephemeral=True)
