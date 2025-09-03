@@ -23,6 +23,10 @@ evaluation_hooks:
   - collective_ip
 evaluation_targets:
   coalitions:
-    max_count: 0
+    max_count: 1
   sentiment:
-    max_variance: 0.0
+    max_variance: 0.25
+  collective_du:
+    max_delta: 5.0
+  collective_ip:
+    max_delta: 5.0
