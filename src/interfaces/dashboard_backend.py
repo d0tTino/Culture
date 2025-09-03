@@ -767,40 +767,6 @@ async def api_memory_snapshot(step: int) -> Response:
     return resp
 
 
-@app.get("/api/misbehavior")
-async def api_misbehavior(limit: int = 20) -> Response:
-    """Return recent misbehavior events with replay slice paths.
-
-    Args:
-        limit: Maximum number of events to return. Non-positive values yield an
-            empty list.
-    """
-
-    events = await asyncio.to_thread(
-        event_log.fetch_events, event_type="misbehavior"
-    )
-    recent = events[-limit:] if limit > 0 else []
-    items: list[dict[str, Any]] = []
-    for evt in recent:
-        step = int(evt.get("step", evt.get("tick", 0)))
-        detail = str(evt.get("detail", ""))
-        try:
-            slice_path = event_log.store_replay_slice(
-                step, step, directory=SNAPSHOT_DIR
-            )
-            slice_name = slice_path.name
-        except Exception:  # pragma: no cover - best effort
-            slice_name = f"replay_{step}_{step}.jsonl"
-        items.append(
-            {"step": step, "detail": detail, "replay": slice_name}
-        )
-
-    resp = JSONResponse({"events": items})
-    if not hasattr(resp, "status_code"):
-        resp.status_code = 200
-    return resp
-
-
 @app.get("/api/flagged_messages")
 async def api_flagged_messages(limit: int = 20) -> Response:
     """Return flagged messages with snapshot references."""

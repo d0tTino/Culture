@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Extra, Field
 from typing_extensions import NotRequired
 
 from src.agents.core.agent_state import AgentState
+from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 
 
 class AgentActionOutput(BaseModel):
@@ -100,6 +101,8 @@ class AgentTurnState(TypedDict):
     environment_perception: dict[str, object]
     perceived_messages: list[dict[str, object]]
     memory_history_list: list[dict[str, Any]]
+    memory_context: NotRequired[list[str]]
+    memory_retriever: NotRequired[MultiLayerRetriever]
     turn_sentiment_score: int
     prompt_modifier: str
     structured_output: AgentActionOutput | None
