@@ -17,6 +17,7 @@ async def test_api_misbehavior(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(db, "SNAPSHOT_DIR", tmp_path)
     monkeypatch.setattr(db.event_log, "fetch_events", lambda event_type=None: events)
 
+
     calls: list[tuple[int, int, Path | None]] = []
 
     def fake_store(start: int, end: int, directory: Path | None = None) -> Path:
@@ -43,3 +44,4 @@ async def test_api_misbehavior(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         ]
     }
     assert calls == [(1, 1, tmp_path), (2, 2, tmp_path)]
+

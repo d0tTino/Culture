@@ -12,6 +12,7 @@ The dashboard backend exposes `/api/misbehavior` to retrieve recent misbehavior 
 
 ### Response
 
+
 ```json
 {
   "events": [
@@ -26,4 +27,5 @@ The dashboard backend exposes `/api/misbehavior` to retrieve recent misbehavior 
 ```
 
 Each object contains the simulation `step`, the offending `agent_id`, the `reason` for the misbehavior, and a `replay_path` pointing to a replay slice containing events around that step.
+
 

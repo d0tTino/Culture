@@ -140,7 +140,7 @@ def get_event_queue(
     ctx: SimulationContext = DEFAULT_CONTEXT,
 ) -> asyncio.Queue[SimulationEvent | None]:
     """Return a shared event queue bound to the active loop."""
-    return ctx.get_event_queue()
+    return cast(asyncio.Queue[SimulationEvent | None], ctx.get_event_queue())
 
 
 # Simulation control state
@@ -762,6 +762,40 @@ async def api_memory_snapshot(step: int) -> Response:
             resp.status_code = 404
         return resp
     resp = JSONResponse(data)
+    if not hasattr(resp, "status_code"):
+        resp.status_code = 200
+    return resp
+
+
+@app.get("/api/misbehavior")
+async def api_misbehavior(limit: int = 20) -> Response:
+    """Return recent misbehavior events with replay slice paths.
+
+    Args:
+        limit: Maximum number of events to return. Non-positive values yield an
+            empty list.
+    """
+
+    events = await asyncio.to_thread(
+        event_log.fetch_events, event_type="misbehavior"
+    )
+    recent = events[-limit:] if limit > 0 else []
+    items: list[dict[str, Any]] = []
+    for evt in recent:
+        step = int(evt.get("step", evt.get("tick", 0)))
+        detail = str(evt.get("detail", ""))
+        try:
+            slice_path = event_log.store_replay_slice(
+                step, step, directory=SNAPSHOT_DIR
+            )
+            slice_name = slice_path.name
+        except Exception:  # pragma: no cover - best effort
+            slice_name = f"replay_{step}_{step}.jsonl"
+        items.append(
+            {"step": step, "detail": detail, "replay": slice_name}
+        )
+
+    resp = JSONResponse({"events": items})
     if not hasattr(resp, "status_code"):
         resp.status_code = 200
     return resp
