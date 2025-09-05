@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra import event_log
+from src.infra import metrics as infra_metrics
 from src.infra.ledger import ledger
 from src.infra.snapshot import load_snapshot
 from src.interfaces import metrics
@@ -430,7 +431,7 @@ async def api_map() -> Response:
 
 @app.get("/api/agent_stats")
 async def api_agent_stats() -> Response:
-    """Return retrieval counts and mood for each agent."""
+    """Return retrieval counts, mood, and cost metrics for each agent."""
     sim = SIM_STATE.get("simulation")
     stats: dict[str, dict[str, Any]] = {}
     retrieval_counts: dict[str, int] = {}
@@ -461,9 +462,20 @@ async def api_agent_stats() -> Response:
 
         for ag in sim.agents:
             mood = getattr(ag.state, "mood_value", None)
+            du_per_1k = infra_metrics.get_agent_du_per_1k_tokens(ag.agent_id)
+            try:
+                llm_latency_p95 = float(
+                    metrics.AGENT_LLM_LATENCY_P95_MS.labels(
+                        agent_id=ag.agent_id
+                    )._value.get()  # type: ignore[attr-defined]
+                )
+            except Exception:  # pragma: no cover - defensive
+                llm_latency_p95 = 0.0
             stats[ag.agent_id] = {
                 "mood": mood,
                 "retrieval_count": retrieval_counts.get(ag.agent_id, 0),
+                "du_per_1k_tokens": du_per_1k,
+                "llm_latency_p95_ms": llm_latency_p95,
             }
     return JSONResponse({"agents": stats})
 
