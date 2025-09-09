@@ -391,7 +391,13 @@ def store_replay_slice(
     dest_dir = Path(directory) if directory is not None else _log_file().parent
     dest_dir.mkdir(parents=True, exist_ok=True)
     out = dest_dir / f"replay_{start_step}_{end_step}.jsonl"
+    seed = get_seed()
     with out.open("w", encoding="utf-8") as fh:
+        header: dict[str, Any] = {"type": "header"}
+        if seed is not None:
+            header["seed"] = seed
+        fh.write(json.dumps(header))
+        fh.write("\n")
         for event in events:
             fh.write(json.dumps(event))
             fh.write("\n")
