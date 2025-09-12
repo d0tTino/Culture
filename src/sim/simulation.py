@@ -359,6 +359,23 @@ class Simulation:
             ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
             du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
 
+        try:
+            get_resource_manager().ensure_du_budget(target.agent_id, du_cost)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.info(
+                "Rejecting human %s for %s: %s",
+                "broadcast" if broadcast else "command",
+                target.agent_id,
+                exc,
+            )
+            if self.discord_bot:
+                await self.discord_bot.send_simulation_update(
+                    str(exc),
+                    agent_id=target.agent_id,
+                    target_channel_id=self.discord_bot.last_channel_id,
+                )
+            return
+
         if state.ip < ip_cost or state.du < du_cost:
             logger.info(
                 "Rejecting human %s for %s: insufficient resources",
