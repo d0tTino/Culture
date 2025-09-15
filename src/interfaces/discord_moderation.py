@@ -2,12 +2,19 @@
 
 import time
 from functools import wraps
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from src.infra.ledger import log_penalty
+from src.interfaces import discord_bot
 from src.interfaces.dashboard_backend import DEFAULT_CONTEXT, SimulationEvent
-from src.interfaces.discord_bot import bot, get_active_bot, has_admin_permission
 from src.utils.policy import evaluate_with_opa
+
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from discord.ext.commands import Bot as DiscordBot  # noqa: F401
+
+bot = getattr(discord_bot, "bot")
+get_active_bot = discord_bot.get_active_bot
+has_admin_permission = discord_bot.has_admin_permission
 
 _ACTION_COUNTS: dict[str, int] = {}
 _COOLDOWNS: dict[str, float] = {}

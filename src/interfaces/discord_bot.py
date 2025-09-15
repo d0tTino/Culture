@@ -13,7 +13,6 @@ import time
 import typing
 from collections.abc import Awaitable, Iterator
 from contextlib import contextmanager
-from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import httpx
@@ -526,6 +525,7 @@ class SimulationDiscordBot:
 
                 @tree.command(name="nudge")
                 @app_commands.describe(prompt="Prompt to nudge the simulation")
+                @moderation_rate_limit("nudge")
                 async def _tree_nudge(interaction: "discord.Interaction", prompt: str) -> None:
                     with command_span("nudge", interaction) as span:
                         span.set_attribute("discord.message.length", len(prompt))
@@ -1162,36 +1162,7 @@ async def record_misbehavior(interaction: Any, agent_id: str, reason: str) -> No
     await send_interaction_response(interaction, "misbehavior recorded", ephemeral=True)
 
 
-_MOD_ACTION_COUNTS: dict[str, int] = {}
-_MOD_COOLDOWNS: dict[str, float] = {}
-_MOD_COOLDOWN_SECONDS = 1.0
-
-
-async def _mod_rate_limit(user: Any, action: str) -> bool:
-    user_id = str(getattr(user, "id", ""))
-    key = f"{user_id}:{action}"
-    _MOD_ACTION_COUNTS[key] = _MOD_ACTION_COUNTS.get(key, 0) + 1
-    now = time.monotonic()
-    if _MOD_COOLDOWNS.get(key, 0.0) > now:
-        return False
-    allow, _ = await evaluate_with_opa(key)
-    if allow:
-        _MOD_COOLDOWNS[key] = now + _MOD_COOLDOWN_SECONDS
-    return allow
-
-
-def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(func)
-        async def wrapper(interaction: Any, *args: Any, **kwargs: Any) -> Any:
-            if not await _mod_rate_limit(getattr(interaction, "user", None), action):
-                await send_interaction_response(interaction, "rate limited", ephemeral=True)
-                return None
-            return await func(interaction, *args, **kwargs)
-
-        return wrapper
-
-    return decorator
+from src.interfaces.discord_moderation import moderation_rate_limit  # noqa: E402
 
 
 @bot.command(name="say")
