@@ -19,7 +19,11 @@ pytest_plugins = ["tests.pytest_asyncio_stub"]
 if "pytest_asyncio" not in sys.modules:
     import types
 
-    sys.modules["pytest_asyncio"] = types.ModuleType("pytest_asyncio")
+    import pytest
+
+    stub = types.ModuleType("pytest_asyncio")
+    stub.fixture = pytest.fixture  # type: ignore[attr-defined]
+    sys.modules["pytest_asyncio"] = stub
 
 try:
     import numpy as np
