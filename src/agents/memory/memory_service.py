@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import tiktoken
 from typing_extensions import Self
@@ -25,12 +25,27 @@ class MemoryService:
         semantic_manager: SemanticMemoryManager | None = None,
         level3_manager: Level3SummaryManager | None = None,
         tokenizer: tiktoken.Encoding | None = None,
+        memory_score_threshold: float = 0.0,
+        memory_scorer: Callable[[str, dict[str, Any] | None], float] | None = None,
     ) -> None:
         self.vector_store = vector_store
         self.semantic_manager = semantic_manager
         self.level3_manager = level3_manager
         self.tokenizer = tokenizer or tiktoken.get_encoding("cl100k_base")
         self.retriever = MultiLayerRetriever(vector_store, semantic_manager, self.tokenizer)
+        self.memory_score_threshold = memory_score_threshold
+        self.memory_scorer = memory_scorer or self._default_score_memory
+
+    def _default_score_memory(
+        self: Self, content: str, metadata: dict[str, Any] | None = None
+    ) -> float:
+        return float(len(self.tokenizer.encode(content)))
+
+    def should_store_memory(
+        self: Self, content: str, metadata: dict[str, Any] | None = None
+    ) -> bool:
+        score = self.memory_scorer(content, metadata)
+        return score >= self.memory_score_threshold
 
     def add_memory(
         self: Self,
@@ -42,6 +57,8 @@ class MemoryService:
         metadata: dict[str, Any] | None = None,
     ) -> str:
         if not self.vector_store:
+            return ""
+        if not self.should_store_memory(content, metadata):
             return ""
         with trace_agent_action("memory.add_memory", agent_id=agent_id, event_type=event_type):
             return self.vector_store.add_memory(
