@@ -1,13 +1,50 @@
+# Scenario demonstrates signature workflow and embeds evaluation guidance for maintainers.
 name: signature_demo
 description: Demo scenario showcasing evaluation hooks for coalition and sentiment tracking
 goal: Agents collaborate to sign a shared plan while monitoring group dynamics
-steps: 30
+steps: 30  # Keeps pacing tight; increase only when adding more beats or agents.
 beats:
+  # Beat order drives evaluation segmentation; keep in sync with prompts and narrative_beats.
   - proposal
   - critique
   - vote
   - deliverable
+narrative_beats:
+  # Each beat outlines narrative focus and expected signals; update when modifying story arc.
+  proposal:
+    summary: >-
+      Present an initial pact framework that others can endorse or amend.
+    collaboration_focus: >-
+      Encourage inclusive brainstorming that surfaces shared priorities without factions forming.
+    success_signals:
+      coalition_count: 0
+      sentiment_curve: 0.10
+  critique:
+    summary: >-
+      Stress-test the draft pact, highlighting risks, trade-offs, and must-have revisions.
+    collaboration_focus: >-
+      Channel disagreements into constructive edits so feedback feels rigorous yet respectful.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: -0.05
+  vote:
+    summary: >-
+      Capture final positions, resolve outstanding objections, and record commitments to sign.
+    collaboration_focus: >-
+      Reinforce consensus-building so the group converges on a single, well-supported option.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.05
+  deliverable:
+    summary: >-
+      Produce the signed pact along with immediate next steps and accountability checkpoints.
+    collaboration_focus: >-
+      Emphasize unity and shared ownership while outlining how the coalition will execute.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.20
 prompts:
+  # Prompts align with beats above; edit both sections together to avoid drift.
   proposal: >-
     Kick off the project by proposing a plan for everyone to sign.
   critique: >-
@@ -16,12 +53,27 @@ prompts:
     Decide whether to adopt the proposal.
   deliverable: >-
     Summarize the approved plan and outline next steps.
+success_metrics:
+  # Aggregated success criteria mirror evaluation_targets; adjust tolerances when metrics change.
+  coalition_count:
+    target_max: 1
+    explanation: >-
+      The simulation should avoid splintering factions, keeping a single coalition through signing.
+  sentiment_curve:
+    expected_trend:
+      proposal: 0.10
+      critique: -0.05
+      vote: 0.05
+      deliverable: 0.20
+    variance_tolerance: 0.25
 evaluation_hooks:
+  # Hooks activate instrumentation; ensure success_metrics stay aligned with supported evaluators.
   - coalitions
   - sentiment
   - collective_du
   - collective_ip
 evaluation_targets:
+  # Targets pair with hooks and should be tuned alongside success_metrics when behaviors shift.
   coalitions:
     max_count: 1
   sentiment:
