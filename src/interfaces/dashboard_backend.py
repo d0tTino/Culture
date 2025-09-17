@@ -691,6 +691,11 @@ async def api_token_balances() -> Response:
         for agent_id, token, amount in cur.fetchall():
             agent = balances.setdefault(agent_id, {"ip": 0.0, "du": 0.0, "tokens": {}})
             agent["tokens"][token] = int(amount)
+        for agent_id, agent in balances.items():
+            agent["remaining_du_budget"] = infra_metrics.get_agent_du_budget(agent_id)
+            agent["llm_latency_p95_ms"] = infra_metrics.get_agent_llm_latency_p95(
+                agent_id
+            )
         return balances
 
     agents = await asyncio.to_thread(_load)
