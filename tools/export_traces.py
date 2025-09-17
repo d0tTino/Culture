@@ -8,10 +8,14 @@ import json
 import shutil
 import tempfile
 from collections import defaultdict
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import matplotlib.pyplot as plt
+
+# Optional scenario-level metrics to include when bundling replay artifacts.
+scenario_metrics: dict[str, Any] = {}
 
 
 def iter_events(

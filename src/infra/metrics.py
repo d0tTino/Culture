@@ -12,6 +12,8 @@ from .ledger import ledger
 _last_du_per_1k_tokens: float = 0.0
 # Track DU-per-1k-tokens per agent for quick lookup
 _agent_du_per_1k_tokens: dict[str, float] = {}
+# Track remaining DU budget per agent
+_agent_du_budget: dict[str, float] = {}
 
 # Keep a rolling window of recent LLM latencies in milliseconds
 _LATENCY_SAMPLES: deque[float] = deque(maxlen=100)
@@ -45,6 +47,19 @@ def get_du_per_1k_tokens() -> float:
 def get_agent_du_per_1k_tokens(agent_id: str) -> float:
     """Return the DU-per-1k-tokens value for ``agent_id``."""
     return float(_agent_du_per_1k_tokens.get(agent_id, 0.0))
+
+
+def record_du_budget(agent_id: str, remaining: float) -> None:
+    """Record the remaining DU budget for ``agent_id``."""
+    remaining_du = float(remaining)
+    _agent_du_budget[agent_id] = remaining_du
+    if hasattr(prom_metrics.AGENT_REMAINING_DU, "labels"):
+        prom_metrics.AGENT_REMAINING_DU.labels(agent_id=agent_id).set(remaining_du)
+
+
+def get_agent_du_budget(agent_id: str) -> float:
+    """Return the remaining DU budget for ``agent_id``."""
+    return float(_agent_du_budget.get(agent_id, 0.0))
 
 
 def record_llm_latency(agent_id: str, latency_ms: float) -> None:
@@ -110,10 +125,12 @@ def get_recall_p5() -> float:
 
 
 __all__ = [
+    "get_agent_du_budget",
     "get_du_per_1k_tokens",
     "get_llm_latency_p95",
     "get_recall_p5",
     "get_retrieval_latency_p95",
+    "record_du_budget",
     "record_du_per_1k_tokens",
     "record_llm_latency",
     "record_recall_p5",
