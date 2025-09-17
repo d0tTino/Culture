@@ -201,6 +201,51 @@ async def test_websocket_events() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_token_balances_includes_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.interfaces import dashboard_backend as db
+
+    class _Cursor:
+        def __init__(self, rows: list[tuple[object, ...]]) -> None:
+            self._rows = rows
+
+        def fetchall(self) -> list[tuple[object, ...]]:
+            return list(self._rows)
+
+    class _Conn:
+        def execute(self, query: str, params: tuple[object, ...] = ()) -> _Cursor:
+            if "FROM agent_balances" in query:
+                return _Cursor([("agent-1", 1.0, 2.0)])
+            if "FROM agent_tokens" in query:
+                return _Cursor([("agent-1", "token-a", 3)])
+            raise AssertionError(f"Unexpected query: {query}")
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_budget(agent_id: str) -> float:
+        calls.append(("budget", agent_id))
+        return 7.5
+
+    def fake_latency(agent_id: str) -> float:
+        calls.append(("latency", agent_id))
+        return 123.4
+
+    monkeypatch.setattr(db.ledger, "conn", _Conn(), raising=False)
+    monkeypatch.setattr(db.infra_metrics, "get_agent_du_budget", fake_budget)
+    monkeypatch.setattr(db.infra_metrics, "get_agent_llm_latency_p95", fake_latency)
+
+    resp = await db.api_token_balances()
+    payload = json.loads(resp.body)
+
+    agent = payload["agents"]["agent-1"]
+    assert agent["remaining_du_budget"] == pytest.approx(7.5)
+    assert agent["llm_latency_p95_ms"] == pytest.approx(123.4)
+    assert agent["tokens"]["token-a"] == 3
+    assert ("budget", "agent-1") in calls
+    assert ("latency", "agent-1") in calls
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_message_queue_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
