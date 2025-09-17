@@ -12,6 +12,7 @@
 - [Windows / WSL2 Setup Checklist](docs/windows_setup.md#quick-setup-checklist)
 - [Running Tests](#running-tests)
 - [Start vLLM](#start-vllm)
+- [Signature Demo](#signature-demo)
 - [culture-ui Frontend](#culture-ui-frontend)
 - [Extensions and Plug-ins](#extensions-and-plug-ins)
 - [Roadmap](#roadmap)
@@ -220,6 +221,33 @@ Results will vary depending on hardware and models.
    ```
    This script loads environment variables from `.env` and launches the vertical
    slice with Discord enabled so you can chat with the agents immediately.
+
+### Signature Demo
+
+Run the evaluation-focused scenario and export reference artifacts with:
+
+```bash
+python scripts/run_signature_demo.py
+```
+
+The entry point executes `scenarios/signature_demo.yaml`, resets
+`results/signature_demo/`, and captures the evaluation hooks used in continuous
+integration. Install `matplotlib` (for example, `pip install matplotlib`) to
+render the PNG plots. To stream events to Redpanda during the run, set
+`ENABLE_REDPANDA=1` and `REDPANDA_BROKER` in your environment before launching
+the script.
+
+Each run produces fresh outputs in `results/signature_demo/`, including:
+
+- `event_log.jsonl`, `metrics.json`, and `traces.jsonl`.
+- A `snapshots/` directory containing `snapshot_<step>.json` files and the
+  deterministic `replay_0_<step>.jsonl` slice.
+- `signature_demo_bundle.zip` for sharing or replaying the run end-to-end.
+- Optional `plots/` PNGs and an updated `README.md` summarizing the artifact
+  locations.
+
+For deeper guidance on evaluation hooks, exports, and replaying the bundle, see
+[docs/scenario_hooks.md](docs/scenario_hooks.md#running-and-replaying-signature_demo).
 
 ### Quick Start
 
@@ -677,6 +705,8 @@ the current milestones and ways plug-in authors can participate.
 The project's direction is guided by the future directions listed above. Key future work includes:
 
 * Reviewing the architectural layers summarized in the [Blueprint Memo](docs/blueprint_memo.md).
+* Exercising the [Signature Demo](#signature-demo) scenario to validate
+  evaluation hooks and artifact generation.
 
 * **Medium-Term:**
     * Validating and refining Memory Pruning.
