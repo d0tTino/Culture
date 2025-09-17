@@ -13,6 +13,8 @@ from .ledger import ledger
 _last_du_per_1k_tokens: float = 0.0
 # Track DU-per-1k-tokens per agent for quick lookup
 _agent_du_per_1k_tokens: dict[str, float] = {}
+# Track remaining DU budget per agent
+_agent_du_budget: dict[str, float] = {}
 
 # Keep a rolling window of recent LLM latencies in milliseconds
 _LATENCY_SAMPLES: deque[float] = deque(maxlen=100)
@@ -118,6 +120,7 @@ def get_agent_du_budget(agent_id: str) -> float:
     return 0.0
 
 
+
 def record_llm_latency(agent_id: str, latency_ms: float) -> None:
     """Record latency for an LLM call and update p95 statistics."""
     prom_metrics.LLM_LATENCY_MS.set(latency_ms)
@@ -200,11 +203,11 @@ def get_recall_p5() -> float:
 
 __all__ = [
     "get_agent_du_budget",
-    "get_agent_llm_latency_p95",
     "get_du_per_1k_tokens",
     "get_llm_latency_p95",
     "get_recall_p5",
     "get_retrieval_latency_p95",
+    "record_du_budget",
     "record_du_per_1k_tokens",
     "record_llm_latency",
     "record_recall_p5",

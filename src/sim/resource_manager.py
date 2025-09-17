@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from src.infra.metrics import record_du_budget
+
 
 class HasResources(Protocol):
     ip: float
@@ -26,7 +28,9 @@ class ResourceManager:
             obj.du = du_start + self.max_du_per_tick
 
     def set_du_budget(self, agent_id: str, budget: float) -> None:
-        self._du_budgets[agent_id] = float(budget)
+        remaining = float(budget)
+        self._du_budgets[agent_id] = remaining
+        record_du_budget(agent_id, remaining)
 
     def ensure_du_budget(self, agent_id: str, amount: float) -> None:
         """Verify that the agent has at least ``amount`` DU available."""
@@ -44,7 +48,9 @@ class ResourceManager:
     def charge_du(self, agent_id: str, amount: float) -> None:
         self.ensure_du_budget(agent_id, amount)
         remaining = self._du_budgets.get(agent_id, 0.0)
-        self._du_budgets[agent_id] = remaining - amount
+        updated = max(remaining - amount, 0.0)
+        self._du_budgets[agent_id] = updated
+        record_du_budget(agent_id, updated)
 
     def get_du_budget(self, agent_id: str) -> float:
         return float(self._du_budgets.get(agent_id, 0.0))
