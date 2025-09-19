@@ -465,9 +465,7 @@ async def api_agent_stats() -> Response:
             du_per_1k = infra_metrics.get_agent_du_per_1k_tokens(ag.agent_id)
             try:
                 llm_latency_p95 = float(
-                    metrics.AGENT_LLM_LATENCY_P95_MS.labels(
-                        agent_id=ag.agent_id
-                    )._value.get()  # type: ignore[attr-defined]
+                    metrics.AGENT_LLM_LATENCY_P95_MS.labels(agent_id=ag.agent_id)._value.get()  # type: ignore[attr-defined]
                 )
             except Exception:  # pragma: no cover - defensive
                 llm_latency_p95 = 0.0
@@ -693,21 +691,42 @@ async def api_token_balances() -> Response:
             agent["tokens"][token] = int(amount)
         for agent_id, agent in balances.items():
             agent["remaining_du_budget"] = infra_metrics.get_agent_du_budget(agent_id)
-            agent["llm_latency_p95_ms"] = infra_metrics.get_agent_llm_latency_p95(
-                agent_id
-            )
+            agent["llm_latency_p95_ms"] = infra_metrics.get_agent_llm_latency_p95(agent_id)
         return balances
 
     agents = await asyncio.to_thread(_load)
     return JSONResponse({"agents": agents})
 
 
-def _cost_metrics_data() -> dict[str, float]:
-    """Collect DU cost and latency metrics."""
+def _cost_metrics_data() -> dict[str, float | int]:
+    """Collect DU cost, sentiment, and reliability metrics for dashboards."""
+
+    memory_retrievals = metrics.get_memory_retrievals()
+    memory_retrieval_errors = metrics.get_memory_retrieval_errors()
+    memory_retrieval_attempts = memory_retrievals + memory_retrieval_errors
+    memory_success_rate = (
+        memory_retrievals / memory_retrieval_attempts if memory_retrieval_attempts else 0.0
+    )
+    memory_error_rate = (
+        memory_retrieval_errors / memory_retrieval_attempts if memory_retrieval_attempts else 0.0
+    )
+
+    llm_errors_total = metrics.get_llm_errors_total()
+    llm_calls_total = metrics.get_llm_calls_total()
+    llm_error_rate = llm_errors_total / llm_calls_total if llm_calls_total else 0.0
 
     return {
         "du_per_1k_tokens": metrics.get_du_per_1k_tokens(),
         "llm_latency_p95_ms": metrics.get_llm_latency_p95(),
+        "coalition_count": metrics.get_coalition_count(),
+        "average_sentiment": metrics.get_average_sentiment(),
+        "rag_hit_rate": metrics.get_rag_hit_rate(),
+        "memory_retrievals_total": memory_retrievals,
+        "memory_retrieval_errors_total": memory_retrieval_errors,
+        "memory_retrieval_success_rate": memory_success_rate,
+        "memory_retrieval_error_rate": memory_error_rate,
+        "llm_errors_total": llm_errors_total,
+        "llm_error_rate": llm_error_rate,
     }
 
 
