@@ -116,6 +116,16 @@ def get_llm_latency_p95() -> float:
     return float(LLM_LATENCY_P95_MS._value.get())
 
 
+def get_llm_calls_total() -> int:
+    """Return the total number of LLM calls recorded."""
+    return int(LLM_CALLS_TOTAL._value.get())
+
+
+def get_llm_errors_total() -> int:
+    """Return the total number of failed LLM calls."""
+    return int(LLM_ERRORS_TOTAL._value.get())
+
+
 def get_kb_size() -> int:
     """Return the current Knowledge Board size."""
     return int(KNOWLEDGE_BOARD_SIZE._value.get())
@@ -223,6 +233,8 @@ __all__ = [
     "get_gas_price_per_token",
     "get_human_messages",
     "get_kb_size",
+    "get_llm_calls_total",
+    "get_llm_errors_total",
     "get_llm_latency",
     "get_llm_latency_p95",
     "get_memory_retrieval_errors",

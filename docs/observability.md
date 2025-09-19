@@ -73,12 +73,38 @@ to alert when budgets run low or spike unexpectedly.
 ### Dashboard Cost Metrics Endpoint
 
 The dashboard backend provides `/api/observability_metrics` for quick visibility into
-LLM usage. The endpoint returns:
+LLM usage, coalition dynamics, and retrieval health. Example response:
+
+```json
+{
+  "du_per_1k_tokens": 1.8,
+  "llm_latency_p95_ms": 450.0,
+  "coalition_count": 4,
+  "average_sentiment": 0.37,
+  "rag_hit_rate": 0.82,
+  "memory_retrievals_total": 120,
+  "memory_retrieval_errors_total": 6,
+  "memory_retrieval_success_rate": 0.95,
+  "memory_retrieval_error_rate": 0.05,
+  "llm_errors_total": 3,
+  "llm_error_rate": 0.02
+}
+```
 
 - `du_per_1k_tokens` – average digital units spent per 1,000 tokens. Lower values
   indicate more efficient usage of the DU budget.
 - `llm_latency_p95_ms` – 95th percentile latency of recent LLM calls in milliseconds,
   useful for spotting tail latency issues.
+- `coalition_count` – number of active coalitions discovered in the simulation.
+- `average_sentiment` – current aggregate sentiment across agents.
+- `rag_hit_rate` – most recent hit rate for Retrieval Augmented Generation (RAG)
+  lookups.
+- `memory_retrievals_total` and `memory_retrieval_errors_total` – cumulative counts of
+  successful and failed memory retrievals, respectively.
+- `memory_retrieval_success_rate` and `memory_retrieval_error_rate` – derived ratios of
+  successful and failed retrievals.
+- `llm_errors_total` – total failed LLM calls captured by the monitoring decorator.
+- `llm_error_rate` – share of failed LLM calls relative to total LLM traffic.
 
 These metrics can be fetched directly by the UI or external monitoring systems.
 
