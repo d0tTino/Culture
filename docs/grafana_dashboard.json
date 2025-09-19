@@ -17,6 +17,29 @@
       "type": "timeseries",
       "title": "Proposal Throughput",
       "targets": [{"expr": "proposal_throughput"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "DU per 1k Tokens",
+      "targets": [{"expr": "llm_du_per_1k_tokens"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM p95 Latency",
+      "targets": [{"expr": "llm_latency_p95_ms"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory Retrieval Throughput / Error Rate",
+      "targets": [
+        {"expr": "rate(memory_retrievals_total[5m])"},
+        {"expr": "rate(memory_retrieval_errors_total[5m])"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Human Message Volume",
+      "targets": [{"expr": "rate(human_messages_total[5m])"}]
     }
   ]
 }

@@ -43,7 +43,17 @@ curl -X POST -H "Content-Type: application/json" \
     http://admin:admin@localhost:3000/api/dashboards/db
 ```
 
-The imported dashboard includes panels for CPU usage, Knowledge Board size, active agent count, and the LLM query rate (QPS).
+The imported dashboard includes time-series panels for coalition count, average sentiment, proposal throughput, DU per 1k tokens, LLM p95 latency, memory retrieval throughput/error rate, and human message volume. These views are wired to Prometheus so you can import the JSON and begin charting the metrics immediately.
+
+### Panel Queries
+
+Each panel relies on the following Prometheus expressions:
+
+- **DU per 1k Tokens:** `llm_du_per_1k_tokens`
+- **LLM p95 Latency:** `llm_latency_p95_ms`
+- **Memory Retrieval Throughput:** `rate(memory_retrievals_total[5m])`
+- **Memory Retrieval Error Rate:** `rate(memory_retrieval_errors_total[5m])`
+- **Human Message Volume:** `rate(human_messages_total[5m])`
 
 ### Memory Retrieval Metrics
 
@@ -52,7 +62,7 @@ Two counters track memory lookup activity:
 - `memory_retrievals_total` – counts successful memory lookups.
 - `memory_retrieval_errors_total` – counts memory retrieval failures.
 
-Add a new panel in Grafana using these counters. For example, graph `rate(memory_retrievals_total[1m])` to view retrieval throughput.
+The dashboard's **Memory Retrieval Throughput / Error Rate** panel already charts these counters. It graphs `rate(memory_retrievals_total[5m])` for successful lookups and `rate(memory_retrieval_errors_total[5m])` for failures so you can compare throughput against errors in a single view.
 
 Additional Prometheus metrics include:
 
@@ -67,8 +77,15 @@ Each agent exposes its remaining DU balance and efficiency via Prometheus gauges
 - `agent_remaining_du{agent_id="<id>"}` shows the DU balance for a given agent.
 - `agent_du_per_1k_tokens{agent_id="<id>"}` reports DU spent per 1k tokens on the last LLM call.
 
-Create Grafana panels with queries such as `agent_remaining_du` or `agent_du_per_1k_tokens`
-to alert when budgets run low or spike unexpectedly.
+The **DU per 1k Tokens** panel visualizes `llm_du_per_1k_tokens` to highlight overall efficiency. Create additional views with `avg by (agent_id) (agent_du_per_1k_tokens)` or `agent_remaining_du` if you need to track per-agent budgets.
+
+### LLM Tail Latency
+
+Use the **LLM p95 Latency** panel to monitor tail behavior. It charts the `llm_latency_p95_ms` gauge exposed by the dashboard backend. For per-agent tail latency, graph `agent_llm_latency_p95_ms` or aggregate with `max by (agent_id) (agent_llm_latency_p95_ms)`.
+
+### Human Message Volume
+
+The **Human Message Volume** panel plots `rate(human_messages_total[5m])` to show how frequently humans interact with the simulation. Adjust the range selector (for example `rate(human_messages_total[1m])`) to zoom in on shorter bursts of activity.
 
 ### Dashboard Cost Metrics Endpoint
 
