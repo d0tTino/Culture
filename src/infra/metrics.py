@@ -120,6 +120,31 @@ def get_agent_du_budget(agent_id: str) -> float:
     return 0.0
 
 
+def record_du_budget(agent_id: str, remaining: float) -> None:
+    """Record remaining DU budget for ``agent_id`` to metrics backends."""
+
+    remaining = float(remaining)
+    _agent_du_budget[agent_id] = remaining
+    gauge = getattr(prom_metrics, "AGENT_REMAINING_DU", None)
+    if gauge is not None:
+        if hasattr(gauge, "labels"):
+            try:
+                gauge.labels(agent_id=agent_id).set(remaining)
+            except Exception:
+                try:
+                    gauge.set(remaining)
+                except Exception:
+                    pass
+        else:
+            try:
+                gauge.set(remaining)
+            except Exception:
+                pass
+    try:  # pragma: no cover - optional dependency
+        ledger.record_du_budget(agent_id, remaining)
+    except Exception:
+        pass
+
 
 def record_llm_latency(agent_id: str, latency_ms: float) -> None:
     """Record latency for an LLM call and update p95 statistics."""
