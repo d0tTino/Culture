@@ -80,6 +80,65 @@ def _log_file(path: str | Path | None = None) -> Path:
     return Path(os.getenv("EVENT_LOG_PATH", "event_log.jsonl"))
 
 
+def _rehydrate_log_state(path: str | Path | None = None) -> None:
+    """Populate cached state from the existing log file if available."""
+
+    global _last_hash, _seed
+    needs_hash = _last_hash is None
+    needs_seed = _seed is None
+    if not needs_hash and not needs_seed:
+        return
+
+    file = _log_file(path)
+    if not file.exists():
+        return
+
+    try:  # pragma: no cover - best effort
+        with file.open("r", encoding="utf-8") as fh:
+            header_line = fh.readline().strip()
+            header: dict[str, Any] | None = None
+            if header_line:
+                try:
+                    maybe_header = json.loads(header_line)
+                except Exception:
+                    maybe_header = None
+                if isinstance(maybe_header, dict) and maybe_header.get("type") == "header":
+                    header = maybe_header
+
+            if needs_seed and header is not None:
+                header_seed = header.get("seed")
+                if isinstance(header_seed, int):
+                    _seed = header_seed
+                    needs_seed = False
+
+            last_event: dict[str, Any] | None = None
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except Exception:
+                    continue
+                last_event = event
+
+            if last_event is None:
+                return
+
+            if needs_hash:
+                trace_hash = last_event.get("trace_hash")
+                if isinstance(trace_hash, str):
+                    _last_hash = trace_hash
+                    needs_hash = False
+
+            if needs_seed:
+                seed = last_event.get("seed")
+                if isinstance(seed, int):
+                    _seed = seed
+    except Exception:  # pragma: no cover - ignore
+        pass
+
+
 def _ensure_header(path: str | Path | None = None) -> None:
     """Write the log header containing the simulation seed if missing."""
     global _header_written, _seed
@@ -192,13 +251,14 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
     """Log an event to the append-only file and Redpanda if enabled."""
 
     global _last_hash
-    _ensure_header()
+    path = _log_file()
+    _rehydrate_log_state(path)
+    _ensure_header(path)
 
     with tracer.start_as_current_span("event_log.log_event") as span:
         span.set_attribute("event.type", event.get("type"))
         span.set_attribute("step", event.get("step"))
 
-        path = _log_file()
         span.set_attribute("log.file_path", str(path))
 
         if "trace_hash" in event:
@@ -219,21 +279,23 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
         if _last_hash is not None:
             event["prev_hash"] = _last_hash
         event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
-        _last_hash = event_with_hash["trace_hash"]
+        serialized_event = json.dumps(event_with_hash)
+        persisted_event = json.loads(serialized_event)
+        _last_hash = persisted_event["trace_hash"]
 
         # Append to local log file
         try:  # pragma: no cover - best effort
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(event_with_hash))
+                fh.write(serialized_event)
                 fh.write("\n")
         except Exception:  # pragma: no cover - ignore
             pass
 
         if os.getenv("ENABLE_REDPANDA", "0") != "1":
-            return event_with_hash
+            return persisted_event
         try:  # pragma: no cover - best effort
-            payload = json.dumps(event_with_hash).encode("utf-8")
+            payload = serialized_event.encode("utf-8")
             producer = _get_producer()
             producer.produce(_topic, payload)
             producer.poll(0)
@@ -241,7 +303,7 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
             import logging
 
             logging.getLogger(__name__).debug("Failed to log event: %s", exc)
-        return event_with_hash
+        return persisted_event
 
 
 def log_misbehavior(event: dict[str, Any]) -> dict[str, Any]:

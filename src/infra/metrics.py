@@ -26,6 +26,29 @@ _RETRIEVAL_LATENCY_SAMPLES: deque[float] = deque(maxlen=100)
 _RECALL_P5_SAMPLES: deque[float] = deque(maxlen=100)
 
 
+def record_du_budget(agent_id: str, value: float) -> None:
+    """Record the remaining DU budget for ``agent_id``."""
+
+    _agent_du_budget[agent_id] = float(value)
+
+    gauge = getattr(prom_metrics, "AGENT_REMAINING_DU", None)
+    if gauge is not None:
+        try:  # pragma: no cover - defensive update
+            if hasattr(gauge, "labels"):
+                gauge.labels(agent_id=agent_id).set(float(value))
+            else:
+                gauge.set(float(value))
+        except Exception:
+            pass
+
+    try:  # pragma: no cover - optional dependency
+        hook = getattr(ledger, "record_du_budget", None)
+        if callable(hook):
+            hook(agent_id, value)
+    except Exception:
+        pass
+
+
 def record_du_per_1k_tokens(agent_id: str, value: float) -> None:
     """Record DU cost per 1k tokens for the latest LLM call."""
     global _last_du_per_1k_tokens
