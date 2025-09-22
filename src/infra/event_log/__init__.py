@@ -124,6 +124,59 @@ def _ensure_header(path: str | Path | None = None) -> None:
         pass
 
 
+def _rehydrate_last_hash(path: Path) -> None:
+    """Populate ``_last_hash`` from the most recent event on disk."""
+
+    global _last_hash
+    if _last_hash is not None or not path.exists():
+        return
+    try:  # pragma: no cover - best effort
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            pos = fh.tell()
+            if pos <= 0:
+                return
+            buffer = bytearray()
+            while pos > 0:
+                pos -= 1
+                fh.seek(pos)
+                char = fh.read(1)
+                if char == b"\n":
+                    if not buffer:
+                        continue
+                    line_bytes = bytes(reversed(buffer)).strip()
+                    buffer.clear()
+                    if not line_bytes:
+                        continue
+                    try:
+                        line = line_bytes.decode("utf-8")
+                        event = json.loads(line)
+                    except Exception:
+                        continue
+                    if isinstance(event, dict) and event.get("type") != "header":
+                        last_hash = event.get("trace_hash")
+                        if isinstance(last_hash, str):
+                            _last_hash = last_hash
+                        return
+                    continue
+                buffer.append(char[0])
+            if buffer:
+                line_bytes = bytes(reversed(buffer)).strip()
+                if not line_bytes:
+                    return
+                try:
+                    line = line_bytes.decode("utf-8")
+                    event = json.loads(line)
+                except Exception:
+                    return
+                if isinstance(event, dict) and event.get("type") != "header":
+                    last_hash = event.get("trace_hash")
+                    if isinstance(last_hash, str):
+                        _last_hash = last_hash
+    except Exception:
+        pass
+
+
 def _is_valid_event(event: dict[str, Any], last_step: int, last_hash: str | None) -> bool:
     """Check ``event`` ordering and integrity."""
     step = event.get("step", 0)
@@ -200,6 +253,7 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
 
         path = _log_file()
         span.set_attribute("log.file_path", str(path))
+        _rehydrate_last_hash(path)
 
         if "trace_hash" in event:
             event = {**event}
