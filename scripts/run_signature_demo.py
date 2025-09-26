@@ -12,10 +12,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
-
 from scripts import export_traces
-from src.app import create_simulation
+from src.app import create_simulation, load_scenario
 from src.infra import event_log
 from src.infra.checkpoint import capture_rng_state
 from src.infra.snapshot import compute_trace_hash, save_snapshot
@@ -241,14 +239,17 @@ async def main() -> None:
     event_log_path = RESULT_DIR / "event_log.jsonl"
     os.environ["EVENT_LOG_PATH"] = str(event_log_path)
 
-    with SCENARIO_PATH.open("r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
-
-    scenario_desc = data.get("description", "")
-    steps = int(data.get("steps", 0) or 0)
-    num_agents = int(data.get("agents", 3) or 3)
-    beats = data.get("beats") or []
-    eval_hooks = data.get("evaluation_hooks") or []
+    (
+        scenario_desc,
+        steps_override,
+        agents_override,
+        beats,
+        evaluation_hooks,
+        evaluation_targets,
+        success_metrics,
+    ) = load_scenario(str(SCENARIO_PATH))
+    steps = steps_override or 0
+    num_agents = agents_override or 3
 
     sim = create_simulation(
         num_agents=num_agents,
@@ -256,9 +257,10 @@ async def main() -> None:
         scenario=scenario_desc,
         beats=beats,
         seed=42,
+        evaluation_hook_names=evaluation_hooks,
+        evaluation_targets=evaluation_targets,
+        success_metrics=success_metrics,
     )
-    if eval_hooks:
-        sim.register_named_evaluation_hooks(list(map(str, eval_hooks)))
 
     await sim.async_run(steps)
 

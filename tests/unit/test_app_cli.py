@@ -80,12 +80,17 @@ def test_load_scenario_from_file(tmp_path) -> None:
     path = tmp_path / "demo.yaml"
     path.write_text("""description: Test scenario\nsteps: 7\nagents: 4\n""")
 
-    desc, steps, agents, beats = app.load_scenario(str(path))
+    desc, steps, agents, beats, hooks, targets, success_metrics = app.load_scenario(
+        str(path)
+    )
 
     assert desc == "Test scenario"
     assert steps == 7
     assert agents == 4
     assert beats == []
+    assert hooks == []
+    assert targets == {}
+    assert success_metrics == {}
 
 
 def test_main_uses_scenario_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
