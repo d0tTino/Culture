@@ -173,6 +173,13 @@ async def test_run_signature_demo(
         step, value = metrics[key][0]
         assert isinstance(step, int)
         assert isinstance(value, float)
+    target_summary = metrics.get("_target_summary")
+    assert isinstance(target_summary, dict)
+    for key in ("coalitions", "sentiment", "collective_du", "collective_ip"):
+        assert key in target_summary
+        entry = target_summary[key]
+        assert isinstance(entry, dict)
+        assert "status" in entry
 
     replay_files = sorted(snapshots_dir.glob("replay_*.jsonl"))
     assert replay_files, "Replay slice not created"
@@ -195,3 +202,6 @@ async def test_run_signature_demo(
         assert "traces.jsonl" in names
         assert "metrics.json" in names
         assert any(name.startswith("snapshots/") for name in names)
+
+    readme_text = (result_dir / "README.md").read_text(encoding="utf-8")
+    assert "Evaluation Target Summary" in readme_text
