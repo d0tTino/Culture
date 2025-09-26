@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 import shutil
+import statistics
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -101,7 +102,92 @@ def _create_snapshot(sim: Simulation, directory: Path) -> Path:
     return directory / f"snapshot_{sim.current_step}.json"
 
 
-def _write_readme(entries: Iterable[tuple[str, Path]]) -> None:
+def _summarize_targets(
+    metrics: dict[str, list[tuple[int, float]]],
+    evaluation_targets: dict[str, dict[str, float | int | str]] | None,
+) -> dict[str, dict[str, object]]:
+    summary: dict[str, dict[str, object]] = {}
+    if not evaluation_targets:
+        return summary
+
+    for metric, target in evaluation_targets.items():
+        if not isinstance(target, dict):
+            continue
+        values = [float(value) for _, value in metrics.get(metric, [])]
+        if not values:
+            summary[metric] = {
+                "status": "missing",
+                "reason": "No samples recorded for this metric.",
+            }
+            continue
+
+        checks: dict[str, dict[str, object]] = {}
+        status: str = "pass"
+        for field, raw_threshold in target.items():
+            if not isinstance(raw_threshold, (int, float)):
+                checks[field] = {
+                    "threshold": raw_threshold,
+                    "passed": None,
+                    "reason": "Non-numeric threshold is not evaluated.",
+                }
+                if status == "pass":
+                    status = "unknown"
+                continue
+
+            threshold = float(raw_threshold)
+            observed: float
+            passed: bool | None
+
+            if field == "max_count":
+                observed = max(values)
+                passed = observed <= threshold
+            elif field == "max_value":
+                observed = max(values)
+                passed = observed <= threshold
+            elif field == "min_value":
+                observed = min(values)
+                passed = observed >= threshold
+            elif field == "max_delta":
+                deltas = [abs(curr - prev) for prev, curr in zip(values[:-1], values[1:])]
+                observed = max(deltas) if deltas else 0.0
+                passed = observed <= threshold
+            elif field == "max_variance":
+                observed = statistics.pvariance(values) if len(values) > 1 else 0.0
+                passed = observed <= threshold
+            else:
+                checks[field] = {
+                    "threshold": threshold,
+                    "passed": None,
+                    "reason": "Unsupported target field.",
+                }
+                if status == "pass":
+                    status = "unknown"
+                continue
+
+            checks[field] = {
+                "threshold": threshold,
+                "observed": observed,
+                "passed": passed,
+            }
+            if not passed:
+                status = "fail"
+
+        if not checks:
+            summary[metric] = {
+                "status": "unknown",
+                "reason": "No recognized target fields for evaluation.",
+            }
+            continue
+
+        summary[metric] = {"status": status, "checks": checks}
+
+    return summary
+
+
+def _write_readme(
+    entries: Iterable[tuple[str, Path]],
+    target_summary: dict[str, dict[str, object]] | None = None,
+) -> None:
     lines = [
         "# Signature Demo Results",
         "",
@@ -115,6 +201,35 @@ def _write_readme(entries: Iterable[tuple[str, Path]]) -> None:
             rel = path
         suffix = "/" if path.is_dir() else ""
         lines.append(f"- **{label}**: `{rel}{suffix}`")
+    if target_summary:
+        lines.extend(["", "## Evaluation Target Summary", ""])
+        for metric, details in target_summary.items():
+            status = str(details.get("status", "unknown")).upper()
+            lines.append(f"- **{metric}**: {status}")
+            checks = details.get("checks")
+            if isinstance(checks, dict):
+                for field, check_details in checks.items():
+                    if not isinstance(check_details, dict):
+                        continue
+                    observed = check_details.get("observed")
+                    threshold = check_details.get("threshold")
+                    passed = check_details.get("passed")
+                    note_parts: list[str] = []
+                    if isinstance(observed, (int, float)):
+                        note_parts.append(f"observed={observed:.3f}")
+                    if isinstance(threshold, (int, float)):
+                        note_parts.append(f"target={threshold:.3f}")
+                    if isinstance(passed, bool):
+                        note_parts.append("pass" if passed else "fail")
+                    reason = check_details.get("reason")
+                    if isinstance(reason, str):
+                        note_parts.append(reason)
+                    summary_line = ", ".join(note_parts) if note_parts else "no details"
+                    lines.append(f"  - {field}: {summary_line}")
+            reason = details.get("reason")
+            if isinstance(reason, str):
+                lines.append(f"  - Note: {reason}")
+
     README_PATH.parent.mkdir(parents=True, exist_ok=True)
     README_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -149,8 +264,14 @@ async def main() -> None:
 
     metrics_path = RESULT_DIR / "metrics.json"
     metrics = export_traces.load_metrics(event_log_path)
+    target_summary = _summarize_targets(
+        metrics, data.get("evaluation_targets") if isinstance(data, dict) else None
+    )
+    metrics_output: dict[str, object] = {key: value for key, value in metrics.items()}
+    if target_summary:
+        metrics_output["_target_summary"] = target_summary
     with metrics_path.open("w", encoding="utf-8") as fh:
-        json.dump(metrics, fh, indent=2)
+        json.dump(metrics_output, fh, indent=2)
 
     snapshots_dir = RESULT_DIR / "snapshots"
     snapshot_path = _create_snapshot(sim, snapshots_dir)
@@ -184,7 +305,7 @@ async def main() -> None:
     ]
     for plot_path in sorted(plot_paths):
         artifact_entries.append((f"Plot: {plot_path.stem}", plot_path))
-    _write_readme(artifact_entries)
+    _write_readme(artifact_entries, target_summary)
 
     print(f"Event log: {event_log_path}")
     print(f"Metrics: {metrics_path}")
