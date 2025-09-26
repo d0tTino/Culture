@@ -102,7 +102,15 @@ async def test_run_signature_demo(
     event_log_module.set_seed(42)
 
     # Build deterministic agent outputs tied to the scenario beats.
-    _, _, _, beats = load_scenario(str(scenario_path))
+    (
+        _,
+        _,
+        _,
+        beats,
+        hook_names,
+        evaluation_targets,
+        success_metrics,
+    ) = load_scenario(str(scenario_path))
     beat_cycle = cycle(beats or ["default"])
     message_counter = count(1)
 
@@ -142,6 +150,10 @@ async def test_run_signature_demo(
         await run_signature_demo.main()
 
     assert created_sims, "Simulation was not constructed"
+    sim = created_sims[0]
+    assert sim.evaluation_hook_names == hook_names
+    assert sim.evaluation_targets == evaluation_targets
+    assert sim.success_metrics == success_metrics
 
     event_log_path = result_dir / "event_log.jsonl"
     metrics_path = result_dir / "metrics.json"

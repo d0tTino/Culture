@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 import argparse
 import asyncio
+import copy
 import logging
 import random
 import threading
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, cast
 
 import numpy as np
 from opentelemetry import trace
@@ -78,6 +79,9 @@ class Simulation:
         beats: list[str] | None = None,
         discord_bot: Optional["SimulationDiscordBot"] = None,
         seed: int | None = None,
+        evaluation_hook_names: Sequence[str] | None = None,
+        evaluation_targets: Mapping[str, Any] | None = None,
+        success_metrics: Mapping[str, Any] | None = None,
     ) -> None:
         """
         Initializes the Simulation instance.
@@ -97,6 +101,12 @@ class Simulation:
             discord_bot (Optional[SimulationDiscordBot]): Discord bot for sending
                 simulation updates to Discord.
             seed (int | None): Seed for Python and NumPy random number generators.
+            evaluation_hook_names (Sequence[str] | None): Symbolic evaluation
+                hook names to register for metric collection.
+            evaluation_targets (Mapping[str, Any] | None): Scenario-provided
+                evaluation target thresholds for compliance checks.
+            success_metrics (Mapping[str, Any] | None): High-level success metric
+                definitions describing desired narrative outcomes.
         """
         # Reload configuration to pick up any environment overrides set in tests
         config.load_config(validate_required=False)
@@ -185,9 +195,18 @@ class Simulation:
         logger.info("Simulation initialized with collective IP/DU tracking.")
 
         # --- NEW: Evaluation hooks and metrics ---
+        self.evaluation_hook_names: list[str] = []
+        self.evaluation_targets: dict[str, Any] = (
+            copy.deepcopy(evaluation_targets) if evaluation_targets else {}
+        )
+        self.success_metrics: dict[str, Any] = (
+            copy.deepcopy(success_metrics) if success_metrics else {}
+        )
         self.evaluation_hooks: list[Callable[[Self, list[Any]], dict[str, Any] | None]] = []
         self.metrics: list[dict[str, Any]] = []
         self.add_evaluation_hook(self._collect_metrics)
+        if evaluation_hook_names:
+            self.register_named_evaluation_hooks(list(evaluation_hook_names))
 
         # --- Initialize memory service ---
         if memory_service is None:
@@ -1135,7 +1154,7 @@ class Simulation:
             "collective_du": self.collective_du,
         }
 
-    def register_named_evaluation_hooks(self: Self, hook_names: list[str]) -> None:
+    def register_named_evaluation_hooks(self: Self, hook_names: Sequence[str]) -> None:
         """Register evaluation hooks by symbolic ``hook_names``.
 
         Each name is looked up in :data:`EVALUATION_HOOKS`; unknown names are ignored
@@ -1143,13 +1162,22 @@ class Simulation:
         registering the provided hooks to avoid duplicate metric entries.
         """
 
+        requested = [str(name) for name in hook_names]
         self.evaluation_hooks = []
-        for name in hook_names:
+        self.evaluation_hook_names = []
+        for name in requested:
             hook = EVALUATION_HOOKS.get(name)
             if hook is None:
                 logger.warning("Unknown evaluation hook '%s'", name)
                 continue
+            self.evaluation_hook_names.append(name)
             self.add_evaluation_hook(hook)
+        if not self.evaluation_hook_names:
+            if requested:
+                logger.warning(
+                    "No valid evaluation hooks configured; using default metrics collector"
+                )
+            self.add_evaluation_hook(self._collect_metrics)
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""

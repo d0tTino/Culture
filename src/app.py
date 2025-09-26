@@ -74,8 +74,24 @@ def _simple_yaml(path: Path) -> dict[str, object]:
     return data
 
 
-def load_scenario(value: str) -> tuple[str, int | None, int | None, list[str]]:
-    """Return scenario description, overrides, and optional beats from a file."""
+def load_scenario(
+    value: str,
+) -> tuple[
+    str,
+    int | None,
+    int | None,
+    list[str],
+    list[str],
+    dict[str, object],
+    dict[str, object],
+]:
+    """Return scenario description and optional overrides from a file.
+
+    The returned tuple contains the scenario description, optional overrides for
+    ``steps`` and ``agents``, narrative beats, evaluation hook names, evaluation
+    target definitions, and success metric specifications. When ``value`` does
+    not reference a file the remaining items are empty defaults.
+    """
     path = Path(value)
     if path.is_file():
         try:  # Try full YAML parsing if PyYAML is available
@@ -91,16 +107,38 @@ def load_scenario(value: str) -> tuple[str, int | None, int | None, list[str]]:
             agents = content.get("agents")
             beats = content.get("beats")
             beat_list = [str(b) for b in beats] if isinstance(beats, list) else []
+            hook_values = content.get("evaluation_hooks")
+            if isinstance(hook_values, list):
+                evaluation_hooks = [str(h) for h in hook_values if h is not None]
+            elif hook_values is None:
+                evaluation_hooks = []
+            else:
+                evaluation_hooks = [str(hook_values)]
+            targets = content.get("evaluation_targets")
+            evaluation_targets = (
+                {str(key): value for key, value in targets.items()}
+                if isinstance(targets, dict)
+                else {}
+            )
+            success_defs = content.get("success_metrics")
+            success_metrics = (
+                {str(key): value for key, value in success_defs.items()}
+                if isinstance(success_defs, dict)
+                else {}
+            )
             return (
                 desc,
                 int(steps) if steps is not None else None,
                 int(agents) if agents is not None else None,
                 beat_list,
+                evaluation_hooks,
+                evaluation_targets,
+                success_metrics,
             )
         if isinstance(content, str):
-            return content, None, None, []
-        return str(content), None, None, []
-    return value, None, None, []
+            return content, None, None, [], [], {}, {}
+        return str(content), None, None, [], [], {}, {}
+    return value, None, None, [], [], {}, {}
 
 
 use_uvloop_if_available()
@@ -120,6 +158,9 @@ def create_simulation(
     steps: int = 10,
     scenario: str = DEFAULT_SCENARIO,
     beats: list[str] | None = None,
+    evaluation_hook_names: list[str] | None = None,
+    evaluation_targets: dict[str, object] | None = None,
+    success_metrics: dict[str, object] | None = None,
     use_discord: bool = False,
     use_vector_store: bool = False,
     vector_store_dir: str = "./chroma_db",
@@ -195,6 +236,9 @@ def create_simulation(
         beats=beats,
         discord_bot=discord_bot,
         seed=seed,
+        evaluation_hook_names=evaluation_hook_names,
+        evaluation_targets=evaluation_targets,
+        success_metrics=success_metrics,
     )
     if config.KNOWLEDGE_BOARD_BACKEND == "graph":
         sim.knowledge_board = GraphKnowledgeBoard()
@@ -313,7 +357,15 @@ def main() -> None:
     # Load optional plugins before argument parsing
     asyncio.run(load_plugins())
     args = parse_args()
-    desc, file_steps, file_agents, beats = load_scenario(args.scenario)
+    (
+        desc,
+        file_steps,
+        file_agents,
+        beats,
+        evaluation_hooks,
+        evaluation_targets,
+        success_metrics,
+    ) = load_scenario(args.scenario)
     if file_steps is not None:
         args.steps = file_steps
     if file_agents is not None:
@@ -384,6 +436,12 @@ def main() -> None:
             "semantic_user": args.semantic_user,
             "semantic_password": args.semantic_password,
         }
+        if evaluation_hooks:
+            sim_kwargs["evaluation_hook_names"] = evaluation_hooks
+        if evaluation_targets:
+            sim_kwargs["evaluation_targets"] = evaluation_targets
+        if success_metrics:
+            sim_kwargs["success_metrics"] = success_metrics
         if args.seed is not None:
             sim_kwargs["seed"] = args.seed
         sim = create_simulation(**sim_kwargs)

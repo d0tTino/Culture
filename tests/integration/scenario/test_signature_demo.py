@@ -10,7 +10,6 @@ from src.agents.graphs.basic_agent_types import AgentActionOutput
 from src.app import create_simulation, load_scenario
 from src.infra import event_log
 from src.infra import snapshot as snap
-from src.sim.simulation import Simulation
 from tests.utils.mock_llm import MockLLM
 
 
@@ -44,7 +43,15 @@ async def test_signature_demo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(snap, "load_snapshot", load_no_verify)
     monkeypatch.setattr(export_traces, "load_snapshot", load_no_verify)
 
-    scenario_desc, _, _, beats = load_scenario("scenarios/signature_demo.yaml")
+    (
+        scenario_desc,
+        _,
+        _,
+        beats,
+        hook_names,
+        evaluation_targets,
+        success_metrics,
+    ) = load_scenario("scenarios/signature_demo.yaml")
     beat_cycle = cycle(beats)
 
     def next_structured_output() -> AgentActionOutput:
@@ -76,9 +83,14 @@ async def test_signature_demo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
             scenario=scenario_desc,
             seed=42,
             beats=beats,
+            evaluation_hook_names=hook_names,
+            evaluation_targets=evaluation_targets,
+            success_metrics=success_metrics,
         )
         sim._beat_interval = max(1, sim.steps_to_run // len(beats))
-        sim.evaluation_hooks = [Simulation._collect_metrics]
+        assert sim.evaluation_hook_names == hook_names
+        assert sim.evaluation_targets == evaluation_targets
+        assert sim.success_metrics == success_metrics
         for _ in range(30):
             await sim.run_step()
 
