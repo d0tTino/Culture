@@ -116,3 +116,13 @@ summary to `results/signature_demo/`.
    ```
 
    Adjust `--replay-start` and `--replay-end` to slice the run if desired.
+
+   For an ad-hoc inspection without booting the full app CLI, use the replay
+   helper instead. The tool accepts an optional `--events` flag but will also
+   look for `event_log.jsonl` next to the snapshot bundle automatically:
+
+   ```bash
+   python -m tools.replay_cli demo_run/snapshots/snapshot_0.json --from 1 --to 50
+   python -m tools.replay_cli demo_run/snapshots/snapshot_0.json --from 51 --to 100 \
+       --events demo_run/event_log.jsonl
+   ```
