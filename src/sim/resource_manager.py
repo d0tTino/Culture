@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from src.infra import event_log
 from src.infra.metrics import record_du_budget
 
 
@@ -36,6 +37,17 @@ class ResourceManager:
         """Verify that the agent has at least ``amount`` DU available."""
         remaining = self._du_budgets.get(agent_id, 0.0)
         if amount > remaining:
+            try:
+                event_log.log_event(
+                    {
+                        "type": "du_budget_exceeded",
+                        "agent": agent_id,
+                        "required": float(amount),
+                        "remaining": float(remaining),
+                    }
+                )
+            except Exception:  # pragma: no cover - best effort
+                pass
             try:
                 from src.interfaces.discord_bot import notify_budget_exceeded
 
