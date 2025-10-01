@@ -56,6 +56,7 @@ async def test_snapshot_rng_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
     event_log._last_hash = None
     event_log._seed = None
+    event_log._seed_cache = {}
     seed = 1234
     random.seed(seed)
     event_log.set_seed(seed)
@@ -72,6 +73,7 @@ async def test_snapshot_rng_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     # Replay from snapshot_2 using the stored seed and event log
     event_log._last_hash = None
     event_log._seed = None
+    event_log._seed_cache = {}
     stored = event_log.get_seed(str(tmp_path / "events.jsonl")) or seed
     replay = Simulation.replay_from_snapshot(
         snap_path, start_step=3, end_step=3, seed=stored

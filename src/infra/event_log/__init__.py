@@ -28,7 +28,8 @@ _topic = os.getenv("REDPANDA_TOPIC", "culture.events")
 _producer: Any | None = None
 _last_hash: str | None = None
 _seed: int | None = None
-_header_written: bool = False
+_seed_cache: dict[Path, int] = {}
+_header_written: set[Path] = set()
 
 
 def set_seed(seed: int) -> None:
@@ -55,15 +56,21 @@ def get_log_header(path: str | Path | None = None) -> dict[str, Any]:
 
 def get_seed(path: str | Path | None = None) -> int | None:
     """Return the seed from the event log header if available."""
+
     global _seed
-    if _seed is not None:
-        return _seed
+    file = _log_file(path)
+    resolved = _resolved_path(file)
+    cached = _seed_cache.get(resolved)
+    if cached is not None:
+        return cached
+
     header = get_log_header(path)
     seed = header.get("seed") if isinstance(header, dict) else None
     if isinstance(seed, int):
+        _seed_cache[resolved] = seed
         _seed = seed
         return seed
-    return None
+    return _seed
 
 
 _consumer_conf = {
@@ -80,16 +87,44 @@ def _log_file(path: str | Path | None = None) -> Path:
     return Path(os.getenv("EVENT_LOG_PATH", "event_log.jsonl"))
 
 
+def _resolved_path(path: Path) -> Path:
+    """Return a stable cache key for ``path``."""
+
+    try:
+        return path.resolve()
+    except Exception:
+        return Path(os.path.abspath(path))
+
+
+def _get_or_create_seed(resolved: Path) -> int:
+    """Return the cached seed for ``resolved`` or generate a new one."""
+
+    global _seed
+    cached = _seed_cache.get(resolved)
+    if cached is not None:
+        return cached
+
+    if _seed is None:
+        try:
+            _seed = random.getstate()[1][0]
+        except Exception:  # pragma: no cover - fallback
+            _seed = 0
+
+    _seed_cache[resolved] = _seed
+    return _seed
+
+
 def _rehydrate_log_state(path: str | Path | None = None) -> None:
     """Populate cached state from the existing log file if available."""
 
     global _last_hash, _seed
     needs_hash = _last_hash is None
-    needs_seed = _seed is None
+    file = _log_file(path)
+    resolved = _resolved_path(file)
+    needs_seed = resolved not in _seed_cache
     if not needs_hash and not needs_seed:
         return
 
-    file = _log_file(path)
     if not file.exists():
         return
 
@@ -109,6 +144,7 @@ def _rehydrate_log_state(path: str | Path | None = None) -> None:
                 header_seed = header.get("seed")
                 if isinstance(header_seed, int):
                     _seed = header_seed
+                    _seed_cache[resolved] = header_seed
                     needs_seed = False
 
             last_event: dict[str, Any] | None = None
@@ -135,6 +171,7 @@ def _rehydrate_log_state(path: str | Path | None = None) -> None:
                 seed = last_event.get("seed")
                 if isinstance(seed, int):
                     _seed = seed
+                    _seed_cache[resolved] = seed
     except Exception:  # pragma: no cover - ignore
         pass
 
@@ -142,15 +179,13 @@ def _rehydrate_log_state(path: str | Path | None = None) -> None:
 def _ensure_header(path: str | Path | None = None) -> None:
     """Write the log header containing the simulation seed if missing."""
     global _header_written, _seed
-    if _header_written:
-        return
     file = _log_file(path)
-    if _seed is None:
-        try:
-            _seed = random.getstate()[1][0]
-        except Exception:  # pragma: no cover - fallback
-            _seed = 0
-    header = {"type": "header", "seed": _seed}
+    resolved = _resolved_path(file)
+    if resolved in _header_written:
+        return
+
+    seed_value = _get_or_create_seed(resolved)
+    header = {"type": "header", "seed": seed_value}
     try:  # pragma: no cover - best effort
         if file.exists():
             with file.open("r", encoding="utf-8") as fh:
@@ -162,16 +197,18 @@ def _ensure_header(path: str | Path | None = None) -> None:
             if existing.get("type") == "header" and "seed" in existing:
                 # Populate the cached seed from the existing header to ensure
                 # subsequent ``log_event`` calls embed the same seed value.
-                if _seed is None and isinstance(existing.get("seed"), int):
-                    _seed = existing["seed"]
-                _header_written = True
+                existing_seed = existing.get("seed")
+                if isinstance(existing_seed, int):
+                    _seed = existing_seed
+                    _seed_cache[resolved] = existing_seed
+                _header_written.add(resolved)
                 return
         file.parent.mkdir(parents=True, exist_ok=True)
         if not file.exists() or file.stat().st_size == 0:
             with file.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(header))
                 fh.write("\n")
-        _header_written = True
+        _header_written.add(resolved)
         if os.getenv("ENABLE_REDPANDA", "0") == "1":
             try:
                 producer = _get_producer()
@@ -305,6 +342,7 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
 
     global _last_hash
     path = _log_file()
+    resolved = _resolved_path(path)
     _rehydrate_log_state(path)
     _ensure_header(path)
 
@@ -320,14 +358,9 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
             event.pop("trace_hash", None)
         from src.infra.checkpoint import capture_rng_state
 
-        global _seed
-        if _seed is None:
-            try:
-                _seed = random.getstate()[1][0]
-            except Exception:  # pragma: no cover - fallback
-                _seed = 0
+        seed_value = _get_or_create_seed(resolved)
 
-        event = {**event, "rng_state": capture_rng_state(), "seed": _seed}
+        event = {**event, "rng_state": capture_rng_state(), "seed": seed_value}
         if "step" in event and "tick" not in event:
             event["tick"] = event["step"]
         if _last_hash is not None:

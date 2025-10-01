@@ -22,7 +22,9 @@ async def test_signature_demo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(event_log, "_get_producer", lambda: None)
     monkeypatch.setattr(event_log, "_producer", None, raising=False)
     monkeypatch.setattr(event_log, "_last_hash", None, raising=False)
-    monkeypatch.setattr(event_log, "_header_written", False, raising=False)
+    monkeypatch.setattr(event_log, "_seed", None, raising=False)
+    monkeypatch.setattr(event_log, "_seed_cache", {}, raising=False)
+    monkeypatch.setattr(event_log, "_header_written", set(), raising=False)
     event_log.set_seed(42)
     monkeypatch.setattr("src.sim.simulation.upload_snapshot", lambda *a, **k: None)
 

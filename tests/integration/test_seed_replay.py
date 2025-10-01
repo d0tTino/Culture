@@ -26,6 +26,7 @@ async def test_seed_replay(monkeypatch: pytest.MonkeyPatch) -> None:
             np.random.seed(1234)
         event_log._last_hash = None
         event_log._seed = None
+        event_log._seed_cache = {}
         events: list[dict[str, Any]] = []
         real_log_event = event_log.log_event
 
