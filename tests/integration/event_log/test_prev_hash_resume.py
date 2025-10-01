@@ -26,7 +26,8 @@ def test_prev_hash_resume(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, enabl
     monkeypatch.setenv("EVENT_LOG_PATH", str(log_file))
     monkeypatch.setattr(event_log, "_last_hash", None, raising=False)
     monkeypatch.setattr(event_log, "_seed", None, raising=False)
-    monkeypatch.setattr(event_log, "_header_written", False, raising=False)
+    monkeypatch.setattr(event_log, "_seed_cache", {}, raising=False)
+    monkeypatch.setattr(event_log, "_header_written", set(), raising=False)
     monkeypatch.setattr(event_log, "_producer", None, raising=False)
     monkeypatch.setitem(
         sys.modules,
@@ -47,7 +48,8 @@ def test_prev_hash_resume(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, enabl
     # Simulate a fresh process where module globals are unset.
     event_log._last_hash = None
     event_log._seed = None
-    event_log._header_written = False
+    event_log._seed_cache = {}
+    event_log._header_written = set()
     event_log._producer = None
 
     resumed = event_log.log_event({"type": "test", "step": 2, "payload": "resumed"})

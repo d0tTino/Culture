@@ -40,7 +40,8 @@ def test_log_misbehavior_and_fetch(monkeypatch, tmp_path):
     monkeypatch.setenv("EVENT_LOG_PATH", str(log_file))
     monkeypatch.setattr("src.infra.event_log._last_hash", None, raising=False)
     monkeypatch.setattr("src.infra.event_log._seed", None, raising=False)
-    monkeypatch.setattr("src.infra.event_log._header_written", False, raising=False)
+    monkeypatch.setattr("src.infra.event_log._seed_cache", {}, raising=False)
+    monkeypatch.setattr("src.infra.event_log._header_written", set(), raising=False)
     monkeypatch.setitem(
         sys.modules,
         "src.infra.checkpoint",

@@ -98,7 +98,9 @@ async def test_run_signature_demo(
     monkeypatch.setattr(event_log_module, "_get_producer", lambda: None)
     monkeypatch.setattr(event_log_module, "_producer", None, raising=False)
     monkeypatch.setattr(event_log_module, "_last_hash", None, raising=False)
-    monkeypatch.setattr(event_log_module, "_header_written", False, raising=False)
+    monkeypatch.setattr(event_log_module, "_seed", None, raising=False)
+    monkeypatch.setattr(event_log_module, "_seed_cache", {}, raising=False)
+    monkeypatch.setattr(event_log_module, "_header_written", set(), raising=False)
     event_log_module.set_seed(42)
 
     # Build deterministic agent outputs tied to the scenario beats.
