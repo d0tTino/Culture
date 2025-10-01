@@ -1373,6 +1373,7 @@ class Simulation:
         start_step: int | None = None,
         end_step: int | None = None,
         seed: int | None = None,
+        events_path: str | Path | None = None,
     ) -> Self:
         """Load a snapshot and replay events from the event log."""
         snap = load_snapshot(snapshot_path)
@@ -1383,7 +1384,9 @@ class Simulation:
         if start_step is not None:
             after_step = max(after_step, start_step - 1)
 
-        for event in event_log.stream_events(after_step=after_step):
+        for event in event_log.stream_events(
+            after_step=after_step, end_step=end_step, path=events_path
+        ):
             step = int(event.get("step", 0))
             if start_step is not None and step < start_step:
                 continue

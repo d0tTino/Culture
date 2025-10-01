@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from tools import replay_cli
@@ -7,8 +9,21 @@ from tools import replay_cli
 def test_replay_cli_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, object] = {}
 
-    def mock_replay(snapshot: str, start_step=None, end_step=None, seed=None):
-        called.update(snapshot=snapshot, start=start_step, end=end_step, seed=seed)
+    def mock_replay(
+        snapshot: Path,
+        *,
+        start_step=None,
+        end_step=None,
+        seed=None,
+        events_path=None,
+    ):
+        called.update(
+            snapshot=snapshot,
+            start=start_step,
+            end=end_step,
+            seed=seed,
+            events=events_path,
+        )
 
     monkeypatch.setattr(replay_cli.Simulation, "replay_from_snapshot", mock_replay)
 
@@ -16,10 +31,11 @@ def test_replay_cli_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
         replay_cli.main(["snap.json", "--from", "2", "--to", "4", "--seed", "99"]) == 0
     )
     assert called == {
-        "snapshot": "snap.json",
+        "snapshot": Path("snap.json"),
         "start": 2,
         "end": 4,
         "seed": 99,
+        "events": None,
     }
 
 
@@ -27,11 +43,19 @@ def test_replay_cli_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_replay_cli_tick_range_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, object] = {}
 
-    def mock_replay(snapshot: str, start_step=None, end_step=None, seed=None):
-        called.update(start=start_step, end=end_step)
+    def mock_replay(
+        snapshot: Path,
+        *,
+        start_step=None,
+        end_step=None,
+        seed=None,
+        events_path=None,
+    ):
+        called.update(start=start_step, end=end_step, events=events_path)
 
     monkeypatch.setattr(replay_cli.Simulation, "replay_from_snapshot", mock_replay)
 
     replay_cli.main(["snap.json", "--from-tick", "5", "--to-tick", "7"])
     assert called["start"] == 5
     assert called["end"] == 7
+    assert called["events"] is None
