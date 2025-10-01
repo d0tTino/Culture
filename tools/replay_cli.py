@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
+
 from src.infra import event_log
 from src.sim.simulation import Simulation
 
@@ -42,6 +43,7 @@ def _resolve_event_log(snapshot: Path, explicit: str | None) -> Path | None:
         return Path(explicit)
     for candidate in _candidate_event_logs(snapshot):
         if candidate.exists():
+
             return candidate
     return None
 
@@ -92,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         end_step=args.end,
         seed=seed,
         events_path=events_path,
+
     )
     return 0
 

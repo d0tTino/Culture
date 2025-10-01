@@ -23,6 +23,7 @@ def test_replay_cli_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
             end=end_step,
             seed=seed,
             events=events_path,
+
         )
 
     monkeypatch.setattr(replay_cli.Simulation, "replay_from_snapshot", mock_replay)
@@ -52,6 +53,7 @@ def test_replay_cli_tick_range_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
         events_path=None,
     ):
         called.update(start=start_step, end=end_step, events=events_path)
+
 
     monkeypatch.setattr(replay_cli.Simulation, "replay_from_snapshot", mock_replay)
 

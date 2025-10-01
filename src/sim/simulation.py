@@ -1374,6 +1374,7 @@ class Simulation:
         end_step: int | None = None,
         seed: int | None = None,
         events_path: str | Path | None = None,
+
     ) -> Self:
         """Load a snapshot and replay events from the event log."""
         snap = load_snapshot(snapshot_path)
@@ -1387,11 +1388,10 @@ class Simulation:
         for event in event_log.stream_events(
             after_step=after_step, end_step=end_step, path=events_path
         ):
+
             step = int(event.get("step", 0))
             if start_step is not None and step < start_step:
                 continue
-            if end_step is not None and step > end_step:
-                break
             sim.apply_event(event)
         return sim
 
