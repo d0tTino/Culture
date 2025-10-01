@@ -5,18 +5,45 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Iterable
+
 
 from src.infra import event_log
 from src.sim.simulation import Simulation
 
 
-def _discover_event_log(snapshot_path: str | Path) -> Path | None:
-    """Infer the event log location from the snapshot hierarchy."""
+def _candidate_event_logs(snapshot: Path) -> Iterable[Path]:
+    """Yield plausible event log paths relative to ``snapshot``."""
 
-    path = Path(snapshot_path)
-    for directory in path.parents:
-        candidate = directory / "event_log.jsonl"
-        if candidate.is_file():
+    directory = snapshot.parent
+    stem = snapshot.stem
+    if stem.endswith(".json"):
+        stem = stem[:-5]
+    candidates = [
+        directory / "events.jsonl",
+        directory / "event_log.jsonl",
+        directory / f"{stem}.events.jsonl",
+        directory / f"{stem}.event_log.jsonl",
+        snapshot.with_suffix(".jsonl"),
+    ]
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        yield candidate
+
+
+def _resolve_event_log(snapshot: Path, explicit: str | None) -> Path | None:
+    """Determine which event log file should be used for replay."""
+
+    if explicit:
+        return Path(explicit)
+    for candidate in _candidate_event_logs(snapshot):
+        if candidate.exists():
+
             return candidate
     return None
 
@@ -47,29 +74,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--events",
-        type=Path,
-        help="Path to the event log (auto-detected relative to the snapshot if omitted)",
+        help=(
+            "Path to the event log file. If omitted, a log located next to the "
+            "snapshot will be used when available."
+        ),
     )
     args = parser.parse_args(argv)
 
-    event_log_path: Path | None
-    if args.events is not None:
-        if not args.events.is_file():
-            parser.error(f"Event log not found: {args.events}")
-        event_log_path = args.events
-    else:
-        event_log_path = _discover_event_log(args.snapshot)
+    snapshot = Path(args.snapshot)
+    events_path = _resolve_event_log(snapshot, args.events)
 
     seed = args.seed
     if seed is None:
-        seed = event_log.get_seed(path=event_log_path)
+        seed = event_log.get_seed(events_path)
 
     Simulation.replay_from_snapshot(
-        args.snapshot,
+        snapshot,
         start_step=args.start,
         end_step=args.end,
         seed=seed,
-        event_log_path=event_log_path,
+        events_path=events_path,
+
     )
     return 0
 
