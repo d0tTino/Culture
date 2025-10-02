@@ -4,9 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
-
 
 from src.infra import event_log
 from src.sim.simulation import Simulation
@@ -16,7 +15,13 @@ def _candidate_event_logs(snapshot: Path) -> Iterable[Path]:
     """Yield plausible event log paths relative to ``snapshot``."""
 
     directory = snapshot.parent
-    stem = snapshot.stem
+
+    compression_suffixes = {".zst", ".gz", ".bz2", ".xz"}
+    uncompressed_snapshot = snapshot
+    while uncompressed_snapshot.suffix in compression_suffixes:
+        uncompressed_snapshot = uncompressed_snapshot.with_suffix("")
+
+    stem = uncompressed_snapshot.stem
     if stem.endswith(".json"):
         stem = stem[:-5]
     candidates = [
@@ -24,7 +29,7 @@ def _candidate_event_logs(snapshot: Path) -> Iterable[Path]:
         directory / "event_log.jsonl",
         directory / f"{stem}.events.jsonl",
         directory / f"{stem}.event_log.jsonl",
-        snapshot.with_suffix(".jsonl"),
+        uncompressed_snapshot.with_suffix(".jsonl"),
     ]
     seen: set[Path] = set()
     for candidate in candidates:
