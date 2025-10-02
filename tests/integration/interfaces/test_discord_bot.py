@@ -234,6 +234,7 @@ async def test_control_commands_require_admin_without_opa(
     await _assert_unauthorized(slash_spawn, "agent-1")
 
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_on_message_updates_agent_state(monkeypatch: pytest.MonkeyPatch) -> None:
