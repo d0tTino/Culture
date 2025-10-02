@@ -17,6 +17,21 @@ from src.infra import event_log
 from src.infra.snapshot import load_snapshot
 
 
+def _snapshot_step(path: Path) -> int:
+    """Return the snapshot step number extracted from ``path``."""
+
+    name = path.name
+    prefix = "snapshot_"
+    if not name.startswith(prefix):
+        raise ValueError(f"Unexpected snapshot filename: {name}")
+    step_part = name[len(prefix) :]
+    for suffix in (".json.zst", ".json"):
+        if step_part.endswith(suffix):
+            step_part = step_part[: -len(suffix)]
+            break
+    return int(step_part)
+
+
 def export_latest(
     directory: str | Path = "snapshots", output: str | Path = "data/traces.jsonl"
 ) -> Path:
@@ -27,14 +42,14 @@ def export_latest(
     """
 
     path = Path(directory)
-    files = sorted(path.glob("snapshot_*.json*"), key=lambda p: int(p.stem.split("_")[1]))
+    files = sorted(path.glob("snapshot_*.json*"), key=_snapshot_step)
     if not files:
         raise FileNotFoundError(f"No snapshots found in {directory}")
 
     out_path = Path(output)
     with out_path.open("w", encoding="utf-8") as out:
         for file in files:
-            step = int(file.stem.split("_")[1])
+            step = _snapshot_step(file)
             compress = file.suffix == ".zst"
             snap = load_snapshot(step, directory=directory, compress=compress)
             out.write(json.dumps(snap))
@@ -46,9 +61,9 @@ def export_latest(
 def iter_snapshots(directory: str | Path) -> Iterable[dict[str, Any]]:
     """Yield snapshots from ``directory`` in step order."""
     path = Path(directory)
-    files = sorted(path.glob("snapshot_*.json*"), key=lambda p: int(p.stem.split("_")[1]))
+    files = sorted(path.glob("snapshot_*.json*"), key=_snapshot_step)
     for file in files:
-        step = int(file.stem.split("_")[1])
+        step = _snapshot_step(file)
         compress = file.suffix == ".zst"
         yield load_snapshot(step, directory=directory, compress=compress)
 

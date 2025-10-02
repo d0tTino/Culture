@@ -70,6 +70,31 @@ def test_export_latest(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_export_latest_mixed_suffixes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "snapshot_1.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "snapshot_2.json.zst").write_text("", encoding="utf-8")
+    (tmp_path / "snapshot_10.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "snapshot_3.json.zst").write_text("", encoding="utf-8")
+
+    calls: list[tuple[int, bool]] = []
+
+    def fake_load_snapshot(step: int, *, directory: Path | str, compress: bool) -> dict[str, int]:
+        calls.append((step, compress))
+        return {"step": step}
+
+    monkeypatch.setattr(et, "load_snapshot", fake_load_snapshot)
+
+    out = tmp_path / "out.jsonl"
+    et.export_latest(directory=tmp_path, output=out)
+
+    lines = out.read_text().splitlines()
+    assert [json.loads(line)["step"] for line in lines] == [1, 2, 3, 10]
+    assert calls == [(1, False), (2, True), (3, True), (10, False)]
+
+
+@pytest.mark.unit
 def test_export_traces_no_snapshots(tmp_path: Path) -> None:
     out = tmp_path / "out.jsonl"
     ret = et.main(["--snapshots", str(tmp_path), "-o", str(out)])
