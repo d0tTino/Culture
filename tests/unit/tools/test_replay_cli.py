@@ -61,3 +61,15 @@ def test_replay_cli_tick_range_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
     assert called["start"] == 5
     assert called["end"] == 7
     assert called["events"] is None
+
+
+@pytest.mark.unit
+def test_resolve_event_log_handles_compressed_snapshot(tmp_path: Path) -> None:
+    snapshot = tmp_path / "sim.json.zst"
+    snapshot.touch()
+    expected = tmp_path / "sim.jsonl"
+    expected.touch()
+
+    resolved = replay_cli._resolve_event_log(snapshot, explicit=None)
+
+    assert resolved == expected
