@@ -114,6 +114,7 @@ class ConfigSettings(BaseSettings):
     DISCORD_BOT_TOKEN: str = ""
     DISCORD_CHANNEL_ID: int | None = None
     DISCORD_TOKENS_DB_URL: str = ""
+    DISCORD_ALLOW_OPA_CONTROL_COMMANDS: bool = False
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     DEFAULT_LOG_LEVEL: str = "INFO"

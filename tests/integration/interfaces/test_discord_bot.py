@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import typing
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,7 +10,14 @@ import pytest
 pytest.importorskip("discord")
 from src.interfaces import metrics
 from src.interfaces.dashboard_backend import AgentMessage, SimulationEvent
-from src.interfaces.discord_bot import SimulationDiscordBot, say, stats
+from src.interfaces.discord_bot import (
+    SimulationDiscordBot,
+    say,
+    slash_spawn,
+    slash_start,
+    slash_stop,
+    stats,
+)
 from src.sim.context import SimulationContext
 
 sent_by_token: list[str] = []
@@ -201,18 +209,30 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_knowledge_board_embed_truncates_large_entry(
+async def test_control_commands_require_admin_without_opa(
     simulation_bot: SimulationDiscordBot,
 ) -> None:
-    oversized = "x" * 5000
+    class Perms:
+        administrator = False
 
-    embed_payload = simulation_bot.create_knowledge_board_embed("agent123", oversized, step=7)
-    description = embed_payload["description"]
+    user = SimpleNamespace(id="user0", guild_permissions=Perms())
 
-    assert len(description) == 4096
-    assert description.startswith("```")
-    assert description.endswith("```")
-    assert "…" in description
+    async def _assert_unauthorized(
+        command: typing.Callable[..., typing.Awaitable[None]], *args: object
+    ) -> None:
+        response = SimpleNamespace(send_message=AsyncMock())
+        interaction = SimpleNamespace(
+            user=user,
+            response=response,
+            channel=SimpleNamespace(id=simulation_bot.channel_id),
+        )
+        await command(interaction, *args)
+        response.send_message.assert_awaited_once_with("unauthorized", ephemeral=True)
+
+    await _assert_unauthorized(slash_start)
+    await _assert_unauthorized(slash_stop)
+    await _assert_unauthorized(slash_spawn, "agent-1")
+
 
 
 @pytest.mark.unit

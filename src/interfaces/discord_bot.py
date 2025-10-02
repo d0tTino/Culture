@@ -403,6 +403,15 @@ class SimulationDiscordBot:
                         chan = getattr(interaction, "channel", None)
                         chan_id = getattr(chan, "id", None)
                         agent_id = self.channel_to_agent.get(chan_id)
+                        if not await _has_control_command_permission(
+                            getattr(interaction, "user", None),
+                            "start",
+                            agent_id=agent_id,
+                        ):
+                            await interaction.response.send_message(
+                                "unauthorized", ephemeral=True
+                            )
+                            return
                         try:
                             await start_simulation(self.context)
                         except Exception as exc:
@@ -431,6 +440,15 @@ class SimulationDiscordBot:
                         chan = getattr(interaction, "channel", None)
                         chan_id = getattr(chan, "id", None)
                         agent_id = self.channel_to_agent.get(chan_id)
+                        if not await _has_control_command_permission(
+                            getattr(interaction, "user", None),
+                            "stop",
+                            agent_id=agent_id,
+                        ):
+                            await interaction.response.send_message(
+                                "unauthorized", ephemeral=True
+                            )
+                            return
                         try:
                             await stop_simulation(self.context)
                         except Exception as exc:
@@ -457,6 +475,15 @@ class SimulationDiscordBot:
                 @moderation_rate_limit("spawn")
                 async def _tree_spawn(interaction: "discord.Interaction", agent_id: str) -> None:
                     with command_span("spawn", interaction, agent_id=agent_id) as span:
+                        if not await _has_control_command_permission(
+                            getattr(interaction, "user", None),
+                            "spawn",
+                            agent_id=agent_id,
+                        ):
+                            await interaction.response.send_message(
+                                "unauthorized", ephemeral=True
+                            )
+                            return
                         try:
                             await spawn_agent_command(agent_id, self.context)
                         except Exception as exc:
@@ -1120,6 +1147,50 @@ def has_admin_permission(user: Any) -> bool:
     return bool(perms)
 
 
+_TRUE_BOOL_VALUES = {"1", "true", "yes", "on"}
+_FALSE_BOOL_VALUES = {"0", "false", "no", "off"}
+
+
+def _coerce_to_bool(value: object) -> bool:
+    """Normalize truthy and falsy values retrieved from configuration."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _TRUE_BOOL_VALUES:
+            return True
+        if lowered in _FALSE_BOOL_VALUES:
+            return False
+    return bool(value)
+
+
+def _allow_control_via_opa() -> bool:
+    """Return True when control commands may defer authorization to OPA."""
+    value = config.CONFIG_OVERRIDES.get("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
+    if value is None:
+        value = config.get_config("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
+    return _coerce_to_bool(value)
+
+
+async def _has_control_command_permission(
+    user: Any, command: str, *, agent_id: str | None = None
+) -> bool:
+    """Return True when the user may execute privileged control commands."""
+
+    if has_admin_permission(user):
+        return True
+    if not _allow_control_via_opa():
+        return False
+    payload = {
+        "command": command,
+        "user_id": str(getattr(user, "id", "")),
+    }
+    if agent_id is not None:
+        payload["agent_id"] = agent_id
+    allowed, _ = await evaluate_with_opa(json.dumps(payload))
+    return bool(allowed)
+
+
 async def check_command_rate_limit(user: Any) -> bool:
     """Increment and check the rate limit for the given user."""
     user_id = str(getattr(user, "id", ""))
@@ -1327,6 +1398,13 @@ async def slash_start(interaction: Any) -> None:
         agent_id = None
         if bot_instance is not None:
             agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if not await _has_control_command_permission(
+            getattr(interaction, "user", None),
+            "start",
+            agent_id=agent_id,
+        ):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
         try:
             await start_simulation(ctx)
         except Exception as exc:
@@ -1369,6 +1447,13 @@ async def slash_stop(interaction: Any) -> None:
         agent_id = None
         if bot_instance is not None:
             agent_id = bot_instance.channel_to_agent.get(chan_id)
+        if not await _has_control_command_permission(
+            getattr(interaction, "user", None),
+            "stop",
+            agent_id=agent_id,
+        ):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
         try:
             await stop_simulation(ctx)
         except Exception as exc:
@@ -1406,6 +1491,13 @@ async def slash_spawn(interaction: Any, agent_id: str) -> None:
     with command_span("spawn", interaction, agent_id=agent_id) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        if not await _has_control_command_permission(
+            getattr(interaction, "user", None),
+            "spawn",
+            agent_id=agent_id,
+        ):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
         try:
             await spawn_agent_command(agent_id, ctx)
         except Exception as exc:
