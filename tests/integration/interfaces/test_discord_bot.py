@@ -199,6 +199,22 @@ async def test_on_message_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
         await bot.stop_bot()
 
 
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_knowledge_board_embed_truncates_large_entry(
+    simulation_bot: SimulationDiscordBot,
+) -> None:
+    oversized = "x" * 5000
+
+    embed_payload = simulation_bot.create_knowledge_board_embed("agent123", oversized, step=7)
+    description = embed_payload["description"]
+
+    assert len(description) == 4096
+    assert description.startswith("```")
+    assert description.endswith("```")
+    assert "…" in description
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_on_message_updates_agent_state(monkeypatch: pytest.MonkeyPatch) -> None:

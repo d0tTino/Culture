@@ -141,6 +141,32 @@ def embed_from_payload(payload: dict[str, Any]) -> Any:
     return embed
 
 
+MAX_EMBED_DESCRIPTION_LENGTH = 4096
+
+
+def _truncate_for_code_block(content: str, max_length: int = MAX_EMBED_DESCRIPTION_LENGTH) -> str:
+    """Wrap ``content`` in a code block, truncating safely to ``max_length`` characters."""
+
+    prefix = "```"
+    suffix = "```"
+    # Reserve space for the code fence markers so that the block always closes.
+    available = max_length - len(prefix) - len(suffix)
+    if available <= 0:
+        # Fallback: return the maximum slice of repeated backticks to avoid empty output.
+        return (prefix + suffix)[:max_length]
+
+    if len(content) > available:
+        ellipsis = "…"
+        if available >= len(ellipsis):
+            truncated = content[: available - len(ellipsis)] + ellipsis
+        else:  # pragma: no cover - defensive for pathological limits
+            truncated = content[:available]
+    else:
+        truncated = content
+
+    return f"{prefix}{truncated}{suffix}"
+
+
 def board_payload_to_embed(payload: dict[str, Any]) -> dict[str, Any]:
     """Map a knowledge board payload to Discord embed fields."""
     agent_id = str(payload.get("agent_id", ""))
@@ -148,7 +174,7 @@ def board_payload_to_embed(payload: dict[str, Any]) -> dict[str, Any]:
     step = int(payload.get("step", 0))
     return {
         "title": f"📝 New Knowledge Board Entry (Step {step})",
-        "description": f"```{content}```",
+        "description": _truncate_for_code_block(content),
         "color": 0xFFD700,
         "author": {"name": f"Posted by Agent {agent_id[:8]}"},
     }
