@@ -105,6 +105,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "DISCORD_BOT_TOKEN": "",
     "DISCORD_CHANNEL_ID": None,
     "DISCORD_TOKENS_DB_URL": "",
+    "DISCORD_ALLOW_OPA_CONTROL_COMMANDS": False,
     "OPENAI_API_KEY": "",
     "ANTHROPIC_API_KEY": "",
     "DEFAULT_LOG_LEVEL": "INFO",
