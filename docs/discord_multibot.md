@@ -69,5 +69,7 @@ Administrators can moderate the simulation directly from Discord using the follo
 - `/mute <agent_id>` and `/unmute <agent_id>` – temporarily block or restore an agent's ability to post messages.
 - `/pause_all` – halt all agent turns until `/resume` is issued. Requires administrator permissions.
 - `/kill_agent <agent_id>` – permanently remove an agent from the simulation. Administrator only.
+- `/reset_memory <agent_id>` – clear the agent's stored memories when corrective action is needed. Administrator only.
+- `/penalty <agent_id> [ip] [du]` – deduct IP/DU from an agent to reflect moderation penalties. Administrator only.
 
 These tools allow moderators to quickly intervene when agents misbehave or when the simulation needs to be frozen for review.
