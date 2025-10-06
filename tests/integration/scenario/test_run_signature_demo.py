@@ -18,11 +18,26 @@ def _ensure_record_du_budget_stub() -> None:
         return
 
     def record_du_budget(agent_id: str, value: float) -> None:
-        metrics_module._agent_du_budget[agent_id] = float(value)
+        remaining = float(value)
+        metrics_module._agent_du_budget[agent_id] = remaining
         gauge = getattr(metrics_module.prom_metrics, "AGENT_REMAINING_DU", None)
         if hasattr(gauge, "labels"):
             try:
-                gauge.labels(agent_id=agent_id).set(float(value))
+                gauge.labels(agent_id=agent_id).set(remaining)
+            except Exception:
+                try:
+                    gauge.set(remaining)
+                except Exception:
+                    pass
+        else:
+            try:
+                gauge.set(remaining)
+            except Exception:
+                pass
+        hook = getattr(metrics_module.ledger, "record_du_budget", None)
+        if callable(hook):
+            try:
+                hook(agent_id, remaining)
             except Exception:
                 pass
 

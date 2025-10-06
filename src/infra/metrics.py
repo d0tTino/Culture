@@ -24,31 +24,6 @@ _LATENCY_SAMPLES_PER_AGENT: dict[str, deque[float]] = {}
 # Keep rolling windows for retrieval benchmark metrics
 _RETRIEVAL_LATENCY_SAMPLES: deque[float] = deque(maxlen=100)
 _RECALL_P5_SAMPLES: deque[float] = deque(maxlen=100)
-
-
-def record_du_budget(agent_id: str, value: float) -> None:
-    """Record the remaining DU budget for ``agent_id``."""
-
-    _agent_du_budget[agent_id] = float(value)
-
-    gauge = getattr(prom_metrics, "AGENT_REMAINING_DU", None)
-    if gauge is not None:
-        try:  # pragma: no cover - defensive update
-            if hasattr(gauge, "labels"):
-                gauge.labels(agent_id=agent_id).set(float(value))
-            else:
-                gauge.set(float(value))
-        except Exception:
-            pass
-
-    try:  # pragma: no cover - optional dependency
-        hook = getattr(ledger, "record_du_budget", None)
-        if callable(hook):
-            hook(agent_id, value)
-    except Exception:
-        pass
-
-
 def record_du_per_1k_tokens(agent_id: str, value: float) -> None:
     """Record DU cost per 1k tokens for the latest LLM call."""
     global _last_du_per_1k_tokens
@@ -148,25 +123,34 @@ def record_du_budget(agent_id: str, remaining: float) -> None:
 
     remaining = float(remaining)
     _agent_du_budget[agent_id] = remaining
+
     gauge = getattr(prom_metrics, "AGENT_REMAINING_DU", None)
     if gauge is not None:
+        updated = False
         if hasattr(gauge, "labels"):
             try:
-                gauge.labels(agent_id=agent_id).set(remaining)
+                child = gauge.labels(agent_id=agent_id)
             except Exception:
-                try:
-                    gauge.set(remaining)
-                except Exception:
-                    pass
-        else:
+                child = None
+            else:
+                if hasattr(child, "set"):
+                    try:
+                        child.set(remaining)
+                        updated = True
+                    except Exception:
+                        pass
+        if not updated and hasattr(gauge, "set"):
             try:
                 gauge.set(remaining)
             except Exception:
                 pass
-    try:  # pragma: no cover - optional dependency
-        ledger.record_du_budget(agent_id, remaining)
-    except Exception:
-        pass
+
+    hook = getattr(ledger, "record_du_budget", None)
+    if callable(hook):
+        try:  # pragma: no cover - optional dependency
+            hook(agent_id, remaining)
+        except Exception:
+            pass
 
 
 def record_llm_latency(agent_id: str, latency_ms: float) -> None:
