@@ -1,4 +1,5 @@
 import random
+from collections import deque
 from types import SimpleNamespace
 
 import pytest
@@ -33,6 +34,7 @@ def make_agent_state() -> SimpleNamespace:
         du=0.0,
         role_embedding=ROLE_EMBEDDINGS.role_vectors[roles.ROLE_INNOVATOR],
         role_reputation={},
+        post_turn_memory_policy={"write": True},
     )
 
 
@@ -138,3 +140,88 @@ def test_compile_agent_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     compiled = "compiled"
     monkeypatch.setattr(bag, "build_graph", lambda: compiled)
     assert bag.compile_agent_graph() == compiled
+
+
+class DummyMemoryService:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def store_post_turn_memory(
+        self,
+        agent_id: str,
+        step: int,
+        event_type: str,
+        content: str,
+        *,
+        write: bool,
+        memory_type: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> str:
+        self.calls.append(
+            {
+                "agent_id": agent_id,
+                "step": step,
+                "event_type": event_type,
+                "content": content,
+                "write": write,
+                "memory_type": memory_type,
+                "metadata": metadata,
+            }
+        )
+        return "stored" if write else ""
+
+
+class DummySummary:
+    def __init__(self, summary: str) -> None:
+        self.summary = summary
+
+
+class DummyL1Generator:
+    def __init__(self, summary_text: str = "summary") -> None:
+        self._summary_text = summary_text
+
+    def generate_summary(self, *args: object, **kwargs: object) -> DummySummary:
+        return DummySummary(self._summary_text)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("policy_config,expected", [(True, True), (False, False), ({"write": False}, False)])
+def test_update_state_node_respects_post_turn_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    policy_config: object,
+    expected: bool,
+) -> None:
+    agent_state = make_agent_state()
+    agent_state.short_term_memory = deque(
+        [
+            {"content": "m1"},
+            {"content": "m2"},
+            {"content": "m3"},
+        ]
+    )
+    agent_state.llm_client = object()
+    agent_state.mood_value = 0.0
+
+    if isinstance(policy_config, bool):
+        agent_state.should_write_post_turn_memory = lambda **_: policy_config
+    else:
+        agent_state.post_turn_memory_policy = policy_config
+
+    controller = DummyController(agent_state)
+    monkeypatch.setattr(bag, "AgentController", lambda s: controller)
+    monkeypatch.setattr(bag, "L1SummaryGenerator", lambda: DummyL1Generator("generated"))
+
+    service = DummyMemoryService()
+
+    state = {
+        "agent_id": "agent_1",
+        "simulation_step": 4,
+        "structured_output": SimpleNamespace(action_intent="idle", requested_role_change=None),
+        "state": agent_state,
+        "memory_service": service,
+    }
+
+    bag.update_state_node(state)
+
+    assert service.calls, "Memory service should be invoked for summaries"
+    assert service.calls[0]["write"] is expected
