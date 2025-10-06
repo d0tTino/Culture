@@ -1,10 +1,10 @@
-import pytest
-
 from collections import deque
 from types import SimpleNamespace
 
-from src.infra import metrics as infra_metrics
+import pytest
+
 import src.sim.resource_manager as resource_manager_mod
+from src.infra import metrics as infra_metrics
 
 
 class GaugeChildStub:
@@ -24,6 +24,49 @@ class GaugeStub:
         if key not in self._metrics:
             self._metrics[key] = GaugeChildStub(0.0)
         return self._metrics[key]
+
+
+@pytest.mark.unit
+def test_record_du_budget_updates_backends_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    child_calls: list[float] = []
+
+    class GaugeWithLabels:
+        def __init__(self) -> None:
+            self.label_calls: list[dict[str, str]] = []
+            self.set_calls: list[float] = []
+
+        def labels(self, **labels: str):
+            self.label_calls.append(labels)
+
+            class Child:
+                def set(self_inner, value: float) -> None:
+                    child_calls.append(value)
+
+            return Child()
+
+        def set(self, value: float) -> None:
+            self.set_calls.append(value)
+
+    gauge = GaugeWithLabels()
+    ledger_calls: list[tuple[str, float]] = []
+
+    def ledger_hook(agent_id: str, remaining: float) -> None:
+        ledger_calls.append((agent_id, remaining))
+
+    monkeypatch.setattr(infra_metrics, "_agent_du_budget", {}, raising=False)
+    monkeypatch.setattr(infra_metrics.prom_metrics, "AGENT_REMAINING_DU", gauge, raising=False)
+    monkeypatch.setattr(
+        infra_metrics,
+        "ledger",
+        SimpleNamespace(record_du_budget=ledger_hook),
+    )
+
+    infra_metrics.record_du_budget("agent-42", 12.5)
+
+    assert infra_metrics._agent_du_budget["agent-42"] == pytest.approx(12.5)
+    assert child_calls == [12.5]
+    assert gauge.set_calls == []
+    assert ledger_calls == [("agent-42", 12.5)]
 
 
 @pytest.mark.unit

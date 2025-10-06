@@ -1,12 +1,7 @@
-import hashlib
-import json
-import sys
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
-from src.interfaces.dashboard_backend import board_payload_to_embed  # noqa: E402
+from src.interfaces.dashboard_backend import board_payload_to_embed
 
 
 @pytest.mark.unit

@@ -6,9 +6,9 @@ import logging
 import random
 import threading
 import time
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import numpy as np
 from opentelemetry import trace
