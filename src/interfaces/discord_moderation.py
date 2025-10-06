@@ -49,38 +49,48 @@ def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callabl
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(interaction: Any, *args: Any, **kwargs: Any) -> Any:
-            agent_id: str | None = None
+            agent_id_value: str | None = None
             if args:
-                agent_id = args[0]
-            elif "agent_id" in kwargs:
-                agent_id = str(kwargs.get("agent_id"))
-            bot_instance = get_active_bot()
-            ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-            if not await _rate_limit(getattr(interaction, "user", None), action, agent_id):
-                await ctx.get_event_queue().put(
-                    SimulationEvent(
-                        type="moderation",
-                        data={"command": action, "agent_id": agent_id, "violation": True},
+                agent_id_value = str(args[0])
+            elif "agent_id" in kwargs and kwargs.get("agent_id") is not None:
+                agent_id_value = str(kwargs.get("agent_id"))
+
+            with discord_bot.command_span(action, interaction, agent_id=agent_id_value):
+                bot_instance = get_active_bot()
+                ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+                if not await _rate_limit(
+                    getattr(interaction, "user", None), action, agent_id_value
+                ):
+                    await ctx.get_event_queue().put(
+                        SimulationEvent(
+                            type="moderation",
+                            data={
+                                "command": action,
+                                "agent_id": agent_id_value,
+                                "violation": True,
+                            },
+                        )
                     )
-                )
-                await ctx.get_event_queue().put(
-                    SimulationEvent(
-                        type="moderation",
-                        data={
-                            "command": "penalty",
-                            "agent_id": agent_id,
-                            "ip": _IP_PENALTY,
-                            "du": _DU_PENALTY,
-                        },
+                    await ctx.get_event_queue().put(
+                        SimulationEvent(
+                            type="moderation",
+                            data={
+                                "command": "penalty",
+                                "agent_id": agent_id_value,
+                                "ip": _IP_PENALTY,
+                                "du": _DU_PENALTY,
+                            },
+                        )
                     )
-                )
-                try:  # pragma: no cover - best effort
-                    log_penalty(agent_id, _IP_PENALTY, _DU_PENALTY, "rate_limit_violation")
-                except Exception:
-                    pass
-                await interaction.response.send_message("rate limited", ephemeral=True)
-                return None
-            return await func(interaction, *args, **kwargs)
+                    try:  # pragma: no cover - best effort
+                        log_penalty(
+                            agent_id_value, _IP_PENALTY, _DU_PENALTY, "rate_limit_violation"
+                        )
+                    except Exception:
+                        pass
+                    await interaction.response.send_message("rate limited", ephemeral=True)
+                    return None
+                return await func(interaction, *args, **kwargs)
 
         return wrapper
 
