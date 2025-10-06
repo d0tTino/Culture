@@ -165,7 +165,9 @@ behavior:
   capture memory lookup paths and latency.
 - `llm.request` and `llm.du_burn` record LLM API calls and digital unit charges.
 - `discord.command` and `discord.send_message` trace Discord command handlers
-  and outbound messages.
+  and outbound messages. Moderation slash commands (mute, unmute, penalty,
+  reset_memory) now emit their own `discord.command` spans so approvals and
+  rate-limit violations are easy to inspect in tracing tools.
 
 To view traces locally, run a collector such as
 [Jaeger](https://www.jaegertracing.io/) and set:
