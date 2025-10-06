@@ -4,6 +4,7 @@ import asyncio
 import copy
 import logging
 import random
+import statistics
 import threading
 import time
 from collections.abc import Awaitable, Mapping, Sequence
@@ -995,15 +996,63 @@ class Simulation:
                 except Exception:  # pragma: no cover - defensive
                     logger.exception("Evaluation hook failed")
             metrics["beat"] = self.beats[self._beat_index]
-            self.metrics.append({"step": self.current_step, **metrics})
-            eval_event = log_event({"type": "evaluation", "step": self.current_step, **metrics})
+            metrics_entry: dict[str, Any] = {"step": self.current_step, **metrics}
+            self.metrics.append(metrics_entry)
+
+            target_summary = self._summarize_evaluation_targets()
+            target_status: str | None = None
+            target_alerts: list[str] = []
+            if target_summary:
+                target_status = self._aggregate_target_status(target_summary)
+                target_alerts = self._collect_target_alerts(target_summary)
+                metrics_entry["_target_summary"] = copy.deepcopy(target_summary)
+                if target_status is not None:
+                    metrics_entry["_target_status"] = target_status
+                if target_alerts:
+                    metrics_entry["_target_alerts"] = target_alerts
+
+            event_payload: dict[str, Any] = {
+                "type": "evaluation",
+                "step": self.current_step,
+                **metrics,
+            }
+            if target_summary:
+                event_payload["_target_summary"] = target_summary
+                if target_status is not None:
+                    event_payload["_target_status"] = target_status
+                if target_alerts:
+                    event_payload["_target_alerts"] = target_alerts
+
+            eval_event = log_event(event_payload)
             if eval_event is None:
                 eval_event = {
                     "type": "evaluation",
                     "step": self.current_step,
                     **metrics,
                 }
+                if target_summary:
+                    eval_event["_target_summary"] = target_summary
+                    if target_status is not None:
+                        eval_event["_target_status"] = target_status
+                    if target_alerts:
+                        eval_event["_target_alerts"] = target_alerts
                 eval_event["trace_hash"] = compute_trace_hash(eval_event)
+            elif target_summary:
+                # Ensure downstream consumers receive the summary even if the
+                # event log implementation returned a cached payload.
+                eval_event.setdefault("_target_summary", target_summary)
+                if target_status is not None:
+                    eval_event.setdefault("_target_status", target_status)
+                if target_alerts:
+                    eval_event.setdefault("_target_alerts", target_alerts)
+
+            if target_status == "fail":
+                logger.warning(
+                    "Evaluation targets violated at step %s: %s",
+                    self.current_step,
+                    target_alerts or target_summary,
+                )
+
             await emit_event(SimulationEvent(type="evaluation", data=eval_event))
             self._beat_index += 1
 
@@ -1153,6 +1202,170 @@ class Simulation:
             "collective_ip": self.collective_ip,
             "collective_du": self.collective_du,
         }
+
+    def _summarize_evaluation_targets(self: Self) -> dict[str, dict[str, object]]:
+        """Aggregate collected metrics and compare them to ``evaluation_targets``."""
+
+        summary: dict[str, dict[str, object]] = {}
+        if not self.evaluation_targets:
+            return summary
+
+        history: dict[str, list[float]] = {}
+        for record in self.metrics:
+            for key, value in record.items():
+                if not isinstance(key, str):
+                    continue
+                if key.startswith("_") or key in {"step", "beat"}:
+                    continue
+                if isinstance(value, (int, float)):
+                    history.setdefault(key, []).append(float(value))
+
+        for metric, target in self.evaluation_targets.items():
+            if not isinstance(metric, str) or not isinstance(target, Mapping):
+                continue
+
+            values = history.get(metric, [])
+            if not values:
+                summary[metric] = {
+                    "status": "missing",
+                    "reason": "No samples recorded for this metric.",
+                }
+                continue
+
+            checks: dict[str, dict[str, object]] = {}
+            status: str = "pass"
+            for field, raw_threshold in target.items():
+                field_name = str(field)
+                if not isinstance(raw_threshold, (int, float)):
+                    checks[field_name] = {
+                        "threshold": raw_threshold,
+                        "passed": None,
+                        "reason": "Non-numeric threshold is not evaluated.",
+                    }
+                    if status == "pass":
+                        status = "unknown"
+                    continue
+
+                threshold = float(raw_threshold)
+                observed: float
+                passed: bool
+                reason: str | None = None
+
+                if field_name in {"max_count", "max_value"}:
+                    observed = max(values)
+                    passed = observed <= threshold
+                    if not passed:
+                        reason = f"observed {observed:.3f} exceeds max {threshold:.3f}"
+                elif field_name == "min_value":
+                    observed = min(values)
+                    passed = observed >= threshold
+                    if not passed:
+                        reason = f"observed {observed:.3f} below min {threshold:.3f}"
+                elif field_name == "max_delta":
+                    deltas = [abs(curr - prev) for prev, curr in zip(values[:-1], values[1:])]
+                    observed = max(deltas) if deltas else 0.0
+                    passed = observed <= threshold
+                    if not passed:
+                        reason = f"largest delta {observed:.3f} exceeds max {threshold:.3f}"
+                elif field_name == "max_variance":
+                    observed = statistics.pvariance(values) if len(values) > 1 else 0.0
+                    passed = observed <= threshold
+                    if not passed:
+                        reason = f"variance {observed:.3f} exceeds max {threshold:.3f}"
+                else:
+                    checks[field_name] = {
+                        "threshold": threshold,
+                        "passed": None,
+                        "reason": "Unsupported target field.",
+                    }
+                    if status == "pass":
+                        status = "unknown"
+                    continue
+
+                checks[field_name] = {
+                    "threshold": threshold,
+                    "observed": observed,
+                    "passed": passed,
+                }
+                if reason is not None:
+                    checks[field_name]["reason"] = reason
+                if not passed:
+                    status = "fail"
+
+            if not checks:
+                summary[metric] = {
+                    "status": "unknown",
+                    "reason": "No recognized target fields for evaluation.",
+                }
+                continue
+
+            summary[metric] = {"status": status, "checks": checks}
+
+        return summary
+
+    @staticmethod
+    def _aggregate_target_status(summary: Mapping[str, Mapping[str, object]]) -> str:
+        """Collapse per-metric statuses into a single aggregate label."""
+
+        priority = {"fail": 0, "missing": 1, "unknown": 2, "pass": 3}
+        overall = "pass"
+        best_score = priority[overall]
+        for details in summary.values():
+            status = str(details.get("status", "unknown")).lower()
+            score = priority.get(status, priority["unknown"])
+            if score < best_score:
+                best_score = score
+                overall = status
+            if score == 0:
+                break
+        return overall
+
+    @staticmethod
+    def _collect_target_alerts(summary: Mapping[str, Mapping[str, object]]) -> list[str]:
+        """Generate alert messages for any metric that did not pass."""
+
+        alerts: list[str] = []
+        for metric, details in summary.items():
+            status = str(details.get("status", "")).lower()
+            if status in {"", "pass"}:
+                continue
+
+            note: str | None = None
+            checks = details.get("checks")
+            if isinstance(checks, Mapping):
+                fragments: list[str] = []
+                for field, check in checks.items():
+                    if not isinstance(check, Mapping):
+                        continue
+                    passed = check.get("passed")
+                    if passed is False or status in {"missing", "unknown"}:
+                        reason = check.get("reason")
+                        if isinstance(reason, str) and reason:
+                            fragments.append(f"{field}: {reason}")
+                        else:
+                            observed = check.get("observed")
+                            threshold = check.get("threshold")
+                            parts: list[str] = []
+                            if isinstance(observed, (int, float)):
+                                parts.append(f"observed={observed:.3f}")
+                            if isinstance(threshold, (int, float)):
+                                parts.append(f"target={threshold:.3f}")
+                            if parts:
+                                fragments.append(f"{field}: {', '.join(parts)}")
+                if fragments:
+                    note = "; ".join(fragments)
+
+            if note is None:
+                reason = details.get("reason")
+                if isinstance(reason, str) and reason:
+                    note = reason
+
+            message = f"{metric} {status}"
+            if note:
+                message = f"{message} ({note})"
+            alerts.append(message)
+
+        return alerts
 
     def register_named_evaluation_hooks(self: Self, hook_names: Sequence[str]) -> None:
         """Register evaluation hooks by symbolic ``hook_names``.

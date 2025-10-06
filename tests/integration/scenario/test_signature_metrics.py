@@ -104,8 +104,33 @@ async def test_signature_metrics(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert all("collective_du" in m for m in metrics)
     assert all("collective_ip" in m for m in metrics)
 
+    summary_entries = [m for m in metrics if "_target_summary" in m]
+    assert summary_entries
+    final_metrics_entry = summary_entries[-1]
+    final_summary = final_metrics_entry.get("_target_summary")
+    assert final_summary
+    assert final_metrics_entry.get("_target_status") == "pass"
+    assert all(detail.get("status") == "pass" for detail in final_summary.values())
+
     log_lines = log_path.read_text().splitlines()
-    assert any('"type": "evaluation"' in line for line in log_lines)
+    evaluation_events: list[dict] = []
+    for line in log_lines:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("type") == "evaluation":
+            evaluation_events.append(payload)
+
+    assert evaluation_events
+    summary_events = [event for event in evaluation_events if "_target_summary" in event]
+    assert summary_events
+    final_event = summary_events[-1]
+    assert final_event.get("_target_status") == "pass"
+    assert not final_event.get("_target_alerts")
+    assert all(
+        detail.get("status") == "pass" for detail in final_event["_target_summary"].values()
+    )
 
     traces = tmp_path / "traces.jsonl"
     ret = export_traces.main(["--events", str(log_path), "-o", str(traces)])
