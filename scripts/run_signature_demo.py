@@ -8,7 +8,7 @@ import json
 import os
 import shutil
 import statistics
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -182,9 +182,49 @@ def _summarize_targets(
     return summary
 
 
+def _summarize_success_metrics(
+    success_metrics: Mapping[str, object] | None,
+) -> dict[str, object]:
+    if not success_metrics:
+        return {}
+
+    def _sanitize(value: object) -> object:
+        if isinstance(value, Mapping):
+            return {str(key): _sanitize(inner) for key, inner in value.items()}
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            return [_sanitize(item) for item in value]
+        return value
+
+    return {str(metric): _sanitize(details) for metric, details in success_metrics.items()}
+
+
+def _append_guidance_details(
+    lines: list[str],
+    details: object,
+    indent: str = "  ",
+) -> None:
+    if isinstance(details, Mapping):
+        for key, value in details.items():
+            if isinstance(value, Mapping):
+                lines.append(f"{indent}- {key}:")
+                _append_guidance_details(lines, value, indent + "  ")
+            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+                lines.append(f"{indent}- {key}:")
+                for item in value:
+                    _append_guidance_details(lines, item, indent + "  ")
+            else:
+                lines.append(f"{indent}- {key}: {value}")
+    elif isinstance(details, Sequence) and not isinstance(details, (str, bytes, bytearray)):
+        for item in details:
+            _append_guidance_details(lines, item, indent)
+    else:
+        lines.append(f"{indent}- {details}")
+
+
 def _write_readme(
     entries: Iterable[tuple[str, Path]],
     target_summary: dict[str, dict[str, object]] | None = None,
+    success_guidance: Mapping[str, object] | None = None,
 ) -> None:
     lines = [
         "# Signature Demo Results",
@@ -228,6 +268,12 @@ def _write_readme(
             if isinstance(reason, str):
                 lines.append(f"  - Note: {reason}")
 
+    if success_guidance:
+        lines.extend(["", "## Success Metrics Guidance", ""])
+        for metric, details in success_guidance.items():
+            lines.append(f"- **{metric}**")
+            _append_guidance_details(lines, details)
+
     README_PATH.parent.mkdir(parents=True, exist_ok=True)
     README_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -266,12 +312,13 @@ async def main() -> None:
 
     metrics_path = RESULT_DIR / "metrics.json"
     metrics = export_traces.load_metrics(event_log_path)
-    target_summary = _summarize_targets(
-        metrics, data.get("evaluation_targets") if isinstance(data, dict) else None
-    )
+    target_summary = _summarize_targets(metrics, evaluation_targets)
+    success_guidance = _summarize_success_metrics(success_metrics)
     metrics_output: dict[str, object] = {key: value for key, value in metrics.items()}
     if target_summary:
         metrics_output["_target_summary"] = target_summary
+    if success_guidance:
+        metrics_output["_success_metrics_guidance"] = success_guidance
     with metrics_path.open("w", encoding="utf-8") as fh:
         json.dump(metrics_output, fh, indent=2)
 
@@ -307,7 +354,7 @@ async def main() -> None:
     ]
     for plot_path in sorted(plot_paths):
         artifact_entries.append((f"Plot: {plot_path.stem}", plot_path))
-    _write_readme(artifact_entries, target_summary)
+    _write_readme(artifact_entries, target_summary, success_guidance)
 
     print(f"Event log: {event_log_path}")
     print(f"Metrics: {metrics_path}")

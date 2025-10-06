@@ -209,6 +209,18 @@ async def test_run_signature_demo(
         entry = target_summary[key]
         assert isinstance(entry, dict)
         assert "status" in entry
+    success_guidance = metrics.get("_success_metrics_guidance")
+    assert isinstance(success_guidance, dict)
+    assert success_guidance.get("coalition_count", {}).get("target_max") == success_metrics[
+        "coalition_count"
+    ]["target_max"]
+    sentiment_guidance = success_guidance.get("sentiment_curve")
+    assert isinstance(sentiment_guidance, dict)
+    expected_trend = sentiment_guidance.get("expected_trend")
+    assert isinstance(expected_trend, dict)
+    assert expected_trend.get("proposal") == success_metrics["sentiment_curve"]["expected_trend"][
+        "proposal"
+    ]
 
     replay_files = sorted(snapshots_dir.glob("replay_*.jsonl"))
     assert replay_files, "Replay slice not created"
@@ -234,3 +246,6 @@ async def test_run_signature_demo(
 
     readme_text = (result_dir / "README.md").read_text(encoding="utf-8")
     assert "Evaluation Target Summary" in readme_text
+    assert "Success Metrics Guidance" in readme_text
+    assert "coalition_count" in readme_text
+    assert "variance_tolerance" in readme_text
