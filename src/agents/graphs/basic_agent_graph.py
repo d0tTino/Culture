@@ -172,6 +172,52 @@ def _set_current_role(agent_state: AgentState, role: str) -> None:
         setattr(agent_state, "role", role)
 
 
+def _coerce_truthy(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"false", "0", "no", "off"}:
+            return False
+        if lowered in {"true", "1", "yes", "on"}:
+            return True
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default
+
+
+def _should_write_post_turn_memory(
+    agent_state: AgentState | Any,
+    *,
+    event_type: str,
+    memory_type: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> bool:
+    policy_fn = getattr(agent_state, "should_write_post_turn_memory", None)
+    if callable(policy_fn):
+        try:
+            result = policy_fn(
+                event_type=event_type,
+                memory_type=memory_type,
+                metadata=metadata,
+            )
+        except TypeError:
+            result = policy_fn(event_type, memory_type, metadata)
+        return _coerce_truthy(result)
+
+    policy = getattr(agent_state, "post_turn_memory_policy", None)
+    if isinstance(policy, dict):
+        if memory_type and memory_type in policy:
+            return _coerce_truthy(policy[memory_type])
+        if event_type in policy:
+            return _coerce_truthy(policy[event_type])
+        for key in ("write", "allow", "enabled"):
+            if key in policy:
+                return _coerce_truthy(policy[key])
+        return True
+    return _coerce_truthy(policy)
+
+
 def _embedding_similarity(vec1: list[float], vec2: list[float]) -> float:
     """Return cosine similarity between two vectors."""
     if not vec1 or not vec2:
@@ -304,14 +350,21 @@ def update_state_node(state: AgentTurnState) -> dict[str, Any]:
                     memory_summary,
                     {"step": sim_step, "type": "consolidated_summary"},
                 )
-                service = state.get("memory_service")
-                if service and hasattr(service, "add_memory"):
-                    cast(MemoryService, service).add_memory(
+                service = cast(MemoryService | None, state.get("memory_service"))
+                if service and hasattr(service, "store_post_turn_memory"):
+                    should_write = _should_write_post_turn_memory(
+                        agent_state_obj,
+                        event_type="consolidated_summary",
+                        memory_type="consolidated_summary",
+                        metadata={"step": sim_step},
+                    )
+                    service.store_post_turn_memory(
                         agent_id,
                         sim_step,
                         "consolidated_summary",
                         memory_summary,
-                        "consolidated_summary",
+                        write=should_write,
+                        memory_type="consolidated_summary",
                     )
                 logger.info(f"Agent {agent_id}: Generated L1 memory summary.")
         except Exception as e:

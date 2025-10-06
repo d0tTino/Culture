@@ -78,6 +78,22 @@ def _generate_default_genes() -> dict[str, float]:
     return {f"g{i}": random.random() for i in range(3)}
 
 
+def _coerce_policy_bool(value: Any, default: bool = True) -> bool:
+    """Best-effort coercion of policy values to boolean."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"false", "0", "no", "off"}:
+            return False
+        if lowered in {"true", "1", "yes", "on"}:
+            return True
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default
+
+
 class AgentActionIntent(str, Enum):
     IDLE = "idle"
     CONTINUE_COLLABORATION = "continue_collaboration"
@@ -172,6 +188,7 @@ class AgentStateData(BaseModel):
     memory_retriever_token_cap: int = Field(
         default_factory=lambda: int(str(get_config("MEMORY_RETRIEVER_TOKEN_LIMIT") or "1000"))
     )
+    post_turn_memory_policy: Any = Field(default_factory=lambda: {"write": True})
 
     def __init__(self, **data: Any) -> None:
         """Initialize and conditionally call ``model_post_init`` for Pydantic v1."""
@@ -344,6 +361,49 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             if isinstance(first_goal, dict) and "description" in first_goal:
                 return str(first_goal["description"])
         return "Contribute to the simulation as effectively as possible."
+
+    def should_write_post_turn_memory(
+        self: Self,
+        *,
+        event_type: str,
+        memory_type: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Return whether post-turn memories should be written to persistent storage."""
+
+        policy = getattr(self, "post_turn_memory_policy", None)
+        default = True
+
+        if callable(policy):
+            try:
+                result = policy(
+                    self,
+                    event_type=event_type,
+                    memory_type=memory_type,
+                    metadata=metadata,
+                )
+            except TypeError:
+                try:
+                    result = policy(
+                        event_type=event_type,
+                        memory_type=memory_type,
+                        metadata=metadata,
+                    )
+                except TypeError:
+                    result = policy(event_type, memory_type, metadata)
+            return _coerce_policy_bool(result, default)
+
+        if isinstance(policy, dict):
+            if memory_type and memory_type in policy:
+                return _coerce_policy_bool(policy[memory_type], default)
+            if event_type in policy:
+                return _coerce_policy_bool(policy[event_type], default)
+            for key in ("write", "allow", "enabled"):
+                if key in policy:
+                    return _coerce_policy_bool(policy[key], default)
+            return default
+
+        return _coerce_policy_bool(policy, default)
 
     # ------------------------------------------------------------------
     # Role embedding utilities

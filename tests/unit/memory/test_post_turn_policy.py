@@ -21,6 +21,12 @@ def test_post_turn_write_policy(chroma_test_dir: Path) -> None:
 
     mem_id = service.store_post_turn_memory("agent", 1, "thought", "hello", write=True)
     assert mem_id
+    stored = vector.collection.get(include=["ids", "documents"])
+    assert stored
+    assert stored.get("documents") == ["hello"]
 
     no_mem = service.store_post_turn_memory("agent", 2, "thought", "skip", write=False)
     assert no_mem == ""
+    stored_after = vector.collection.get(include=["ids", "documents"])
+    assert stored_after
+    assert stored_after.get("documents") == ["hello"]
