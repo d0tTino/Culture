@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -18,7 +19,16 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - fallback
     KafkaConsumer = KafkaProducer = Any
 
-from src.infra.snapshot import compute_trace_hash
+try:  # pragma: no cover - optional dependency in tests
+    from src.infra.snapshot import compute_trace_hash as _compute_trace_hash
+except ImportError:  # pragma: no cover - fallback when tests stub snapshot
+
+    def _compute_trace_hash(data: dict[str, Any]) -> str:
+        payload = json.dumps(data, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+
+compute_trace_hash = _compute_trace_hash
 
 tracer = trace.get_tracer(__name__)
 

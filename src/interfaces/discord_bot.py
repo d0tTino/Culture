@@ -13,6 +13,8 @@ import time
 import typing
 from collections.abc import Awaitable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 import httpx
@@ -24,15 +26,6 @@ from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
-from src.interfaces.dashboard_backend import (
-    DEFAULT_CONTEXT,
-    SNAPSHOT_DIR,
-    AgentMessage,
-    SimulationEvent,
-)
-from src.interfaces.dashboard_backend import (
-    message_sse_queue as dashboard_message_queue,
-)
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
 
@@ -54,6 +47,19 @@ else:  # pragma: no cover - runtime import with fallback
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
+
+_fallback_context = SimulationContext()
+DEFAULT_CONTEXT = cast(SimulationContext, getattr(db, "DEFAULT_CONTEXT", _fallback_context))
+
+_default_snapshot_dir = Path(__file__).resolve().parents[2] / "snapshots"
+SNAPSHOT_DIR = cast(Path, getattr(db, "SNAPSHOT_DIR", _default_snapshot_dir))
+
+AgentMessage = getattr(db, "AgentMessage", SimpleNamespace)
+SimulationEvent = getattr(db, "SimulationEvent", SimpleNamespace)
+
+dashboard_message_queue = getattr(db, "message_sse_queue", None)
+if dashboard_message_queue is None or not hasattr(dashboard_message_queue, "put_nowait"):
+    dashboard_message_queue = SimpleNamespace(put_nowait=lambda *a, **k: None)
 
 message_sse_queue = dashboard_message_queue
 
@@ -551,6 +557,58 @@ class SimulationDiscordBot:
                             )
                         )
                         await interaction.response.send_message("killed", ephemeral=True)
+
+                @tree.command(name="reset_memory")
+                @app_commands.describe(agent_id="ID of the agent to reset")
+                @moderation_rate_limit("reset_memory")
+                async def _tree_reset_memory(
+                    interaction: "discord.Interaction", agent_id: str
+                ) -> None:
+                    with command_span("reset_memory", interaction, agent_id=agent_id) as span:
+                        if not has_admin_permission(getattr(interaction, "user", None)):
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
+                            return
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="moderation",
+                                data={"command": "reset_memory", "agent_id": agent_id},
+                            )
+                        )
+                        await send_interaction_response(
+                            interaction, "memory reset", ephemeral=True
+                        )
+
+                @tree.command(name="penalty")
+                @app_commands.describe(
+                    agent_id="ID of the agent to penalize",
+                    ip="Influence points to deduct",
+                    du="Decision units to deduct",
+                )
+                @moderation_rate_limit("penalty")
+                async def _tree_penalty(
+                    interaction: "discord.Interaction",
+                    agent_id: str,
+                    ip: float = 0.0,
+                    du: float = 0.0,
+                ) -> None:
+                    with command_span("penalty", interaction, agent_id=agent_id) as span:
+                        if not has_admin_permission(getattr(interaction, "user", None)):
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
+                            return
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="moderation",
+                                data={
+                                    "command": "penalty",
+                                    "agent_id": agent_id,
+                                    "ip": ip,
+                                    "du": du,
+                                },
+                            )
+                        )
+                        await send_interaction_response(
+                            interaction, "penalty applied", ephemeral=True
+                        )
 
                 @tree.command(name="mute")
                 @app_commands.describe(agent_id="ID of the agent to mute")
