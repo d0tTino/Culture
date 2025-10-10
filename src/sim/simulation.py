@@ -450,6 +450,21 @@ class Simulation:
             self.pending_messages_for_next_round.extend(msgs)
             self.messages_to_perceive_this_round.extend(msgs)
 
+        log_event(
+            {
+                "type": "human_command",
+                "step": self.current_step,
+                "tick": self.current_step + 1,
+                "sender_id": "human",
+                "target_agent_id": target.agent_id,
+                "broadcast": broadcast,
+                "text": text,
+                "ip_cost": ip_cost,
+                "du_cost": du_cost,
+                "messages": [dict(msg) for msg in msgs],
+            }
+        )
+
         if self.discord_bot and self.discord_bot.last_channel_id is not None:
             chan = self.discord_bot.last_channel_id
             aid = target.agent_id
@@ -1520,6 +1535,80 @@ class Simulation:
                 self.collective_ip = float(event["ip"])
             if "du" in event:
                 self.collective_du = float(event["du"])
+        elif event.get("type") == "human_command":
+            step = event.get("step")
+            if isinstance(step, int) and step > self.current_step:
+                self.current_step = step
+            sender = str(event.get("sender_id", "human"))
+            default_step = int(step) if isinstance(step, int) else self.current_step
+            raw_messages = event.get("messages", [])
+            reconstructed: list[SimulationMessage] = []
+            if isinstance(raw_messages, list):
+                for msg in raw_messages:
+                    if not isinstance(msg, Mapping):
+                        continue
+                    msg_step = msg.get("step", default_step)
+                    try:
+                        msg_step_int = int(msg_step)
+                    except (TypeError, ValueError):
+                        msg_step_int = default_step
+                    reconstructed.append(
+                        cast(
+                            SimulationMessage,
+                            {
+                                "step": msg_step_int,
+                                "sender_id": str(msg.get("sender_id", sender)),
+                                "recipient_id": msg.get("recipient_id"),
+                                "content": str(msg.get("content", "")),
+                                "action_intent": msg.get(
+                                    "action_intent",
+                                    AgentActionIntent.SEND_DIRECT_MESSAGE.value,
+                                ),
+                                "sentiment_score": msg.get("sentiment_score"),
+                            },
+                        )
+                    )
+            if not reconstructed:
+                text = str(event.get("text", ""))
+                target = event.get("target_agent_id")
+                recipients: list[str | None]
+                if event.get("broadcast"):
+                    recipients = [agent.agent_id for agent in self.agents]
+                elif isinstance(target, str):
+                    recipients = [target]
+                else:
+                    recipients = [None]
+                reconstructed = [
+                    cast(
+                        SimulationMessage,
+                        {
+                            "step": default_step,
+                            "sender_id": sender,
+                            "recipient_id": recipient,
+                            "content": text,
+                            "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
+                            "sentiment_score": None,
+                        },
+                    )
+                    for recipient in recipients
+                ]
+            target_id = event.get("target_agent_id")
+            try:
+                ip_cost = float(event.get("ip_cost", 0.0))
+            except (TypeError, ValueError):
+                ip_cost = 0.0
+            try:
+                du_cost = float(event.get("du_cost", 0.0))
+            except (TypeError, ValueError):
+                du_cost = 0.0
+            if isinstance(target_id, str):
+                for agent in self.agents:
+                    if agent.agent_id == target_id:
+                        agent.state.ip -= ip_cost
+                        agent.state.du -= du_cost
+                        break
+            self.pending_messages_for_next_round.extend(reconstructed)
+            self.messages_to_perceive_this_round.extend(reconstructed)
         elif event.get("type") == "snapshot":
             step = event.get("step")
             if isinstance(step, int):

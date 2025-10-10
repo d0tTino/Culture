@@ -283,10 +283,14 @@ def _rehydrate_last_hash(path: Path) -> None:
         pass
 
 
+_STEP_EQ_ALLOWED_TYPES = {"human_command"}
+
+
 def _is_valid_event(event: dict[str, Any], last_step: int, last_hash: str | None) -> bool:
     """Check ``event`` ordering and integrity."""
     step = event.get("step", 0)
-    if step <= last_step:
+    event_type = event.get("type")
+    if step <= last_step and event_type not in _STEP_EQ_ALLOWED_TYPES:
         return False
     event_copy = {**event}
     trace_hash = event_copy.pop("trace_hash", None)
@@ -306,7 +310,8 @@ def _filter_events(
     valid: list[dict[str, Any]] = []
     for ev in events:
         if _is_valid_event(ev, last_step, last_hash):
-            last_step = ev.get("step", last_step)
+            if ev.get("type") not in _STEP_EQ_ALLOWED_TYPES:
+                last_step = ev.get("step", last_step)
             last_hash = ev.get("trace_hash")
             valid.append(ev)
     return valid
