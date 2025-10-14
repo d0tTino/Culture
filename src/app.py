@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -383,8 +384,14 @@ def main() -> None:
         log_suppressed=args.log_suppressed_warnings,
     )
 
+    events_path: Path | None = None
+    if args.replay:
+        events_path = event_log.resolve_replay_event_log(
+            Path(args.replay), os.getenv("EVENT_LOG_PATH")
+        )
+
     if args.seed is None and args.replay:
-        stored = event_log.get_seed()
+        stored = event_log.get_seed(events_path)
         if stored is not None:
             logging.info("Using seed %s from event log", stored)
             args.seed = stored
@@ -400,6 +407,8 @@ def main() -> None:
         }
         if args.seed is not None:
             replay_kwargs["seed"] = args.seed
+        if events_path is not None:
+            replay_kwargs["events_path"] = events_path
         Simulation.replay_from_snapshot(
             args.replay,
             **replay_kwargs,
@@ -408,7 +417,9 @@ def main() -> None:
             out_path = Path(args.export_dataset)
             with out_path.open("w", encoding="utf-8") as fh:
                 after = (args.replay_start or 0) - 1
-                for ev in event_log.stream_events(after_step=after, end_step=args.replay_end):
+                for ev in event_log.stream_events(
+                    after_step=after, end_step=args.replay_end, path=events_path
+                ):
                     step = int(ev.get("step", 0))
                     if args.replay_start is not None and step < args.replay_start:
                         continue

@@ -12,12 +12,14 @@ python -m src.app --seed 42
 
 ## Replaying from a snapshot
 
-To replay a previous run, pass the snapshot path to `--replay`. Optional `--replay-start` and `--replay-end` flags restrict which ticks from the event log are applied. Supplying the same `--seed` as the original run restores deterministic behaviour.
+To replay a previous run, pass the snapshot path to `--replay`. When `EVENT_LOG_PATH` is unset the application automatically looks for an `event_log.jsonl` (or similar) located next to the snapshot and uses it for replay. Optional `--replay-start` and `--replay-end` flags restrict which ticks from the event log are applied. Supplying the same `--seed` as the original run restores deterministic behaviour.
 
 ```bash
 python -m src.app --replay snapshots/snapshot_10.json --seed 42 \
     --replay-start 11 --replay-end 20
 ```
+
+If you need to point to a different log file, set `EVENT_LOG_PATH` before running `src.app` or pass `--events /path/to/log.jsonl` to `tools/replay_cli.py`.
 
 ## Slicing event logs
 

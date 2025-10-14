@@ -4,53 +4,13 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterable
 from pathlib import Path
 
 from src.infra import event_log
+from src.infra.event_log import (
+    resolve_replay_event_log as _resolve_event_log,
+)
 from src.sim.simulation import Simulation
-
-
-def _candidate_event_logs(snapshot: Path) -> Iterable[Path]:
-    """Yield plausible event log paths relative to ``snapshot``."""
-
-    directory = snapshot.parent
-
-    compression_suffixes = {".zst", ".gz", ".bz2", ".xz"}
-    uncompressed_snapshot = snapshot
-    while uncompressed_snapshot.suffix in compression_suffixes:
-        uncompressed_snapshot = uncompressed_snapshot.with_suffix("")
-
-    stem = uncompressed_snapshot.stem
-    if stem.endswith(".json"):
-        stem = stem[:-5]
-    candidates = [
-        directory / "events.jsonl",
-        directory / "event_log.jsonl",
-        directory / f"{stem}.events.jsonl",
-        directory / f"{stem}.event_log.jsonl",
-        uncompressed_snapshot.with_suffix(".jsonl"),
-    ]
-    seen: set[Path] = set()
-    for candidate in candidates:
-        if not candidate:
-            continue
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        yield candidate
-
-
-def _resolve_event_log(snapshot: Path, explicit: str | None) -> Path | None:
-    """Determine which event log file should be used for replay."""
-
-    if explicit:
-        return Path(explicit)
-    for candidate in _candidate_event_logs(snapshot):
-        if candidate.exists():
-
-            return candidate
-    return None
 
 
 def main(argv: list[str] | None = None) -> int:

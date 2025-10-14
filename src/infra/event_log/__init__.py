@@ -30,6 +30,50 @@ except ImportError:  # pragma: no cover - fallback when tests stub snapshot
 
 compute_trace_hash = _compute_trace_hash
 
+
+def candidate_event_logs_for_snapshot(snapshot: str | Path) -> Iterable[Path]:
+    """Yield plausible event log paths relative to ``snapshot``."""
+
+    snapshot_path = Path(snapshot)
+    directory = snapshot_path.parent
+
+    compression_suffixes = {".zst", ".gz", ".bz2", ".xz"}
+    uncompressed_snapshot = snapshot_path
+    while uncompressed_snapshot.suffix in compression_suffixes:
+        uncompressed_snapshot = uncompressed_snapshot.with_suffix("")
+
+    stem = uncompressed_snapshot.stem
+    if stem.endswith(".json"):
+        stem = stem[:-5]
+    candidates = [
+        directory / "events.jsonl",
+        directory / "event_log.jsonl",
+        directory / f"{stem}.events.jsonl",
+        directory / f"{stem}.event_log.jsonl",
+        uncompressed_snapshot.with_suffix(".jsonl"),
+    ]
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        yield candidate
+
+
+def resolve_replay_event_log(
+    snapshot: str | Path, explicit: str | Path | None = None
+) -> Path | None:
+    """Determine which event log file should be used for replay."""
+
+    if explicit:
+        return Path(explicit)
+    for candidate in candidate_event_logs_for_snapshot(snapshot):
+        if candidate.exists():
+            return candidate
+    return None
+
 tracer = trace.get_tracer(__name__)
 
 _broker = os.getenv("REDPANDA_BROKER", "localhost:9092")
