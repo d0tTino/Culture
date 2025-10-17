@@ -9,6 +9,7 @@ import tiktoken
 from opentelemetry import trace
 from typing_extensions import Self
 
+from src.infra import metrics as infra_metrics
 from src.interfaces import metrics
 
 from .semantic_memory_manager import SemanticMemoryManager
@@ -124,9 +125,15 @@ class MultiLayerRetriever:
                 metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
                 raise
             finally:
-                span.set_attribute(
-                    "memory.latency_ms", (time.perf_counter() - start_total) * 1000
-                )
+                latency_ms = (time.perf_counter() - start_total) * 1000
+                span.set_attribute("memory.latency_ms", latency_ms)
+                infra_metrics.record_retrieval_latency(latency_ms)
+                record_recall = getattr(infra_metrics, "record_recall_p5", None)
+                if callable(record_recall):
+                    try:
+                        record_recall(latency_ms)
+                    except Exception:  # pragma: no cover - defensive
+                        pass
 
     async def retrieve_and_update_semantic(
         self: Self, agent_id: str, query: str = "", k: int = 5
@@ -170,9 +177,15 @@ class MultiLayerRetriever:
                 metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
                 raise
             finally:
-                span.set_attribute(
-                    "memory.latency_ms", (time.perf_counter() - start_total) * 1000
-                )
+                latency_ms = (time.perf_counter() - start_total) * 1000
+                span.set_attribute("memory.latency_ms", latency_ms)
+                infra_metrics.record_retrieval_latency(latency_ms)
+                record_recall = getattr(infra_metrics, "record_recall_p5", None)
+                if callable(record_recall):
+                    try:
+                        record_recall(latency_ms)
+                    except Exception:  # pragma: no cover - defensive
+                        pass
 
     def get_recent_semantic_summaries(self: Self, agent_id: str, limit: int = 3) -> list[str]:
         if not self.semantic_manager:

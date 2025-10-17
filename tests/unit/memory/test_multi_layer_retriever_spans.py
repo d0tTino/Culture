@@ -56,3 +56,34 @@ async def test_retrieve_tracing(monkeypatch):
         if span.name != "memory.retrieve":
             assert span.attributes["llm.tokens.prompt"] == 0
             assert span.attributes["llm.tokens.completion"] == 0
+
+
+@pytest.mark.asyncio
+async def test_retrieve_records_latency_metric(monkeypatch):
+    times = iter([1.0, 2.0, 3.0, 4.0])
+
+    def fake_perf_counter():
+        return next(times)
+
+    monkeypatch.setattr(
+        "src.agents.memory.multi_layer_retriever.time.perf_counter", fake_perf_counter
+    )
+
+    recorded = {}
+
+    def fake_record_latency(value):
+        recorded["latency"] = value
+
+    monkeypatch.setattr(
+        "src.infra.metrics.record_retrieval_latency", fake_record_latency
+    )
+
+    class DummyVectorStore:
+        async def aretrieve_relevant_memories(self, agent_id, query, k):
+            return [{"relevance_score": 0.5}]
+
+    retriever = MultiLayerRetriever(DummyVectorStore(), None)
+    result = await retriever.retrieve("agent", "query", 1)
+
+    assert result
+    assert recorded["latency"] == pytest.approx(3000.0)
