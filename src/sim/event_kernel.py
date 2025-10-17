@@ -6,6 +6,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from opentelemetry import trace
 from typing_extensions import Self
 
 from src.infra.event_log import log_event
@@ -19,6 +20,8 @@ from src.interfaces.dashboard_backend import (
 
 from .event_bus import get_event_bus
 from .version_vector import VersionVector
+
+tracer = trace.get_tracer(__name__)
 
 
 @dataclass(order=True)
@@ -214,7 +217,16 @@ class EventKernel:
                 continue
             self.current_step = event.step
             self.vector.merge(event.vector)
-            await event.callback()
+            queue_depth_before_callback = len(self._queue)
+            with tracer.start_as_current_span("event.kernel.dispatch") as span:
+                if span.is_recording():
+                    span.set_attribute("event.agent_id", event.agent_id or "")
+                    span.set_attribute("event.step", event.step)
+                    span.set_attribute("event.token_burn", event.tokens)
+                    span.set_attribute(
+                        "event.queue_depth_before_callback", queue_depth_before_callback
+                    )
+                await event.callback()
             executed.append(event)
         return executed
 
