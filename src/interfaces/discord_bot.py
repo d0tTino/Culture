@@ -264,9 +264,17 @@ def notify_budget_exceeded(agent_id: str, required: float, remaining: float) -> 
     bot_instance = get_active_bot()
     if bot_instance is not None:
         try:
-            asyncio.create_task(bot_instance.send_simulation_update(embed=embed))  # noqa: RUF006
-        except Exception:  # pragma: no cover - best effort
-            logger.exception("Failed to send budget exceeded embed")
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                asyncio.run(bot_instance.send_simulation_update(embed=embed))
+            except Exception:  # pragma: no cover - best effort
+                logger.exception("Failed to send budget exceeded embed")
+        else:
+            try:
+                loop.create_task(bot_instance.send_simulation_update(embed=embed))  # noqa: RUF006
+            except Exception:  # pragma: no cover - best effort
+                logger.exception("Failed to send budget exceeded embed")
 
 
 class SimulationDiscordBot:

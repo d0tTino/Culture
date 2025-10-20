@@ -193,6 +193,46 @@ def test_embed_creators(discord_module: object, monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.unit
+def test_notify_budget_exceeded_without_running_loop(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured_payloads: list[object] = []
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.embeds: list[dict[str, object] | None] = []
+
+        async def send_simulation_update(self, *, embed: dict[str, object] | None = None) -> None:
+            self.embeds.append(embed)
+
+    dummy_bot = DummyBot()
+
+    monkeypatch.setattr(discord_module, "message_sse_queue", SimpleNamespace(put_nowait=captured_payloads.append))
+    monkeypatch.setattr(discord_module, "get_active_bot", lambda: dummy_bot)
+    monkeypatch.setattr(
+        discord_module, "metrics", SimpleNamespace(get_llm_latency_p95=lambda: 42.0)
+    )
+    monkeypatch.setattr(
+        discord_module.ledger, "get_balance", lambda agent_id: (1.0, 2.0), raising=False
+    )
+
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        discord_module.notify_budget_exceeded("agent-123", required=10.0, remaining=-1.0)
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
+
+    assert captured_payloads, "SSE queue should receive at least one payload"
+    payload = captured_payloads[0]
+    assert getattr(payload, "agent_id", None) == "agent-123"
+    assert getattr(payload, "extra", {}).get("required") == 10.0
+    assert getattr(payload, "extra", {}).get("remaining") == -1.0
+    assert dummy_bot.embeds, "Fallback path should dispatch embed synchronously"
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_forward_agent_messages_embed(
     discord_module: object, monkeypatch: pytest.MonkeyPatch
