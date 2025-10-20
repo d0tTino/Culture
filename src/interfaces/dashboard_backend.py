@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any, Callable, Final, cast
 
 from pydantic import BaseModel
 
+from opentelemetry import trace
+
 from src.governance.law_board import law_board
 from src.governance.service import governance
 from src.infra import event_log
@@ -26,6 +28,7 @@ from .widget_registry import WidgetRegistry
 SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "snapshots"
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 # JSON response body for semantic summary retrieval errors
 SEMANTIC_SUMMARIES_ERROR: Final[dict[str, str]] = {"error": "summary retrieval failed"}
@@ -969,21 +972,66 @@ except AttributeError:  # pragma: no cover - stub app may lack decorators
     pass
 
 
+def _coerce_tags(value: Any) -> list[str] | None:
+    """Normalize tag values into a list for span attributes."""
+
+    if value is None:
+        return None
+    if isinstance(value, (list, set, tuple)):
+        return [str(tag) for tag in value]
+    return [str(value)]
+
+
+async def _publish_with_span(
+    bus: Any,
+    event: SimulationEvent,
+    span_name: str,
+    breakpoint_tags: set[str],
+) -> None:
+    """Publish ``event`` on ``bus`` while recording tracing metadata."""
+
+    with tracer.start_as_current_span(span_name) as span:
+        span.set_attribute("event.type", event.type)
+
+        data = event.data or {}
+        step = data.get("step") if isinstance(data, dict) else None
+        if step is not None:
+            span.set_attribute("event.step", step)
+
+        tags_attr = None
+        if isinstance(data, dict):
+            tags_attr = _coerce_tags(data.get("tags"))
+        if tags_attr is not None:
+            span.set_attribute("event.tags", tags_attr)
+
+        span.set_attribute(
+            "event.breakpoint_tags", sorted(breakpoint_tags) if breakpoint_tags else []
+        )
+
+        await bus.publish(event)
+
+
 async def emit_event(event: SimulationEvent) -> None:
     """Emit a simulation event and check for breakpoints."""
     bus = get_event_bus()
-    await bus.publish(event)
     tags = set(event.data.get("tags", [])) if event.data else set()
-    if tags & BREAKPOINT_TAGS:
+    breakpoint_tags = tags & BREAKPOINT_TAGS
+
+    await _publish_with_span(bus, event, "dashboard.emit_event", breakpoint_tags)
+
+    if breakpoint_tags:
         DEFAULT_CONTEXT.sim_state["paused"] = True
-        await bus.publish(
+        await _publish_with_span(
+            bus,
             SimulationEvent(
                 type="breakpoint_hit",
                 data={
-                    "tags": list(tags & BREAKPOINT_TAGS),
+                    "tags": list(breakpoint_tags),
                     "step": event.data.get("step") if event.data else None,
                 },
-            )
+            ),
+            "dashboard.emit_event.breakpoint",
+            breakpoint_tags,
         )
 
 
