@@ -9,6 +9,7 @@ import pytest
 
 from src.infra import event_log
 from src.infra.snapshot import compute_trace_hash, save_snapshot
+from src.sim.knowledge_board import BoardEntry
 from src.sim.simulation import Simulation
 
 __all__ = [
@@ -69,7 +70,15 @@ class ReplayFixtureAgent:
         **_: object,
     ) -> dict:
         if not self._added and knowledge_board is not None:
-            knowledge_board.add_entry("fixture-entry", self.agent_id, simulation_step)
+            knowledge_board.add_entry(
+                BoardEntry(
+                    content_full="fixture-entry",
+                    entry_type="test",
+                    tags=["replay", "fixture"],
+                ),
+                self.agent_id,
+                simulation_step,
+            )
             self._added = True
         return {}
 

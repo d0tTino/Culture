@@ -6,6 +6,7 @@ import pytest
 
 from src.infra import config
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
+from src.sim.knowledge_board import BoardEntry
 from src.sim.simulation import Simulation
 
 
@@ -78,7 +79,7 @@ def test_graph_board_add_and_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
     board = GraphKnowledgeBoard()
     board.clear_board()
     assert board.get_state() == []
-    board.add_entry("idea", "agent", 1)
+    board.add_entry(BoardEntry(content_full="idea", entry_type="idea"), "agent", 1)
     assert board.get_state() == ["Step 1 (Agent: agent): idea"]
 
 
@@ -90,8 +91,8 @@ def test_graph_board_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("neo4j.GraphDatabase.driver", lambda *a, **k: dummy_driver)
     board = GraphKnowledgeBoard()
     board.clear_board()
-    board.add_entry("first", "A", 1)
-    board.add_entry("second", "B", 2)
+    board.add_entry(BoardEntry(content_full="first", entry_type="idea"), "A", 1)
+    board.add_entry(BoardEntry(content_full="second", entry_type="idea"), "B", 2)
     entries = board.get_full_entries()
     assert [e["content_full"] for e in entries] == ["first", "second"]
     board_dict = board.to_dict()

@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 
 
 class MockSpan:
@@ -40,7 +40,11 @@ def test_add_entry_tracing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.shared.telemetry.tracer", tracer)
 
     kb = KnowledgeBoard()
-    kb.add_entry("entry", agent_id="agent", step=1)
+    kb.add_entry(
+        BoardEntry(content_full="entry", entry_type="unit_test"),
+        agent_id="agent",
+        step=1,
+    )
 
     span = tracer.spans[0]
     assert span.name == "agent.knowledge_board.add_entry"
@@ -72,6 +76,9 @@ def test_get_recent_entries_for_prompt_tracing(
             "entry_id": "id",
             "step": 1,
             "agent_id": "agent",
+            "entry_type": "unit_test",
+            "tags": ["unit"],
+            "reference_metadata": None,
             "content_full": "entry",
             "content_display": "entry",
             "content_summary": "entry",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from typing import Any
 
 try:  # pragma: no cover - optional dependency
@@ -25,6 +24,7 @@ from typing_extensions import Self
 
 from src.infra import config
 from src.interfaces import metrics
+from src.sim.knowledge_board import BoardEntry, prepare_entry_payload
 
 logger = logging.getLogger(__name__)
 
@@ -111,25 +111,19 @@ class GraphKnowledgeBoard:
 
     def add_entry(
         self: Self,
-        entry: str,
+        entry: str | BoardEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
     ) -> bool:
-        entry_id = str(uuid.uuid4())
-        formatted_content = f"Step {step} (Agent: {agent_id}): {entry}"
-        props = {
-            "entry_id": entry_id,
-            "step": step,
-            "agent_id": agent_id,
-            "content_full": entry,
-            "content_display": formatted_content,
-            "content_summary": entry,
-        }
+        _, props = prepare_entry_payload(entry, agent_id, step)
         self._run("CREATE (e:KBEntry $props)", props=props)
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
         logger.info(
-            "GraphKnowledgeBoard: Added entry %s by %s at step %s", entry_id, agent_id, step
+            "GraphKnowledgeBoard: Added entry %s by %s at step %s",
+            props["entry_id"],
+            agent_id,
+            step,
         )
         return True
 
@@ -140,7 +134,16 @@ class GraphKnowledgeBoard:
         step: int,
         vector: dict[str, int] | None = None,
     ) -> bool:
-        return self.add_entry(f"Law proposed: {proposal}", agent_id, step, vector)
+        return self.add_entry(
+            BoardEntry(
+                content_full=f"Law proposed: {proposal}",
+                entry_type="proposal",
+                tags=["governance", "proposal"],
+            ),
+            agent_id,
+            step,
+            vector,
+        )
 
     def clear_board(self: Self) -> None:
         self._run("MATCH (e:KBEntry) DETACH DELETE e")

@@ -9,9 +9,8 @@ from collections.abc import AsyncGenerator, Awaitable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Final, cast
 
-from pydantic import BaseModel
-
 from opentelemetry import trace
+from pydantic import BaseModel
 
 from src.governance.law_board import law_board
 from src.governance.service import governance

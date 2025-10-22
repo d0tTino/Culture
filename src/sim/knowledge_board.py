@@ -1,10 +1,13 @@
-"""
-Defines the Knowledge Board class for maintaining shared knowledge among agents.
-"""
+"""Defines the Knowledge Board class for maintaining shared knowledge."""
+
+from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
+from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
@@ -19,6 +22,111 @@ from .version_vector import VersionVector
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+@dataclass(slots=True)
+class BoardEntry:
+    """Typed payload describing a knowledge board entry."""
+
+    content_full: str
+    entry_type: str
+    content_display: str | None = None
+    content_summary: str | None = None
+    tags: Iterable[str] | None = None
+    reference_metadata: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.content_full, str):
+            raise TypeError("content_full must be a string")
+        if not self.entry_type:
+            raise ValueError("entry_type must be provided")
+
+    def normalized_tags(self) -> list[str]:
+        """Return tags as a list preserving order without duplicates."""
+
+        if self.tags is None:
+            return []
+        seen: set[str] = set()
+        result: list[str] = []
+        for tag in self.tags:
+            if not isinstance(tag, str):
+                continue
+            if tag not in seen:
+                seen.add(tag)
+                result.append(tag)
+        return result
+
+
+_DEFAULT_ENTRY_TYPE = "note"
+
+__all__ = ["BoardEntry", "KnowledgeBoard", "prepare_entry_payload"]
+
+
+def prepare_entry_payload(
+    entry: str | BoardEntry, agent_id: str, step: int
+) -> tuple[str, dict[str, Any]]:
+    if isinstance(entry, BoardEntry):
+        payload = entry
+    else:
+        payload = BoardEntry(entry, entry_type=_DEFAULT_ENTRY_TYPE)
+
+    max_length = int(getattr(config, "MAX_KB_ENTRY_LENGTH", 2048))
+    content_full = payload.content_full[:max_length]
+    content_summary = (
+        payload.content_summary[:max_length]
+        if isinstance(payload.content_summary, str)
+        else content_full
+    )
+    explicit_display = (
+        payload.content_display[:max_length]
+        if isinstance(payload.content_display, str)
+        else None
+    )
+    display_content = explicit_display or (
+        f"Step {step} (Agent: {agent_id}): {content_full}"
+    )
+    tags = payload.normalized_tags()
+    reference_metadata = (
+        dict(payload.reference_metadata)
+        if isinstance(payload.reference_metadata, dict)
+        else None
+    )
+
+    if (
+        payload.entry_type == _DEFAULT_ENTRY_TYPE
+        and not tags
+        and reference_metadata is None
+        and payload.content_summary is None
+        and explicit_display is None
+    ):
+        seed = f"{agent_id}:{step}:{content_full}"
+    else:
+        seed_payload: dict[str, Any] = {
+            "agent_id": agent_id,
+            "step": step,
+            "entry_type": payload.entry_type,
+            "content_full": content_full,
+            "content_summary": content_summary,
+            "tags": tags,
+            "reference_metadata": reference_metadata,
+        }
+        if explicit_display is not None:
+            seed_payload["content_display"] = explicit_display
+        seed = json.dumps(seed_payload, sort_keys=True, default=str)
+
+    entry_id = str(uuid.uuid5(uuid.NAMESPACE_OID, seed))
+    entry_dict = {
+        "entry_id": entry_id,
+        "step": step,
+        "agent_id": agent_id,
+        "entry_type": payload.entry_type,
+        "tags": tags,
+        "reference_metadata": reference_metadata,
+        "content_full": content_full,
+        "content_display": display_content,
+        "content_summary": content_summary,
+    }
+    return entry_id, entry_dict
 
 
 class LoggingList(list[T], Generic[T]):
@@ -71,6 +179,7 @@ class KnowledgeBoard:
             f"KnowledgeBoard initialized. Instance ID: {id(self)}. Entries list ID: {id(self.entries)} type: {type(self.entries)}"
         )
         metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+
 
     def get_state(self: Self, max_entries: int = 10) -> list[str]:
         """
@@ -155,7 +264,7 @@ class KnowledgeBoard:
 
     def add_entry(
         self: Self,
-        entry: str,
+        entry: str | BoardEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
@@ -164,7 +273,7 @@ class KnowledgeBoard:
         Adds an entry to the knowledge board.
 
         Args:
-            entry (str): The knowledge entry to add to the board.
+            entry: The knowledge entry to add to the board.
             agent_id (str): ID of the agent proposing the entry.
             step (int): The simulation step when this entry was proposed.
 
@@ -173,20 +282,7 @@ class KnowledgeBoard:
         """
         try:
             with trace_agent_action("knowledge_board.add_entry", agent_id=agent_id, step=step):
-                entry_id = str(
-                    uuid.uuid5(uuid.NAMESPACE_OID, f"{agent_id}:{step}:{entry}")
-                )  # Deterministic ID for testing
-                formatted_content = (
-                    f"Step {step} (Agent: {agent_id}): {entry}"  # Keep this for display
-                )
-
-                new_entry_dict = {
-                    "entry_id": entry_id,
-                    "step": step,
-                    "agent_id": agent_id,  # Store original proposer ID
-                    "content_full": entry,  # Store raw entry
-                    "content_display": formatted_content,  # Store formatted entry for display
-                }
+                entry_id, new_entry_dict = prepare_entry_payload(entry, agent_id, step)
                 self.entries.append(new_entry_dict)  # Append first
                 if vector is not None:
                     self.vector.merge(VersionVector(vector))
@@ -232,7 +328,16 @@ class KnowledgeBoard:
         vector: dict[str, int] | None = None,
     ) -> bool:
         """Record a law proposal on the board."""
-        return self.add_entry(f"Law proposed: {proposal}", agent_id, step, vector)
+        return self.add_entry(
+            BoardEntry(
+                content_full=f"Law proposed: {proposal}",
+                entry_type="proposal",
+                tags=["governance", "proposal"],
+            ),
+            agent_id,
+            step,
+            vector,
+        )
 
     def clear_board(self: Self) -> None:
         """Clears all entries from the Knowledge Board."""

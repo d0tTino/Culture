@@ -6,6 +6,7 @@ import pytest
 
 from src.agents.dspy_programs.intent_selector import _StubLM
 from src.infra.dspy_ollama_integration import dspy
+from src.sim.knowledge_board import BoardEntry
 
 
 @pytest.mark.integration
@@ -36,6 +37,8 @@ def test_vertical_slice_simulation(monkeypatch: pytest.MonkeyPatch) -> None:
 
     dashboard_stub.AgentMessage = _AgentMessage
     dashboard_stub.message_sse_queue = asyncio.Queue()
+    dashboard_stub.DEFAULT_CONTEXT = types.SimpleNamespace()
+    dashboard_stub.SimulationEvent = types.SimpleNamespace
 
     monkeypatch.setitem(sys.modules, "src.agents.memory.vector_store", vector_store_stub)
     monkeypatch.setitem(
@@ -59,7 +62,7 @@ def test_vertical_slice_simulation(monkeypatch: pytest.MonkeyPatch) -> None:
         kb = state.get("knowledge_board")
         if kb is not None:
             kb.add_entry(
-                "stub entry",
+                BoardEntry(content_full="stub entry", entry_type="simulation_stub"),
                 agent_id=state["agent_id"],
                 step=state.get("simulation_step", 0),
             )

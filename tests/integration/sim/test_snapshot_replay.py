@@ -7,6 +7,7 @@ from typing import ClassVar
 import pytest
 
 from src.infra import event_log
+from src.sim.knowledge_board import BoardEntry
 from src.sim.simulation import Simulation
 
 
@@ -87,7 +88,15 @@ class MoveAgent:
         memory_service: object | None = None,
     ) -> dict[str, object]:
         if not self._added and knowledge_board is not None:
-            knowledge_board.add_entry("hello", self.agent_id, simulation_step)
+            knowledge_board.add_entry(
+                BoardEntry(
+                    content_full="hello",
+                    entry_type="agent_update",
+                    tags=["simulation", "movement"],
+                ),
+                self.agent_id,
+                simulation_step,
+            )
             self._added = True
         return {"map_action": {"action": "move", "dx": 1, "dy": 0}}
 
@@ -95,6 +104,7 @@ class MoveAgent:
 async def _run_simulation(tmp_path: Path) -> tuple[Simulation, Path]:
     agent = MoveAgent()
     sim = Simulation([agent])
+    sim.evaluation_hooks = []
 
     await sim.run_step()
 

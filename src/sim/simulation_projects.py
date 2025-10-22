@@ -5,6 +5,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from src.sim.knowledge_board import BoardEntry
+
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
     from .simulation import Simulation
 
@@ -61,7 +63,12 @@ def create_project(
         if project_description:
             project_info += f"\nDescription: {project_description}"
         sim.knowledge_board.add_entry(
-            project_info,
+            BoardEntry(
+                content_full=project_info,
+                entry_type="project_update",
+                tags=["project", "creation"],
+                reference_metadata={"project_id": project_id},
+            ),
             creator_agent_id,
             sim.current_step,
             sim.vector.to_dict(),
@@ -105,7 +112,12 @@ def join_project(sim: Simulation, project_id: str, agent_id: str) -> bool:
     if sim.knowledge_board:
         join_info = f"Agent {agent_id} joined Project: {project['name']} (ID: {project_id})"
         sim.knowledge_board.add_entry(
-            join_info,
+            BoardEntry(
+                content_full=join_info,
+                entry_type="project_update",
+                tags=["project", "membership"],
+                reference_metadata={"project_id": project_id},
+            ),
             agent_id,
             sim.current_step,
             sim.vector.to_dict(),
@@ -149,7 +161,12 @@ def leave_project(sim: Simulation, project_id: str, agent_id: str) -> bool:
     if sim.knowledge_board:
         leave_info = f"Agent {agent_id} left Project: {project['name']} (ID: {project_id})"
         sim.knowledge_board.add_entry(
-            leave_info,
+            BoardEntry(
+                content_full=leave_info,
+                entry_type="project_update",
+                tags=["project", "membership"],
+                reference_metadata={"project_id": project_id},
+            ),
             agent_id,
             sim.current_step,
             sim.vector.to_dict(),
