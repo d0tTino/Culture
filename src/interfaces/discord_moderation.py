@@ -2,6 +2,7 @@
 
 import time
 from functools import wraps
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
 from src.infra.ledger import log_penalty
@@ -15,6 +16,8 @@ if TYPE_CHECKING:  # pragma: no cover - type checking only
 bot = getattr(discord_bot, "bot")
 get_active_bot = discord_bot.get_active_bot
 has_admin_permission = discord_bot.has_admin_permission
+
+_APP_COMMANDS = getattr(discord_bot, "app_commands", SimpleNamespace(describe=lambda *a, **k: (lambda f: f)))
 
 _ACTION_COUNTS: dict[str, int] = {}
 _COOLDOWNS: dict[str, float] = {}
@@ -97,62 +100,124 @@ def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callabl
     return decorator
 
 
-@bot.tree.command(name="mute")
-@moderation_rate_limit("mute")
-async def slash_mute(interaction: Any, agent_id: str) -> None:
-    """Mute an agent in the simulation."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(type="moderation", data={"command": "mute", "agent_id": agent_id})
-    )
-    await interaction.response.send_message("muted", ephemeral=True)
+def _context_description(**kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Return an ``app_commands.describe`` decorator when available."""
+
+    describe = getattr(_APP_COMMANDS, "describe", None)
+    if describe is None:
+        def _noop(func: Callable[..., Any]) -> Callable[..., Any]:
+            return func
+
+        return _noop
+
+    return describe(**kwargs)
 
 
-@bot.tree.command(name="reset_memory")
-@moderation_rate_limit("reset_memory")
-async def slash_reset_memory(interaction: Any, agent_id: str) -> None:
-    """Reset the memory of an agent."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    if not has_admin_permission(getattr(interaction, "user", None)):
-        await interaction.response.send_message("unauthorized", ephemeral=True)
-        return
-    await ctx.get_event_queue().put(
-        SimulationEvent(type="moderation", data={"command": "reset_memory", "agent_id": agent_id})
-    )
-    await interaction.response.send_message("memory reset", ephemeral=True)
+def register_moderation_commands(
+    tree: Any,
+    *,
+    resolve_context: Callable[[], tuple[Any, Any]],
+) -> dict[str, Callable[..., Any]]:
+    """Register moderation commands on the provided command tree."""
 
+    commands: dict[str, Callable[..., Any]] = {}
 
-@bot.tree.command(name="penalty")
-@moderation_rate_limit("penalty")
-async def slash_penalty(interaction: Any, agent_id: str, ip: float = 0.0, du: float = 0.0) -> None:
-    """Apply an IP/DU penalty to an agent."""
-    bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(
-            type="moderation",
-            data={"command": "penalty", "agent_id": agent_id, "ip": ip, "du": du},
+    @tree.command(name="reset_memory")
+    @_context_description(agent_id="ID of the agent to reset")
+    @moderation_rate_limit("reset_memory")
+    async def slash_reset_memory(interaction: Any, agent_id: str) -> None:
+        ctx, event_queue = resolve_context()
+        if not has_admin_permission(getattr(interaction, "user", None)):
+            await interaction.response.send_message("unauthorized", ephemeral=True)
+            return
+        await event_queue.put(
+            SimulationEvent(type="moderation", data={"command": "reset_memory", "agent_id": agent_id})
         )
+        await discord_bot.send_interaction_response(interaction, "memory reset", ephemeral=True)
+
+    commands["reset_memory"] = slash_reset_memory
+
+    @tree.command(name="penalty")
+    @_context_description(
+        agent_id="ID of the agent to penalize",
+        ip="Influence points to deduct",
+        du="Decision units to deduct",
     )
-    try:  # pragma: no cover - best effort
-        log_penalty(agent_id, abs(ip), abs(du), "moderation_penalty")
-    except Exception:
-        pass
-    await interaction.response.send_message("penalty applied", ephemeral=True)
+    @moderation_rate_limit("penalty")
+    async def slash_penalty(
+        interaction: Any,
+        agent_id: str,
+        ip: float = 0.0,
+        du: float = 0.0,
+    ) -> None:
+        ctx, event_queue = resolve_context()
+        if not has_admin_permission(getattr(interaction, "user", None)):
+            await interaction.response.send_message("unauthorized", ephemeral=True)
+            return
+        await event_queue.put(
+            SimulationEvent(
+                type="moderation",
+                data={"command": "penalty", "agent_id": agent_id, "ip": ip, "du": du},
+            )
+        )
+        try:  # pragma: no cover - best effort
+            log_penalty(agent_id, abs(ip), abs(du), "moderation_penalty")
+        except Exception:
+            pass
+        await discord_bot.send_interaction_response(interaction, "penalty applied", ephemeral=True)
+
+    commands["penalty"] = slash_penalty
+
+    @tree.command(name="mute")
+    @_context_description(agent_id="ID of the agent to mute")
+    @moderation_rate_limit("mute")
+    async def slash_mute(interaction: Any, agent_id: str) -> None:
+        ctx, event_queue = resolve_context()
+        await event_queue.put(
+            SimulationEvent(type="moderation", data={"command": "mute", "agent_id": agent_id})
+        )
+        await discord_bot.send_interaction_response(interaction, "muted", ephemeral=True)
+
+    commands["mute"] = slash_mute
+
+    @tree.command(name="unmute")
+    @_context_description(agent_id="ID of the agent to unmute")
+    @moderation_rate_limit("unmute")
+    async def slash_unmute(interaction: Any, agent_id: str) -> None:
+        ctx, event_queue = resolve_context()
+        await event_queue.put(
+            SimulationEvent(type="moderation", data={"command": "unmute", "agent_id": agent_id})
+        )
+        await discord_bot.send_interaction_response(interaction, "unmuted", ephemeral=True)
+
+    commands["unmute"] = slash_unmute
+
+    return commands
 
 
-@bot.tree.command(name="unmute")
-@moderation_rate_limit("unmute")
-async def slash_unmute(interaction: Any, agent_id: str) -> None:
-    """Unmute an agent in the simulation."""
+def _global_context_resolver() -> tuple[Any, Any]:
     bot_instance = get_active_bot()
-    ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-    await ctx.get_event_queue().put(
-        SimulationEvent(type="moderation", data={"command": "unmute", "agent_id": agent_id})
-    )
-    await interaction.response.send_message("unmuted", ephemeral=True)
+    if bot_instance is not None:
+        return bot_instance.context, bot_instance.event_queue
+    ctx = DEFAULT_CONTEXT
+    return ctx, ctx.get_event_queue()
 
 
-__all__ = ["slash_mute", "slash_penalty", "slash_reset_memory", "slash_unmute"]
+_REGISTERED_COMMANDS = register_moderation_commands(
+    getattr(bot, "tree"), resolve_context=_global_context_resolver
+)
+
+slash_reset_memory = _REGISTERED_COMMANDS["reset_memory"]
+slash_penalty = _REGISTERED_COMMANDS["penalty"]
+slash_mute = _REGISTERED_COMMANDS["mute"]
+slash_unmute = _REGISTERED_COMMANDS["unmute"]
+
+
+__all__ = [
+    "moderation_rate_limit",
+    "register_moderation_commands",
+    "slash_mute",
+    "slash_penalty",
+    "slash_reset_memory",
+    "slash_unmute",
+]

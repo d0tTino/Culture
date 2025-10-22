@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import sys
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -127,13 +127,18 @@ def reload_module(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "src.sim.context", SimpleNamespace(SimulationContext=DummyContext))
     monkeypatch.setitem(sys.modules, "src.utils.policy", dummy_policy)
 
-    module = importlib.reload(importlib.import_module("src.interfaces.discord_bot"))
+    sys.modules.pop("src.interfaces.discord_moderation", None)
+    sys.modules.pop("src.interfaces.discord_bot", None)
+    module = importlib.import_module("src.interfaces.discord_bot")
     return module
 
 
 @pytest.fixture()
 def discord_module(monkeypatch: pytest.MonkeyPatch):
     module = reload_module(monkeypatch)
+    module.DEFAULT_CONTEXT.sim_state = {}
+    module.DEFAULT_CONTEXT._event_queue = asyncio.Queue()
+    module.DEFAULT_CONTEXT.message_queue = asyncio.Queue()
     yield module
     importlib.reload(module)
 
@@ -151,17 +156,18 @@ class DummyInteraction:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_command_tree_registers_moderation_commands(discord_module: object) -> None:
-    context = DummyContext()
+    context = discord_module.DEFAULT_CONTEXT
     bot = discord_module.SimulationDiscordBot("token", 123, context=context)
     tree = next(iter(bot.command_trees.values()))
-    assert "reset_memory" in tree.commands
-    assert "penalty" in tree.commands
+    for name in {"reset_memory", "penalty", "mute", "unmute"}:
+        assert name in tree.commands
+        assert hasattr(tree.commands[name], "__wrapped__")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_reset_memory_and_penalty_commands_require_admin(discord_module: object) -> None:
-    context = DummyContext()
+    context = discord_module.DEFAULT_CONTEXT
     bot = discord_module.SimulationDiscordBot("token", 123, context=context)
     tree = next(iter(bot.command_trees.values()))
 
@@ -201,3 +207,50 @@ async def test_reset_memory_and_penalty_commands_require_admin(discord_module: o
     authorized_penalty.response.send_message.assert_awaited_once_with(
         "penalty applied", ephemeral=True
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_mute_command_respects_rate_limiting(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    context = discord_module.DEFAULT_CONTEXT
+    bot = discord_module.SimulationDiscordBot("token", 123, context=context)
+    tree = next(iter(bot.command_trees.values()))
+    mute_cmd = tree.commands["mute"]
+    queue = context.get_event_queue()
+    assert queue is bot.event_queue
+    assert context.get_event_queue() is queue
+    queue_put = AsyncMock()
+    monkeypatch.setattr(queue, "put", queue_put)
+
+    moderation_module = importlib.import_module("src.interfaces.discord_moderation")
+    moderation_module._ACTION_COUNTS.clear()
+    moderation_module._COOLDOWNS.clear()
+    penalty_logger = Mock()
+    monkeypatch.setattr(moderation_module, "log_penalty", penalty_logger)
+
+    allowed = DummyInteraction(admin=False, user_id="user-mute-allowed")
+    await mute_cmd(allowed, "agent-allowed")
+    assert queue_put.await_count == 1
+    allowed_event = queue_put.await_args_list[0].args[0]
+    assert allowed_event.type == "moderation"
+    assert allowed_event.data == {"command": "mute", "agent_id": "agent-allowed"}
+    allowed.response.send_message.assert_awaited_once_with("muted", ephemeral=True)
+    queue_put.reset_mock()
+
+    assert discord_module.get_active_bot() is bot
+
+    rate_limited = DummyInteraction(admin=False, user_id="user-mute-rate")
+    monkeypatch.setattr(
+        moderation_module,
+        "evaluate_with_opa",
+        AsyncMock(return_value=(False, None)),
+    )
+    await mute_cmd(rate_limited, "agent-rate")
+    rate_limited.response.send_message.assert_awaited_once_with(
+        "rate limited", ephemeral=True
+    )
+    assert moderation_module._ACTION_COUNTS["user-mute-rate:mute"] == 1
+    assert queue_put.await_count == 0
+    penalty_logger.assert_called_once()
