@@ -805,6 +805,47 @@ async def api_memory_snapshot(step: int) -> Response:
     return resp
 
 
+@app.get("/api/agent_actions/explain_why")
+async def api_agent_action_explain_why(
+    after_step: int = 0, limit: int = 20
+) -> Response:
+    """Expose explain-why payloads for recent agent actions."""
+
+    def _load_events() -> list[dict[str, Any]]:
+        return event_log.fetch_events(after_step=after_step, event_type="agent_action")
+
+    events = await asyncio.to_thread(_load_events)
+    if limit > 0:
+        events = events[-limit:]
+
+    agent_events: list[dict[str, Any]] = []
+    for evt in events:
+        explain = evt.get("explain_why")
+        if not isinstance(explain, dict):
+            explain = {}
+        kb_entries = explain.get("knowledge_board_entries", [])
+        if not isinstance(kb_entries, list):
+            kb_entries = [kb_entries] if kb_entries else []
+        agent_events.append(
+            {
+                "agent_id": str(evt.get("agent_id", "")),
+                "step": int(evt.get("step", evt.get("tick", 0) or 0)),
+                "action_intent": evt.get("action_intent"),
+                "explain_why": {
+                    "memories": explain.get("memories", []),
+                    "knowledge_board_entries": [str(entry) for entry in kb_entries],
+                    "tool_calls": explain.get("tool_calls", []),
+                    "rag_summary": explain.get("rag_summary"),
+                },
+            }
+        )
+
+    resp = JSONResponse({"events": agent_events})
+    if not hasattr(resp, "status_code"):
+        resp.status_code = 200
+    return resp
+
+
 @app.get("/api/flagged_messages")
 async def api_flagged_messages(limit: int = 20) -> Response:
     """Return flagged messages with snapshot references."""

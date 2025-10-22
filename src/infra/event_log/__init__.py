@@ -7,7 +7,7 @@ import json
 import os
 import random
 import time
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,62 @@ except ImportError:  # pragma: no cover - fallback when tests stub snapshot
 
 
 compute_trace_hash = _compute_trace_hash
+
+
+_AGENT_ACTION_EXPLAIN_DEFAULT: dict[str, Any] = {
+    "memories": [],
+    "knowledge_board_entries": [],
+    "tool_calls": [],
+    "rag_summary": None,
+}
+
+def _jsonify(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): _jsonify(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonify(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _ensure_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return [_jsonify(item) for item in value]
+    if isinstance(value, (tuple, set)):
+        return [_jsonify(item) for item in value]
+    if value is None:
+        return []
+    return [_jsonify(value)]
+
+
+def _sanitize_agent_action(event: dict[str, Any]) -> dict[str, Any]:
+    raw_explain = event.get("explain_why")
+    sanitized = dict(_AGENT_ACTION_EXPLAIN_DEFAULT)
+
+    if isinstance(raw_explain, Mapping):
+        if "memories" in raw_explain:
+            sanitized["memories"] = _ensure_list(raw_explain.get("memories"))
+        if "knowledge_board_entries" in raw_explain:
+            sanitized["knowledge_board_entries"] = [
+                str(item) for item in _ensure_list(raw_explain.get("knowledge_board_entries"))
+            ]
+        if "tool_calls" in raw_explain:
+            sanitized["tool_calls"] = _ensure_list(raw_explain.get("tool_calls"))
+        if "rag_summary" in raw_explain:
+            summary = raw_explain.get("rag_summary")
+            if summary is None or isinstance(summary, str):
+                sanitized["rag_summary"] = summary
+            else:
+                sanitized["rag_summary"] = str(summary)
+
+    return {**event, "explain_why": sanitized}
+
+
+def _sanitize_event_payload(event: dict[str, Any]) -> dict[str, Any]:
+    if event.get("type") == "agent_action":
+        return _sanitize_agent_action(event)
+    return event
 
 
 def candidate_event_logs_for_snapshot(snapshot: str | Path) -> Iterable[Path]:
@@ -404,6 +460,8 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
     resolved = _resolved_path(path)
     _rehydrate_log_state(path)
     _ensure_header(path)
+
+    event = _sanitize_event_payload(event)
 
     with tracer.start_as_current_span("event_log.log_event") as span:
         span.set_attribute("event.type", event.get("type"))

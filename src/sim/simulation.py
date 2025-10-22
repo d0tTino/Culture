@@ -793,6 +793,22 @@ class Simulation:
         action_intent_str = agent_output.get("action_intent", "idle")
         map_action = agent_output.get("map_action")
 
+        explain_why_payload = (
+            {**agent_output.get("explain_why", {})}
+            if isinstance(agent_output.get("explain_why"), dict)
+            else {}
+        )
+        kb_excerpt = perception_data.get("knowledge_board_content", [])
+        if not isinstance(kb_excerpt, list):
+            kb_excerpt = [kb_excerpt] if kb_excerpt else []
+        explain_why_payload.setdefault(
+            "knowledge_board_entries", [str(entry) for entry in kb_excerpt]
+        )
+        explain_why_payload.setdefault("memories", [])
+        explain_why_payload.setdefault("tool_calls", [])
+        if "rag_summary" not in explain_why_payload:
+            explain_why_payload["rag_summary"] = None
+
         allowed = await evaluate_policy(action_intent_str)
         if not allowed:
             action_intent_str = AgentActionIntent.IDLE.value
@@ -907,6 +923,7 @@ class Simulation:
                     "du": current_agent_state.du,
                     "knowledge_board": kb_state,
                     "world_map": wm_state,
+                    "explain_why": explain_why_payload,
                 }
                 event = log_event(payload)
                 if event is None:
