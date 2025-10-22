@@ -127,6 +127,7 @@ class ConfigSettings(BaseSettings):
     DEFAULT_MAX_SIMULATION_STEPS: int = 50
     MAX_KB_ENTRIES_FOR_PERCEPTION: int = 10
     MAX_KB_ENTRIES: int = 100
+    MAX_KB_ENTRY_LENGTH: int = 2048
     MEMORY_STORE_TTL_SECONDS: int = 60 * 60 * 24 * 7
     MEMORY_STORE_PRUNE_INTERVAL_STEPS: int = 0
     MAX_IP_PER_TICK: float = 10.0

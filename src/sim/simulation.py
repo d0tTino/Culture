@@ -41,7 +41,7 @@ from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
-from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
 from src.sim.version_vector import VersionVector
@@ -338,7 +338,11 @@ class Simulation:
             if entry:
                 async with self.knowledge_board.lock:
                     self.knowledge_board.add_entry(
-                        entry,
+                        BoardEntry(
+                            content_full=entry,
+                            entry_type="human_message",
+                            tags=["human", "knowledge_board"],
+                        ),
                         "human",
                         self.current_step,
                         self.vector.to_dict(),
@@ -522,7 +526,11 @@ class Simulation:
             if text and self.knowledge_board:
                 async with self.knowledge_board.lock:
                     self.knowledge_board.add_entry(
-                        text,
+                        BoardEntry(
+                            content_full=text,
+                            entry_type="human_message",
+                            tags=["human", "moderation"],
+                        ),
                         str(author),
                         self.current_step,
                         self.vector.to_dict(),
@@ -607,7 +615,13 @@ class Simulation:
             if self.knowledge_board:
                 async with self.knowledge_board.lock:
                     self.knowledge_board.add_entry(
-                        f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                        BoardEntry(
+                            content_full=
+                            f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                            entry_type="spawn_event",
+                            tags=["population", "spawn"],
+                            reference_metadata={"child_id": agent.agent_id},
+                        ),
                         parent.agent_id,
                         self.current_step,
                         self.vector.to_dict(),
@@ -630,7 +644,11 @@ class Simulation:
         if self.knowledge_board:
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
-                    f"Agent {agent.agent_id} retired",
+                    BoardEntry(
+                        content_full=f"Agent {agent.agent_id} retired",
+                        entry_type="retirement",
+                        tags=["population", "retirement"],
+                    ),
                     agent.agent_id,
                     self.current_step,
                     self.vector.to_dict(),
@@ -806,7 +824,11 @@ class Simulation:
             ):
                 async with self.knowledge_board.lock:
                     self.knowledge_board.add_entry(
-                        message_content,
+                        BoardEntry(
+                            content_full=message_content,
+                            entry_type="idea",
+                            tags=["agent", "proposal"],
+                        ),
                         agent_id,
                         self.current_step,
                         self.vector.to_dict(),
@@ -1650,7 +1672,13 @@ class Simulation:
         kb = snapshot.get("knowledge_board", {})
         for entry in kb.get("entries", []):
             sim.knowledge_board.add_entry(
-                entry.get("content_full", ""),
+                BoardEntry(
+                    content_full=entry.get("content_full", ""),
+                    entry_type=entry.get("entry_type", "note"),
+                    content_summary=entry.get("content_summary"),
+                    tags=entry.get("tags"),
+                    reference_metadata=entry.get("reference_metadata"),
+                ),
                 entry.get("agent_id", "unknown"),
                 int(entry.get("step", 0)),
             )
@@ -1822,7 +1850,11 @@ class Simulation:
         if approved and self.knowledge_board:
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
-                    f"Law approved: {text}",
+                    BoardEntry(
+                        content_full=f"Law approved: {text}",
+                        entry_type="proposal_result",
+                        tags=["governance", "result"],
+                    ),
                     proposer_id,
                     self.current_step,
                     self.vector.to_dict(),

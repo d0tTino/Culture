@@ -21,7 +21,7 @@ else:  # pragma: no cover - optional dependency
 from src.infra import config
 from src.infra.event_log import log_event
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
-from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 from src.sim.simulation import Simulation
 
 logger = logging.getLogger(__name__)
@@ -191,7 +191,17 @@ def load_checkpoint(
     if backend == "graph":
         board = GraphKnowledgeBoard()
         for e in kb_entries:
-            board.add_entry(e["content_full"], e["agent_id"], int(e["step"]))
+            board.add_entry(
+                BoardEntry(
+                    content_full=e.get("content_full", ""),
+                    entry_type=e.get("entry_type", "note"),
+                    content_summary=e.get("content_summary"),
+                    tags=e.get("tags"),
+                    reference_metadata=e.get("reference_metadata"),
+                ),
+                e.get("agent_id", "unknown"),
+                int(e.get("step", 0)),
+            )
         sim.knowledge_board = board
     else:
         sim.knowledge_board = cast(

@@ -5,6 +5,7 @@ from typing import ClassVar
 
 import pytest
 
+from src.sim.knowledge_board import BoardEntry
 from src.sim.simulation import Simulation
 
 
@@ -41,9 +42,19 @@ class DummyAgent:
         environment_perception: dict | None = None,
         vector_store_manager: object | None = None,
         knowledge_board: object | None = None,
+        memory_service: object | None = None,
+        **_: object,
     ) -> dict:
         if not self._added and knowledge_board is not None:
-            knowledge_board.add_entry("test entry", self.agent_id, simulation_step)
+            knowledge_board.add_entry(
+                BoardEntry(
+                    content_full="test entry",
+                    entry_type="test",
+                    tags=["snapshot"],
+                ),
+                self.agent_id,
+                simulation_step,
+            )
             self._added = True
         return {}
 
@@ -55,6 +66,7 @@ async def test_snapshot_contains_knowledge_board(
 ) -> None:
     agent = DummyAgent()
     sim = Simulation(agents=[agent])
+    sim.evaluation_hooks = []
 
     def _save(step: int, data: dict, directory: Path = tmp_path) -> None:
         from src.infra.snapshot import save_snapshot as real_save
@@ -73,6 +85,9 @@ async def test_snapshot_contains_knowledge_board(
 
     assert "knowledge_board" in snapshot
     assert snapshot["knowledge_board"]["entries"]
+    first_entry = snapshot["knowledge_board"]["entries"][0]
+    assert first_entry["entry_type"] == "test"
+    assert first_entry["tags"] == ["snapshot"]
     assert "vector" in snapshot["knowledge_board"]
     assert "trace_hash" in snapshot
 
@@ -88,6 +103,7 @@ async def test_snapshot_contains_knowledge_board(
 
     agent2 = DummyAgent()
     sim2 = Simulation(agents=[agent2])
+    sim2.evaluation_hooks = []
 
     def _save2(step: int, data: dict, directory: Path = tmp_path / "run2") -> None:
         from src.infra.snapshot import save_snapshot as real_save

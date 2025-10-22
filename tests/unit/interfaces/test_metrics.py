@@ -5,7 +5,7 @@ import pytest
 from src.infra import config
 from src.interfaces import metrics
 from src.shared.decorator_utils import monitor_llm_call
-from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 
 
 @pytest.mark.unit
@@ -26,7 +26,11 @@ def test_llm_metrics_update() -> None:
 def test_kb_size_metric() -> None:
     kb = KnowledgeBoard()
     start = metrics.KNOWLEDGE_BOARD_SIZE._value.get()
-    kb.add_entry("entry", "agent", 1)
+    kb.add_entry(
+        BoardEntry(content_full="entry", entry_type="metric_test"),
+        "agent",
+        1,
+    )
     assert metrics.KNOWLEDGE_BOARD_SIZE._value.get() == start + 1
 
 
@@ -35,14 +39,14 @@ def test_kb_size_metric_pruning(monkeypatch: pytest.MonkeyPatch) -> None:
     kb = KnowledgeBoard()
 
     # Add several entries with the default max limit (100)
-    kb.add_entry("e1", "A", 1)
-    kb.add_entry("e2", "A", 2)
-    kb.add_entry("e3", "A", 3)
+    kb.add_entry(BoardEntry(content_full="e1", entry_type="metric_test"), "A", 1)
+    kb.add_entry(BoardEntry(content_full="e2", entry_type="metric_test"), "A", 2)
+    kb.add_entry(BoardEntry(content_full="e3", entry_type="metric_test"), "A", 3)
     before = metrics.KNOWLEDGE_BOARD_SIZE._value.get()
 
     # Now lower the max size and add another entry to trigger pruning
     monkeypatch.setattr(config, "MAX_KB_ENTRIES", 2)
-    kb.add_entry("e4", "A", 4)
+    kb.add_entry(BoardEntry(content_full="e4", entry_type="metric_test"), "A", 4)
 
     after = metrics.KNOWLEDGE_BOARD_SIZE._value.get()
     assert after == before - 1

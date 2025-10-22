@@ -13,6 +13,7 @@ from src.infra.checkpoint import (
     save_checkpoint,
 )
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
+from src.sim.knowledge_board import BoardEntry
 
 pytestmark = pytest.mark.unit
 
@@ -90,7 +91,11 @@ def test_checkpoint_preserves_board_and_collective_metrics(tmp_path, monkeypatch
 
     sim.collective_ip = 12.34
     sim.collective_du = 56.78
-    sim.knowledge_board.add_entry("hello", sim.agents[0].agent_id, step=0)
+    sim.knowledge_board.add_entry(
+        BoardEntry(content_full="hello", entry_type="checkpoint"),
+        sim.agents[0].agent_id,
+        step=0,
+    )
 
     chk = tmp_path / "sim.pkl"
     save_checkpoint(sim, chk)
@@ -110,7 +115,11 @@ def test_checkpoint_loads_graph_board(tmp_path, monkeypatch):
     monkeypatch.setattr(neo4j.GraphDatabase, "driver", lambda *a, **k: DummyDriver())
     config.load_config(validate_required=False)
     sim = create_simulation(num_agents=1, steps=1, scenario="test")
-    sim.knowledge_board.add_entry("hello", sim.agents[0].agent_id, step=0)
+    sim.knowledge_board.add_entry(
+        BoardEntry(content_full="hello", entry_type="checkpoint"),
+        sim.agents[0].agent_id,
+        step=0,
+    )
 
     chk = tmp_path / "sim.pkl"
     save_checkpoint(sim, chk)
