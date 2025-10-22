@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from typing import Any
 
 import tiktoken
@@ -14,6 +15,29 @@ from src.interfaces import metrics
 
 from .semantic_memory_manager import SemanticMemoryManager
 from .vector_store import ChromaVectorStoreManager
+
+
+def _extract_recall_score(memories: Iterable[dict[str, Any]]) -> float | None:
+    """Return the first recall@5-style score found in the provided memories."""
+
+    recall_keys = ("recall_p5", "recall@5", "p_at_5", "recall")
+    for memory in memories:
+        if not isinstance(memory, dict):
+            continue
+
+        for key in recall_keys:
+            value = memory.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
+
+        metrics_payload = memory.get("metrics")
+        if isinstance(metrics_payload, dict):
+            for key in recall_keys:
+                value = metrics_payload.get(key)
+                if isinstance(value, (int, float)):
+                    return float(value)
+
+    return None
 
 tracer = trace.get_tracer(__name__)
 
@@ -43,6 +67,7 @@ class MultiLayerRetriever:
             span.set_attribute("memory.query.length", len(query))
             span.set_attribute("memory.k", k)
             start_total = time.perf_counter()
+            recall_score: float | None = None
             try:
                 episodic: list[dict[str, Any]] = []
                 if self.vector_store:
@@ -120,7 +145,11 @@ class MultiLayerRetriever:
                 combined.sort(key=lambda m: m.get("relevance_score", 0.0), reverse=True)
                 metrics.MEMORY_RETRIEVALS_TOTAL.inc()
                 span.set_attribute("memory.results", len(combined))
-                return combined[:k]
+                top_k = combined[:k]
+                recall_score = _extract_recall_score(top_k)
+                if recall_score is not None:
+                    span.set_attribute("memory.recall_p5", recall_score)
+                return top_k
             except Exception:
                 metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
                 raise
@@ -129,9 +158,9 @@ class MultiLayerRetriever:
                 span.set_attribute("memory.latency_ms", latency_ms)
                 infra_metrics.record_retrieval_latency(latency_ms)
                 record_recall = getattr(infra_metrics, "record_recall_p5", None)
-                if callable(record_recall):
+                if callable(record_recall) and recall_score is not None:
                     try:
-                        record_recall(latency_ms)
+                        record_recall(recall_score)
                     except Exception:  # pragma: no cover - defensive
                         pass
 
@@ -143,6 +172,7 @@ class MultiLayerRetriever:
             span.set_attribute("memory.query.length", len(query))
             span.set_attribute("memory.k", k)
             start_total = time.perf_counter()
+            recall_score: float | None = None
             try:
                 episodic = []
                 if self.vector_store:
@@ -172,6 +202,9 @@ class MultiLayerRetriever:
                         )
                 metrics.MEMORY_RETRIEVALS_TOTAL.inc()
                 span.set_attribute("memory.results", len(episodic))
+                recall_score = _extract_recall_score(episodic)
+                if recall_score is not None:
+                    span.set_attribute("memory.recall_p5", recall_score)
                 return episodic
             except Exception:
                 metrics.MEMORY_RETRIEVAL_ERRORS_TOTAL.inc()
@@ -181,9 +214,9 @@ class MultiLayerRetriever:
                 span.set_attribute("memory.latency_ms", latency_ms)
                 infra_metrics.record_retrieval_latency(latency_ms)
                 record_recall = getattr(infra_metrics, "record_recall_p5", None)
-                if callable(record_recall):
+                if callable(record_recall) and recall_score is not None:
                     try:
-                        record_recall(latency_ms)
+                        record_recall(recall_score)
                     except Exception:  # pragma: no cover - defensive
                         pass
 
