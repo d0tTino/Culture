@@ -49,13 +49,13 @@ def test_log_misbehavior_and_fetch(monkeypatch, tmp_path):
     )
 
     log_event({"type": "normal", "step": 1})
-    mis = log_misbehavior({"step": 2, "detail": "bad"})
+    mis = log_misbehavior({"step": 1, "detail": "bad"})
     assert mis["type"] == "misbehavior"
     assert {"seed", "prev_hash", "trace_hash"}.issubset(mis)
 
     span = next(s for s in tracer.spans if s.name == "event_log.misbehavior")
     assert span.attributes["event.type"] == "misbehavior"
-    assert span.attributes["step"] == 2
+    assert span.attributes["step"] == 1
     assert {"seed", "prev_hash", "trace_hash"}.issubset(span.attributes)
 
     # Misbehavior events are filtered out by default
@@ -66,6 +66,7 @@ def test_log_misbehavior_and_fetch(monkeypatch, tmp_path):
     # They can be explicitly included
     all_events = fetch_events(after_step=0, include_misbehavior=True, path=log_file)
     assert [ev["type"] for ev in all_events] == ["normal", "misbehavior"]
+    assert [ev["step"] for ev in all_events] == [1, 1]
 
     # Or filtered directly
     mis_events = fetch_events(after_step=0, event_type="misbehavior", path=log_file)
