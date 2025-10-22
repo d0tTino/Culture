@@ -410,6 +410,11 @@ class SimulationDiscordBot:
             if tree is not None:
                 self.command_trees[_token] = tree
 
+                register_moderation_commands(
+                    tree,
+                    resolve_context=lambda self=self: (self.context, self.event_queue),
+                )
+
                 @tree.command(name="start")
                 @moderation_rate_limit("start")
                 async def _tree_start(interaction: "discord.Interaction") -> None:
@@ -565,82 +570,6 @@ class SimulationDiscordBot:
                             )
                         )
                         await interaction.response.send_message("killed", ephemeral=True)
-
-                @tree.command(name="reset_memory")
-                @app_commands.describe(agent_id="ID of the agent to reset")
-                @moderation_rate_limit("reset_memory")
-                async def _tree_reset_memory(
-                    interaction: "discord.Interaction", agent_id: str
-                ) -> None:
-                    with command_span("reset_memory", interaction, agent_id=agent_id) as span:
-                        if not has_admin_permission(getattr(interaction, "user", None)):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        await self.event_queue.put(
-                            SimulationEvent(
-                                type="moderation",
-                                data={"command": "reset_memory", "agent_id": agent_id},
-                            )
-                        )
-                        await send_interaction_response(
-                            interaction, "memory reset", ephemeral=True
-                        )
-
-                @tree.command(name="penalty")
-                @app_commands.describe(
-                    agent_id="ID of the agent to penalize",
-                    ip="Influence points to deduct",
-                    du="Decision units to deduct",
-                )
-                @moderation_rate_limit("penalty")
-                async def _tree_penalty(
-                    interaction: "discord.Interaction",
-                    agent_id: str,
-                    ip: float = 0.0,
-                    du: float = 0.0,
-                ) -> None:
-                    with command_span("penalty", interaction, agent_id=agent_id) as span:
-                        if not has_admin_permission(getattr(interaction, "user", None)):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        await self.event_queue.put(
-                            SimulationEvent(
-                                type="moderation",
-                                data={
-                                    "command": "penalty",
-                                    "agent_id": agent_id,
-                                    "ip": ip,
-                                    "du": du,
-                                },
-                            )
-                        )
-                        await send_interaction_response(
-                            interaction, "penalty applied", ephemeral=True
-                        )
-
-                @tree.command(name="mute")
-                @app_commands.describe(agent_id="ID of the agent to mute")
-                async def _tree_mute(interaction: "discord.Interaction", agent_id: str) -> None:
-                    with command_span("mute", interaction, agent_id=agent_id) as span:
-                        await self.event_queue.put(
-                            SimulationEvent(
-                                type="moderation",
-                                data={"command": "mute", "agent_id": agent_id},
-                            )
-                        )
-                        await interaction.response.send_message("muted", ephemeral=True)
-
-                @tree.command(name="unmute")
-                @app_commands.describe(agent_id="ID of the agent to unmute")
-                async def _tree_unmute(interaction: "discord.Interaction", agent_id: str) -> None:
-                    with command_span("unmute", interaction, agent_id=agent_id) as span:
-                        await self.event_queue.put(
-                            SimulationEvent(
-                                type="moderation",
-                                data={"command": "unmute", "agent_id": agent_id},
-                            )
-                        )
-                        await interaction.response.send_message("unmuted", ephemeral=True)
 
                 @tree.command(name="nudge")
                 @app_commands.describe(prompt="Prompt to nudge the simulation")
@@ -1325,7 +1254,10 @@ async def record_misbehavior(interaction: Any, agent_id: str, reason: str) -> No
     await send_interaction_response(interaction, "misbehavior recorded", ephemeral=True)
 
 
-from src.interfaces.discord_moderation import moderation_rate_limit  # noqa: E402
+from src.interfaces.discord_moderation import (  # noqa: E402
+    moderation_rate_limit,
+    register_moderation_commands,
+)
 
 
 @bot.command(name="say")
