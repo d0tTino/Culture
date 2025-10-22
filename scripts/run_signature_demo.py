@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import os
@@ -24,6 +25,28 @@ if TYPE_CHECKING:  # pragma: no cover - typing helpers
 RESULT_DIR = Path("results/signature_demo")
 SCENARIO_PATH = Path("scenarios/signature_demo.yaml")
 README_PATH = RESULT_DIR / "README.md"
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Return CLI arguments for running the signature demo."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Seed value passed to the simulation and event log.",
+    )
+    parser.add_argument(
+        "--steps",
+        type=int,
+        help="Number of steps to run the simulation.",
+    )
+    parser.add_argument(
+        "--agents",
+        type=int,
+        help="Number of agents participating in the simulation.",
+    )
+    return parser.parse_args(argv)
 
 
 def _clean_results_dir() -> None:
@@ -278,7 +301,9 @@ def _write_readme(
     README_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-async def main() -> None:
+async def main(
+    *, seed: int | None = None, steps: int | None = None, agents: int | None = None
+) -> None:
     """Execute the signature_demo scenario and save outputs."""
     _clean_results_dir()
     RESULT_DIR.mkdir(parents=True, exist_ok=True)
@@ -294,21 +319,24 @@ async def main() -> None:
         evaluation_targets,
         success_metrics,
     ) = load_scenario(str(SCENARIO_PATH))
-    steps = steps_override or 0
-    num_agents = agents_override or 3
+    steps_value = steps if steps is not None else steps_override or 0
+    num_agents = agents if agents is not None else agents_override or 3
+    seed_value = seed if seed is not None else 42
+
+    event_log.set_seed(seed_value)
 
     sim = create_simulation(
         num_agents=num_agents,
-        steps=steps,
+        steps=steps_value,
         scenario=scenario_desc,
         beats=beats,
-        seed=42,
+        seed=seed_value,
         evaluation_hook_names=evaluation_hooks,
         evaluation_targets=evaluation_targets,
         success_metrics=success_metrics,
     )
 
-    await sim.async_run(steps)
+    await sim.async_run(steps_value)
 
     metrics_path = RESULT_DIR / "metrics.json"
     metrics = export_traces.load_metrics(event_log_path)
@@ -366,4 +394,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    arguments = parse_args()
+    asyncio.run(
+        main(seed=arguments.seed, steps=arguments.steps, agents=arguments.agents)
+    )
