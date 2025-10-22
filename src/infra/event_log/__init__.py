@@ -383,7 +383,7 @@ def _rehydrate_last_hash(path: Path) -> None:
         pass
 
 
-_STEP_EQ_ALLOWED_TYPES = {"human_command"}
+_STEP_EQ_ALLOWED_TYPES = {"human_command", "misbehavior"}
 
 
 def _is_valid_event(event: dict[str, Any], last_step: int, last_hash: str | None) -> bool:
