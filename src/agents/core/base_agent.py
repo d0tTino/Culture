@@ -7,7 +7,7 @@ import asyncio
 import copy
 import logging
 import uuid
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Mapping
 from math import sqrt
 
 # LangGraph imports
@@ -100,6 +100,18 @@ from src.agents.dspy_programs.role_thought_generator import get_role_thought_gen
 AgentMessage = DashboardAgentMessage
 
 logger = logging.getLogger(__name__)
+
+
+def _to_jsonable(value: Any) -> Any:
+    """Recursively convert ``value`` to JSON-serializable primitives."""
+
+    if isinstance(value, Mapping):
+        return {str(k): _to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
 
 
 class Agent:
@@ -453,6 +465,44 @@ class Agent:
         logger.debug(
             f"  Retrieved knowledge board content (entries: {len(knowledge_board_content)})"
         )
+        base_kb_entries = (
+            [str(entry) for entry in knowledge_board_content]
+            if isinstance(knowledge_board_content, list)
+            else ([str(knowledge_board_content)] if knowledge_board_content else [])
+        )
+
+        def _build_explain_payload(state: AgentTurnState | None = None) -> dict[str, Any]:
+            memories: list[Any] = []
+            kb_entries = list(base_kb_entries)
+            tool_calls: list[Any] = []
+            rag_summary: str | None = None
+
+            if state:
+                raw_memories = state.get("memory_history_list")
+                if isinstance(raw_memories, list):
+                    memories = [_to_jsonable(mem) for mem in raw_memories]
+
+                raw_kb = state.get("knowledge_board_content")
+                if isinstance(raw_kb, list) and raw_kb:
+                    kb_entries = [str(entry) for entry in raw_kb]
+
+                raw_tool_calls = state.get("tool_calls")
+                if isinstance(raw_tool_calls, list):
+                    tool_calls = [_to_jsonable(call) for call in raw_tool_calls]
+
+                raw_summary = state.get("rag_summary")
+                if isinstance(raw_summary, str):
+                    rag_summary = raw_summary
+                elif raw_summary is not None:
+                    rag_summary = str(raw_summary)
+
+            return {
+                "memories": memories,
+                "knowledge_board_entries": kb_entries,
+                "tool_calls": tool_calls,
+                "rag_summary": rag_summary,
+            }
+
         # --- End Extract Knowledge Board ---
 
         # --- Extract Simulation Scenario ---
@@ -546,6 +596,7 @@ class Agent:
                 "message_recipient_id": None,
                 "action_intent": "idle",
                 "structured_output": None,
+                "explain_why": _build_explain_payload(),
             }
 
         # The cast below was to object, which is too generic.
@@ -557,6 +608,7 @@ class Agent:
             Callable[[AgentTurnState], Awaitable[AgentTurnState]], self.graph.ainvoke
         )
 
+        final_result_state: AgentTurnState | None = None
         try:
             # Invoke the graph asynchronously for the turn
             logger.debug(
@@ -565,7 +617,7 @@ class Agent:
             logger.debug(
                 f"Agent {self.agent_id} initial_turn_state before invoke: {initial_turn_state.keys()}"
             )
-            final_result_state: AgentTurnState = await graph_ainvoke_callable(initial_turn_state)
+            final_result_state = await graph_ainvoke_callable(initial_turn_state)
 
             # Add debug logging to inspect the graph.ainvoke result
             logger.debug(
@@ -580,6 +632,7 @@ class Agent:
                     "message_content": None,
                     "message_recipient_id": None,
                     "action_intent": "idle",
+                    "explain_why": _build_explain_payload(),
                 }
 
             # Log dictionary keys to help debug
@@ -658,6 +711,7 @@ class Agent:
                     "message_recipient_id": message_recipient_id,
                     "action_intent": action_intent,
                     "trace_hash": trace_hash,
+                    "explain_why": _build_explain_payload(final_result_state),
                 }
                 logger.debug(f"Agent {self.agent_id} run_turn returning: {turn_output}")
 
@@ -693,6 +747,7 @@ class Agent:
                     "message_content": None,
                     "message_recipient_id": None,
                     "action_intent": "idle",
+                    "explain_why": _build_explain_payload(final_result_state),
                 }
 
         except Exception as e:
@@ -700,7 +755,12 @@ class Agent:
                 f"Error running turn for agent {self.agent_id} at step {simulation_step}: {e}",
                 exc_info=True,
             )
-            return {"message_content": None, "message_recipient_id": None, "action_intent": "idle"}
+            return {
+                "message_content": None,
+                "message_recipient_id": None,
+                "action_intent": "idle",
+                "explain_why": _build_explain_payload(final_result_state),
+            }
 
     def __str__(self: Self) -> str:
         """Returns a string representation of the agent."""
