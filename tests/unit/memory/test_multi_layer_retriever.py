@@ -131,3 +131,48 @@ async def test_service_metrics_increment(monkeypatch: pytest.MonkeyPatch, tmp_pa
     with pytest.raises(RuntimeError):
         await service.retrieve_episodic_and_update_semantic("agent", "q")
     assert metrics.get_memory_retrieval_errors() == err_before + 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recall_metric_only_called_with_score(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    vector = ChromaVectorStoreManager(
+        persist_directory=str(tmp_path), embedding_function=lambda t: [[0.0] for _ in t]
+    )
+    semantic = SemanticMemoryManager(vector, driver=None)
+    retriever = MultiLayerRetriever(vector, semantic)
+
+    async def fake_episodic(agent_id: str, query: str, k: int) -> list[dict[str, Any]]:
+        return [{"content": "e1"}]
+
+    monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_episodic)
+
+    recorded: list[float] = []
+
+    def fake_record_recall(value: float) -> None:
+        recorded.append(value)
+
+    monkeypatch.setattr(
+        "src.agents.memory.multi_layer_retriever.infra_metrics.record_recall_p5",
+        fake_record_recall,
+    )
+
+    await retriever.retrieve("agent", "query")
+    assert recorded == []
+
+    async def fake_episodic_with_recall(
+        agent_id: str, query: str, k: int
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "content": "e2",
+                "metrics": {"recall_p5": 0.8},
+            }
+        ]
+
+    monkeypatch.setattr(vector, "aretrieve_relevant_memories", fake_episodic_with_recall)
+
+    await retriever.retrieve("agent", "query")
+    assert recorded == [pytest.approx(0.8)]
