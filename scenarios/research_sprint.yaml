@@ -1,0 +1,83 @@
+# Research sprint scenario focused on rapid experimentation and knowledge sharing.
+name: research_sprint
+description: Collaborative research push that turns raw ideas into a publishable insight
+goal: Surface hypotheses, run lightweight experiments, and package actionable findings
+steps: 26  # Keeps the sprint time-boxed so teams must prioritize signal over perfection.
+beats:
+  # Beats align with a typical discovery sprint; update prompts if you change these labels.
+  - discovery
+  - experimentation
+  - synthesis
+  - publication
+narrative_beats:
+  discovery:
+    summary: >-
+      Collect background context, articulate open questions, and pick a focus area.
+    collaboration_focus: >-
+      Encourage divergent brainstorming where every agent contributes unique leads.
+    success_signals:
+      coalition_count: 0
+      sentiment_curve: 0.05
+  experimentation:
+    summary: >-
+      Test the leading hypotheses, capture results, and trade notes on what worked.
+    collaboration_focus: >-
+      Pair up to divide experiments efficiently while sharing raw observations quickly.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.10
+  synthesis:
+    summary: >-
+      Compare evidence, cluster insights, and decide on the headline story.
+    collaboration_focus: >-
+      Balance critical thinking with optimism so the group converges on defensible conclusions.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.15
+  publication:
+    summary: >-
+      Draft the sprint report, highlight next questions, and circulate the findings.
+    collaboration_focus: >-
+      Make the write-up accessible to stakeholders while capturing momentum for follow-up work.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.20
+prompts:
+  discovery: >-
+    Share prior knowledge, list unknowns, and nominate the most promising research question.
+  experimentation: >-
+    Outline the tests you will run, assign responsibilities, and report interim findings.
+  synthesis: >-
+    Merge experiment outcomes into a cohesive narrative and decide on the key takeaway.
+  publication: >-
+    Produce a short research summary with implications, risks, and recommended next steps.
+success_metrics:
+  coalition_count:
+    target_max: 1
+    explanation: >-
+      Research collaboration should orbit a single sprint team with shared context.
+  sentiment_curve:
+    expected_trend:
+      discovery: 0.05
+      experimentation: 0.10
+      synthesis: 0.15
+      publication: 0.20
+    variance_tolerance: 0.20
+  insight_velocity:
+    target_minimum_updates: 3
+    explanation: >-
+      Sprint logs should reflect steady knowledge updates instead of long silences.
+evaluation_hooks:
+  - coalitions
+  - sentiment
+  - collective_du
+  - collective_ip
+evaluation_targets:
+  coalitions:
+    max_count: 1
+  sentiment:
+    max_variance: 0.20
+  collective_du:
+    max_delta: 5.5
+  collective_ip:
+    max_delta: 7.0

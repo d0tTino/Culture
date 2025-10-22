@@ -1,70 +1,45 @@
-# Planning Project Scenario
+# Scenario Guide
 
-This scenario guides a small group through a structured planning process.
+Culture ships with curated simulation blueprints to cover the most common collaboration patterns. Each scenario below references a YAML file in the `scenarios/` directory that you can pass to `src/app.py`.
 
-## Setup
+```bash
+python src/app.py --scenario <path-to-scenario>
+```
 
-1. Run the simulation using the scenario file:
-   ```bash
-   python src/app.py --scenario scenarios/planning_project.yaml
-   ```
-2. Export trace data after the run:
-   ```bash
-   python scripts/export_traces.py --snapshots snapshots --output data/traces.jsonl
-   ```
-3. Generate evaluation plots:
-   ```bash
-   python tools/export_traces.py data/traces.jsonl --outdir plots
-   ```
+## Demo Warm-up (`scenarios/demo.yaml`)
+- **Use when:** You need a smoke test to confirm agents start, exchange messages, and record snapshots.
+- **Pacing:** Two agents, five steps.
+- **Why it exists:** Validates new environments or CI images without the overhead of additional hooks.
 
-During the run, evaluation events are emitted at the end of each beat, recording
-coalition counts and sentiment snapshots for plotting.
+## Planning Project (`scenarios/planning_project.yaml`)
+- **Use when:** You want a longer-form planning exercise with distinct proposal → critique → vote → deliverable beats.
+- **Key beats:**
+  1. **Proposal** – the planner presents a project idea.
+  2. **Critique** – the critic challenges and refines the plan.
+  3. **Vote** – participants decide whether to proceed.
+  4. **Deliverable** – the worker produces the agreed output.
+- **Instrumentation:** Simple coalition and sentiment success metrics for quick retros.
 
-## Scripted Beats
+Run it with:
+```bash
+python src/app.py --scenario scenarios/planning_project.yaml
+```
 
-1. **Proposal** – the planner presents a project idea.
-2. **Critique** – the critic challenges and refines the plan.
-3. **Vote** – participants decide whether to proceed.
-4. **Deliverable** – the worker produces the agreed output.
+## Signature Demo (`scenarios/signature_demo.yaml`)
+- **Use when:** You need end-to-end evaluation artifacts, including coalition tracking, sentiment variance, and collective DU/IP deltas.
+- **Beats:** Proposal, critique, vote, deliverable with narrative guidance embedded in the YAML file.
+- **Companion script:** `python scripts/run_signature_demo.py` orchestrates exports, bundle generation, and README updates.
 
-## Metrics
+## Crisis Response (`scenarios/crisis_response.yaml`)
+- **Use when:** Stress-testing communication during incident drills across alert, triage, stabilization, and recovery phases.
+- **Highlights:**
+  - Narrative beats encourage calm coordination while sentiment steadily recovers.
+  - Success metrics watch for splinter coalitions, sentiment variance, and response alignment milestones.
+- **Expected outcome:** A replay slice that documents the mitigation timeline plus metrics to audit decision velocity.
 
-- **Coalitions formed**: number of projects with more than one member.
-- **Sentiment curves**: average agent mood over time.
-
-The resulting plots appear in the `plots/` directory.
-
-## Signature Demo Scenario
-
-This lightweight scenario highlights evaluation hooks for common group metrics.
-
-### Usage
-
-1. Run the simulation with the signature demo:
-   ```bash
-   python src/app.py --scenario scenarios/signature_demo.yaml
-   ```
-2. Export trace data:
-   ```bash
-   python scripts/export_traces.py --snapshots snapshots --output data/traces.jsonl
-   ```
-3. Generate plots and bundle metrics:
-   ```bash
-   python tools/export_traces.py data/traces.jsonl --outdir plots --bundle run_bundle
-   ```
-
-### Prompts
-
-- **Proposal** – "Kick off the project by proposing a plan for everyone to sign."
-- **Critique** – "Review and refine the proposal, noting strengths and weaknesses."
-- **Vote** – "Decide whether to adopt the proposal."
-- **Deliverable** – "Summarize the approved plan and outline next steps."
-
-### Expected Arc
-
-1. **Proposal** – agents introduce an initial plan.
-2. **Critique** – members challenge and refine the idea.
-3. **Vote** – the group decides on adopting the plan.
-4. **Deliverable** – the final plan is summarized and shared.
-
-Evaluation hooks record coalition counts, sentiment trends, and collective DU/IP usage for analysis.
+## Research Sprint (`scenarios/research_sprint.yaml`)
+- **Use when:** Facilitating focused discovery work where agents explore, experiment, synthesize, and publish findings in a tight loop.
+- **Highlights:**
+  - Encourages divergent idea generation before converging on a publishable insight.
+  - Tracks coalition stability, positive sentiment trends, and minimum knowledge updates.
+- **Expected outcome:** Bundled traces capture experiment logs and the final report outline for follow-up analysis.
