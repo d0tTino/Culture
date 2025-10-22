@@ -121,8 +121,8 @@ async def test_run_signature_demo(
     # Build deterministic agent outputs tied to the scenario beats.
     (
         _,
-        _,
-        _,
+        scenario_steps_override,
+        scenario_agents_override,
         beats,
         hook_names,
         evaluation_targets,
@@ -146,8 +146,10 @@ async def test_run_signature_demo(
         )
 
     created_sims: list = []
+    create_kwargs: list[dict[str, object]] = []
 
     def create_simulation_stub(**kwargs):
+        create_kwargs.append(dict(kwargs))
         sim = create_simulation(**kwargs)
         created_sims.append(sim)
         return sim
@@ -164,88 +166,122 @@ async def test_run_signature_demo(
             "src.infra.llm_client.async_generate_structured_output",
             AsyncMock(side_effect=lambda *a, **k: next_structured_output()),
         )
+
         await run_signature_demo.main()
 
-    assert created_sims, "Simulation was not constructed"
-    sim = created_sims[0]
-    assert sim.evaluation_hook_names == hook_names
-    assert sim.evaluation_targets == evaluation_targets
-    assert sim.success_metrics == success_metrics
+        assert created_sims, "Simulation was not constructed"
+        default_sim = created_sims[0]
+        default_kwargs = create_kwargs[0]
+        expected_agents = scenario_agents_override or 3
+        expected_steps = scenario_steps_override or 0
 
-    event_log_path = result_dir / "event_log.jsonl"
-    metrics_path = result_dir / "metrics.json"
-    traces_path = result_dir / "traces.jsonl"
-    bundle_path = result_dir / "signature_demo_bundle.zip"
-    snapshots_dir = result_dir / "snapshots"
+        assert default_kwargs["seed"] == 42
+        assert default_kwargs["num_agents"] == expected_agents
+        assert default_kwargs["steps"] == expected_steps
+        assert default_sim.evaluation_hook_names == hook_names
+        assert default_sim.evaluation_targets == evaluation_targets
+        assert default_sim.success_metrics == success_metrics
 
-    assert event_log_path.exists(), "Event log was not generated"
-    assert metrics_path.exists(), "Metrics JSON was not generated"
-    assert traces_path.exists(), "Trace dataset was not generated"
-    assert bundle_path.exists(), "Bundle archive was not generated"
-    assert snapshots_dir.is_dir(), "Snapshot directory missing"
+        event_log_path = result_dir / "event_log.jsonl"
+        metrics_path = result_dir / "metrics.json"
+        traces_path = result_dir / "traces.jsonl"
+        bundle_path = result_dir / "signature_demo_bundle.zip"
+        snapshots_dir = result_dir / "snapshots"
 
-    log_lines = event_log_path.read_text(encoding="utf-8").splitlines()
-    assert log_lines, "Event log is empty"
-    header = json.loads(log_lines[0])
-    assert header["type"] == "header"
-    assert header["seed"] == 42
+        assert event_log_path.exists(), "Event log was not generated"
+        assert metrics_path.exists(), "Metrics JSON was not generated"
+        assert traces_path.exists(), "Trace dataset was not generated"
+        assert bundle_path.exists(), "Bundle archive was not generated"
+        assert snapshots_dir.is_dir(), "Snapshot directory missing"
 
-    events = [json.loads(line) for line in log_lines[1:] if line.strip()]
-    assert events, "Event log contains no events"
-    max_step = max(ev.get("step", 0) for ev in events)
-    assert max_step > 0
+        default_log_lines = event_log_path.read_text(encoding="utf-8").splitlines()
+        assert default_log_lines, "Event log is empty"
+        header = json.loads(default_log_lines[0])
+        assert header["type"] == "header"
+        assert header["seed"] == 42
 
-    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-    for key in ("coalitions", "sentiment", "collective_du", "collective_ip"):
-        assert key in metrics
-        assert metrics[key], f"Metric '{key}' has no data points"
-        step, value = metrics[key][0]
-        assert isinstance(step, int)
-        assert isinstance(value, float)
-    target_summary = metrics.get("_target_summary")
-    assert isinstance(target_summary, dict)
-    for key in ("coalitions", "sentiment", "collective_du", "collective_ip"):
-        assert key in target_summary
-        entry = target_summary[key]
-        assert isinstance(entry, dict)
-        assert "status" in entry
-    success_guidance = metrics.get("_success_metrics_guidance")
-    assert isinstance(success_guidance, dict)
-    assert success_guidance.get("coalition_count", {}).get("target_max") == success_metrics[
-        "coalition_count"
-    ]["target_max"]
-    sentiment_guidance = success_guidance.get("sentiment_curve")
-    assert isinstance(sentiment_guidance, dict)
-    expected_trend = sentiment_guidance.get("expected_trend")
-    assert isinstance(expected_trend, dict)
-    assert expected_trend.get("proposal") == success_metrics["sentiment_curve"]["expected_trend"][
-        "proposal"
-    ]
+        events = [json.loads(line) for line in default_log_lines[1:] if line.strip()]
+        assert events, "Event log contains no events"
+        max_step = max(ev.get("step", 0) for ev in events)
+        assert max_step > 0
 
-    replay_files = sorted(snapshots_dir.glob("replay_*.jsonl"))
-    assert replay_files, "Replay slice not created"
-    replay_path = replay_files[0]
-    replay_lines = replay_path.read_text(encoding="utf-8").splitlines()
-    assert replay_lines, "Replay slice is empty"
-    replay_header = json.loads(replay_lines[0])
-    assert replay_header["type"] == "header"
-    assert replay_header["seed"] == 42
-    assert replay_path.name.endswith(f"_{max_step}.jsonl")
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        for key in ("coalitions", "sentiment", "collective_du", "collective_ip"):
+            assert key in metrics
+            assert metrics[key], f"Metric '{key}' has no data points"
+            step, value = metrics[key][0]
+            assert isinstance(step, int)
+            assert isinstance(value, float)
+        target_summary = metrics.get("_target_summary")
+        assert isinstance(target_summary, dict)
+        for key in ("coalitions", "sentiment", "collective_du", "collective_ip"):
+            assert key in target_summary
+            entry = target_summary[key]
+            assert isinstance(entry, dict)
+            assert "status" in entry
+        success_guidance = metrics.get("_success_metrics_guidance")
+        assert isinstance(success_guidance, dict)
+        assert success_guidance.get("coalition_count", {}).get("target_max") == success_metrics[
+            "coalition_count"
+        ]["target_max"]
+        sentiment_guidance = success_guidance.get("sentiment_curve")
+        assert isinstance(sentiment_guidance, dict)
+        expected_trend = sentiment_guidance.get("expected_trend")
+        assert isinstance(expected_trend, dict)
+        assert expected_trend.get("proposal") == success_metrics["sentiment_curve"]["expected_trend"][
+            "proposal"
+        ]
 
-    snapshot_files = sorted(p for p in snapshots_dir.glob("snapshot_*.json"))
-    assert snapshot_files, "Snapshot JSON not written"
-    snapshot = json.loads(snapshot_files[-1].read_text(encoding="utf-8"))
-    assert snapshot.get("seed") == 42
-    assert snapshot.get("trace_hash")
+        replay_files = sorted(snapshots_dir.glob("replay_*.jsonl"))
+        assert replay_files, "Replay slice not created"
+        replay_path = replay_files[0]
+        replay_lines = replay_path.read_text(encoding="utf-8").splitlines()
+        assert replay_lines, "Replay slice is empty"
+        replay_header = json.loads(replay_lines[0])
+        assert replay_header["type"] == "header"
+        assert replay_header["seed"] == 42
+        assert replay_path.name.endswith(f"_{max_step}.jsonl")
 
-    with zipfile.ZipFile(bundle_path) as zf:
-        names = set(zf.namelist())
-        assert "traces.jsonl" in names
-        assert "metrics.json" in names
-        assert any(name.startswith("snapshots/") for name in names)
+        snapshot_files = sorted(p for p in snapshots_dir.glob("snapshot_*.json"))
+        assert snapshot_files, "Snapshot JSON not written"
+        snapshot = json.loads(snapshot_files[-1].read_text(encoding="utf-8"))
+        assert snapshot.get("seed") == 42
+        assert snapshot.get("trace_hash")
 
-    readme_text = (result_dir / "README.md").read_text(encoding="utf-8")
-    assert "Evaluation Target Summary" in readme_text
-    assert "Success Metrics Guidance" in readme_text
-    assert "coalition_count" in readme_text
-    assert "variance_tolerance" in readme_text
+        with zipfile.ZipFile(bundle_path) as zf:
+            names = set(zf.namelist())
+            assert "traces.jsonl" in names
+            assert "metrics.json" in names
+            assert any(name.startswith("snapshots/") for name in names)
+
+        readme_text = (result_dir / "README.md").read_text(encoding="utf-8")
+        assert "Evaluation Target Summary" in readme_text
+        assert "Success Metrics Guidance" in readme_text
+        assert "coalition_count" in readme_text
+        assert "variance_tolerance" in readme_text
+
+        # Run the script again using explicit CLI parameters to verify overrides.
+        event_log_module._seed_cache.clear()
+        event_log_module._header_written.clear()
+        event_log_module._last_hash = None
+        event_log_module._seed = None
+
+        cli_seed = 99
+        cli_steps = 5
+        cli_agents = 4
+
+        await run_signature_demo.main(
+            seed=cli_seed, steps=cli_steps, agents=cli_agents
+        )
+
+        assert len(created_sims) >= 2, "Second simulation was not constructed"
+        cli_kwargs = create_kwargs[-1]
+        assert cli_kwargs["seed"] == cli_seed
+        assert cli_kwargs["steps"] == cli_steps
+        assert cli_kwargs["num_agents"] == cli_agents
+
+        cli_log_lines = event_log_path.read_text(encoding="utf-8").splitlines()
+        assert cli_log_lines, "Event log is empty after CLI invocation"
+        cli_header = json.loads(cli_log_lines[0])
+        assert cli_header["type"] == "header"
+        assert cli_header["seed"] == cli_seed
