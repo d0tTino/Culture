@@ -218,9 +218,25 @@ Results will vary depending on hardware and models.
 7. **Connect Discord (optional)**
    ```bash
    scripts/start_discord_slice.sh
-   ```
+  ```
    This script loads environment variables from `.env` and launches the vertical
    slice with Discord enabled so you can chat with the agents immediately.
+
+### Scenario Catalog
+
+The repository ships with curated YAML scenarios that you can run via:
+
+```bash
+python src/app.py --scenario <path-to-scenario>
+```
+
+| Scenario | File | When to use it |
+| --- | --- | --- |
+| Demo warm-up | `scenarios/demo.yaml` | Quick smoke test with two agents when validating a fresh installation. |
+| Planning project | `scenarios/planning_project.yaml` | Longer-form collaboration with role-specific prompts for proposal → critique → vote → deliverable workflows. |
+| Signature demo | `scenarios/signature_demo.yaml` | Evaluation showcase with sentiment, coalition, and collective IP/DU instrumentation for regression testing. |
+| Crisis response | `scenarios/crisis_response.yaml` | Incident-management drill that stresses alignment during alert, triage, stabilization, and recovery beats. |
+| Research sprint | `scenarios/research_sprint.yaml` | Time-boxed discovery sprint emphasizing experiment logs, synthesis, and publication of findings. |
 
 ### Signature Demo
 

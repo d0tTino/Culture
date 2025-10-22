@@ -1,0 +1,86 @@
+# Crisis response scenario guiding teams through stabilizing an outage.
+name: crisis_response
+description: Cross-functional incident drill focused on restoring a degraded service
+goal: Coordinate responders, share updates, and document a safe recovery plan
+steps: 28  # Keeps tempo urgent while leaving room for back-and-forth updates.
+beats:
+  # Beats align to the lifecycle of an incident response. Keep prompts synchronized.
+  - alert
+  - triage
+  - stabilization
+  - recovery
+narrative_beats:
+  alert:
+    summary: >-
+      Broadcast the outage, list immediate risks, and assign initial response roles.
+    collaboration_focus: >-
+      Rally participants around a single channel of truth while capturing key unknowns.
+    success_signals:
+      coalition_count: 0
+      sentiment_curve: -0.15
+  triage:
+    summary: >-
+      Map blast radius, prioritize affected systems, and identify the fastest mitigation steps.
+    collaboration_focus: >-
+      Encourage calm knowledge sharing so responders exchange telemetry without blame.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: -0.05
+  stabilization:
+    summary: >-
+      Execute mitigation, confirm customer impact is shrinking, and update stakeholders.
+    collaboration_focus: >-
+      Keep responders aligned on a single plan of record while validating fixes in parallel.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.10
+  recovery:
+    summary: >-
+      Close the incident, capture lessons, and outline follow-up actions for lasting resilience.
+    collaboration_focus: >-
+      Transition from firefighting to reflection so the team leaves with shared ownership.
+    success_signals:
+      coalition_count: 1
+      sentiment_curve: 0.25
+prompts:
+  alert: >-
+    Announce the incident, describe symptoms, and assign first-response roles.
+  triage: >-
+    Compare telemetry, agree on severity, and propose immediate mitigation steps.
+  stabilization: >-
+    Share progress on mitigation, validate improvements, and update stakeholders.
+  recovery: >-
+    Declare the incident resolved, recap actions taken, and list follow-up tasks.
+success_metrics:
+  coalition_count:
+    target_max: 1
+    explanation: >-
+      Emergency coordination should center on one response coalition without splinter groups.
+  sentiment_curve:
+    expected_trend:
+      alert: -0.15
+      triage: -0.05
+      stabilization: 0.10
+      recovery: 0.25
+    variance_tolerance: 0.30
+  response_alignment:
+    expected_milestones:
+      - alert
+      - stabilization
+      - recovery
+    explanation: >-
+      Teams should converge on a single mitigation plan quickly and sustain alignment through recovery.
+evaluation_hooks:
+  - coalitions
+  - sentiment
+  - collective_du
+  - collective_ip
+evaluation_targets:
+  coalitions:
+    max_count: 1
+  sentiment:
+    max_variance: 0.30
+  collective_du:
+    max_delta: 6.5
+  collective_ip:
+    max_delta: 6.5
