@@ -11,6 +11,7 @@ import json
 import logging
 import time
 import typing
+from collections import deque
 from collections.abc import Awaitable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -1131,9 +1132,10 @@ def get_active_bot(ctx: SimulationContext = DEFAULT_CONTEXT) -> "SimulationDisco
 
 # --- Command rate limiting -------------------------------------------------
 
-_COMMAND_COUNTS: dict[str, int] = {}
+_COMMAND_HISTORY: dict[str, deque[float]] = {}
 _COMMAND_LOCKS: dict[str, asyncio.Lock] = {}
 _MAX_RATE: int = 5
+_DEFAULT_RATE_LIMIT_WINDOW_SECONDS: float = 60.0
 
 
 def has_admin_permission(user: Any) -> bool:
@@ -1161,10 +1163,23 @@ def _coerce_to_bool(value: object) -> bool:
 
 def _allow_control_via_opa() -> bool:
     """Return True when control commands may defer authorization to OPA."""
-    value = config.CONFIG_OVERRIDES.get("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
+    overrides = getattr(config, "CONFIG_OVERRIDES", {})
+    value = overrides.get("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
     if value is None:
         value = config.get_config("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
     return _coerce_to_bool(value)
+
+
+def _get_command_rate_limit_window() -> float:
+    """Return the configured rate limit window in seconds."""
+    overrides = getattr(config, "CONFIG_OVERRIDES", {})
+    value = overrides.get("DISCORD_COMMAND_RATE_LIMIT_SECONDS")
+    if value is None:
+        value = config.get_config("DISCORD_COMMAND_RATE_LIMIT_SECONDS")
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        return _DEFAULT_RATE_LIMIT_WINDOW_SECONDS
 
 
 async def _has_control_command_permission(
@@ -1193,20 +1208,30 @@ async def check_command_rate_limit(user: Any) -> bool:
         return True
     lock = _COMMAND_LOCKS.setdefault(user_id, asyncio.Lock())
     async with lock:
-        count = _COMMAND_COUNTS.get(user_id, 0)
-        if count >= _MAX_RATE:
+        history = _COMMAND_HISTORY.setdefault(user_id, deque())
+        now = time.monotonic()
+        window_seconds = _get_command_rate_limit_window()
+        if window_seconds <= 0:
+            history.clear()
+        else:
+            cutoff = now - window_seconds
+            while history and history[0] <= cutoff:
+                history.popleft()
+        if len(history) >= _MAX_RATE:
             logger.warning("Rate limit exceeded for user %s", user_id)
             return False
-        _COMMAND_COUNTS[user_id] = count + 1
+        history.append(now)
     return True
 
 
 def reset_command_counts(user_id: str | None = None) -> None:
     """Reset stored command counts for a user or all users."""
     if user_id is not None:
-        _COMMAND_COUNTS.pop(user_id, None)
+        history = _COMMAND_HISTORY.pop(user_id, None)
+        if history is not None:
+            history.clear()
     else:
-        _COMMAND_COUNTS.clear()
+        _COMMAND_HISTORY.clear()
 
 
 def set_max_rate(value: int) -> None:
