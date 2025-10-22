@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import random
 import time
@@ -13,11 +14,13 @@ from typing import Any
 
 from opentelemetry import trace
 
+_KAFKA_IMPORT_ERROR: Exception | None = None
 try:  # pragma: no cover - optional dependency
     from confluent_kafka import Consumer as KafkaConsumer
     from confluent_kafka import Producer as KafkaProducer
-except Exception:  # pragma: no cover - fallback
+except Exception as exc:  # pragma: no cover - fallback
     KafkaConsumer = KafkaProducer = Any
+    _KAFKA_IMPORT_ERROR = exc
 
 try:  # pragma: no cover - optional dependency in tests
     from src.infra.snapshot import compute_trace_hash as _compute_trace_hash
@@ -140,6 +143,7 @@ _last_hash: str | None = None
 _seed: int | None = None
 _seed_cache: dict[Path, int] = {}
 _header_written: set[Path] = set()
+_KAFKA_WARNING_EMITTED = False
 
 
 def set_seed(seed: int) -> None:
@@ -188,6 +192,21 @@ _consumer_conf = {
     "group.id": os.getenv("REPLAY_GROUP", "culture-replay"),
     "auto.offset.reset": "earliest",
 }
+
+
+def _kafka_bindings_available() -> bool:
+    """Return ``True`` when the Kafka bindings imported successfully."""
+
+    global _KAFKA_WARNING_EMITTED
+    if _KAFKA_IMPORT_ERROR is None:
+        return True
+    if not _KAFKA_WARNING_EMITTED:
+        logging.getLogger(__name__).warning(
+            "Redpanda integration disabled: failed to import confluent_kafka (%s)",
+            _KAFKA_IMPORT_ERROR,
+        )
+        _KAFKA_WARNING_EMITTED = True
+    return False
 
 
 def _log_file(path: str | Path | None = None) -> Path:
@@ -322,8 +341,9 @@ def _ensure_header(path: str | Path | None = None) -> None:
         if os.getenv("ENABLE_REDPANDA", "0") == "1":
             try:
                 producer = _get_producer()
-                producer.produce(_topic, json.dumps(header).encode("utf-8"))
-                producer.poll(0)
+                if producer is not None:
+                    producer.produce(_topic, json.dumps(header).encode("utf-8"))
+                    producer.poll(0)
             except Exception:
                 pass
     except Exception:  # pragma: no cover - ignore
@@ -417,8 +437,10 @@ def _filter_events(
     return valid
 
 
-def _get_producer() -> Any:
+def _get_producer() -> Any | None:
     global _producer
+    if not _kafka_bindings_available():
+        return None
     if _producer is None:
         _producer = KafkaProducer({"bootstrap.servers": _broker})
     return _producer
@@ -501,11 +523,10 @@ def log_event(event: dict[str, Any]) -> dict[str, Any]:
         try:  # pragma: no cover - best effort
             payload = serialized_event.encode("utf-8")
             producer = _get_producer()
-            producer.produce(_topic, payload)
-            producer.poll(0)
+            if producer is not None:
+                producer.produce(_topic, payload)
+                producer.poll(0)
         except Exception as exc:  # pragma: no cover - best effort
-            import logging
-
             logging.getLogger(__name__).debug("Failed to log event: %s", exc)
         return persisted_event
 
@@ -538,7 +559,9 @@ def fetch_events(
     misbehavior events are filtered out. Set ``include_misbehavior`` to
     ``True`` to include them in the results.
     """
-    source = "redpanda" if os.getenv("ENABLE_REDPANDA", "0") == "1" else "file"
+    redpanda_requested = os.getenv("ENABLE_REDPANDA", "0") == "1"
+    redpanda_available = _kafka_bindings_available() if redpanda_requested else False
+    source = "redpanda" if redpanda_requested and redpanda_available else "file"
     with tracer.start_as_current_span("event_log.fetch_events") as span:
         span.set_attribute("event.source", source)
         span.set_attribute("tick.start", after_step)
@@ -573,8 +596,6 @@ def fetch_events(
                 if step > after_step and (end_step is None or step <= end_step):
                     raw_events.append(event)
         except Exception as exc:  # pragma: no cover - best effort
-            import logging
-
             logging.getLogger(__name__).debug("Failed to fetch events: %s", exc)
         finally:
             try:
@@ -598,7 +619,9 @@ def stream_events(
     path: str | Path | None = None,
 ) -> Generator[dict[str, Any], None, None]:
     """Yield events from the log or Redpanda until ``timeout`` of inactivity."""
-    source = "redpanda" if os.getenv("ENABLE_REDPANDA", "0") == "1" else "file"
+    redpanda_requested = os.getenv("ENABLE_REDPANDA", "0") == "1"
+    redpanda_available = _kafka_bindings_available() if redpanda_requested else False
+    source = "redpanda" if redpanda_requested and redpanda_available else "file"
     with tracer.start_as_current_span("event_log.stream_events") as span:
         span.set_attribute("event.source", source)
         span.set_attribute("tick.start", after_step)
