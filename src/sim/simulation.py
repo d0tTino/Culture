@@ -554,6 +554,11 @@ class Simulation:
 
         await _mute_agent(self, agent_id)
 
+    async def unmute_agent(self: Self, agent_id: str) -> None:
+        from .resources import unmute_agent as _unmute_agent
+
+        await _unmute_agent(self, agent_id)
+
     async def reset_memory(self: Self, agent_id: str) -> None:
         from .resources import reset_memory as _reset_memory
 
@@ -571,6 +576,11 @@ class Simulation:
         if action == "mute" and agent_id:
             await self.event_kernel.schedule_immediate(
                 lambda aid=str(agent_id): self.mute_agent(aid),
+                vector=self.vector,
+            )
+        elif action == "unmute" and agent_id:
+            await self.event_kernel.schedule_immediate(
+                lambda aid=str(agent_id): self.unmute_agent(aid),
                 vector=self.vector,
             )
         elif action == "reset_memory" and agent_id:

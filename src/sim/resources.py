@@ -23,6 +23,18 @@ async def mute_agent(sim: Simulation, agent_id: str) -> None:
     await sim.event_kernel.emit_environment_event(event)
 
 
+async def unmute_agent(sim: Simulation, agent_id: str) -> None:
+    """Unmute ``agent_id`` and broadcast the action."""
+    sim.muted_agents.discard(agent_id)
+    event = {
+        "type": "moderation",
+        "action": "unmute",
+        "agent_id": agent_id,
+        "step": sim.current_step,
+    }
+    await sim.event_kernel.emit_environment_event(event)
+
+
 async def reset_memory(sim: Simulation, agent_id: str) -> None:
     """Reset the memory of ``agent_id`` and broadcast the action."""
     try:
@@ -57,4 +69,4 @@ async def apply_penalty(sim: Simulation, agent_id: str, ip: float = 0.0, du: flo
     await sim.event_kernel.emit_environment_event(event)
 
 
-__all__ = ["apply_penalty", "mute_agent", "reset_memory"]
+__all__ = ["apply_penalty", "mute_agent", "reset_memory", "unmute_agent"]
