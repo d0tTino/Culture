@@ -549,20 +549,35 @@ class Simulation:
                     )
                     _ = task
 
-    async def mute_agent(self: Self, agent_id: str) -> None:
+    async def mute_agent(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
         from .resources import mute_agent as _mute_agent
 
-        await _mute_agent(self, agent_id)
+        event = _mute_agent(self, agent_id)
+        if emit_event:
+            await self.event_kernel.emit_environment_event(event)
 
-    async def reset_memory(self: Self, agent_id: str) -> None:
+    async def unmute_agent(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
+        from .resources import unmute_agent as _unmute_agent
+
+        event = _unmute_agent(self, agent_id)
+        if emit_event:
+            await self.event_kernel.emit_environment_event(event)
+
+    async def reset_memory(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
         from .resources import reset_memory as _reset_memory
 
-        await _reset_memory(self, agent_id)
+        event = _reset_memory(self, agent_id)
+        if emit_event and event:
+            await self.event_kernel.emit_environment_event(event)
 
-    async def apply_penalty(self: Self, agent_id: str, ip: float, du: float) -> None:
+    async def apply_penalty(
+        self: Self, agent_id: str, ip: float, du: float, *, emit_event: bool = True
+    ) -> None:
         from .resources import apply_penalty as _apply_penalty
 
-        await _apply_penalty(self, agent_id, ip, du)
+        event = _apply_penalty(self, agent_id, ip, du)
+        if emit_event and event:
+            await self.event_kernel.emit_environment_event(event)
 
     async def handle_moderation_command(self: Self, cmd: dict[str, Any]) -> None:
         """Process moderation actions like muting or penalties."""
@@ -576,6 +591,11 @@ class Simulation:
         elif action == "reset_memory" and agent_id:
             await self.event_kernel.schedule_immediate(
                 lambda aid=str(agent_id): self.reset_memory(aid),
+                vector=self.vector,
+            )
+        elif action == "unmute" and agent_id:
+            await self.event_kernel.schedule_immediate(
+                lambda aid=str(agent_id): self.unmute_agent(aid),
                 vector=self.vector,
             )
         elif action == "penalty" and agent_id:
@@ -1566,6 +1586,42 @@ class Simulation:
                 from src.infra.checkpoint import restore_environment
 
                 restore_environment(env)
+        elif event.get("type") == "moderation":
+            action = event.get("action")
+            agent_id = event.get("agent_id")
+            if not isinstance(agent_id, str):
+                return
+            from .resources import (
+                apply_penalty as _apply_penalty,
+            )
+            from .resources import (
+                mute_agent as _mute_agent,
+            )
+            from .resources import (
+                reset_memory as _reset_memory,
+            )
+            from .resources import (
+                unmute_agent as _unmute_agent,
+            )
+
+            if action == "mute":
+                _mute_agent(self, agent_id)
+            elif action == "unmute":
+                _unmute_agent(self, agent_id)
+            elif action == "reset_memory":
+                _reset_memory(self, agent_id)
+            elif action == "penalty":
+                ip_val = event.get("ip", 0.0)
+                du_val = event.get("du", 0.0)
+                try:
+                    ip = float(ip_val)
+                except (TypeError, ValueError):
+                    ip = 0.0
+                try:
+                    du = float(du_val)
+                except (TypeError, ValueError):
+                    du = 0.0
+                _apply_penalty(self, agent_id, ip, du)
         elif event.get("type") == "tick":
             step = event.get("step")
             if isinstance(step, int) and step > self.current_step:
