@@ -23,10 +23,6 @@ def mute_agent(sim: Simulation, agent_id: str) -> dict[str, object]:
     }
 
 
-async def unmute_agent(sim: Simulation, agent_id: str) -> None:
-    """Unmute ``agent_id`` and broadcast the action."""
-    sim.muted_agents.discard(agent_id)
-    event = {
 def unmute_agent(sim: Simulation, agent_id: str) -> dict[str, object]:
     """Unmute ``agent_id`` and return the moderation event payload."""
 
@@ -37,11 +33,6 @@ def unmute_agent(sim: Simulation, agent_id: str) -> dict[str, object]:
         "agent_id": agent_id,
         "step": sim.current_step,
     }
-    await sim.event_kernel.emit_environment_event(event)
-
-
-async def reset_memory(sim: Simulation, agent_id: str) -> None:
-    """Reset the memory of ``agent_id`` and broadcast the action."""
 
 
 def reset_memory(sim: Simulation, agent_id: str) -> dict[str, object] | None:
