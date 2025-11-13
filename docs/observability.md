@@ -210,9 +210,10 @@ Set the following variables in your `.env`:
 ```env
 ENABLE_REDPANDA=1
 REDPANDA_BROKER=localhost:9092
+REDPANDA_TOPIC=culture.events  # optional override of the topic name
 ```
 
-Events will be written to the `culture-events` topic. You can inspect them with the `rpk` CLI or any Kafka-compatible consumer.
+Events will be written to the `culture.events` topic by default. You can inspect them with the `rpk` CLI or any Kafka-compatible consumer, or override the destination by setting `REDPANDA_TOPIC`.
 
 ## 9. Metrics Reference
 
