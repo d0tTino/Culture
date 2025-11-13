@@ -84,6 +84,9 @@ HUMAN_MESSAGES_TOTAL = Counter(
 COALITION_COUNT = Gauge("coalition_count", "Number of active coalitions")
 AVERAGE_SENTIMENT = Gauge("average_sentiment", "Average sentiment across all agents")
 PROPOSAL_THROUGHPUT = Gauge("proposal_throughput", "Proposals processed per minute")
+ACTIVE_AGENT_COUNT = Gauge(
+    "active_agent_count", "Number of active agents participating in the simulation"
+)
 
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")

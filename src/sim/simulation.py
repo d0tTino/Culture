@@ -38,6 +38,7 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
 )
+from src.interfaces.metrics import ACTIVE_AGENT_COUNT
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
@@ -120,6 +121,7 @@ class Simulation:
         self.seed = seed
 
         self.agents: list[Agent] = agents
+        ACTIVE_AGENT_COUNT.set(len(self.agents))
         self.current_step: int = 0
         self.current_agent_index: int = 0
         self.last_completed_agent_index: int | None = None
@@ -317,6 +319,7 @@ class Simulation:
 
         self.collective_ip = total_ip
         self.collective_du = total_du
+        ACTIVE_AGENT_COUNT.set(len(self.agents))
 
         if self.track_collective_metrics:
             current_collective_ip = sum(agent.state.ip for agent in self.agents)
@@ -516,6 +519,7 @@ class Simulation:
                         self.agents.remove(agent)
                     except ValueError:  # pragma: no cover - defensive
                         pass
+                    self._update_collective_metrics()
         elif action == "set_speed":
             try:
                 self.speed = float(cmd.get("value", 1))
@@ -654,6 +658,7 @@ class Simulation:
         self.agents.append(agent)
         await self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
         self._update_collective_metrics()
+        ACTIVE_AGENT_COUNT.set(len(self.agents))
 
     async def retire_agent(self: Self, agent: "Agent") -> None:
         """Retire an agent and compute inheritance."""
