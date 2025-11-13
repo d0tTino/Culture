@@ -7,9 +7,10 @@ import random
 import statistics
 import threading
 import time
-from collections.abc import Awaitable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import numpy as np
 from opentelemetry import trace
@@ -559,12 +560,6 @@ class Simulation:
     async def unmute_agent(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
         from .resources import unmute_agent as _unmute_agent
 
-    async def unmute_agent(self: Self, agent_id: str) -> None:
-        from .resources import unmute_agent as _unmute_agent
-
-        await _unmute_agent(self, agent_id)
-
-    async def reset_memory(self: Self, agent_id: str) -> None:
         event = _unmute_agent(self, agent_id)
         if emit_event:
             await self.event_kernel.emit_environment_event(event)
@@ -602,11 +597,6 @@ class Simulation:
         elif action == "reset_memory" and agent_id:
             await self.event_kernel.schedule_immediate(
                 lambda aid=str(agent_id): self.reset_memory(aid),
-                vector=self.vector,
-            )
-        elif action == "unmute" and agent_id:
-            await self.event_kernel.schedule_immediate(
-                lambda aid=str(agent_id): self.unmute_agent(aid),
                 vector=self.vector,
             )
         elif action == "penalty" and agent_id:
@@ -719,9 +709,9 @@ class Simulation:
 
     async def send_discord_update(
         self: Self,
-        message: Optional[str] = None,
-        embed: Optional[object] = None,
-        agent_id: Optional[str] = None,
+        message: str | None = None,
+        embed: object | None = None,
+        agent_id: str | None = None,
     ) -> None:
         """
         Send an update to Discord if the discord_bot is available.
@@ -1347,7 +1337,7 @@ class Simulation:
                     if not passed:
                         reason = f"observed {observed:.3f} below min {threshold:.3f}"
                 elif field_name == "max_delta":
-                    deltas = [abs(curr - prev) for prev, curr in zip(values[:-1], values[1:])]
+                    deltas = [abs(curr - prev) for prev, curr in pairwise(values)]
                     observed = max(deltas) if deltas else 0.0
                     passed = observed <= threshold
                     if not passed:
@@ -1600,20 +1590,14 @@ class Simulation:
         elif event.get("type") == "moderation":
             action = event.get("action")
             agent_id = event.get("agent_id")
+
             if not isinstance(agent_id, str):
                 return
-            from .resources import (
-                apply_penalty as _apply_penalty,
-            )
-            from .resources import (
-                mute_agent as _mute_agent,
-            )
-            from .resources import (
-                reset_memory as _reset_memory,
-            )
-            from .resources import (
-                unmute_agent as _unmute_agent,
-            )
+
+            from .resources import apply_penalty as _apply_penalty
+            from .resources import mute_agent as _mute_agent
+            from .resources import reset_memory as _reset_memory
+            from .resources import unmute_agent as _unmute_agent
 
             if action == "mute":
                 _mute_agent(self, agent_id)
@@ -1624,14 +1608,17 @@ class Simulation:
             elif action == "penalty":
                 ip_val = event.get("ip", 0.0)
                 du_val = event.get("du", 0.0)
+
                 try:
                     ip = float(ip_val)
                 except (TypeError, ValueError):
                     ip = 0.0
+
                 try:
                     du = float(du_val)
                 except (TypeError, ValueError):
                     du = 0.0
+
                 _apply_penalty(self, agent_id, ip, du)
         elif event.get("type") == "tick":
             step = event.get("step")
@@ -1884,8 +1871,8 @@ class Simulation:
         self: Self,
         project_name: str,
         creator_agent_id: str,
-        project_description: Optional[str] = None,
-    ) -> Optional[str]:
+        project_description: str | None = None,
+    ) -> str | None:
         from .simulation_projects import create_project as _create_project
 
         return _create_project(self, project_name, creator_agent_id, project_description)
