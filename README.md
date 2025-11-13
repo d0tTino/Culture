@@ -890,6 +890,7 @@ See [docs/testing.md](docs/testing.md) for full instructions, marker definitions
   - `OTEL_EXPORTER_ENDPOINT` to override the OTLP log endpoint
   - `ENABLE_REDPANDA=1` to log events to Redpanda
   - `REDPANDA_BROKER` (e.g., localhost:9092) address of the Redpanda broker
+  - `REDPANDA_TOPIC` to override the default `culture.events` topic name
   - `SNAPSHOT_COMPRESS=1` to compress simulation snapshots
 
 
@@ -944,7 +945,7 @@ You can install Redpanda quickly with:
 curl -1s https://raw.githubusercontent.com/redpanda-data/redpanda/master/install.sh | bash
 docker compose -f docker-compose.redpanda.yml up -d
 ```
-Events are written to the `culture-events` topic and can be consumed using the `rpk` CLI.
+Events are written to the `culture.events` topic by default and can be consumed using the `rpk` CLI. Override the topic name with the `REDPANDA_TOPIC` environment variable if desired.
 
 ### Prometheus Metrics
 The simulation exposes Prometheus metrics on port 8000 when `src.interfaces.metrics` is imported.
