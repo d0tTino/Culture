@@ -15,6 +15,7 @@
 - [Signature Demo](#signature-demo)
 - [culture-ui Frontend](#culture-ui-frontend)
 - [Extensions and Plug-ins](#extensions-and-plug-ins)
+- [Council Mode (Experimental)](#council-mode-experimental)
 - [Roadmap](#roadmap)
 - [Exporting Simulation Traces](#exporting-simulation-traces)
 
@@ -109,6 +110,10 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 * **Agent Lifecycle & Legacy:**
     * Agent Legacy & Artifacts on the Knowledge Board.
     * Mechanisms for agent "death" or succession.
+
+## Council Mode (Experimental)
+
+Culture ships with an opt-in, experimental **Council Mode** where you can temporarily promote a panel of specialized agents to debate, critique, or ratify pivotal simulation actions before they execute. Because this workflow is still evolving, it is disabled by default—enable it only when you are ready to iterate on council prompts and guardrails. Refer to the [Council Mode design doc](docs/council_mode_design.md) for the latest setup instructions, capabilities, and caveats.
 
 ## Technology Stack
 
