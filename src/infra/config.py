@@ -5,8 +5,14 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
+
+try:  # pragma: no cover - fallback when dependency missing
+    import yaml
+except Exception:  # pragma: no cover - guard against optional dependency
+    yaml = None  # type: ignore[assignment]
 
 from src.shared.pydantic_compat import BaseSettings
 
@@ -136,6 +142,9 @@ DEFAULT_CONFIG: dict[str, object] = {
     "AGENT_TOKEN_BUDGET": 10000,
     "MEMORY_RETRIEVER_TOP_K": 5,
     "MEMORY_RETRIEVER_TOKEN_LIMIT": 1000,
+    "USE_COUNCIL_MODE": False,
+    "COUNCIL_CONFIG_PATH": "config/council.yml",
+    "DU_BUDGET_PER_QUESTION": 5.0,
     "ROLE_DU_GENERATION": {
         "Facilitator": {"base": 1.0},
         "Innovator": {"base": 1.0},
@@ -144,8 +153,23 @@ DEFAULT_CONFIG: dict[str, object] = {
     "GENE_MUTATION_RATE": 0.1,
 }
 
+# Cache for council roster configuration
+_COUNCIL_CONFIG: dict[str, Any] | None = None
+
 # Global config dictionary
 _CONFIG: dict[str, object] = {}
+
+
+def _build_default_council_config() -> dict[str, Any]:
+    """Return default council roster entries."""
+    model_name = str(getattr(settings, "DEFAULT_LLM_MODEL", "mistral:latest"))
+    return {
+        "members": [
+            {"name": "Innovator", "role": "Innovator", "model": model_name},
+            {"name": "Analyzer", "role": "Analyzer", "model": model_name},
+            {"name": "Red Team", "role": "Red Team", "model": model_name},
+        ]
+    }
 
 # Define keys that should be floats and ints for type conversion
 FLOAT_CONFIG_KEYS = [
@@ -190,6 +214,7 @@ FLOAT_CONFIG_KEYS = [
     "GENE_MUTATION_RATE",
     "LLM_BATCH_TIMEOUT",
     "DISCORD_COMMAND_RATE_LIMIT_SECONDS",
+    "DU_BUDGET_PER_QUESTION",
 ]
 INT_CONFIG_KEYS = [
     "IP_AWARD_FOR_PROPOSAL",
@@ -243,6 +268,7 @@ BOOL_CONFIG_KEYS = [
     "MEMORY_PRUNING_L1_MUS_ENABLED",
     "MEMORY_PRUNING_L2_MUS_ENABLED",
     "SNAPSHOT_COMPRESS",
+    "USE_COUNCIL_MODE",
 ]
 
 # Keys that must be defined for a complete runtime configuration.
@@ -300,6 +326,63 @@ def get_config(key: str | None = None) -> Any:
     if hasattr(settings, key):
         return getattr(settings, key)
     return None
+
+
+def load_council_config(*, path: str | None = None, reload: bool = False) -> dict[str, Any]:
+    """Load council roster configuration from YAML, falling back to defaults."""
+
+    global _COUNCIL_CONFIG
+
+    cacheable = path is None
+    if cacheable and not reload and _COUNCIL_CONFIG is not None:
+        return deepcopy(_COUNCIL_CONFIG)
+
+    config_path = Path(path or settings.COUNCIL_CONFIG_PATH)
+    default_config = _build_default_council_config()
+    default_members = [dict(entry) for entry in default_config.get("members", [])]
+
+    if yaml is None:
+        logger.debug("pyyaml is unavailable; using default council config")
+        result = {"members": default_members}
+        if cacheable:
+            _COUNCIL_CONFIG = result
+        return deepcopy(result)
+
+    loaded_data: dict[str, Any] | None = None
+    if config_path.exists():
+        try:
+            parsed = yaml.safe_load(config_path.read_text())  # type: ignore[no-untyped-call]
+        except Exception as exc:  # pragma: no cover - filesystem edge cases
+            logger.warning("Failed to load council config at %s: %s", config_path, exc)
+        else:
+            if isinstance(parsed, dict):
+                loaded_data = parsed
+            else:
+                logger.warning(
+                    "Council config at %s is not a mapping; using defaults", config_path
+                )
+    else:
+        logger.debug("Council config not found at %s; falling back to defaults", config_path)
+
+    members: list[dict[str, Any]] = []
+    if loaded_data is not None:
+        raw_members = loaded_data.get("members")
+        if isinstance(raw_members, list):
+            default_model = default_members[0].get("model") if default_members else None
+            for entry in raw_members:
+                if isinstance(entry, dict):
+                    normalized = dict(entry)
+                    if default_model and not normalized.get("model"):
+                        normalized["model"] = default_model
+                    members.append(normalized)
+
+    if not members:
+        members = default_members
+
+    result = {"members": members}
+    if cacheable:
+        _COUNCIL_CONFIG = result
+    return deepcopy(result)
 
 
 def get(setting_name: str, default: str | None = None) -> object:

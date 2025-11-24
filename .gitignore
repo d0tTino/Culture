@@ -80,7 +80,8 @@ pytest_*.txt
 
 # Local configuration
 .local/
-config/
+config/*
+!config/council.yml
 
 # Temporary files
 *.tmp

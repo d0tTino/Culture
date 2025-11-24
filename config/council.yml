@@ -1,0 +1,12 @@
+# Sample council roster used in local development
+# Each member uses the default local model placeholder by default.
+members:
+  - name: Innovator
+    role: Innovator
+    model: mistral:latest
+  - name: Analyzer
+    role: Analyzer
+    model: mistral:latest
+  - name: Red Team
+    role: Red Team
+    model: mistral:latest
