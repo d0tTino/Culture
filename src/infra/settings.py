@@ -143,6 +143,9 @@ class ConfigSettings(BaseSettings):
     AGENT_TOKEN_BUDGET: int = 10000
     MEMORY_RETRIEVER_TOP_K: int = 5
     MEMORY_RETRIEVER_TOKEN_LIMIT: int = 1000
+    USE_COUNCIL_MODE: bool = False
+    COUNCIL_CONFIG_PATH: str = "config/council.yml"
+    DU_BUDGET_PER_QUESTION: float = 5.0
     GENE_MUTATION_RATE: float = 0.1
     ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
         "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
