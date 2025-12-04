@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, MutableSequence, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 
 @dataclass(slots=True)
@@ -21,12 +23,15 @@ class CouncilMemberConfig:
     metadata: Mapping[str, Any] | None = None
 
 
+CouncilMembers = Annotated[Sequence[CouncilMemberConfig], Field(min_length=1)]
+
+
 @dataclass(slots=True)
 class CouncilConfig:
     """Top-level configuration for enabling Council Mode in a scenario."""
 
     enabled: bool
-    members: Sequence[CouncilMemberConfig]
+    members: CouncilMembers
     quorum: int | None = None
     consensus_threshold: float = 0.67
     max_rounds: int = 1
