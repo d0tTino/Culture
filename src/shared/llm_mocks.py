@@ -5,6 +5,7 @@ Provides mock helpers for LLM-dependent tests.
 
 import json
 import logging
+import re
 import socket
 from typing import Any
 from unittest.mock import MagicMock
@@ -151,6 +152,51 @@ def create_mock_ollama_client() -> MagicMock:
     def mock_generate(*args: Any, **kwargs: Any) -> OllamaGenerateResponse:
         prompt_content = str(kwargs.get("prompt", ""))  # Ensure prompt_content is a string
         logger.debug(f"MOCK_GENERATE_PROMPT_CONTENT_DEBUG: '''{prompt_content}'''")
+
+        if "[council-member-answer]" in prompt_content:
+            member_match = re.search(r"member_id[=:]\s*([\w-]+)", prompt_content)
+            member_id = member_match.group(1) if member_match else "member"
+            logger.debug("Mock generate producing deterministic council member answer for %s", member_id)
+            response_json_str = json.dumps(
+                {
+                    "answer": f"Deterministic answer from {member_id}",
+                    "reasoning": f"Deterministic reasoning from {member_id}",
+                    "confidence": 0.82,
+                    "citations": [f"citation-{member_id}"],
+                }
+            )
+            return {
+                "response": response_json_str,
+                "done": True,
+                "eval_count": 5,
+                "total_duration": 25,
+            }
+
+        if "[council-judgement]" in prompt_content:
+            member_ids = re.findall(r"member_id[=:]\s*([\w-]+)", prompt_content)
+            if not member_ids:
+                member_ids = ["member"]
+            winner = member_ids[0]
+            votes = {mid: 1 for mid in member_ids}
+            metrics = {"cohesion": 0.91, "coverage": 0.77}
+            logger.debug(
+                "Mock generate producing deterministic council judgement with winner %s", winner
+            )
+            response_json_str = json.dumps(
+                {
+                    "winner": winner,
+                    "votes": votes,
+                    "metrics": metrics,
+                    "resolution": f"{winner} proposal selected",
+                    "summary": "Deterministic council summary",
+                }
+            )
+            return {
+                "response": response_json_str,
+                "done": True,
+                "eval_count": 6,
+                "total_duration": 30,
+            }
 
         # Determine which DSPy program this prompt is for based on unique field combinations
         is_l1_summary_prompt = (

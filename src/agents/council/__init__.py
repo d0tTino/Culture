@@ -7,6 +7,7 @@ from .types import (
     CouncilQuestion,
     MemberAnswer,
 )
+from .orchestrator import CouncilOrchestrator
 
 __all__ = [
     "CouncilConfig",
@@ -14,4 +15,5 @@ __all__ = [
     "CouncilOutcome",
     "CouncilQuestion",
     "MemberAnswer",
+    "CouncilOrchestrator",
 ]
