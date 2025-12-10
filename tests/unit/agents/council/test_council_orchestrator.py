@@ -172,26 +172,43 @@ def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatc
     llm_mocks.set_mock_llm_du_budget(None)
 
 
-def test_council_orchestrator_populates_rag_documents(monkeypatch: pytest.MonkeyPatch) -> None:
-    retriever = DummyRetriever()
-    orchestrator = CouncilOrchestrator(memory_retriever=retriever)
+def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = CouncilOrchestrator()
     config = _build_council_config()
-    question = _build_question(metadata={"agent_id": "agent-123"})
+    question = _build_question()
 
-    captured_prompts: list[str] = []
-    original_generate_structured_output = council_orchestrator.generate_structured_output
+    rag_marker = "<mocked-rag-docs>"
+    extra_context = "<extra-context>"
+    member_prompts: list[str] = []
+    judge_prompts: list[str] = []
 
-    def _capture_generate(prompt: str, **kwargs: Any):
-        captured_prompts.append(prompt)
-        return original_generate_structured_output(prompt, **kwargs)
+    monkeypatch.setattr(
+        "src.agents.council.orchestrator._format_rag_docs", lambda _: rag_marker
+    )
 
-    monkeypatch.setattr(council_orchestrator, "generate_structured_output", _capture_generate)
+    original_generate = llm_client.client.generate
 
-    orchestrator.deliberate(config, question)
+    def capture_generate(*args: object, **kwargs: object) -> dict[str, object]:
+        prompt = str(kwargs.get("prompt") or (args[0] if args else ""))
+        if "[council-member-answer]" in prompt:
+            member_prompts.append(prompt)
+        if "[council-judgement]" in prompt:
+            judge_prompts.append(prompt)
+        return original_generate(*args, **kwargs)
 
-    assert retriever.calls
-    assert question.rag_documents[:2] == [
-        "Memory fact (source: episodic-1)",
-        "Semantic insight",
-    ]
-    assert any("Memory fact" in prompt for prompt in captured_prompts)
+    monkeypatch.setattr(llm_client.client, "generate", capture_generate)
+
+    orchestrator.deliberate(
+        config,
+        question,
+        extra_context=extra_context,
+        rag_docs=["Doc 1", "Doc 2"],
+    )
+
+    assert member_prompts
+    assert judge_prompts
+
+    assert all(rag_marker in prompt for prompt in member_prompts)
+    assert all(rag_marker in prompt for prompt in judge_prompts)
+    assert all(extra_context in prompt for prompt in member_prompts)
+    assert all(extra_context in prompt for prompt in judge_prompts)
