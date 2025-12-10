@@ -53,6 +53,7 @@ class CouncilQuestion:
     question_id: str
     prompt: str
     context: str | None = None
+    rag_documents: MutableSequence[str] = field(default_factory=list)
     metadata: Mapping[str, Any] | None = None
 
 

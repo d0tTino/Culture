@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
 
+import src.agents.council.orchestrator as council_orchestrator
 from src.agents.council import (
     CouncilConfig,
     CouncilMemberConfig,
@@ -86,12 +89,27 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
     return CouncilConfig(enabled=True, members=base_members + extra_members)
 
 
-def _build_question() -> CouncilQuestion:
+def _build_question(metadata: Mapping[str, Any] | None = None) -> CouncilQuestion:
     return CouncilQuestion(
         question_id="q-1",
         prompt="Which project should we fund first?",
         context="We have budget for only one initiative this quarter.",
+        metadata=metadata,
     )
+
+
+class DummyRetriever:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, int, int | None]] = []
+
+    async def retrieve(
+        self, agent_id: str, query: str = "", k: int = 5, token_budget: int | None = None
+    ) -> list[dict[str, str]]:
+        self.calls.append((agent_id, query, k, token_budget))
+        return [
+            {"content": "Memory fact", "metadata": {"source": "episodic-1"}},
+            {"content": "Semantic insight"},
+        ]
 
 
 def test_council_orchestrator_invokes_all_members_and_aggregates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,3 +170,28 @@ def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatc
     }
 
     llm_mocks.set_mock_llm_du_budget(None)
+
+
+def test_council_orchestrator_populates_rag_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    retriever = DummyRetriever()
+    orchestrator = CouncilOrchestrator(memory_retriever=retriever)
+    config = _build_council_config()
+    question = _build_question(metadata={"agent_id": "agent-123"})
+
+    captured_prompts: list[str] = []
+    original_generate_structured_output = council_orchestrator.generate_structured_output
+
+    def _capture_generate(prompt: str, **kwargs: Any):
+        captured_prompts.append(prompt)
+        return original_generate_structured_output(prompt, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "generate_structured_output", _capture_generate)
+
+    orchestrator.deliberate(config, question)
+
+    assert retriever.calls
+    assert question.rag_documents[:2] == [
+        "Memory fact (source: episodic-1)",
+        "Semantic insight",
+    ]
+    assert any("Memory fact" in prompt for prompt in captured_prompts)
