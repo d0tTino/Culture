@@ -152,3 +152,45 @@ def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatc
     }
 
     llm_mocks.set_mock_llm_du_budget(None)
+
+
+def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config()
+    question = _build_question()
+
+    rag_marker = "<mocked-rag-docs>"
+    extra_context = "<extra-context>"
+    member_prompts: list[str] = []
+    judge_prompts: list[str] = []
+
+    monkeypatch.setattr(
+        "src.agents.council.orchestrator._format_rag_docs", lambda _: rag_marker
+    )
+
+    original_generate = llm_client.client.generate
+
+    def capture_generate(*args: object, **kwargs: object) -> dict[str, object]:
+        prompt = str(kwargs.get("prompt") or (args[0] if args else ""))
+        if "[council-member-answer]" in prompt:
+            member_prompts.append(prompt)
+        if "[council-judgement]" in prompt:
+            judge_prompts.append(prompt)
+        return original_generate(*args, **kwargs)
+
+    monkeypatch.setattr(llm_client.client, "generate", capture_generate)
+
+    orchestrator.deliberate(
+        config,
+        question,
+        extra_context=extra_context,
+        rag_docs=["Doc 1", "Doc 2"],
+    )
+
+    assert member_prompts
+    assert judge_prompts
+
+    assert all(rag_marker in prompt for prompt in member_prompts)
+    assert all(rag_marker in prompt for prompt in judge_prompts)
+    assert all(extra_context in prompt for prompt in member_prompts)
+    assert all(extra_context in prompt for prompt in judge_prompts)
