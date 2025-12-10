@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.agents.council.types import (
     CouncilConfig,
@@ -18,6 +21,9 @@ from src.agents.council.types import (
 )
 from src.infra.config import get_config, load_council_config
 from src.infra.llm_client import generate_structured_output, generate_text
+from src.sim.resource_manager import get_resource_manager
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Provide a JSON object with keys: "
@@ -37,10 +43,16 @@ class MemberResponseModel(BaseModel):
 class CouncilVoteModel(BaseModel):
     """Structured judgment produced by the council's adjudicator."""
 
-    winning_member_id: str
-    scores: dict[str, float] = Field(default_factory=dict)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    winning_member_id: str = Field(
+        alias="winning_member_id", validation_alias="winner"
+    )
+    scores: dict[str, float] = Field(default_factory=dict, alias="votes")
+    metrics: dict[str, float] = Field(default_factory=dict)
     summary: str
-    reasoning: str
+    reasoning: str | None = None
+    resolution: str | None = None
 
 
 @dataclass(slots=True)
@@ -66,6 +78,12 @@ def _build_council_context() -> CouncilContext:
     raw_config = load_council_config()
     default_model = str(get_config("DEFAULT_LLM_MODEL") or "mistral:latest")
     judge_model = str(raw_config.get("judge_model") or default_model)
+    max_concurrent_calls = raw_config.get("max_concurrent_calls")
+    if max_concurrent_calls is None:
+        max_concurrent_calls = get_config("COUNCIL_MAX_CONCURRENT_CALLS")
+    du_budget_per_question = raw_config.get("du_budget_per_question")
+    if du_budget_per_question is None:
+        du_budget_per_question = get_config("DU_BUDGET_PER_QUESTION")
 
     members: list[CouncilMemberConfig] = []
     for index, entry in enumerate(raw_config.get("members", [])):
@@ -112,6 +130,10 @@ def _build_council_context() -> CouncilContext:
         consensus_threshold=float(raw_config.get("consensus_threshold", 0.67)),
         max_rounds=int(raw_config.get("max_rounds", 1)),
         auto_record_transcript=bool(raw_config.get("auto_record_transcript", True)),
+        max_concurrent_calls=int(max_concurrent_calls) if max_concurrent_calls else None,
+        du_budget_per_question=(
+            float(du_budget_per_question) if du_budget_per_question is not None else None
+        ),
         metadata={"raw_config": raw_config},
     )
 
@@ -149,6 +171,7 @@ def _ask_council_member(
     *,
     extra_context: str | None = None,
     rag_docs: Sequence[str] | None = None,
+    agent_state: Any | None = None,
 ) -> MemberAnswer:
     prompt = _build_member_prompt(member, question, extra_context=extra_context, rag_docs=rag_docs)
     model_name = str((member.metadata or {}).get("model")) if member.metadata else None
@@ -159,10 +182,16 @@ def _ask_council_member(
         response_model=MemberResponseModel,
         model=member_model,
         temperature=0.3,
+        agent_state=agent_state,
     )
 
     if structured is None:
-        fallback_text = generate_text(prompt, model=member_model, temperature=0.3) or ""
+        fallback_text = (
+            generate_text(
+                prompt, model=member_model, temperature=0.3, agent_state=agent_state
+            )
+            or ""
+        )
         return MemberAnswer(
             member_id=member.member_id,
             answer=fallback_text,
@@ -229,6 +258,198 @@ def _judge_council_answers(
     )
 
 
+class CouncilOrchestrator:
+    """Coordinate concurrent council member calls with DU budgeting."""
+
+    def __init__(
+        self,
+        *,
+        max_concurrent_calls: int | None = None,
+        du_budget_per_question: float | None = None,
+    ) -> None:
+        default_concurrency = int(get_config("COUNCIL_MAX_CONCURRENT_CALLS") or 1)
+        self.max_concurrent_calls = int(max_concurrent_calls or default_concurrency)
+        default_budget = float(get_config("DU_BUDGET_PER_QUESTION") or 0.0)
+        self.du_budget_per_question = float(
+            default_budget if du_budget_per_question is None else du_budget_per_question
+        )
+
+    def _resolve_context(self, config: CouncilConfig | None = None) -> CouncilContext:
+        base_context = _build_council_context()
+        if config is None:
+            return base_context
+        return CouncilContext(
+            config=config,
+            judge_model=base_context.judge_model,
+            member_model=base_context.member_model,
+        )
+
+    def deliberate(
+        self,
+        config: CouncilConfig | None,
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
+    ) -> CouncilOutcome:
+        """Synchronously deliberate by awaiting the async implementation."""
+
+        context = self._resolve_context(config)
+        return asyncio.run(
+            self.adeliberate(context, question, extra_context=extra_context, rag_docs=rag_docs)
+        )
+
+    async def adeliberate(
+        self,
+        context: CouncilContext,
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
+    ) -> CouncilOutcome:
+        rag_docs = rag_docs or []
+        metrics: dict[str, Any] = {
+            "du_budget_exhausted": False,
+            "du_budget_per_member": self._resolve_du_budget(context.config),
+        }
+        member_states = self._allocate_du_budgets(context.config, metrics)
+
+        answers = await self._gather_member_answers(
+            context,
+            question,
+            member_states,
+            extra_context=extra_context,
+            rag_docs=rag_docs,
+            metrics=metrics,
+        )
+
+        vote = None
+        if answers:
+            vote = await asyncio.to_thread(
+                _judge_council_answers,
+                context,
+                question,
+                answers,
+                extra_context=extra_context,
+                rag_docs=rag_docs,
+            )
+
+        return self._build_outcome(question, answers, vote, metrics)
+
+    def _resolve_du_budget(self, config: CouncilConfig) -> float:
+        if config.du_budget_per_question is not None:
+            return float(config.du_budget_per_question)
+        return float(self.du_budget_per_question)
+
+    def _allocate_du_budgets(
+        self, config: CouncilConfig, metrics: dict[str, Any]
+    ) -> dict[str, SimpleNamespace]:
+        budget = self._resolve_du_budget(config)
+        member_states: dict[str, SimpleNamespace] = {}
+        try:
+            resource_manager = get_resource_manager()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Resource manager unavailable for council DU budgeting: %s", exc)
+            resource_manager = None
+
+        for member in config.members:
+            state = SimpleNamespace(agent_id=member.member_id, du=budget, ip=0.0)
+            member_states[member.member_id] = state
+            if resource_manager is None:
+                continue
+            try:
+                resource_manager.set_du_budget(member.member_id, budget)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Failed to allocate DU budget for %s: %s", member.member_id, exc)
+
+        metrics["du_budget_per_member"] = budget
+        return member_states
+
+    async def _gather_member_answers(
+        self,
+        context: CouncilContext,
+        question: CouncilQuestion,
+        member_states: Mapping[str, SimpleNamespace],
+        *,
+        extra_context: str | None,
+        rag_docs: Sequence[str],
+        metrics: dict[str, Any],
+    ) -> list[MemberAnswer]:
+        semaphore = asyncio.Semaphore(
+            max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
+        )
+
+        async def _call_member(member: CouncilMemberConfig) -> MemberAnswer | None:
+            state = member_states.get(member.member_id)
+            try:
+                async with semaphore:
+                    return await asyncio.to_thread(
+                        _ask_council_member,
+                        member,
+                        question,
+                        extra_context=extra_context,
+                        rag_docs=rag_docs,
+                        agent_state=state,
+                    )
+            except RuntimeError as exc:
+                if "budget" in str(exc).lower():
+                    metrics["du_budget_exhausted"] = True
+                    logger.warning(
+                        "DU budget exhausted for member %s: %s", member.member_id, exc
+                    )
+                else:
+                    logger.exception("Council member call failed: %s", exc)
+                return None
+
+        results = await asyncio.gather(
+            *[_call_member(member) for member in context.config.members],
+            return_exceptions=True,
+        )
+
+        answers: list[MemberAnswer] = []
+        for result in results:
+            if isinstance(result, Exception):
+                if "budget" in str(result).lower():
+                    metrics["du_budget_exhausted"] = True
+                else:
+                    logger.exception("Unexpected error during council call", exc_info=result)
+                continue
+            if result is not None:
+                answers.append(result)
+        return answers
+
+    def _build_outcome(
+        self,
+        question: CouncilQuestion,
+        answers: list[MemberAnswer],
+        vote: CouncilVoteModel | None,
+        metrics: Mapping[str, Any],
+    ) -> CouncilOutcome:
+        winning_member_ids: list[str] = []
+        resolution = "No consensus reached."
+        summary = None
+        metadata: dict[str, Any] = {"metrics": dict(metrics)}
+
+        if vote is not None:
+            winning_member_ids = [vote.winning_member_id]
+            metadata.update({"scores": vote.scores, "judge_reasoning": vote.reasoning})
+            metadata.get("metrics", {}).update(vote.metrics)
+            summary = vote.summary
+            answer_lookup = {answer.member_id: answer.answer for answer in answers}
+            resolution = vote.resolution or answer_lookup.get(
+                vote.winning_member_id, resolution
+            )
+
+        return CouncilOutcome(
+            question=question,
+            answers=answers,
+            resolution=resolution,
+            winning_member_ids=winning_member_ids,
+            summary=summary,
+            metadata=metadata,
+        )
+
+
 def run_council(
     question: CouncilQuestion,
     *,
@@ -237,45 +458,10 @@ def run_council(
 ) -> CouncilOutcome:
     """Gather answers from council members and select a winner using a judge model."""
 
-    council_context = _build_council_context()
-    rag_docs = rag_docs or []
-
-    answers: list[MemberAnswer] = []
-    for member in council_context.config.members:
-        answers.append(
-            _ask_council_member(
-                member,
-                question,
-                extra_context=extra_context,
-                rag_docs=rag_docs,
-            )
-        )
-
-    vote = _judge_council_answers(
-        council_context,
+    orchestrator = CouncilOrchestrator()
+    return orchestrator.deliberate(
+        _build_council_context().config,
         question,
-        answers,
         extra_context=extra_context,
         rag_docs=rag_docs,
-    )
-
-    winning_member_ids: list[str] = []
-    resolution = "No consensus reached."
-    summary = None
-    metadata: dict[str, Any] | None = None
-
-    if vote is not None:
-        winning_member_ids = [vote.winning_member_id]
-        metadata = {"scores": vote.scores, "judge_reasoning": vote.reasoning}
-        summary = vote.summary
-        answer_lookup = {answer.member_id: answer.answer for answer in answers}
-        resolution = answer_lookup.get(vote.winning_member_id, "No consensus reached.")
-
-    return CouncilOutcome(
-        question=question,
-        answers=answers,
-        resolution=resolution,
-        winning_member_ids=winning_member_ids,
-        summary=summary,
-        metadata=metadata,
     )
