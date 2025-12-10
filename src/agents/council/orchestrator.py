@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
-import asyncio
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -24,7 +23,8 @@ from src.agents.council.types import (
 from src.infra import llm_client
 from src.infra.config import get_config, load_council_config
 from src.infra.llm_client import generate_structured_output, generate_text
-from src.shared import llm_mocks
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Provide a JSON object with keys: "
@@ -492,23 +492,41 @@ def run_council(
 class CouncilOrchestrator:
     """Coordinate concurrent council member calls with optional resource limits."""
 
-    def __init__(self: "CouncilOrchestrator", *, max_concurrency: int = 3) -> None:
+    def __init__(self: CouncilOrchestrator, *, max_concurrency: int = 3) -> None:
         self.max_concurrency = max(1, max_concurrency)
         self._semaphore = asyncio.Semaphore(self.max_concurrency)
 
     @staticmethod
-    def _build_member_prompt(member: CouncilMemberConfig, question: CouncilQuestion) -> str:
+    def _build_member_prompt(
+        member: CouncilMemberConfig,
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
+    ) -> str:
+        rag_section = _format_rag_docs(rag_docs or [])
+        additional_context = extra_context or ""
         return (
             "[council-member-answer] "
-            f"member_id={member.member_id} question={question.prompt} context={question.context or ''}"
+            f"member_id={member.member_id} question={question.prompt} context={question.context or ''} "
+            f"extra_context={additional_context} rag_docs={rag_section}"
         )
 
     @staticmethod
-    def _build_judge_prompt(question: CouncilQuestion, answers: Sequence[MemberAnswer]) -> str:
+    def _build_judge_prompt(
+        question: CouncilQuestion,
+        answers: Sequence[MemberAnswer],
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
+    ) -> str:
         member_section = " ".join(f"member_id={answer.member_id}" for answer in answers)
+        rag_section = _format_rag_docs(rag_docs or [])
+        additional_context = extra_context or ""
         return (
             "[council-judgement] "
-            f"question={question.prompt} context={question.context or ''} {member_section}"
+            f"question={question.prompt} context={question.context or ''} "
+            f"extra_context={additional_context} rag_docs={rag_section} {member_section}"
         )
 
     @staticmethod
@@ -522,22 +540,32 @@ class CouncilOrchestrator:
         )
 
     async def _ask_member_async(
-        self: "CouncilOrchestrator",
+        self: CouncilOrchestrator,
         member: CouncilMemberConfig,
         question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
     ) -> MemberAnswer:
-        prompt = self._build_member_prompt(member, question)
+        prompt = self._build_member_prompt(
+            member, question, extra_context=extra_context, rag_docs=rag_docs
+        )
         async with self._semaphore:
             response = await asyncio.to_thread(llm_client.client.generate, prompt=prompt)
         payload = json.loads(str(response.get("response", "{}")))
         return self._parse_member_response(member, payload)
 
     async def _judge_answers_async(
-        self: "CouncilOrchestrator",
+        self: CouncilOrchestrator,
         question: CouncilQuestion,
         answers: Sequence[MemberAnswer],
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
     ) -> CouncilOutcome:
-        prompt = self._build_judge_prompt(question, answers)
+        prompt = self._build_judge_prompt(
+            question, answers, extra_context=extra_context, rag_docs=rag_docs
+        )
         response = await asyncio.to_thread(llm_client.client.generate, prompt=prompt)
         payload = json.loads(str(response.get("response", "{}")))
 
@@ -555,12 +583,19 @@ class CouncilOrchestrator:
         )
 
     async def _gather_answers(
-        self: "CouncilOrchestrator",
+        self: CouncilOrchestrator,
         config: CouncilConfig,
         question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
     ) -> tuple[list[MemberAnswer], bool]:
         tasks = {
-            asyncio.create_task(self._ask_member_async(member, question)): index
+            asyncio.create_task(
+                self._ask_member_async(
+                    member, question, extra_context=extra_context, rag_docs=rag_docs
+                )
+            ): index
             for index, member in enumerate(config.members)
         }
         answers: list[tuple[int, MemberAnswer]] = []
@@ -595,11 +630,16 @@ class CouncilOrchestrator:
         return ordered_answers, budget_exhausted
 
     async def _deliberate_async(
-        self: "CouncilOrchestrator",
+        self: CouncilOrchestrator,
         config: CouncilConfig,
         question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
     ) -> CouncilOutcome:
-        answers, budget_exhausted = await self._gather_answers(config, question)
+        answers, budget_exhausted = await self._gather_answers(
+            config, question, extra_context=extra_context, rag_docs=rag_docs
+        )
 
         if budget_exhausted:
             return CouncilOutcome(
@@ -625,13 +665,22 @@ class CouncilOrchestrator:
                 metadata=None,
             )
 
-        return await self._judge_answers_async(question, answers)
+        return await self._judge_answers_async(
+            question, answers, extra_context=extra_context, rag_docs=rag_docs
+        )
 
     def deliberate(
-        self: "CouncilOrchestrator",
+        self: CouncilOrchestrator,
         config: CouncilConfig,
         question: CouncilQuestion,
+        *,
+        extra_context: str | None = None,
+        rag_docs: Sequence[str] | None = None,
     ) -> CouncilOutcome:
         """Synchronously orchestrate the council deliberation."""
 
-        return asyncio.run(self._deliberate_async(config, question))
+        return asyncio.run(
+            self._deliberate_async(
+                config, question, extra_context=extra_context, rag_docs=rag_docs
+            )
+        )
