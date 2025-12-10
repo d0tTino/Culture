@@ -1,5 +1,6 @@
 """Council Mode data models."""
 
+from .orchestrator import CouncilOrchestrator
 from .types import (
     CouncilConfig,
     CouncilMemberConfig,
@@ -7,13 +8,12 @@ from .types import (
     CouncilQuestion,
     MemberAnswer,
 )
-from .orchestrator import CouncilOrchestrator
 
 __all__ = [
     "CouncilConfig",
     "CouncilMemberConfig",
+    "CouncilOrchestrator",
     "CouncilOutcome",
     "CouncilQuestion",
     "MemberAnswer",
-    "CouncilOrchestrator",
 ]

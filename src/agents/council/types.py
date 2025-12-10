@@ -36,6 +36,8 @@ class CouncilConfig:
     consensus_threshold: float = 0.67
     max_rounds: int = 1
     auto_record_transcript: bool = True
+    max_concurrent_calls: int | None = None
+    du_budget_per_question: float | None = None
     metadata: Mapping[str, Any] | None = None
 
     def requires_quorum(self) -> bool:

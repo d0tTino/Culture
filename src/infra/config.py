@@ -144,6 +144,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MEMORY_RETRIEVER_TOKEN_LIMIT": 1000,
     "USE_COUNCIL_MODE": False,
     "COUNCIL_CONFIG_PATH": "config/council.yml",
+    "COUNCIL_MAX_CONCURRENT_CALLS": 3,
     "DU_BUDGET_PER_QUESTION": 5.0,
     "ROLE_DU_GENERATION": {
         "Facilitator": {"base": 1.0},
@@ -168,7 +169,11 @@ def _build_default_council_config() -> dict[str, Any]:
             {"name": "Innovator", "role": "Innovator", "model": model_name},
             {"name": "Analyzer", "role": "Analyzer", "model": model_name},
             {"name": "Red Team", "role": "Red Team", "model": model_name},
-        ]
+        ],
+        "max_concurrent_calls": int(
+            getattr(settings, "COUNCIL_MAX_CONCURRENT_CALLS", 3)
+        ),
+        "du_budget_per_question": float(getattr(settings, "DU_BUDGET_PER_QUESTION", 0.0)),
     }
 
 # Define keys that should be floats and ints for type conversion
@@ -261,6 +266,7 @@ INT_CONFIG_KEYS = [
     "MEMORY_RETRIEVER_TOP_K",
     "MEMORY_RETRIEVER_TOKEN_LIMIT",
     "LLM_BATCH_SIZE",
+    "COUNCIL_MAX_CONCURRENT_CALLS",
 ]
 BOOL_CONFIG_KEYS = [
     "MEMORY_PRUNING_ENABLED",
@@ -379,7 +385,9 @@ def load_council_config(*, path: str | None = None, reload: bool = False) -> dic
     if not members:
         members = default_members
 
-    result = {"members": members}
+    source_config = loaded_data or default_config
+    result = {k: v for k, v in source_config.items() if k != "members"}
+    result["members"] = members
     if cacheable:
         _COUNCIL_CONFIG = result
     return deepcopy(result)

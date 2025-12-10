@@ -9,8 +9,8 @@ import logging
 import sys
 import time
 import uuid
-from collections.abc import Awaitable, Iterable
-from typing import TYPE_CHECKING, Any, Callable, ParamSpec, Protocol, TypeVar, cast
+from collections.abc import Awaitable, Callable, Iterable
+from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar, cast
 
 import httpx
 from httpx import HTTPError, TimeoutException
@@ -1170,6 +1170,9 @@ async def async_generate_structured_output(
                             base_fields = base_fields()
                         mock_fields = base_fields or {}
                     for field_name, field in mock_fields.items():
+                        if isinstance(mock_data, dict) and field_name in mock_data:
+                            mocked_fields[field_name] = mock_data[field_name]
+                            continue
                         if hasattr(field, "is_required") and callable(field.is_required):
                             required = bool(field.is_required())
                         else:
