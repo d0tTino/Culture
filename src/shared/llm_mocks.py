@@ -8,6 +8,7 @@ import logging
 import re
 import socket
 from typing import Any
+import threading
 from unittest.mock import MagicMock
 
 from typing_extensions import Self
@@ -53,6 +54,56 @@ logger = logging.getLogger(__name__)
 # Module-level mock responses for broader access
 mock_text_global = "This is a mock generated text (global)"
 mock_summary_global = "This is a mock memory summary (global)"
+
+
+class MockLLMGenerateStats:
+    """Track aggregate metrics for the mocked LLM generate calls."""
+
+    def __init__(self: Self) -> None:
+        self._lock = threading.Lock()
+        self.reset()
+
+    def reset(self: Self) -> None:
+        """Reset all tracking counters."""
+
+        with self._lock:
+            self.active_calls = 0
+            self.peak_concurrent_calls = 0
+            self.call_count = 0
+            self.du_budget: float | None = None
+
+    def set_du_budget(self: Self, budget: float | None) -> None:
+        """Set the remaining DU budget for the mock generator."""
+
+        with self._lock:
+            self.du_budget = float(budget) if budget is not None else None
+
+    def _consume_du(self: Self) -> None:
+        with self._lock:
+            if self.du_budget is None:
+                return
+            self.du_budget -= 1.0
+            if self.du_budget < 0:
+                raise RuntimeError("Mock DU budget exhausted")
+
+    def start_call(self: Self) -> None:
+        """Register the beginning of a generate call."""
+
+        with self._lock:
+            self.active_calls += 1
+            self.call_count += 1
+            self.peak_concurrent_calls = max(
+                self.peak_concurrent_calls, self.active_calls
+            )
+
+    def finish_call(self: Self) -> None:
+        """Register the completion of a generate call."""
+
+        with self._lock:
+            self.active_calls = max(0, self.active_calls - 1)
+
+
+mock_generate_stats = MockLLMGenerateStats()
 
 
 def is_ollama_running() -> bool:
@@ -150,125 +201,128 @@ def create_mock_ollama_client() -> MagicMock:
     # as ollama.Client.generate does.
 
     def mock_generate(*args: Any, **kwargs: Any) -> OllamaGenerateResponse:
-        prompt_content = str(kwargs.get("prompt", ""))  # Ensure prompt_content is a string
-        logger.debug(f"MOCK_GENERATE_PROMPT_CONTENT_DEBUG: '''{prompt_content}'''")
+        mock_generate_stats.start_call()
+        try:
+            mock_generate_stats._consume_du()
 
-        if "[council-member-answer]" in prompt_content:
-            member_match = re.search(r"member_id[=:]\s*([\w-]+)", prompt_content)
-            member_id = member_match.group(1) if member_match else "member"
-            logger.debug("Mock generate producing deterministic council member answer for %s", member_id)
-            response_json_str = json.dumps(
-                {
-                    "answer": f"Deterministic answer from {member_id}",
-                    "reasoning": f"Deterministic reasoning from {member_id}",
-                    "confidence": 0.82,
-                    "citations": [f"citation-{member_id}"],
+            prompt_content = str(kwargs.get("prompt", ""))  # Ensure prompt_content is a string
+            logger.debug(f"MOCK_GENERATE_PROMPT_CONTENT_DEBUG: '''{prompt_content}'''")
+
+            if "[council-member-answer]" in prompt_content:
+                member_match = re.search(r"member_id[=:]\s*([\w-]+)", prompt_content)
+                member_id = member_match.group(1) if member_match else "member"
+                logger.debug(
+                    "Mock generate producing deterministic council member answer for %s",
+                    member_id,
+                )
+                response_json_str = json.dumps(
+                    {
+                        "answer": f"Deterministic answer from {member_id}",
+                        "reasoning": f"Deterministic reasoning from {member_id}",
+                        "confidence": 0.82,
+                        "citations": [f"citation-{member_id}"],
+                    }
+                )
+                return {
+                    "response": response_json_str,
+                    "done": True,
+                    "eval_count": 5,
+                    "total_duration": 25,
                 }
-            )
-            return {
-                "response": response_json_str,
-                "done": True,
-                "eval_count": 5,
-                "total_duration": 25,
-            }
 
-        if "[council-judgement]" in prompt_content:
-            member_ids = re.findall(r"member_id[=:]\s*([\w-]+)", prompt_content)
-            if not member_ids:
-                member_ids = ["member"]
-            winner = member_ids[0]
-            votes = {mid: 1 for mid in member_ids}
-            metrics = {"cohesion": 0.91, "coverage": 0.77}
-            logger.debug(
-                "Mock generate producing deterministic council judgement with winner %s", winner
-            )
-            response_json_str = json.dumps(
-                {
-                    "winner": winner,
-                    "votes": votes,
-                    "metrics": metrics,
-                    "resolution": f"{winner} proposal selected",
-                    "summary": "Deterministic council summary",
+            if "[council-judgement]" in prompt_content:
+                member_ids = re.findall(r"member_id[=:]\s*([\w-]+)", prompt_content)
+                if not member_ids:
+                    member_ids = ["member"]
+                winner = member_ids[0]
+                votes = {mid: 1 for mid in member_ids}
+                metrics = {"cohesion": 0.91, "coverage": 0.77}
+                logger.debug(
+                    "Mock generate producing deterministic council judgement with winner %s",
+                    winner,
+                )
+                response_json_str = json.dumps(
+                    {
+                        "winner": winner,
+                        "votes": votes,
+                        "metrics": metrics,
+                        "resolution": f"{winner} proposal selected",
+                        "summary": "Deterministic council summary",
+                    }
+                )
+                return {
+                    "response": response_json_str,
+                    "done": True,
+                    "eval_count": 6,
+                    "total_duration": 30,
                 }
+
+            is_l1_summary_prompt = (
+                "Your output fields are:" in prompt_content
+                and "`l1_summary` (str)" in prompt_content
+                and "`recent_events` (str)" in prompt_content
+                and "`agent_role` (str)" in prompt_content
             )
-            return {
-                "response": response_json_str,
-                "done": True,
-                "eval_count": 6,
-                "total_duration": 30,
-            }
-
-        # Determine which DSPy program this prompt is for based on unique field combinations
-        is_l1_summary_prompt = (
-            "Your output fields are:" in prompt_content
-            and "`l1_summary` (str)" in prompt_content
-            and "`recent_events` (str)" in prompt_content
-            and "`agent_role` (str)" in prompt_content
-        )
-        is_action_intent_prompt = (
-            "Your output fields are:" in prompt_content
-            and "`chosen_action_intent` (str)" in prompt_content
-            and "`justification_thought` (str)" in prompt_content
-            and "`available_actions` (str)" in prompt_content  # Added for specificity
-        )
-        is_role_thought_prompt = (
-            "Your output fields are:" in prompt_content
-            and "`thought` (str)" in prompt_content
-            and "`role_name` (str)" in prompt_content
-            and "`context` (str)" in prompt_content
-        )
-
-        if is_l1_summary_prompt:
-            logger.debug(
-                "Mock ollama.Client.generate: returning JSON structure for L1SummaryGenerator"
+            is_action_intent_prompt = (
+                "Your output fields are:" in prompt_content
+                and "`chosen_action_intent` (str)" in prompt_content
+                and "`justification_thought` (str)" in prompt_content
+                and "`available_actions` (str)" in prompt_content  # Added for specificity
             )
-            summary_value_str = "Mock L1 Summary from global: " + mock_summary_global
-            response_json_str = json.dumps({"l1_summary": summary_value_str})
-            return {
-                "response": response_json_str,
-                "done": True,
-                "eval_count": 10,
-                "total_duration": 100,
-            }
-
-        elif is_action_intent_prompt:
-            logger.debug(
-                "Mock ollama.Client.generate: returning action intent structure for ActionIntentSelector"
+            is_role_thought_prompt = (
+                "Your output fields are:" in prompt_content
+                and "`thought` (str)" in prompt_content
+                and "`role_name` (str)" in prompt_content
+                and "`context` (str)" in prompt_content
             )
-            action_intent_content = {
-                "chosen_action_intent": "send_direct_message",  # Mocked action
-                "justification_thought": "This is a mock justification for selecting send_direct_message from mock_generate.",
-            }
-            response_json_str = json.dumps(action_intent_content)
-            return {
-                "response": response_json_str,
-                "done": True,
-                "eval_count": 10,
-                "total_duration": 100,
-            }
 
-        elif is_role_thought_prompt:
-            logger.debug(
-                "Mock ollama.Client.generate: returning thought structure for RoleThoughtGenerator"
-            )
-            thought_content = {
-                "thought": "As a MockRole, this is a generic mocked thought for RoleThoughtGenerator from mock_generate."
-            }
-            response_json_str = json.dumps(thought_content)
-            return {
-                "response": response_json_str,
-                "done": True,
-                "eval_count": 10,
-                "total_duration": 100,
-            }
+            if is_l1_summary_prompt:
+                logger.debug(
+                    "Mock ollama.Client.generate: returning JSON structure for L1SummaryGenerator"
+                )
+                summary_value_str = "Mock L1 Summary from global: " + mock_summary_global
+                response_json_str = json.dumps({"l1_summary": summary_value_str})
+                return {
+                    "response": response_json_str,
+                    "done": True,
+                    "eval_count": 10,
+                    "total_duration": 100,
+                }
 
-        # Fallback for any other direct ollama.generate calls that don't match DSPy signatures
-        # This might also catch DSPy prompts if the above conditions are not met perfectly.
-        else:
+            elif is_action_intent_prompt:
+                logger.debug(
+                    "Mock ollama.Client.generate: returning action intent structure for ActionIntentSelector"
+                )
+                action_intent_content = {
+                    "chosen_action_intent": "send_direct_message",  # Mocked action
+                    "justification_thought": "This is a mock justification for selecting send_direct_message from mock_generate.",
+                }
+                response_json_str = json.dumps(action_intent_content)
+                return {
+                    "response": response_json_str,
+                    "done": True,
+                    "eval_count": 10,
+                    "total_duration": 100,
+                }
+
+            elif is_role_thought_prompt:
+                logger.debug(
+                    "Mock ollama.Client.generate: returning thought structure for RoleThoughtGenerator"
+                )
+                thought_content = {
+                    "thought": "As a MockRole, this is a generic mocked thought for RoleThoughtGenerator from mock_generate.",
+                }
+                response_json_str = json.dumps(thought_content)
+                return {
+                    "response": response_json_str,
+                    "done": True,
+                    "eval_count": 10,
+                    "total_duration": 100,
+                }
+
             logger.warning(
                 f"Mock ollama.Client.generate: FALLBACK for unrecognized prompt structure. Prompt content: {prompt_content[:200]}..."
             )
-            # Generic JSON response that might or might not work depending on caller
             fallback_content = {
                 "detail": "Fallback mock response from generate",
                 "prompt_received": prompt_content[:100],
@@ -280,6 +334,8 @@ def create_mock_ollama_client() -> MagicMock:
                 "eval_count": 5,
                 "total_duration": 50,
             }
+        finally:
+            mock_generate_stats.finish_call()
 
     mock_client.generate = MagicMock(side_effect=mock_generate)
     # Add other common methods if needed, e.g., pull, list
@@ -307,6 +363,7 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
 
     # Patch the main functions that DON'T rely on llm_client.client directly
     # if they have their own logic or simpler mock needs.
+    mock_generate_stats.reset()
     monkeypatch.setattr(llm_client, "generate_text", lambda *args, **kwargs: mock_text_global)
     monkeypatch.setattr(
         llm_client, "summarize_memory_context", lambda *args, **kwargs: mock_summary_global
@@ -380,6 +437,18 @@ def patch_ollama_functions(monkeypatch: MonkeyPatch) -> None:
         )
 
     logger.info("Global Ollama functions and client have been mocked.")
+
+
+def set_mock_llm_du_budget(budget: float | None) -> None:
+    """Limit how many mock generate calls may succeed before raising."""
+
+    mock_generate_stats.set_du_budget(budget)
+
+
+def get_mock_llm_stats() -> MockLLMGenerateStats:
+    """Expose generate call statistics for assertions in tests."""
+
+    return mock_generate_stats
 
 
 async def get_mock_sentiment_analysis(
