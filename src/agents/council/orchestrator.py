@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import asyncio
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -16,8 +18,10 @@ from src.agents.council.types import (
     CouncilQuestion,
     MemberAnswer,
 )
+from src.infra import llm_client
 from src.infra.config import get_config, load_council_config
 from src.infra.llm_client import generate_structured_output, generate_text
+from src.shared import llm_mocks
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Provide a JSON object with keys: "
@@ -279,3 +283,151 @@ def run_council(
         summary=summary,
         metadata=metadata,
     )
+
+
+class CouncilOrchestrator:
+    """Coordinate concurrent council member calls with optional resource limits."""
+
+    def __init__(self: "CouncilOrchestrator", *, max_concurrency: int = 3) -> None:
+        self.max_concurrency = max(1, max_concurrency)
+        self._semaphore = asyncio.Semaphore(self.max_concurrency)
+
+    @staticmethod
+    def _build_member_prompt(member: CouncilMemberConfig, question: CouncilQuestion) -> str:
+        return (
+            "[council-member-answer] "
+            f"member_id={member.member_id} question={question.prompt} context={question.context or ''}"
+        )
+
+    @staticmethod
+    def _build_judge_prompt(question: CouncilQuestion, answers: Sequence[MemberAnswer]) -> str:
+        member_section = " ".join(f"member_id={answer.member_id}" for answer in answers)
+        return (
+            "[council-judgement] "
+            f"question={question.prompt} context={question.context or ''} {member_section}"
+        )
+
+    @staticmethod
+    def _parse_member_response(member: CouncilMemberConfig, raw: dict[str, Any]) -> MemberAnswer:
+        return MemberAnswer(
+            member_id=member.member_id,
+            answer=str(raw.get("answer", "")),
+            reasoning=raw.get("reasoning"),
+            confidence=float(raw.get("confidence", 0.0)) if raw.get("confidence") is not None else None,
+            citations=list(raw.get("citations", []) or []),
+        )
+
+    async def _ask_member_async(
+        self: "CouncilOrchestrator",
+        member: CouncilMemberConfig,
+        question: CouncilQuestion,
+    ) -> MemberAnswer:
+        prompt = self._build_member_prompt(member, question)
+        async with self._semaphore:
+            response = await asyncio.to_thread(llm_client.client.generate, prompt=prompt)
+        payload = json.loads(str(response.get("response", "{}")))
+        return self._parse_member_response(member, payload)
+
+    async def _judge_answers_async(
+        self: "CouncilOrchestrator",
+        question: CouncilQuestion,
+        answers: Sequence[MemberAnswer],
+    ) -> CouncilOutcome:
+        prompt = self._build_judge_prompt(question, answers)
+        response = await asyncio.to_thread(llm_client.client.generate, prompt=prompt)
+        payload = json.loads(str(response.get("response", "{}")))
+
+        winner = str(payload.get("winner") or "")
+        votes = payload.get("votes") or {}
+        metrics = payload.get("metrics") or {}
+
+        return CouncilOutcome(
+            question=question,
+            answers=answers,
+            resolution=str(payload.get("resolution") or "No consensus reached."),
+            winning_member_ids=[winner] if winner else [],
+            summary=payload.get("summary"),
+            metadata={"votes": votes, "metrics": metrics},
+        )
+
+    async def _gather_answers(
+        self: "CouncilOrchestrator",
+        config: CouncilConfig,
+        question: CouncilQuestion,
+    ) -> tuple[list[MemberAnswer], bool]:
+        tasks = {
+            asyncio.create_task(self._ask_member_async(member, question)): index
+            for index, member in enumerate(config.members)
+        }
+        answers: list[tuple[int, MemberAnswer]] = []
+        budget_exhausted = False
+        try:
+            pending_tasks = set(tasks.keys())
+            while pending_tasks:
+                done, pending_tasks = await asyncio.wait(
+                    pending_tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    try:
+                        answer = task.result()
+                    except RuntimeError as exc:
+                        if "budget" in str(exc).lower():
+                            budget_exhausted = True
+                            continue
+                        raise
+                    else:
+                        answers.append((tasks[task], answer))
+                if budget_exhausted:
+                    pending_tasks = set()
+                    break
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+        ordered_answers = [
+            answer for _, answer in sorted(answers, key=lambda pair: pair[0])
+        ]
+        return ordered_answers, budget_exhausted
+
+    async def _deliberate_async(
+        self: "CouncilOrchestrator",
+        config: CouncilConfig,
+        question: CouncilQuestion,
+    ) -> CouncilOutcome:
+        answers, budget_exhausted = await self._gather_answers(config, question)
+
+        if budget_exhausted:
+            return CouncilOutcome(
+                question=question,
+                answers=answers,
+                resolution="Insufficient DU budget; partial council outcome",
+                winning_member_ids=[],
+                summary=None,
+                metadata={
+                    "du_exhausted": True,
+                    "partial": True,
+                    "completed_members": [a.member_id for a in answers],
+                },
+            )
+
+        if not answers:
+            return CouncilOutcome(
+                question=question,
+                answers=[],
+                resolution="No answers produced.",
+                winning_member_ids=[],
+                summary=None,
+                metadata=None,
+            )
+
+        return await self._judge_answers_async(question, answers)
+
+    def deliberate(
+        self: "CouncilOrchestrator",
+        config: CouncilConfig,
+        question: CouncilQuestion,
+    ) -> CouncilOutcome:
+        """Synchronously orchestrate the council deliberation."""
+
+        return asyncio.run(self._deliberate_async(config, question))
