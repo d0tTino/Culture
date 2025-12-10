@@ -20,7 +20,7 @@ from src.agents.council.types import (
     CouncilQuestion,
     MemberAnswer,
 )
-from src.infra import llm_client
+from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.infra.config import get_config, load_council_config
 from src.infra.llm_client import generate_structured_output, generate_text
 
@@ -63,6 +63,82 @@ class CouncilContext:
     config: CouncilConfig
     judge_model: str
     member_model: str
+
+
+def _stringify_memory_doc(doc: Any) -> str:
+    if isinstance(doc, str):
+        return doc
+
+    if isinstance(doc, Mapping):
+        content = doc.get("content") or doc.get("text") or ""
+        metadata = doc.get("metadata")
+        if isinstance(metadata, Mapping):
+            source = metadata.get("source") or metadata.get("id") or metadata.get("memory_id")
+            if source:
+                if content:
+                    return f"{content} (source: {source})"
+                return str(source)
+        if content:
+            return str(content)
+
+    try:
+        return json.dumps(doc)
+    except Exception:  # pragma: no cover - defensive
+        return str(doc)
+
+
+def _resolve_question_agent_id(question: CouncilQuestion, explicit: str | None) -> str | None:
+    if explicit:
+        return explicit
+
+    metadata = question.metadata or {}
+    if not isinstance(metadata, Mapping):
+        return None
+
+    for key in ("agent_id", "originator_id", "requester_id", "author_id"):
+        value = metadata.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+async def _populate_question_rag_documents(
+    question: CouncilQuestion,
+    *,
+    base_documents: Sequence[str] | None = None,
+    memory_service: Any | None = None,
+    memory_retriever: MultiLayerRetriever | None = None,
+    agent_id: str | None = None,
+    top_k: int = 5,
+    token_budget: int | None = None,
+) -> Sequence[str]:
+    question.rag_documents = list(question.rag_documents or [])
+    if base_documents:
+        question.rag_documents.extend(str(doc) for doc in base_documents)
+
+    retriever = memory_retriever or getattr(memory_service, "retriever", None)
+    if retriever is None:
+        return question.rag_documents
+
+    agent_identifier = _resolve_question_agent_id(question, agent_id)
+    if not agent_identifier:
+        logger.debug("Council question missing agent identifier; skipping RAG retrieval")
+        return question.rag_documents
+
+    query = question.prompt
+    if question.context:
+        query = f"{question.prompt}\n\n{question.context}"
+
+    try:
+        results = await retriever.retrieve(
+            agent_identifier, query, k=top_k, token_budget=token_budget
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Failed to retrieve council RAG documents: %s", exc, exc_info=True)
+        return question.rag_documents
+
+    question.rag_documents.extend(_stringify_memory_doc(doc) for doc in results or [])
+    return question.rag_documents
 
 
 def _slugify(value: str) -> str:
@@ -177,37 +253,46 @@ def _ask_council_member(
     prompt = _build_member_prompt(member, question, extra_context=extra_context, rag_docs=rag_docs)
     model_name = str((member.metadata or {}).get("model")) if member.metadata else None
     member_model = model_name or "mistral:latest"
+    track_mock_usage = is_mock_mode_enabled()
+    if track_mock_usage:
+        llm_mocks.mock_generate_stats.start_call()
+    try:
+        if track_mock_usage:
+            llm_mocks.mock_generate_stats._consume_du()
 
-    structured = generate_structured_output(
-        prompt,
-        response_model=MemberResponseModel,
-        model=member_model,
-        temperature=0.3,
-        agent_state=agent_state,
-    )
-
-    if structured is None:
-        fallback_text = (
-            generate_text(
-                prompt, model=member_model, temperature=0.3, agent_state=agent_state
-            )
-            or ""
+        structured = generate_structured_output(
+            prompt,
+            response_model=MemberResponseModel,
+            model=member_model,
+            temperature=0.3,
+            agent_state=agent_state,
         )
+
+        if structured is None:
+            fallback_text = (
+                generate_text(
+                    prompt, model=member_model, temperature=0.3, agent_state=agent_state
+                )
+                or ""
+            )
+            return MemberAnswer(
+                member_id=member.member_id,
+                answer=fallback_text,
+                reasoning=None,
+                confidence=None,
+                citations=[],
+            )
+
         return MemberAnswer(
             member_id=member.member_id,
-            answer=fallback_text,
-            reasoning=None,
-            confidence=None,
-            citations=[],
+            answer=structured.answer,
+            reasoning=structured.reasoning,
+            confidence=structured.confidence,
+            citations=structured.citations,
         )
-
-    return MemberAnswer(
-        member_id=member.member_id,
-        answer=structured.answer,
-        reasoning=structured.reasoning,
-        confidence=structured.confidence,
-        citations=structured.citations,
-    )
+    finally:
+        if track_mock_usage:
+            llm_mocks.mock_generate_stats.finish_call()
 
 
 def _build_judge_prompt(
@@ -250,13 +335,20 @@ def _judge_council_answers(
     if not answers:
         return None
 
+    track_mock_usage = is_mock_mode_enabled()
+    if track_mock_usage:
+        llm_mocks.mock_generate_stats.start_call()
     prompt = _build_judge_prompt(question, answers, extra_context=extra_context, rag_docs=rag_docs)
-    return generate_structured_output(
-        prompt,
-        response_model=CouncilVoteModel,
-        model=context.judge_model,
-        temperature=0.1,
-    )
+    try:
+        return generate_structured_output(
+            prompt,
+            response_model=CouncilVoteModel,
+            model=context.judge_model,
+            temperature=0.1,
+        )
+    finally:
+        if track_mock_usage:
+            llm_mocks.mock_generate_stats.finish_call()
 
 
 class CouncilOrchestrator:
@@ -266,14 +358,30 @@ class CouncilOrchestrator:
         self,
         *,
         max_concurrent_calls: int | None = None,
+        max_concurrency: int | None = None,
         du_budget_per_question: float | None = None,
+        memory_service: Any | None = None,
+        memory_retriever: MultiLayerRetriever | None = None,
+        rag_top_k: int | None = None,
+        rag_token_limit: int | None = None,
     ) -> None:
         default_concurrency = int(get_config("COUNCIL_MAX_CONCURRENT_CALLS") or 1)
-        self.max_concurrent_calls = int(max_concurrent_calls or default_concurrency)
+        resolved_concurrency = max_concurrent_calls
+        if resolved_concurrency is None and max_concurrency is not None:
+            resolved_concurrency = max_concurrency
+        self.max_concurrent_calls = int(resolved_concurrency or default_concurrency)
+        self.max_concurrency = self.max_concurrent_calls
         default_budget = float(get_config("DU_BUDGET_PER_QUESTION") or 0.0)
         self.du_budget_per_question = float(
             default_budget if du_budget_per_question is None else du_budget_per_question
         )
+        self.memory_service = memory_service
+        self.memory_retriever = memory_retriever
+        self.rag_top_k = int(rag_top_k or get_config("MEMORY_RETRIEVER_TOP_K") or 5)
+        token_limit_value = rag_token_limit
+        if token_limit_value is None:
+            token_limit_value = get_config("MEMORY_RETRIEVER_TOKEN_LIMIT")
+        self.rag_token_limit = int(token_limit_value) if token_limit_value else None
 
     def _resolve_context(self, config: CouncilConfig | None = None) -> CouncilContext:
         base_context = _build_council_context()
@@ -308,7 +416,14 @@ class CouncilOrchestrator:
         extra_context: str | None = None,
         rag_docs: Sequence[str] | None = None,
     ) -> CouncilOutcome:
-        rag_docs = rag_docs or []
+        rag_docs = await _populate_question_rag_documents(
+            question,
+            base_documents=rag_docs,
+            memory_service=self.memory_service,
+            memory_retriever=self.memory_retriever,
+            top_k=self.rag_top_k,
+            token_budget=self.rag_token_limit,
+        )
         metrics: dict[str, Any] = {
             "du_budget_exhausted": False,
             "du_budget_per_member": self._resolve_du_budget(context.config),
@@ -323,6 +438,20 @@ class CouncilOrchestrator:
             rag_docs=rag_docs,
             metrics=metrics,
         )
+
+        if metrics.get("du_budget_exhausted"):
+            return CouncilOutcome(
+                question=question,
+                answers=answers,
+                resolution="Insufficient DU budget; partial council outcome",
+                winning_member_ids=[],
+                summary=None,
+                metadata={
+                    "du_exhausted": True,
+                    "partial": True,
+                    "completed_members": [answer.member_id for answer in answers],
+                },
+            )
 
         vote = None
         if answers:
