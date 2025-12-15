@@ -43,6 +43,10 @@ graph TD
     DEC --> INT[Interfaces]
 ```
 
+### Council Mode (Experimental, Opt-In)
+
+Culture.ai includes an **opt-in, experimental Council Mode** that temporarily promotes a panel of specialized agents to debate or ratify pivotal actions before they execute. Because this feature is still evolving, it remains disabled by default. See [docs/council_mode_design.md](./council_mode_design.md) for setup guidance, workflows, and limitations.
+
 ### Key Architectural Principles
 
 1. **Modularity**: Components are designed with clear boundaries and responsibilities
