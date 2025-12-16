@@ -1,13 +1,16 @@
 """Fitness tracking for council outcomes."""
-
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Iterable
+from itertools import combinations
+from typing import TYPE_CHECKING, Any
 
-from src.agents.council.types import CouncilOutcome
+from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
+
+if TYPE_CHECKING:  # pragma: no cover - avoid circular imports during runtime
+    from src.agents.council.orchestrator import CouncilVoteModel
 
 
 @dataclass
@@ -23,10 +26,19 @@ class MemberFitness:
 class CouncilFitnessStore:
     """Store and update fitness metrics for council participants."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        agreement_threshold: float = 0.75,
+        min_samples: int = 3,
+    ) -> None:
         self._wins: Counter[str] = Counter()
         self._appearances: Counter[str] = Counter()
+        self._pair_counts: Counter[str] = Counter()
+        self._pair_agreements: Counter[str] = Counter()
         self._agreement_scores: list[float] = []
+        self.agreement_threshold = float(agreement_threshold)
+        self.min_samples = int(min_samples)
 
     def record(self, outcome: CouncilOutcome) -> None:
         """Record the results of a completed council round."""
