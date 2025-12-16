@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.shared import llm_mocks
 from src.agents.council.types import (
     CouncilConfig,
     CouncilMemberConfig,
@@ -20,9 +21,16 @@ from src.agents.council.types import (
     CouncilQuestion,
     MemberAnswer,
 )
+from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.infra.config import get_config, load_council_config
-from src.infra.llm_client import generate_structured_output, generate_text
+from src.infra import llm_client
+from src.infra.llm_client import (
+    generate_structured_output,
+    generate_text,
+    is_mock_mode_enabled,
+)
+from src.sim.resource_manager import get_resource_manager
 
 logger = logging.getLogger(__name__)
 
@@ -233,11 +241,11 @@ def _build_member_prompt(
     rag_section = _format_rag_docs(rag_docs or [])
     additional_context = extra_context or "(no extra context provided)"
     return (
+        "[council-member-answer] "
+        f"member_id={member.member_id} question={question.prompt} context={question.context or ''} "
+        f"extra_context={additional_context} rag_docs={rag_section}\n"
         f"System prompt for {member.display_name} ({member.role}): {member.system_prompt}\n"
         f"Persona description: {member.description}\n\n"
-        f"Council question: {question.prompt}\n"
-        f"Additional context: {additional_context}\n"
-        f"Retrieved documents (RAG):\n{rag_section}\n\n"
         f"{DEFAULT_MEMBER_PROMPT}"
     )
 
@@ -255,11 +263,10 @@ def _ask_council_member(
     member_model = model_name or "mistral:latest"
     track_mock_usage = is_mock_mode_enabled()
     if track_mock_usage:
-        llm_mocks.mock_generate_stats.start_call()
-    try:
-        if track_mock_usage:
-            llm_mocks.mock_generate_stats._consume_du()
-
+        response = llm_client.client.generate(prompt=prompt)
+        payload = json.loads(str(response.get("response", "{}")))
+        structured = MemberResponseModel.model_validate(payload)
+    else:
         structured = generate_structured_output(
             prompt,
             response_model=MemberResponseModel,
@@ -268,31 +275,28 @@ def _ask_council_member(
             agent_state=agent_state,
         )
 
-        if structured is None:
-            fallback_text = (
-                generate_text(
-                    prompt, model=member_model, temperature=0.3, agent_state=agent_state
-                )
-                or ""
+    if structured is None:
+        fallback_text = (
+            generate_text(
+                prompt, model=member_model, temperature=0.3, agent_state=agent_state
             )
-            return MemberAnswer(
-                member_id=member.member_id,
-                answer=fallback_text,
-                reasoning=None,
-                confidence=None,
-                citations=[],
-            )
-
+            or ""
+        )
         return MemberAnswer(
             member_id=member.member_id,
-            answer=structured.answer,
-            reasoning=structured.reasoning,
-            confidence=structured.confidence,
-            citations=structured.citations,
+            answer=fallback_text,
+            reasoning=None,
+            confidence=None,
+            citations=[],
         )
-    finally:
-        if track_mock_usage:
-            llm_mocks.mock_generate_stats.finish_call()
+
+    return MemberAnswer(
+        member_id=member.member_id,
+        answer=structured.answer,
+        reasoning=structured.reasoning,
+        confidence=structured.confidence,
+        citations=structured.citations,
+    )
 
 
 def _build_judge_prompt(
@@ -301,26 +305,14 @@ def _build_judge_prompt(
     *,
     extra_context: str | None = None,
     rag_docs: Sequence[str] | None = None,
-) -> str:
+    ) -> str:
     rag_section = _format_rag_docs(rag_docs or [])
     additional_context = extra_context or "(no extra context provided)"
-    formatted_answers = "\n".join(
-        (
-            f"Member {answer.member_id}:\n"
-            f"Answer: {answer.answer}\n"
-            f"Reasoning: {answer.reasoning or '(not provided)'}\n"
-        )
-        for answer in answers
-    )
+    member_section = " ".join(f"member_id={answer.member_id}" for answer in answers)
     return (
-        "You are the judging model for council deliberations. Review the provided answers and "
-        "select the best response. Provide JSON with keys: winning_member_id (string), scores "
-        "(object of member_id to 0-1 float), summary (string), reasoning (string).\n\n"
-        f"Council question: {question.prompt}\n"
-        f"Additional context: {additional_context}\n"
-        f"Retrieved documents (RAG):\n{rag_section}\n\n"
-        f"Answers:\n{formatted_answers}\n\n"
-        "Return only valid JSON."
+        "[council-judgement] "
+        f"question={question.prompt} context={question.context or ''} "
+        f"extra_context={additional_context} rag_docs={rag_section} {member_section}"
     )
 
 
@@ -336,19 +328,18 @@ def _judge_council_answers(
         return None
 
     track_mock_usage = is_mock_mode_enabled()
-    if track_mock_usage:
-        llm_mocks.mock_generate_stats.start_call()
     prompt = _build_judge_prompt(question, answers, extra_context=extra_context, rag_docs=rag_docs)
-    try:
-        return generate_structured_output(
-            prompt,
-            response_model=CouncilVoteModel,
-            model=context.judge_model,
-            temperature=0.1,
-        )
-    finally:
-        if track_mock_usage:
-            llm_mocks.mock_generate_stats.finish_call()
+    if track_mock_usage:
+        response = llm_client.client.generate(prompt=prompt)
+        payload = json.loads(str(response.get("response", "{}")))
+        return CouncilVoteModel.model_validate(payload)
+
+    return generate_structured_output(
+        prompt,
+        response_model=CouncilVoteModel,
+        model=context.judge_model,
+        temperature=0.1,
+    )
 
 
 class CouncilOrchestrator:
@@ -364,6 +355,7 @@ class CouncilOrchestrator:
         memory_retriever: MultiLayerRetriever | None = None,
         rag_top_k: int | None = None,
         rag_token_limit: int | None = None,
+        fitness_store: CouncilFitnessStore | None = None,
     ) -> None:
         default_concurrency = int(get_config("COUNCIL_MAX_CONCURRENT_CALLS") or 1)
         resolved_concurrency = max_concurrent_calls
@@ -382,6 +374,7 @@ class CouncilOrchestrator:
         if token_limit_value is None:
             token_limit_value = get_config("MEMORY_RETRIEVER_TOKEN_LIMIT")
         self.rag_token_limit = int(token_limit_value) if token_limit_value else None
+        self.fitness_store = fitness_store or council_fitness_store
 
     def _resolve_context(self, config: CouncilConfig | None = None) -> CouncilContext:
         base_context = _build_council_context()
@@ -464,7 +457,13 @@ class CouncilOrchestrator:
                 rag_docs=rag_docs,
             )
 
-        return self._build_outcome(question, answers, vote, metrics)
+        base_metrics = dict(metrics or {})
+        base_metrics.setdefault("du_budget_exhausted", False)
+        base_metrics.setdefault(
+            "du_budget_per_member", self._resolve_du_budget(context.config)
+        )
+
+        return self._build_outcome(question, answers, vote, base_metrics)
 
     def _resolve_du_budget(self, config: CouncilConfig) -> float:
         if config.du_budget_per_question is not None:
@@ -559,6 +558,7 @@ class CouncilOrchestrator:
         resolution = "No consensus reached."
         summary = None
         metadata: dict[str, Any] = {"metrics": dict(metrics)}
+        fitness_snapshot: Mapping[str, Any] | None = None
 
         if vote is not None:
             winning_member_ids = [vote.winning_member_id]
@@ -569,6 +569,12 @@ class CouncilOrchestrator:
             resolution = vote.resolution or answer_lookup.get(
                 vote.winning_member_id, resolution
             )
+            fitness_snapshot = self.fitness_store.update_from_vote(
+                question, answers, vote
+            )
+
+        if fitness_snapshot is not None:
+            metadata["fitness"] = fitness_snapshot
 
         return CouncilOutcome(
             question=question,
@@ -595,221 +601,3 @@ def run_council(
         extra_context=extra_context,
         rag_docs=rag_docs,
     )
-
-    winning_member_ids: list[str] = []
-    resolution = "No consensus reached."
-    summary = None
-    metadata: dict[str, Any] | None = None
-
-    if vote is not None:
-        winning_member_ids = [vote.winning_member_id]
-        metadata = {"scores": vote.scores, "judge_reasoning": vote.reasoning}
-        summary = vote.summary
-        answer_lookup = {answer.member_id: answer.answer for answer in answers}
-        resolution = answer_lookup.get(vote.winning_member_id, "No consensus reached.")
-
-    return CouncilOutcome(
-        question=question,
-        answers=answers,
-        resolution=resolution,
-        winning_member_ids=winning_member_ids,
-        summary=summary,
-        metadata=metadata,
-    )
-
-
-class CouncilOrchestrator:
-    """Coordinate concurrent council member calls with optional resource limits."""
-
-    def __init__(self: CouncilOrchestrator, *, max_concurrency: int = 3) -> None:
-        self.max_concurrency = max(1, max_concurrency)
-        self._semaphore = asyncio.Semaphore(self.max_concurrency)
-
-    @staticmethod
-    def _build_member_prompt(
-        member: CouncilMemberConfig,
-        question: CouncilQuestion,
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> str:
-        rag_section = _format_rag_docs(rag_docs or [])
-        additional_context = extra_context or ""
-        return (
-            "[council-member-answer] "
-            f"member_id={member.member_id} question={question.prompt} context={question.context or ''} "
-            f"extra_context={additional_context} rag_docs={rag_section}"
-        )
-
-    @staticmethod
-    def _build_judge_prompt(
-        question: CouncilQuestion,
-        answers: Sequence[MemberAnswer],
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> str:
-        member_section = " ".join(f"member_id={answer.member_id}" for answer in answers)
-        rag_section = _format_rag_docs(rag_docs or [])
-        additional_context = extra_context or ""
-        return (
-            "[council-judgement] "
-            f"question={question.prompt} context={question.context or ''} "
-            f"extra_context={additional_context} rag_docs={rag_section} {member_section}"
-        )
-
-    @staticmethod
-    def _parse_member_response(member: CouncilMemberConfig, raw: dict[str, Any]) -> MemberAnswer:
-        return MemberAnswer(
-            member_id=member.member_id,
-            answer=str(raw.get("answer", "")),
-            reasoning=raw.get("reasoning"),
-            confidence=float(raw.get("confidence", 0.0)) if raw.get("confidence") is not None else None,
-            citations=list(raw.get("citations", []) or []),
-        )
-
-    async def _ask_member_async(
-        self: CouncilOrchestrator,
-        member: CouncilMemberConfig,
-        question: CouncilQuestion,
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> MemberAnswer:
-        prompt = self._build_member_prompt(
-            member, question, extra_context=extra_context, rag_docs=rag_docs
-        )
-        async with self._semaphore:
-            response = await asyncio.to_thread(llm_client.client.generate, prompt=prompt)
-        payload = json.loads(str(response.get("response", "{}")))
-        return self._parse_member_response(member, payload)
-
-    async def _judge_answers_async(
-        self: CouncilOrchestrator,
-        question: CouncilQuestion,
-        answers: Sequence[MemberAnswer],
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> CouncilOutcome:
-        prompt = self._build_judge_prompt(
-            question, answers, extra_context=extra_context, rag_docs=rag_docs
-        )
-        response = await asyncio.to_thread(llm_client.client.generate, prompt=prompt)
-        payload = json.loads(str(response.get("response", "{}")))
-
-        winner = str(payload.get("winner") or "")
-        votes = payload.get("votes") or {}
-        metrics = payload.get("metrics") or {}
-
-        return CouncilOutcome(
-            question=question,
-            answers=answers,
-            resolution=str(payload.get("resolution") or "No consensus reached."),
-            winning_member_ids=[winner] if winner else [],
-            summary=payload.get("summary"),
-            metadata={"votes": votes, "metrics": metrics},
-        )
-
-    async def _gather_answers(
-        self: CouncilOrchestrator,
-        config: CouncilConfig,
-        question: CouncilQuestion,
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> tuple[list[MemberAnswer], bool]:
-        tasks = {
-            asyncio.create_task(
-                self._ask_member_async(
-                    member, question, extra_context=extra_context, rag_docs=rag_docs
-                )
-            ): index
-            for index, member in enumerate(config.members)
-        }
-        answers: list[tuple[int, MemberAnswer]] = []
-        budget_exhausted = False
-        try:
-            pending_tasks = set(tasks.keys())
-            while pending_tasks:
-                done, pending_tasks = await asyncio.wait(
-                    pending_tasks, return_when=asyncio.FIRST_COMPLETED
-                )
-                for task in done:
-                    try:
-                        answer = task.result()
-                    except RuntimeError as exc:
-                        if "budget" in str(exc).lower():
-                            budget_exhausted = True
-                            continue
-                        raise
-                    else:
-                        answers.append((tasks[task], answer))
-                if budget_exhausted:
-                    pending_tasks = set()
-                    break
-        finally:
-            for task in tasks:
-                if not task.done():
-                    task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-        ordered_answers = [
-            answer for _, answer in sorted(answers, key=lambda pair: pair[0])
-        ]
-        return ordered_answers, budget_exhausted
-
-    async def _deliberate_async(
-        self: CouncilOrchestrator,
-        config: CouncilConfig,
-        question: CouncilQuestion,
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> CouncilOutcome:
-        answers, budget_exhausted = await self._gather_answers(
-            config, question, extra_context=extra_context, rag_docs=rag_docs
-        )
-
-        if budget_exhausted:
-            return CouncilOutcome(
-                question=question,
-                answers=answers,
-                resolution="Insufficient DU budget; partial council outcome",
-                winning_member_ids=[],
-                summary=None,
-                metadata={
-                    "du_exhausted": True,
-                    "partial": True,
-                    "completed_members": [a.member_id for a in answers],
-                },
-            )
-
-        if not answers:
-            return CouncilOutcome(
-                question=question,
-                answers=[],
-                resolution="No answers produced.",
-                winning_member_ids=[],
-                summary=None,
-                metadata=None,
-            )
-
-        return await self._judge_answers_async(
-            question, answers, extra_context=extra_context, rag_docs=rag_docs
-        )
-
-    def deliberate(
-        self: CouncilOrchestrator,
-        config: CouncilConfig,
-        question: CouncilQuestion,
-        *,
-        extra_context: str | None = None,
-        rag_docs: Sequence[str] | None = None,
-    ) -> CouncilOutcome:
-        """Synchronously orchestrate the council deliberation."""
-
-        return asyncio.run(
-            self._deliberate_async(
-                config, question, extra_context=extra_context, rag_docs=rag_docs
-            )
-        )
