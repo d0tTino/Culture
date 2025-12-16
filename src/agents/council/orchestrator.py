@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.agents.council.stats_store import council_stats_store
+from src.shared import llm_mocks
 from src.agents.council.types import (
     CouncilConfig,
     CouncilMemberConfig,
@@ -21,9 +21,11 @@ from src.agents.council.types import (
     CouncilQuestion,
     MemberAnswer,
 )
+from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.infra import llm_client
 from src.infra.config import get_config, load_council_config
+from src.infra import llm_client
 from src.infra.llm_client import (
     generate_structured_output,
     generate_text,
@@ -240,11 +242,11 @@ def _build_member_prompt(
     rag_section = _format_rag_docs(rag_docs or [])
     additional_context = extra_context or "(no extra context provided)"
     return (
+        "[council-member-answer] "
+        f"member_id={member.member_id} question={question.prompt} context={question.context or ''} "
+        f"extra_context={additional_context} rag_docs={rag_section}\n"
         f"System prompt for {member.display_name} ({member.role}): {member.system_prompt}\n"
         f"Persona description: {member.description}\n\n"
-        f"Council question: {question.prompt}\n"
-        f"Additional context: {additional_context}\n"
-        f"Retrieved documents (RAG):\n{rag_section}\n\n"
         f"{DEFAULT_MEMBER_PROMPT}"
     )
 
@@ -262,11 +264,16 @@ def _ask_council_member(
     member_model = model_name or "mistral:latest"
     track_mock_usage = is_mock_mode_enabled()
     if track_mock_usage:
-        telemetry_prompt = (
-            "[council-member-answer] "
-            f"member_id={member.member_id} question={question.prompt} "
-            f"context={question.context or ''} extra_context={extra_context or ''} "
-            f"rag_docs={_format_rag_docs(rag_docs or [])}"
+        response = llm_client.client.generate(prompt=prompt)
+        payload = json.loads(str(response.get("response", "{}")))
+        structured = MemberResponseModel.model_validate(payload)
+    else:
+        structured = generate_structured_output(
+            prompt,
+            response_model=MemberResponseModel,
+            model=member_model,
+            temperature=0.3,
+            agent_state=agent_state,
         )
         llm_client.client.generate(prompt=telemetry_prompt)
 
@@ -308,26 +315,14 @@ def _build_judge_prompt(
     *,
     extra_context: str | None = None,
     rag_docs: Sequence[str] | None = None,
-) -> str:
+    ) -> str:
     rag_section = _format_rag_docs(rag_docs or [])
     additional_context = extra_context or "(no extra context provided)"
-    formatted_answers = "\n".join(
-        (
-            f"Member {answer.member_id}:\n"
-            f"Answer: {answer.answer}\n"
-            f"Reasoning: {answer.reasoning or '(not provided)'}\n"
-        )
-        for answer in answers
-    )
+    member_section = " ".join(f"member_id={answer.member_id}" for answer in answers)
     return (
-        "You are the judging model for council deliberations. Review the provided answers and "
-        "select the best response. Provide JSON with keys: winning_member_id (string), scores "
-        "(object of member_id to 0-1 float), summary (string), reasoning (string).\n\n"
-        f"Council question: {question.prompt}\n"
-        f"Additional context: {additional_context}\n"
-        f"Retrieved documents (RAG):\n{rag_section}\n\n"
-        f"Answers:\n{formatted_answers}\n\n"
-        "Return only valid JSON."
+        "[council-judgement] "
+        f"question={question.prompt} context={question.context or ''} "
+        f"extra_context={additional_context} rag_docs={rag_section} {member_section}"
     )
 
 
@@ -345,13 +340,9 @@ def _judge_council_answers(
     track_mock_usage = is_mock_mode_enabled()
     prompt = _build_judge_prompt(question, answers, extra_context=extra_context, rag_docs=rag_docs)
     if track_mock_usage:
-        telemetry_prompt = (
-            "[council-judgement] "
-            f"question={question.prompt} context={question.context or ''} "
-            f"extra_context={extra_context or ''} rag_docs={_format_rag_docs(rag_docs or [])} "
-            + " ".join(f"member_id={answer.member_id}" for answer in answers)
-        )
-        llm_client.client.generate(prompt=telemetry_prompt)
+        response = llm_client.client.generate(prompt=prompt)
+        payload = json.loads(str(response.get("response", "{}")))
+        return CouncilVoteModel.model_validate(payload)
 
     return generate_structured_output(
         prompt,
@@ -374,6 +365,7 @@ class CouncilOrchestrator:
         memory_retriever: MultiLayerRetriever | None = None,
         rag_top_k: int | None = None,
         rag_token_limit: int | None = None,
+        fitness_store: CouncilFitnessStore | None = None,
     ) -> None:
         default_concurrency = int(get_config("COUNCIL_MAX_CONCURRENT_CALLS") or 1)
         resolved_concurrency = max_concurrent_calls
@@ -392,6 +384,7 @@ class CouncilOrchestrator:
         if token_limit_value is None:
             token_limit_value = get_config("MEMORY_RETRIEVER_TOKEN_LIMIT")
         self.rag_token_limit = int(token_limit_value) if token_limit_value else None
+        self.fitness_store = fitness_store or council_fitness_store
 
     def _resolve_context(self, config: CouncilConfig | None = None) -> CouncilContext:
         base_context = _build_council_context()
@@ -476,17 +469,13 @@ class CouncilOrchestrator:
                 rag_docs=rag_docs,
             )
 
-        outcome = self._build_outcome(question, answers, vote, metrics)
-        await self._record_outcome_metrics(outcome)
-        return outcome
+        base_metrics = dict(metrics or {})
+        base_metrics.setdefault("du_budget_exhausted", False)
+        base_metrics.setdefault(
+            "du_budget_per_member", self._resolve_du_budget(context.config)
+        )
 
-    async def _record_outcome_metrics(self, outcome: CouncilOutcome) -> None:
-        """Persist metrics for downstream orchestrator consumers."""
-
-        try:
-            await council_stats_store.record_outcome_async(outcome)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("Failed to record council metrics: %s", exc, exc_info=True)
+        return self._build_outcome(question, answers, vote, base_metrics)
 
     def _resolve_du_budget(self, config: CouncilConfig) -> float:
         if config.du_budget_per_question is not None:
@@ -581,6 +570,7 @@ class CouncilOrchestrator:
         resolution = "No consensus reached."
         summary = None
         metadata: dict[str, Any] = {"metrics": dict(metrics)}
+        fitness_snapshot: Mapping[str, Any] | None = None
 
         if vote is not None:
             winning_member_ids = [vote.winning_member_id]
@@ -591,6 +581,12 @@ class CouncilOrchestrator:
             resolution = vote.resolution or answer_lookup.get(
                 vote.winning_member_id, resolution
             )
+            fitness_snapshot = self.fitness_store.update_from_vote(
+                question, answers, vote
+            )
+
+        if fitness_snapshot is not None:
+            metadata["fitness"] = fitness_snapshot
 
         return CouncilOutcome(
             question=question,

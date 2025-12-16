@@ -13,7 +13,7 @@ from src.agents.council import (
     CouncilOrchestrator,
     CouncilQuestion,
 )
-from src.agents.council.stats_store import CouncilStatsStore
+from src.agents.council.fitness_store import council_fitness_store
 from src.infra import llm_client
 from src.shared import llm_mocks
 
@@ -44,6 +44,11 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
             },
         },
     )
+
+
+@pytest.fixture(autouse=True)
+def reset_fitness_store() -> None:
+    council_fitness_store.reset()
 
 
 def _build_council_config(num_members: int = 3) -> CouncilConfig:
@@ -135,6 +140,11 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(monkeypatch: py
 
     serialized = json.loads(json.dumps(outcome.metadata))
     assert serialized["metrics"]["cohesion"] == pytest.approx(0.91)
+    fitness = serialized.get("fitness", {})
+    member_fitness = fitness.get("members", {})
+    assert member_fitness["facilitator"]["wins"] == 1
+    assert member_fitness["facilitator"]["win_rate"] == pytest.approx(1.0)
+    assert not fitness.get("warnings")
 
 
 def test_council_orchestrator_limits_concurrent_generate_calls(
