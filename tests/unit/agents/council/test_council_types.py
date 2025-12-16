@@ -17,7 +17,7 @@ def council_config_adapter() -> TypeAdapter[CouncilConfig]:
 
 
 @pytest.fixture
-def sample_yaml(tmp_path: Path) -> str:
+def sample_yaml_path(tmp_path: Path) -> Path:
     content = """
     enabled: true
     members:
@@ -32,13 +32,13 @@ def sample_yaml(tmp_path: Path) -> str:
     path = tmp_path / "council" / "sample.yml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
-    return path.read_text()
+    return path
 
 
 def test_sample_yaml_loads_successfully(
-    council_config_adapter: TypeAdapter[CouncilConfig], sample_yaml: str
+    council_config_adapter: TypeAdapter[CouncilConfig], sample_yaml_path: Path
 ) -> None:
-    parsed = yaml.safe_load(sample_yaml)
+    parsed = yaml.safe_load(sample_yaml_path.read_text())
 
     config = council_config_adapter.validate_python(parsed)
 
