@@ -1,5 +1,7 @@
-# Sample council roster used in local development
-# Each member uses the default local model placeholder by default.
+# Sample council roster used in local development.
+# All members default to the local model placeholder defined in your settings.
+max_concurrent_calls: 3
+du_budget_per_question: 5.0
 members:
   - name: Innovator
     role: Innovator

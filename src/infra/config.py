@@ -349,7 +349,7 @@ def load_council_config(*, path: str | None = None, reload: bool = False) -> dic
 
     if yaml is None:
         logger.debug("pyyaml is unavailable; using default council config")
-        result = {"members": default_members}
+        result = deepcopy(default_config)
         if cacheable:
             _COUNCIL_CONFIG = result
         return deepcopy(result)
@@ -370,23 +370,23 @@ def load_council_config(*, path: str | None = None, reload: bool = False) -> dic
     else:
         logger.debug("Council config not found at %s; falling back to defaults", config_path)
 
+    merged_config: dict[str, Any] = {**default_config, **(loaded_data or {})}
+
     members: list[dict[str, Any]] = []
-    if loaded_data is not None:
-        raw_members = loaded_data.get("members")
-        if isinstance(raw_members, list):
-            default_model = default_members[0].get("model") if default_members else None
-            for entry in raw_members:
-                if isinstance(entry, dict):
-                    normalized = dict(entry)
-                    if default_model and not normalized.get("model"):
-                        normalized["model"] = default_model
-                    members.append(normalized)
+    raw_members = merged_config.get("members")
+    if isinstance(raw_members, list):
+        default_model = default_members[0].get("model") if default_members else None
+        for entry in raw_members:
+            if isinstance(entry, dict):
+                normalized = dict(entry)
+                if default_model and not normalized.get("model"):
+                    normalized["model"] = default_model
+                members.append(normalized)
 
     if not members:
         members = default_members
 
-    source_config = loaded_data or default_config
-    result = {k: v for k, v in source_config.items() if k != "members"}
+    result = {k: v for k, v in merged_config.items() if k != "members"}
     result["members"] = members
     if cacheable:
         _COUNCIL_CONFIG = result
