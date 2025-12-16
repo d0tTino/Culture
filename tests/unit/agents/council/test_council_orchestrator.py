@@ -223,3 +223,29 @@ def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPat
     assert all(rag_marker in prompt for prompt in judge_prompts)
     assert all(extra_context in prompt for prompt in member_prompts)
     assert all(extra_context in prompt for prompt in judge_prompts)
+
+
+def test_council_orchestrator_persists_metrics(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    store = CouncilStatsStore(
+        db_path=tmp_path_factory.mktemp("council-metrics") / "stats.sqlite3"
+    )
+    monkeypatch.setattr(council_orchestrator, "council_stats_store", store)
+
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config()
+    question = _build_question()
+
+    outcome = orchestrator.deliberate(config, question)
+
+    snapshot = store.serialize_metrics()
+    facilitator_stats = next(
+        m for m in snapshot["members"] if m["member_id"] == "facilitator"
+    )
+    assert facilitator_stats["wins"] == 1
+    assert facilitator_stats["participations"] == 1
+    assert len(snapshot["members"]) == len(config.members)
+
+    pairwise_entries = {(p["member_a"], p["member_b"]): p for p in snapshot["pairwise"]}
+    assert pairwise_entries[("analyst", "facilitator")]["agreements"] == 1

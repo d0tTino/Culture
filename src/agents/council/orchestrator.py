@@ -23,6 +23,7 @@ from src.agents.council.types import (
 )
 from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
+from src.infra import llm_client
 from src.infra.config import get_config, load_council_config
 from src.infra import llm_client
 from src.infra.llm_client import (
@@ -274,6 +275,15 @@ def _ask_council_member(
             temperature=0.3,
             agent_state=agent_state,
         )
+        llm_client.client.generate(prompt=telemetry_prompt)
+
+    structured = generate_structured_output(
+        prompt,
+        response_model=MemberResponseModel,
+        model=member_model,
+        temperature=0.3,
+        agent_state=agent_state,
+    )
 
     if structured is None:
         fallback_text = (
@@ -433,7 +443,7 @@ class CouncilOrchestrator:
         )
 
         if metrics.get("du_budget_exhausted"):
-            return CouncilOutcome(
+            outcome = CouncilOutcome(
                 question=question,
                 answers=answers,
                 resolution="Insufficient DU budget; partial council outcome",
@@ -445,6 +455,8 @@ class CouncilOrchestrator:
                     "completed_members": [answer.member_id for answer in answers],
                 },
             )
+            await self._record_outcome_metrics(outcome)
+            return outcome
 
         vote = None
         if answers:
@@ -584,6 +596,14 @@ class CouncilOrchestrator:
             summary=summary,
             metadata=metadata,
         )
+
+    def serialize_metrics(self) -> dict[str, list[dict[str, float]]]:
+        """Return a snapshot of aggregated council metrics."""
+
+        return council_stats_store.serialize_metrics()
+
+    async def serialize_metrics_async(self) -> dict[str, list[dict[str, float]]]:
+        return await council_stats_store.serialize_metrics_async()
 
 
 def run_council(
