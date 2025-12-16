@@ -29,6 +29,10 @@ def test_load_council_config_returns_defaults_when_missing(
 
     assert result["members"], "Expected default members when YAML file is missing"
     assert result["members"][0]["name"] == "Innovator"
+    assert (
+        result["max_concurrent_calls"] == infra_config.settings.COUNCIL_MAX_CONCURRENT_CALLS
+    )
+    assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
 
 
 def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -48,3 +52,23 @@ def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert result["members"][0]["name"] == "Strategist"
     assert result["members"][0]["model"] == "local/mistral"
     assert result["members"][1]["model"], "Missing model should default to base model"
+
+
+def test_load_council_config_merges_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _reset_cache(monkeypatch)
+    path = tmp_path / "council.yml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "members": [{"name": "Strategist", "role": "Planner"}],
+                "max_concurrent_calls": 5,
+            }
+        )
+    )
+    monkeypatch.setattr(infra_config.settings, "COUNCIL_CONFIG_PATH", str(path), raising=False)
+
+    result = infra_config.load_council_config(reload=True)
+
+    assert result["max_concurrent_calls"] == 5
+    assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
+    assert result["members"][0]["model"], "Missing model should default to base model"
