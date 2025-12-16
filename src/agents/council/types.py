@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, MutableSequence, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Annotated, Any
-
-from pydantic import Field
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -23,15 +21,12 @@ class CouncilMemberConfig:
     metadata: Mapping[str, Any] | None = None
 
 
-CouncilMembers = Annotated[Sequence[CouncilMemberConfig], Field(min_length=1)]
-
-
 @dataclass(slots=True)
 class CouncilConfig:
     """Top-level configuration for enabling Council Mode in a scenario."""
 
     enabled: bool
-    members: CouncilMembers
+    members: Sequence[CouncilMemberConfig]
     quorum: int | None = None
     consensus_threshold: float = 0.67
     max_rounds: int = 1
@@ -43,7 +38,7 @@ class CouncilConfig:
     def requires_quorum(self) -> bool:
         """Return ``True`` when the council needs to meet a quorum."""
 
-        return self.quorum is not None and self.quorum > 0
+        return bool(self.quorum and self.quorum > 0)
 
 
 @dataclass(slots=True)
@@ -53,7 +48,7 @@ class CouncilQuestion:
     question_id: str
     prompt: str
     context: str | None = None
-    rag_documents: MutableSequence[str] = field(default_factory=list)
+    rag_documents: list[str] = field(default_factory=list)
     metadata: Mapping[str, Any] | None = None
 
 
@@ -65,7 +60,7 @@ class MemberAnswer:
     answer: str
     confidence: float | None = None
     reasoning: str | None = None
-    citations: MutableSequence[str] = field(default_factory=list)
+    citations: list[str] = field(default_factory=list)
     metadata: Mapping[str, Any] | None = None
 
 
