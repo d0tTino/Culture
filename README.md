@@ -115,6 +115,12 @@ The "Culture: An AI Genesis Engine" project has established a robust foundationa
 
 Culture ships with an opt-in, experimental **Council Mode** where you can temporarily promote a panel of specialized agents to debate, critique, or ratify pivotal simulation actions before they execute. Because this workflow is still evolving, it is disabled by default—enable it only when you are ready to iterate on council prompts and guardrails. Refer to the [Council Mode design doc](docs/council_mode_design.md) for the latest setup instructions, capabilities, and caveats.
 
+To pose a one-off question to the council without running a full simulation, use the Makefile helper and provide your prompt via `Q`:
+
+```bash
+make council Q="Should we prioritize the supply-chain audit?"
+```
+
 ## Technology Stack
 
 * **Core Language:** Python 3.11+
