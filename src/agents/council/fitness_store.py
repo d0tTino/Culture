@@ -78,3 +78,8 @@ class CouncilFitnessStore:
             return 0.0
         return sum(self._agreement_scores) / len(self._agreement_scores)
 
+
+
+council_fitness_store = CouncilFitnessStore()
+
+__all__ = ["CouncilFitnessStore", "council_fitness_store"]
