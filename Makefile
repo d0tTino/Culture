@@ -18,17 +18,21 @@ OUTPUT ?= data/traces.jsonl
 .PHONY: local-slice
 local-slice:
 	@if [ -f "$(ACTIVATE)" ]; then \
-	    source "$(ACTIVATE)"; \
-	    if [ ! -f ".venv/.deps_installed" ]; then \
-	        pip install -r requirements.txt -r requirements-dev.txt; \
-	        touch .venv/.deps_installed; \
-	    fi; \
+		source "$(ACTIVATE)"; \
+		if [ ! -f ".venv/.deps_installed" ]; then \
+			pip install -r requirements.txt -r requirements-dev.txt; \
+			touch .venv/.deps_installed; \
+		fi; \
 	fi; \
-        $(VERTICAL_SLICE)
+	$(VERTICAL_SLICE)
 
 .PHONY: dataset
 dataset:
-       python - <<EOF
-from scripts.export_traces import export_latest
-export_latest(directory="$(SNAPSHOTS)", output="$(OUTPUT)")
-EOF
+	python - <<-EOF
+	from scripts.export_traces import export_latest
+	export_latest(directory="$(SNAPSHOTS)", output="$(OUTPUT)")
+	EOF
+
+.PHONY: council
+council:
+	python -m scripts.council_cli --question "$(Q)"
