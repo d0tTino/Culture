@@ -14,6 +14,7 @@ from src.agents.council import (
     CouncilQuestion,
 )
 from src.agents.council.fitness_store import council_fitness_store
+from src.agents.council.stats_store import CouncilStatsStore
 from src.infra import llm_client
 from src.shared import llm_mocks
 

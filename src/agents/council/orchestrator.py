@@ -13,7 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.shared import llm_mocks
+from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
+from src.agents.council.stats_store import council_stats_store
 from src.agents.council.types import (
     CouncilConfig,
     CouncilMemberConfig,
@@ -21,11 +22,9 @@ from src.agents.council.types import (
     CouncilQuestion,
     MemberAnswer,
 )
-from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
 from src.agents.memory.multi_layer_retriever import MultiLayerRetriever
 from src.infra import llm_client
 from src.infra.config import get_config, load_council_config
-from src.infra import llm_client
 from src.infra.llm_client import (
     generate_structured_output,
     generate_text,
@@ -34,6 +33,7 @@ from src.infra.llm_client import (
 from src.sim.resource_manager import get_resource_manager
 
 logger = logging.getLogger(__name__)
+LLM_MAX_ATTEMPTS = 2
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Provide a JSON object with keys: "
@@ -263,41 +263,73 @@ def _ask_council_member(
     model_name = str((member.metadata or {}).get("model")) if member.metadata else None
     member_model = model_name or "mistral:latest"
     track_mock_usage = is_mock_mode_enabled()
-    if track_mock_usage:
-        response = llm_client.client.generate(prompt=prompt)
-        payload = json.loads(str(response.get("response", "{}")))
-        structured = MemberResponseModel.model_validate(payload)
-    else:
-        structured = generate_structured_output(
-            prompt,
-            response_model=MemberResponseModel,
-            model=member_model,
-            temperature=0.3,
-            agent_state=agent_state,
-        )
-        llm_client.client.generate(prompt=telemetry_prompt)
+    errors: list[str] = []
 
-    structured = generate_structured_output(
-        prompt,
-        response_model=MemberResponseModel,
-        model=member_model,
-        temperature=0.3,
-        agent_state=agent_state,
-    )
-
-    if structured is None:
-        fallback_text = (
-            generate_text(
-                prompt, model=member_model, temperature=0.3, agent_state=agent_state
+    structured: MemberResponseModel | None = None
+    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
+        try:
+            if track_mock_usage:
+                llm_client.client.generate(prompt=prompt)
+                structured = generate_structured_output(
+                    prompt,
+                    response_model=MemberResponseModel,
+                    model=member_model,
+                    temperature=0.3,
+                    agent_state=agent_state,
+                )
+            else:
+                structured = generate_structured_output(
+                    prompt,
+                    response_model=MemberResponseModel,
+                    model=member_model,
+                    temperature=0.3,
+                    agent_state=agent_state,
+                )
+            if structured is not None:
+                break
+        except Exception as exc:  # pragma: no cover - defensive
+            if isinstance(exc, RuntimeError) and "budget" in str(exc).lower():
+                raise
+            errors.append(str(exc))
+            logger.warning(
+                "Council member structured response failed",
+                extra={
+                    "event": "council.member.llm_error",
+                    "member_id": member.member_id,
+                    "attempt": attempt,
+                },
+                exc_info=True,
             )
-            or ""
-        )
+
+    fallback_text = ""
+    if structured is None:
+        try:
+            fallback_text = (
+                generate_text(
+                    prompt,
+                    model=member_model,
+                    temperature=0.3,
+                    agent_state=agent_state,
+                )
+                or ""
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.append(str(exc))
+            logger.error(
+                "Council member fallback text generation failed",
+                extra={
+                    "event": "council.member.fallback_error",
+                    "member_id": member.member_id,
+                },
+                exc_info=True,
+            )
         return MemberAnswer(
             member_id=member.member_id,
             answer=fallback_text,
             reasoning=None,
             confidence=None,
             citations=[],
+            metadata={"errors": errors, "fallback_used": True},
         )
 
     return MemberAnswer(
@@ -306,6 +338,7 @@ def _ask_council_member(
         reasoning=structured.reasoning,
         confidence=structured.confidence,
         citations=structured.citations,
+        metadata={"errors": errors, "fallback_used": False},
     )
 
 
@@ -339,17 +372,50 @@ def _judge_council_answers(
 
     track_mock_usage = is_mock_mode_enabled()
     prompt = _build_judge_prompt(question, answers, extra_context=extra_context, rag_docs=rag_docs)
-    if track_mock_usage:
-        response = llm_client.client.generate(prompt=prompt)
-        payload = json.loads(str(response.get("response", "{}")))
-        return CouncilVoteModel.model_validate(payload)
+    errors: list[str] = []
+    structured: CouncilVoteModel | None = None
+    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
+        try:
+            if track_mock_usage:
+                llm_client.client.generate(prompt=prompt)
+                structured = generate_structured_output(
+                    prompt,
+                    response_model=CouncilVoteModel,
+                    model=context.judge_model,
+                    temperature=0.1,
+                )
+            else:
+                structured = generate_structured_output(
+                    prompt,
+                    response_model=CouncilVoteModel,
+                    model=context.judge_model,
+                    temperature=0.1,
+                )
+            if structured is not None:
+                break
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.append(str(exc))
+            logger.warning(
+                "Council judge evaluation failed",
+                extra={
+                    "event": "council.judge.llm_error",
+                    "question_id": question.question_id,
+                    "attempt": attempt,
+                },
+                exc_info=True,
+            )
 
-    return generate_structured_output(
-        prompt,
-        response_model=CouncilVoteModel,
-        model=context.judge_model,
-        temperature=0.1,
-    )
+    if structured is None and errors:
+        logger.error(
+            "Council judge failed after retries",
+            extra={
+                "event": "council.judge.failure",
+                "question_id": question.question_id,
+                "errors": errors,
+            },
+        )
+
+    return structured
 
 
 class CouncilOrchestrator:
@@ -419,6 +485,13 @@ class CouncilOrchestrator:
         extra_context: str | None = None,
         rag_docs: Sequence[str] | None = None,
     ) -> CouncilOutcome:
+        logger.info(
+            "Starting council deliberation",
+            extra={
+                "event": "council.deliberation.start",
+                "question_id": question.question_id,
+            },
+        )
         rag_docs = await _populate_question_rag_documents(
             question,
             base_documents=rag_docs,
@@ -431,6 +504,23 @@ class CouncilOrchestrator:
             "du_budget_exhausted": False,
             "du_budget_per_member": self._resolve_du_budget(context.config),
         }
+        if not context.config.members:
+            metrics.update({"member_count": 0, "error": "no_active_members"})
+            logger.warning(
+                "No active council members available",
+                extra={
+                    "event": "council.no_members",
+                    "question_id": question.question_id,
+                },
+            )
+            return CouncilOutcome(
+                question=question,
+                answers=[],
+                resolution="No active council members available",
+                winning_member_ids=[],
+                summary=None,
+                metadata={"metrics": metrics},
+            )
         member_states = self._allocate_du_budgets(context.config, metrics)
 
         answers = await self._gather_member_answers(
@@ -474,8 +564,9 @@ class CouncilOrchestrator:
         base_metrics.setdefault(
             "du_budget_per_member", self._resolve_du_budget(context.config)
         )
-
-        return self._build_outcome(question, answers, vote, base_metrics)
+        outcome = self._build_outcome(question, answers, vote, base_metrics)
+        await self._record_outcome_metrics(outcome)
+        return outcome
 
     def _resolve_du_budget(self, config: CouncilConfig) -> float:
         if config.du_budget_per_question is not None:
@@ -519,6 +610,8 @@ class CouncilOrchestrator:
         semaphore = asyncio.Semaphore(
             max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
         )
+        metrics.setdefault("member_errors", {})
+        metrics.setdefault("member_fallbacks", 0)
 
         async def _call_member(member: CouncilMemberConfig) -> MemberAnswer | None:
             state = member_states.get(member.member_id)
@@ -540,6 +633,18 @@ class CouncilOrchestrator:
                     )
                 else:
                     logger.exception("Council member call failed: %s", exc)
+                metrics["member_errors"][member.member_id] = str(exc)
+                return None
+            except Exception as exc:  # pragma: no cover - defensive
+                metrics["member_errors"][member.member_id] = str(exc)
+                logger.exception(
+                    "Council member call encountered unexpected error",
+                    extra={
+                        "event": "council.member.failure",
+                        "member_id": member.member_id,
+                    },
+                    exc_info=True,
+                )
                 return None
 
         results = await asyncio.gather(
@@ -554,8 +659,15 @@ class CouncilOrchestrator:
                     metrics["du_budget_exhausted"] = True
                 else:
                     logger.exception("Unexpected error during council call", exc_info=result)
+                metrics["member_errors"][getattr(result, "member_id", "unknown")] = str(
+                    result
+                )
                 continue
             if result is not None:
+                if isinstance(result.metadata, Mapping) and result.metadata.get(
+                    "fallback_used"
+                ):
+                    metrics["member_fallbacks"] += 1
                 answers.append(result)
         return answers
 
@@ -596,6 +708,19 @@ class CouncilOrchestrator:
             summary=summary,
             metadata=metadata,
         )
+
+    async def _record_outcome_metrics(self, outcome: CouncilOutcome) -> None:
+        try:
+            await council_stats_store.record_outcome_async(outcome)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to persist council metrics",
+                extra={
+                    "event": "council.metrics.error",
+                    "question_id": outcome.question.question_id,
+                },
+                exc_info=True,
+            )
 
     def serialize_metrics(self) -> dict[str, list[dict[str, float]]]:
         """Return a snapshot of aggregated council metrics."""

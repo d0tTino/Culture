@@ -1,6 +1,7 @@
 """Council Mode data models."""
 
 from .fitness_store import CouncilFitnessStore
+from .stats_store import CouncilStatsStore
 from .orchestrator import CouncilOrchestrator
 from .graph_state import CouncilState, CouncilStateModel, council_outcome_node
 from .types import (
@@ -21,5 +22,6 @@ __all__ = [
     "CouncilOutcome",
     "CouncilQuestion",
     "MemberAnswer",
+    "CouncilStatsStore",
     "council_outcome_node",
 ]

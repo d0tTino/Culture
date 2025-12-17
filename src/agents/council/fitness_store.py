@@ -4,8 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from itertools import combinations
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
 
@@ -39,6 +38,76 @@ class CouncilFitnessStore:
         self._agreement_scores: list[float] = []
         self.agreement_threshold = float(agreement_threshold)
         self.min_samples = int(min_samples)
+
+    def reset(self) -> None:
+        """Clear tracked metrics so repeated tests start from a clean slate."""
+
+        self._wins.clear()
+        self._appearances.clear()
+        self._pair_counts.clear()
+        self._pair_agreements.clear()
+        self._agreement_scores.clear()
+
+    def update_from_vote(
+        self,
+        question: CouncilQuestion,
+        answers: Sequence[MemberAnswer],
+        vote: CouncilVoteModel,
+    ) -> dict[str, object]:
+        """Update aggregate metrics based on the latest council vote."""
+
+        top_score = max(vote.scores.values()) if vote.scores else 0.0
+        winners = {
+            member_id
+            for member_id, score in vote.scores.items()
+            if score >= top_score
+        }
+
+        for answer in answers:
+            member_id = answer.member_id
+            self._appearances[member_id] += 1
+            if member_id in winners:
+                self._wins[member_id] += 1
+
+        for idx, left in enumerate(answers):
+            for right in answers[idx + 1 :]:
+                member_a, member_b = sorted((left.member_id, right.member_id))
+                key = f"{member_a}|{member_b}"
+                self._pair_counts[key] += 1
+                if (left.answer or "").strip().lower() == (right.answer or "").strip().lower():
+                    self._pair_agreements[key] += 1
+
+        members_snapshot: dict[str, dict[str, float]] = {}
+        for member_id in self._appearances:
+            appearances = float(self._appearances[member_id])
+            wins = float(self._wins.get(member_id, 0))
+            members_snapshot[member_id] = {
+                "wins": wins,
+                "appearances": appearances,
+                "win_rate": wins / appearances if appearances else 0.0,
+            }
+
+        pairs_snapshot: dict[str, dict[str, float]] = {}
+        warnings: list[str] = []
+        for key, count in self._pair_counts.items():
+            agreements = float(self._pair_agreements.get(key, 0))
+            agreement_rate = agreements / count if count else 0.0
+            pairs_snapshot[key] = {
+                "questions_together": float(count),
+                "top_agreements": agreements,
+                "agreement_rate": agreement_rate,
+            }
+            if count >= self.min_samples and agreement_rate >= self.agreement_threshold:
+                warnings.append(
+                    f"Pair {key} showing high agreement {agreement_rate:.2f} over {count} questions"
+                )
+
+        return {
+            "question_id": question.question_id,
+            "members": members_snapshot,
+            "pairs": pairs_snapshot,
+            "warnings": warnings,
+        }
 
     def record(self, outcome: CouncilOutcome) -> None:
         """Record the results of a completed council round."""
