@@ -40,7 +40,7 @@ class CouncilFitnessStore:
         self.min_samples = int(min_samples)
 
     def reset(self) -> None:
-        """Clear tracked metrics so repeated tests start from a clean slate."""
+        """Clear accumulated fitness statistics."""
 
         self._wins.clear()
         self._appearances.clear()
@@ -48,66 +48,57 @@ class CouncilFitnessStore:
         self._pair_agreements.clear()
         self._agreement_scores.clear()
 
-    def update_from_vote(
-        self,
-        question: CouncilQuestion,
-        answers: Sequence[MemberAnswer],
-        vote: CouncilVoteModel,
-    ) -> dict[str, object]:
-        """Update aggregate metrics based on the latest council vote."""
+    @staticmethod
+    def _normalize_answer(answer: str | None) -> str:
+        return (answer or "").strip().lower()
 
-        top_score = max(vote.scores.values()) if vote.scores else 0.0
-        winners = {
-            member_id
-            for member_id, score in vote.scores.items()
-            if score >= top_score
-        }
+    def update_from_vote(
+        self, question: CouncilQuestion, answers: Sequence[MemberAnswer], vote: Any
+    ) -> dict[str, Any]:
+        """Update metrics from a council vote and return a serializable snapshot."""
+
+        winners = {getattr(vote, "winning_member_id", "")}
+        winners.discard("")
 
         for answer in answers:
-            member_id = answer.member_id
+            member_id = str(answer.member_id)
             self._appearances[member_id] += 1
             if member_id in winners:
                 self._wins[member_id] += 1
 
-        for idx, left in enumerate(answers):
-            for right in answers[idx + 1 :]:
-                member_a, member_b = sorted((left.member_id, right.member_id))
-                key = f"{member_a}|{member_b}"
-                self._pair_counts[key] += 1
-                if (left.answer or "").strip().lower() == (right.answer or "").strip().lower():
-                    self._pair_agreements[key] += 1
+        for left, right in combinations(answers, 2):
+            key = "|".join(sorted((left.member_id, right.member_id)))
+            self._pair_counts[key] += 1
+            if self._normalize_answer(left.answer) == self._normalize_answer(right.answer):
+                self._pair_agreements[key] += 1
 
-        members_snapshot: dict[str, dict[str, float]] = {}
-        for member_id in self._appearances:
-            appearances = float(self._appearances[member_id])
-            wins = float(self._wins.get(member_id, 0))
+        members_snapshot: dict[str, Any] = {}
+        for member_id in set(self._appearances.keys()) | winners:
+            appearances = self._appearances.get(member_id, 0)
+            wins = self._wins.get(member_id, 0)
             members_snapshot[member_id] = {
                 "wins": wins,
-                "appearances": appearances,
-                "win_rate": wins / appearances if appearances else 0.0,
+                "participations": appearances,
+                "win_rate": float(wins / appearances) if appearances else 0.0,
+                "agreement_score": self.average_agreement_score,
             }
 
-        pairs_snapshot: dict[str, dict[str, float]] = {}
+        pairs_snapshot: dict[str, Any] = {}
         warnings: list[str] = []
-        for key, count in self._pair_counts.items():
-            agreements = float(self._pair_agreements.get(key, 0))
-            agreement_rate = agreements / count if count else 0.0
-            pairs_snapshot[key] = {
-                "questions_together": float(count),
+        for pair, together in self._pair_counts.items():
+            agreements = self._pair_agreements.get(pair, 0)
+            rate = float(agreements / together) if together else 0.0
+            pairs_snapshot[pair] = {
+                "questions_together": together,
                 "top_agreements": agreements,
-                "agreement_rate": agreement_rate,
+                "agreement_rate": rate,
             }
-            if count >= self.min_samples and agreement_rate >= self.agreement_threshold:
+            if together >= self.min_samples and rate >= self.agreement_threshold:
                 warnings.append(
-                    f"Pair {key} showing high agreement {agreement_rate:.2f} over {count} questions"
+                    f"Potential collusion detected between {pair} (agreement rate {rate:.2f})"
                 )
 
-        return {
-            "question_id": question.question_id,
-            "members": members_snapshot,
-            "pairs": pairs_snapshot,
-            "warnings": warnings,
-        }
+        return {"members": members_snapshot, "pairs": pairs_snapshot, "warnings": warnings}
 
     def record(self, outcome: CouncilOutcome) -> None:
         """Record the results of a completed council round."""

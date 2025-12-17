@@ -44,6 +44,40 @@ Council success should be evaluated with gauges and counters in [`src/interfaces
 
 Qualitative checks should include manual review of L1/L2 summaries and Knowledge Board diffs to confirm that council mandates are executed and dissent is captured.
 
+### Fitness Inspection Guidance
+- **On-demand inspection via CLI:** Run the council CLI (see examples below) with `--question-id` to correlate winning personas, DU spend, and resolution text with Prometheus timeseries during triage.
+- **Metrics lens:** Filter `PROPOSAL_THROUGHPUT`, `RAG_HIT_RATE`, `AGENT_REMAINING_DU`, and `LLM_LATENCY_P95_MS` by `question_id` and `member_id` labels to see which personas drive most DU/IP consumption and whether retrieval discipline holds under load.
+- **Ledger & Knowledge Board diffs:** Cross-check DU/IP balances in the `Ledger` logs against Knowledge Board entries created after council resolutions to validate that governance decisions execute and are retained for later retrieval.
+- **Drift detection:** Compare sentiment/coalition gauges before and after a council cycle to detect polarization regressions, especially when persona packs or prompt scaffolds change.
+
+## CLI Usage & Configuration Flags
+
+### Quickstarts
+- **Makefile helper (no config changes):**
+  ```bash
+  make council Q="Should we prioritize the supply-chain audit?"
+  ```
+- **Direct CLI for richer context:**
+  ```bash
+  python -m scripts.council_cli \
+    "Should we prioritize the supply-chain audit?" \
+    --context "Procurement stalled last sprint" \
+    --rag-doc "Incident INC-2045" \
+    --rag-doc "Q3 vendor scorecard" \
+    --question-id "audit-priority-check"
+  ```
+  The CLI accepts repeated `--rag-doc/--rag-docs` flags to supply additional evidence, and `--question-id` is persisted in metrics to link answers to observability traces.
+
+### Council-specific toggles
+- `USE_COUNCIL_MODE`: Enable/disable council orchestration globally; set in `.env` or via `export USE_COUNCIL_MODE=true` before running simulations.
+- `COUNCIL_CONFIG_PATH`: YAML roster location (default `config/council.yml`). Use to point at environment-specific persona rosters without code changes.
+- `COUNCIL_MAX_CONCURRENT_CALLS`: Maximum concurrent LLM invocations per council run, used to bound latency and spend.
+- `DU_BUDGET_PER_QUESTION`: DU envelope shared by all council members for a single prompt.
+- `ROLE_DU_GENERATION`: Per-persona DU generation settings that control how the Facilitator/Innovator/Analyzer accumulate budget across ticks.
+- `config/council.yml`: Example roster showing `max_concurrent_calls`, `du_budget_per_question`, and `members` with per-role models; override values here or through environment variables consumed in [`src/infra/config.py`](../src/infra/config.py) and [`src/infra/settings.py`](../src/infra/settings.py).
+
+When the YAML file is missing or malformed, Culture falls back to defaults emitted by `_build_default_council_config`, so corrupted configs do not block simulations.
+
 ## Phased Milestones
 1. **Phase 0 – Stakeholder Alignment:** Circulate this design with PM/research partners, confirm KPIs, and prioritize persona coverage gaps before coding.
 2. **Phase 1 – LangGraph Extensions:** Add council-specific nodes/subgraphs referencing `basic_agent_graph.py`, keeping them pluggable with the compiled graph builder and compatible with existing tracing hooks.
@@ -51,5 +85,14 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
 4. **Phase 3 – Memory-Rich Deliberation:** Tune retriever prompts and token budgets so council turns must pass RAG hit-rate guardrails before finalizing actions.
 5. **Phase 4 – Metricized Rollout:** Build dashboards over the Prometheus metrics listed above, adding regression alerts when throughput, DU variance, or sentiment drift outside target bands.
 6. **Phase 5 – Iterative Governance:** Run controlled simulations, capture Knowledge Board diffs, and iterate on persona configurations based on qualitative and quantitative feedback.
+
+### Phase 8 – Readiness Checklist
+Track these blocking items before declaring Council Mode production-ready:
+
+- [ ] **Configuration hygiene:** `USE_COUNCIL_MODE` gating verified in staging, `COUNCIL_CONFIG_PATH` points to a validated roster, and DU envelopes (`DU_BUDGET_PER_QUESTION`, `COUNCIL_MAX_CONCURRENT_CALLS`) are tuned for your LLM capacity.
+- [ ] **Observability baseline:** Prometheus dashboards chart `PROPOSAL_THROUGHPUT`, `RAG_HIT_RATE`, `AGENT_REMAINING_DU`, sentiment/coalition gauges, and P95 latency with `question_id` filters wired through the CLI.
+- [ ] **Retrieval discipline:** Sampled council runs meet minimum RAG hit rate and cite retrieved evidence in L1/L2 summaries; Knowledge Board diffs capture resolutions plus dissent.
+- [ ] **Failure containment:** Fallback persona roster loaded from `_build_default_council_config` confirmed in chaos tests (missing YAML, timeouts), and ledger audits show DU/IP debits for cancelled or timed-out calls.
+- [ ] **UX/operational playbooks:** CLI runbook documents context, RAG doc, and question ID usage; stakeholders trained to trace a resolution from CLI input to Knowledge Board entry and ledger deltas.
 
 > **Stakeholder Review:** Please review this document with the designated research and product stakeholders before implementation to validate the milestones and success criteria.
