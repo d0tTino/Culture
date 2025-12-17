@@ -4,8 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from itertools import combinations
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
 
