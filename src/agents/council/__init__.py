@@ -2,6 +2,7 @@
 
 from .fitness_store import CouncilFitnessStore
 from .orchestrator import CouncilOrchestrator
+from .graph_state import CouncilState, CouncilStateModel, council_outcome_node
 from .types import (
     CouncilConfig,
     CouncilMemberConfig,
@@ -15,7 +16,10 @@ __all__ = [
     "CouncilMemberConfig",
     "CouncilOrchestrator",
     "CouncilFitnessStore",
+    "CouncilState",
+    "CouncilStateModel",
     "CouncilOutcome",
     "CouncilQuestion",
     "MemberAnswer",
+    "council_outcome_node",
 ]
