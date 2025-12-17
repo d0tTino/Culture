@@ -121,6 +121,23 @@ To pose a one-off question to the council without running a full simulation, use
 make council Q="Should we prioritize the supply-chain audit?"
 ```
 
+You can also call the underlying Typer CLI for richer telemetry and RAG context:
+
+```bash
+python -m scripts.council_cli \
+  "Should we prioritize the supply-chain audit?" \
+  --context "Procurement stalled last sprint" \
+  --rag-doc "Incident INC-2045" \
+  --question-id "audit-priority-check"
+```
+
+Configuration flags that influence council behavior include:
+
+- `USE_COUNCIL_MODE` to enable the feature gate.
+- `COUNCIL_CONFIG_PATH` to point at a roster file (defaults to `config/council.yml`).
+- `COUNCIL_MAX_CONCURRENT_CALLS` and `DU_BUDGET_PER_QUESTION` to bound LLM usage per council run.
+- `ROLE_DU_GENERATION` for persona-specific DU generation budgets.
+
 ## Technology Stack
 
 * **Core Language:** Python 3.11+
