@@ -14,7 +14,9 @@ from src.agents.council import (
     CouncilQuestion,
 )
 from src.agents.council.fitness_store import council_fitness_store
+from src.agents.council.stats_store import CouncilStatsStore
 from src.infra import llm_client
+from src.infra import config
 from src.shared import llm_mocks
 
 pytestmark = pytest.mark.unit
@@ -49,6 +51,11 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def reset_fitness_store() -> None:
     council_fitness_store.reset()
+
+
+@pytest.fixture(autouse=True)
+def enable_council_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": True})
 
 
 def _build_council_config(num_members: int = 3) -> CouncilConfig:
@@ -178,6 +185,12 @@ def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatc
         "du_exhausted": True,
         "partial": True,
         "completed_members": ["facilitator", "innovator"],
+        "metrics": {
+            "du_budget_exhausted": True,
+            "du_budget_per_member": pytest.approx(0.0),
+            "partial": True,
+            "completed_members": ["facilitator", "innovator"],
+        },
     }
 
     llm_mocks.set_mock_llm_du_budget(None)
@@ -249,3 +262,43 @@ def test_council_orchestrator_persists_metrics(
 
     pairwise_entries = {(p["member_a"], p["member_b"]): p for p in snapshot["pairwise"]}
     assert pairwise_entries[("analyst", "facilitator")]["agreements"] == 1
+
+
+def test_council_orchestrator_flags_partial_metrics_on_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config()
+    question = _build_question()
+
+    original = council_orchestrator._ask_council_member
+
+    def _raise_on_innovator(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        if member.member_id == "innovator":
+            raise RuntimeError("LLM failure for innovator")
+        return original(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _raise_on_innovator)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics.get("partial") is True
+    assert metrics.get("failed_members") == ["innovator"]
+    assert len(outcome.answers) == len(config.members) - 1
+
+
+def test_council_orchestrator_requires_enabled_council(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": False})
+    orchestrator = CouncilOrchestrator()
+
+    with pytest.raises(RuntimeError, match="Council mode is disabled"):
+        orchestrator.deliberate(_build_council_config(), _build_question())
+
+
+def test_council_orchestrator_requires_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = CouncilOrchestrator()
+    memberless_config = CouncilConfig(enabled=True, members=[])
+
+    with pytest.raises(ValueError, match="at least one member"):
+        orchestrator.deliberate(memberless_config, _build_question())

@@ -40,6 +40,67 @@ class CouncilFitnessStore:
         self.agreement_threshold = float(agreement_threshold)
         self.min_samples = int(min_samples)
 
+    def reset(self) -> None:
+        """Clear accumulated fitness statistics."""
+
+        self._wins.clear()
+        self._appearances.clear()
+        self._pair_counts.clear()
+        self._pair_agreements.clear()
+        self._agreement_scores.clear()
+
+    @staticmethod
+    def _normalize_answer(answer: str | None) -> str:
+        return (answer or "").strip().lower()
+
+    def update_from_vote(
+        self, question: CouncilQuestion, answers: Sequence[MemberAnswer], vote: Any
+    ) -> dict[str, Any]:
+        """Update metrics from a council vote and return a serializable snapshot."""
+
+        winners = {getattr(vote, "winning_member_id", "")}
+        winners.discard("")
+
+        for answer in answers:
+            member_id = str(answer.member_id)
+            self._appearances[member_id] += 1
+            if member_id in winners:
+                self._wins[member_id] += 1
+
+        for left, right in combinations(answers, 2):
+            key = "|".join(sorted((left.member_id, right.member_id)))
+            self._pair_counts[key] += 1
+            if self._normalize_answer(left.answer) == self._normalize_answer(right.answer):
+                self._pair_agreements[key] += 1
+
+        members_snapshot: dict[str, Any] = {}
+        for member_id in set(self._appearances.keys()) | winners:
+            appearances = self._appearances.get(member_id, 0)
+            wins = self._wins.get(member_id, 0)
+            members_snapshot[member_id] = {
+                "wins": wins,
+                "participations": appearances,
+                "win_rate": float(wins / appearances) if appearances else 0.0,
+                "agreement_score": self.average_agreement_score,
+            }
+
+        pairs_snapshot: dict[str, Any] = {}
+        warnings: list[str] = []
+        for pair, together in self._pair_counts.items():
+            agreements = self._pair_agreements.get(pair, 0)
+            rate = float(agreements / together) if together else 0.0
+            pairs_snapshot[pair] = {
+                "questions_together": together,
+                "top_agreements": agreements,
+                "agreement_rate": rate,
+            }
+            if together >= self.min_samples and rate >= self.agreement_threshold:
+                warnings.append(
+                    f"Potential collusion detected between {pair} (agreement rate {rate:.2f})"
+                )
+
+        return {"members": members_snapshot, "pairs": pairs_snapshot, "warnings": warnings}
+
     def record(self, outcome: CouncilOutcome) -> None:
         """Record the results of a completed council round."""
 
