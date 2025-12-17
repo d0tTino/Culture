@@ -419,6 +419,14 @@ class CouncilOrchestrator:
         extra_context: str | None = None,
         rag_docs: Sequence[str] | None = None,
     ) -> CouncilOutcome:
+        if not bool(get_config("USE_COUNCIL_MODE")) or not context.config.enabled:
+            raise RuntimeError(
+                "Council mode is disabled; set USE_COUNCIL_MODE=true to enable it."
+            )
+
+        if not context.config.members:
+            raise ValueError("Council configuration must include at least one member")
+
         rag_docs = await _populate_question_rag_documents(
             question,
             base_documents=rag_docs,
@@ -443,6 +451,8 @@ class CouncilOrchestrator:
         )
 
         if metrics.get("du_budget_exhausted"):
+            metrics.setdefault("partial", True)
+            metrics.setdefault("completed_members", [answer.member_id for answer in answers])
             outcome = CouncilOutcome(
                 question=question,
                 answers=answers,
@@ -453,6 +463,7 @@ class CouncilOrchestrator:
                     "du_exhausted": True,
                     "partial": True,
                     "completed_members": [answer.member_id for answer in answers],
+                    "metrics": dict(metrics),
                 },
             )
             await self._record_outcome_metrics(outcome)
@@ -519,6 +530,7 @@ class CouncilOrchestrator:
         semaphore = asyncio.Semaphore(
             max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
         )
+        failures: list[str] = []
 
         async def _call_member(member: CouncilMemberConfig) -> MemberAnswer | None:
             state = member_states.get(member.member_id)
@@ -540,6 +552,7 @@ class CouncilOrchestrator:
                     )
                 else:
                     logger.exception("Council member call failed: %s", exc)
+                    failures.append(member.member_id)
                 return None
 
         results = await asyncio.gather(
@@ -548,15 +561,27 @@ class CouncilOrchestrator:
         )
 
         answers: list[MemberAnswer] = []
-        for result in results:
+        for member, result in zip(context.config.members, results):
             if isinstance(result, Exception):
                 if "budget" in str(result).lower():
                     metrics["du_budget_exhausted"] = True
                 else:
                     logger.exception("Unexpected error during council call", exc_info=result)
+                    failures.append(member.member_id)
                 continue
-            if result is not None:
-                answers.append(result)
+            if result is None:
+                failures.append(member.member_id)
+                continue
+
+            answers.append(result)
+
+        if failures:
+            metrics["partial"] = True
+            metrics["failed_members"] = sorted(set(failures))
+
+        if metrics.get("du_budget_exhausted") and answers:
+            metrics.setdefault("completed_members", [answer.member_id for answer in answers])
+            metrics.setdefault("partial", True)
         return answers
 
     def _build_outcome(
