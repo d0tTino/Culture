@@ -30,10 +30,13 @@ else:
                 return None
 
 
+from src.infra import config
+
 from .basic_agent_graph import _maybe_consolidate_memories
 from .basic_agent_types import AgentTurnState
 from .graph_nodes import (
     analyze_perception_sentiment_node,
+    council_decision_node,
     finalize_message_agent_node,
     generate_thought_and_message_node,
     prepare_relationship_prompt_node,
@@ -60,12 +63,17 @@ def route_action_intent(state: AgentTurnState) -> str:
 
 
 def build_graph() -> Any:
+    use_council_mode = bool(config.get_config("USE_COUNCIL_MODE"))
+
     graph_builder = StateGraph(AgentTurnState)
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
     graph_builder.add_node("prepare_relationship_prompt", prepare_relationship_prompt_node)
     graph_builder.add_node("retrieve_memories", retriever_node)
     graph_builder.add_node("retrieve_and_summarize_memories", retrieve_and_summarize_memories_node)
     graph_builder.add_node("generate_thought_and_message", generate_thought_and_message_node)
+
+    if use_council_mode:
+        graph_builder.add_node("council_decision", council_decision_node)
 
     graph_builder.add_node("handle_propose_idea", handle_propose_idea_node)
     graph_builder.add_node("handle_ask_clarification", handle_ask_clarification_node)
@@ -89,8 +97,13 @@ def build_graph() -> Any:
     graph_builder.add_edge("retrieve_memories", "retrieve_and_summarize_memories")
     graph_builder.add_edge("retrieve_and_summarize_memories", "generate_thought_and_message")
 
+    branch_source = "generate_thought_and_message"
+    if use_council_mode:
+        graph_builder.add_edge("generate_thought_and_message", "council_decision")
+        branch_source = "council_decision"
+
     graph_builder.add_conditional_edges(
-        "generate_thought_and_message",
+        branch_source,
         route_action_intent,
         {
             "propose_idea": "handle_propose_idea",
