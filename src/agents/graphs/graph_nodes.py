@@ -7,6 +7,8 @@ from typing import Any, Literal, Protocol, cast
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.base_agent import Agent
+from src.agents.council.orchestrator import run_council
+from src.agents.council.types import CouncilOutcome, CouncilQuestion
 from src.agents.memory.memory_service import MemoryService
 from src.infra.llm_client import (
     analyze_sentiment,
@@ -231,6 +233,60 @@ async def generate_thought_and_message_node(
         )
 
     return {"structured_output": cast(AgentActionOutput | None, structured)}
+
+
+async def council_decision_node(state: AgentTurnState) -> dict[str, AgentActionOutput | None]:
+    """Run the agent's proposed action through a council for feedback."""
+
+    output = cast(AgentActionOutput | None, state.get("structured_output"))
+    if output is None:
+        return {"structured_output": None}
+
+    question = CouncilQuestion(
+        question_id=f"{state.get('agent_id', 'agent')}-{state.get('simulation_step', 0)}",
+        prompt=(
+            "Given the agent context and proposed action below, propose the best response. "
+            "Return a concise resolution summarizing the recommended action."
+            f"\n\nGoal: {state.get('agent_goal', '')}"
+            f"\nRole: {state.get('current_role', '')}"
+            f"\nScenario: {state.get('scenario_description', '')}"
+            f"\nPerception: {state.get('environment_perception', {})}"
+            f"\nProposed intent: {getattr(output, 'action_intent', 'idle')}"
+            f"\nThought: {getattr(output, 'thought', '')}"
+            f"\nMessage: {getattr(output, 'message_content', '') or '(no message)'}"
+        ),
+        metadata={
+            "agent_id": state.get("agent_id"),
+            "simulation_step": state.get("simulation_step"),
+        },
+    )
+
+    rag_docs: list[str] = []
+    for key in ("memory_context", "rag_summary"):
+        docs = state.get(key)
+        if isinstance(docs, str):
+            rag_docs.append(docs)
+        elif isinstance(docs, list):
+            rag_docs.extend(str(item) for item in docs)
+
+    try:
+        outcome: CouncilOutcome = await asyncio.to_thread(
+            run_council,
+            question,
+            extra_context=state.get("prompt_modifier"),
+            rag_docs=rag_docs,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Council decision failed: %s", exc, exc_info=True)
+        return {"structured_output": output}
+
+    resolution = outcome.resolution or ""
+    updated = output.model_copy()
+    updated.justification = outcome.summary or resolution or output.justification
+    if resolution:
+        updated.thought = f"{output.thought}\n\nCouncil resolution: {resolution}".strip()
+
+    return {"structured_output": updated}
 
 
 async def finalize_message_agent_node(state: AgentTurnState) -> dict[str, Any]:
