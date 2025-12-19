@@ -28,7 +28,8 @@ def test_load_council_config_returns_defaults_when_missing(
     result = infra_config.load_council_config(reload=True)
 
     assert result["members"], "Expected default members when YAML file is missing"
-    assert result["members"][0]["name"] == "Innovator"
+    assert result["members"][0]["display_name"] == "Innovator"
+    assert result["members"][0]["member_id"] == "innovator"
     assert (
         result["max_concurrent_calls"] == infra_config.settings.COUNCIL_MAX_CONCURRENT_CALLS
     )
@@ -52,9 +53,10 @@ def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     result = infra_config.load_council_config(reload=True)
 
-    assert result["members"][0]["name"] == "Strategist"
+    assert result["members"][0]["display_name"] == "Strategist"
     assert result["members"][0]["model"] == "local/mistral"
     assert result["members"][1]["model"], "Missing model should default to base model"
+    assert result["members"][1]["persona"], "Missing persona should be derived"
     assert all(member.get("is_active") for member in result["members"])
     assert all("temperature" in member for member in result["members"])
 

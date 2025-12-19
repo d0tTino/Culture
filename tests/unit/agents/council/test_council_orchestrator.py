@@ -68,7 +68,10 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
             system_prompt="Lead with clarity",
             decision_weight=1.0,
             persona="Guides the conversation",
+            model="mistral:latest",
             temperature=0.2,
+            max_tokens=256,
+            is_active=True,
         ),
         CouncilMemberConfig(
             member_id="innovator",
@@ -78,7 +81,10 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
             system_prompt="Bring new ideas",
             decision_weight=1.0,
             persona="Explores creative options",
+            model="mistral:latest",
             temperature=0.3,
+            max_tokens=256,
+            is_active=True,
         ),
         CouncilMemberConfig(
             member_id="analyst",
@@ -88,7 +94,10 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
             system_prompt="Look for gaps",
             decision_weight=1.0,
             persona="Evaluates trade-offs",
+            model="mistral:latest",
             temperature=0.25,
+            max_tokens=256,
+            is_active=True,
         ),
     ]
 
@@ -103,6 +112,10 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
                 system_prompt="Share focused insight",
                 decision_weight=1.0,
                 persona="Subject matter expert",
+                model="mistral:latest",
+                temperature=0.3,
+                max_tokens=256,
+                is_active=True,
             )
         )
 
