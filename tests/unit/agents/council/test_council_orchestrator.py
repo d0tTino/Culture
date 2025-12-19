@@ -29,10 +29,29 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
         True,
         {
             "CouncilVoteModel": {
+                "winner_id": "facilitator",
                 "winning_member_id": "facilitator",
-                "winner": "facilitator",
-                "votes": {"facilitator": 1, "innovator": 1, "analyst": 1},
-                "scores": {"facilitator": 1.0, "innovator": 1.0, "analyst": 1.0},
+                "votes": {},
+                "scores": {
+                    "facilitator": {
+                        "correctness": 0.9,
+                        "clarity": 0.8,
+                        "usefulness": 0.7,
+                        "safety": 0.95,
+                    },
+                    "innovator": {
+                        "correctness": 0.6,
+                        "clarity": 0.7,
+                        "usefulness": 0.8,
+                        "safety": 0.9,
+                    },
+                    "analyst": {
+                        "correctness": 0.7,
+                        "clarity": 0.6,
+                        "usefulness": 0.85,
+                        "safety": 0.9,
+                    },
+                },
                 "metrics": {"cohesion": 0.91, "coverage": 0.77},
                 "summary": "Deterministic council summary",
                 "reasoning": "deterministic reasoning",
@@ -158,11 +177,15 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(monkeypatch: py
     assert observed_member_ids == expected_member_ids
 
     assert outcome.winning_member_ids == ["facilitator"]
+    assert outcome.winner_id == "facilitator"
     assert outcome.resolution == "facilitator proposal selected"
+    assert outcome.votes["facilitator"] == pytest.approx(0.8375)
     assert outcome.metadata is not None
     metrics = outcome.metadata.get("metrics", {})
     assert metrics.get("du_budget_exhausted") is False
     assert metrics.get("du_budget_per_member") == pytest.approx(5.0)
+    assert "member_scores" in metrics
+    assert outcome.metrics["member_scores"]["facilitator"]["total"] == pytest.approx(0.8375)
     assert outcome.summary == "Deterministic council summary"
 
     serialized = json.loads(json.dumps(outcome.metadata))
@@ -253,6 +276,7 @@ def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPat
     assert all(rag_marker in prompt for prompt in judge_prompts)
     assert all(extra_context in prompt for prompt in member_prompts)
     assert all(extra_context in prompt for prompt in judge_prompts)
+    assert all("facilitator proposal selected" in prompt for prompt in judge_prompts)
 
 
 def test_council_orchestrator_persists_metrics(

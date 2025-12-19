@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
 from src.agents.council.stats_store import council_stats_store
@@ -34,6 +34,7 @@ from src.sim.resource_manager import get_resource_manager
 
 logger = logging.getLogger(__name__)
 LLM_MAX_ATTEMPTS = 2
+JUDGE_SCORE_CATEGORIES = ("correctness", "clarity", "usefulness", "safety")
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Provide a JSON object with keys: "
@@ -56,10 +57,11 @@ class CouncilVoteModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     winning_member_id: str = Field(
-        alias="winning_member_id", validation_alias="winner"
+        validation_alias=AliasChoices("winner_id", "winner", "winning_member_id")
     )
-    scores: dict[str, float] = Field(default_factory=dict, alias="votes")
-    metrics: dict[str, float] = Field(default_factory=dict)
+    votes: dict[str, Any] = Field(default_factory=dict)
+    scores: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
     summary: str
     reasoning: str | None = None
     resolution: str | None = None
@@ -356,15 +358,124 @@ def _build_judge_prompt(
     *,
     extra_context: str | None = None,
     rag_docs: Sequence[str] | None = None,
-    ) -> str:
+) -> str:
     rag_section = _format_rag_docs(rag_docs or [])
     additional_context = extra_context or "(no extra context provided)"
-    member_section = " ".join(f"member_id={answer.member_id}" for answer in answers)
-    return (
-        "[council-judgement] "
-        f"question={question.prompt} context={question.context or ''} "
-        f"extra_context={additional_context} rag_docs={rag_section} {member_section}"
+    member_blocks = []
+    for answer in answers:
+        member_blocks.append(
+            "\n".join(
+                [
+                    f"- id: {answer.member_id}",
+                    f"  answer: {answer.answer}",
+                    f"  reasoning: {answer.reasoning or '(no reasoning provided)'}",
+                ]
+            )
+        )
+    member_section = "\n".join(member_blocks) or "(no member answers)"
+    score_categories = ", ".join(JUDGE_SCORE_CATEGORIES)
+    return "\n".join(
+        [
+            "[council-judgement]",
+            f"Question: {question.prompt}",
+            f"Context: {question.context or ''}",
+            f"Extra context: {additional_context}",
+            f"RAG docs: {rag_section}",
+            "Members:",
+            member_section,
+            "",
+            "Scoring guidance:",
+            f"- Score each member from 0.0 to 1.0 for: {score_categories}.",
+            "- Compute a total score as the average of the category scores.",
+            "- Choose the winner with the highest total score (break ties by clarity).",
+            "",
+            "Return ONLY valid JSON matching this schema:",
+            "{",
+            '  "winner_id": "<member_id>",',
+            '  "votes": {"<member_id>": 0.0},',
+            '  "scores": {"<member_id>": {"correctness": 0.0, "clarity": 0.0, "usefulness": 0.0, "safety": 0.0}},',
+            '  "metrics": {"cohesion": 0.0, "coverage": 0.0, "member_scores": {"<member_id>": {"correctness": 0.0, "clarity": 0.0, "usefulness": 0.0, "safety": 0.0, "total": 0.0}}},',
+            '  "summary": "<concise summary>",',
+            '  "reasoning": "<why the winner was selected>",',
+            '  "resolution": "<final resolution or selected answer>"',
+            "}",
+        ]
     )
+
+
+def _coerce_score(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_category_scores(raw: Mapping[str, Any]) -> dict[str, float]:
+    scores: dict[str, float] = {}
+    for category in JUDGE_SCORE_CATEGORIES:
+        value = _coerce_score(raw.get(category))
+        if value is not None:
+            scores[category] = value
+    return scores
+
+
+def _normalize_vote_metrics(
+    structured: CouncilVoteModel, answers: Sequence[MemberAnswer]
+) -> CouncilVoteModel:
+    totals: dict[str, float] = {}
+    breakdown: dict[str, dict[str, float]] = {}
+
+    for member_id, score_map in structured.scores.items():
+        if isinstance(score_map, Mapping):
+            category_scores = _extract_category_scores(score_map)
+            if category_scores:
+                breakdown[member_id] = category_scores
+
+    for member_id, value in structured.votes.items():
+        if isinstance(value, Mapping):
+            category_scores = _extract_category_scores(value)
+            if category_scores:
+                breakdown.setdefault(member_id, category_scores)
+        else:
+            score_value = _coerce_score(value)
+            if score_value is not None:
+                totals[member_id] = score_value
+
+    for member_id, category_scores in breakdown.items():
+        if category_scores:
+            totals.setdefault(member_id, sum(category_scores.values()) / len(category_scores))
+
+    if not totals and breakdown:
+        totals = {
+            member_id: sum(scores.values()) / len(scores) for member_id, scores in breakdown.items()
+        }
+
+    member_ids = {answer.member_id for answer in answers}
+    for member_id, total in totals.items():
+        if member_id in member_ids:
+            breakdown.setdefault(member_id, {})
+            breakdown[member_id]["total"] = total
+
+    structured.votes = totals
+    if breakdown:
+        structured.scores = {
+            member_id: {
+                category: score
+                for category, score in scores.items()
+                if category in JUDGE_SCORE_CATEGORIES
+            }
+            for member_id, scores in breakdown.items()
+        }
+        structured.metrics = {
+            **structured.metrics,
+            "member_scores": breakdown,
+            "score_categories": list(JUDGE_SCORE_CATEGORIES),
+        }
+    return structured
 
 
 def _judge_council_answers(
@@ -422,6 +533,9 @@ def _judge_council_answers(
                 "errors": errors,
             },
         )
+
+    if structured is not None:
+        structured = _normalize_vote_metrics(structured, answers)
 
     return structured
 
@@ -693,9 +807,9 @@ class CouncilOrchestrator:
 
         if vote is not None:
             winning_member_ids = [vote.winning_member_id]
-            votes = dict(vote.scores)
+            votes = dict(vote.votes)
             outcome_metrics.update(vote.metrics)
-            metadata.update({"scores": votes, "judge_reasoning": vote.reasoning})
+            metadata.update({"scores": vote.scores or votes, "judge_reasoning": vote.reasoning})
             summary = vote.summary
             answer_lookup = {answer.member_id: answer.answer for answer in answers}
             resolution = vote.resolution or answer_lookup.get(
