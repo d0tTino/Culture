@@ -33,6 +33,9 @@ def test_load_council_config_returns_defaults_when_missing(
         result["max_concurrent_calls"] == infra_config.settings.COUNCIL_MAX_CONCURRENT_CALLS
     )
     assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
+    assert result["voting_mode"] == "single_winner"
+    assert result["members"][0]["is_active"] is True
+    assert result["members"][0]["temperature"] == pytest.approx(0.4)
 
 
 def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -52,6 +55,8 @@ def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert result["members"][0]["name"] == "Strategist"
     assert result["members"][0]["model"] == "local/mistral"
     assert result["members"][1]["model"], "Missing model should default to base model"
+    assert all(member.get("is_active") for member in result["members"])
+    assert all("temperature" in member for member in result["members"])
 
 
 def test_load_council_config_merges_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -72,3 +77,4 @@ def test_load_council_config_merges_defaults(monkeypatch: pytest.MonkeyPatch, tm
     assert result["max_concurrent_calls"] == 5
     assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
     assert result["members"][0]["model"], "Missing model should default to base model"
+    assert result["voting_mode"] == "single_winner"

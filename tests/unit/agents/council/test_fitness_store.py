@@ -4,7 +4,6 @@ from src.agents.council.fitness_store import CouncilFitnessStore
 from src.agents.council.orchestrator import CouncilVoteModel
 from src.agents.council.types import CouncilQuestion, MemberAnswer
 
-
 pytestmark = pytest.mark.unit
 
 

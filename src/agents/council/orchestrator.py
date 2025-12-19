@@ -164,6 +164,7 @@ def _build_council_context() -> CouncilContext:
     raw_config = load_council_config()
     default_model = str(get_config("DEFAULT_LLM_MODEL") or "mistral:latest")
     judge_model = str(raw_config.get("judge_model") or default_model)
+    voting_mode = str(raw_config.get("voting_mode") or "single_winner")
     max_concurrent_calls = raw_config.get("max_concurrent_calls")
     if max_concurrent_calls is None:
         max_concurrent_calls = get_config("COUNCIL_MAX_CONCURRENT_CALLS")
@@ -175,52 +176,59 @@ def _build_council_context() -> CouncilContext:
     for index, entry in enumerate(raw_config.get("members", [])):
         if not isinstance(entry, Mapping):
             continue
+
         display_name = str(
             entry.get("display_name")
             or entry.get("name")
             or entry.get("id")
             or f"Member {index + 1}"
         )
-        member_id = str(entry.get("id") or _slugify(display_name))
+        member_id = str(entry.get("member_id") or entry.get("id") or _slugify(display_name))
         role = str(entry.get("role") or "Generalist")
-        description = str(
-            entry.get("description") or f"{display_name} focuses on the {role} perspective."
+        persona = str(
+            entry.get("persona")
+            or entry.get("description")
+            or f"{display_name} focuses on the {role} perspective."
         )
         system_prompt = str(
             entry.get("system_prompt")
             or f"You are {display_name}, a {role}. Offer concise, grounded answers."
         )
-        decision_weight = float(entry.get("decision_weight") or entry.get("weight") or 1.0)
-        max_turn_tokens = entry.get("max_turn_tokens")
         metadata = dict(entry.get("metadata") or {})
         model_name = str(entry.get("model") or metadata.get("model") or default_model)
         metadata.setdefault("model", model_name)
+        max_tokens = entry.get("max_tokens") or entry.get("max_turn_tokens")
 
-        members.append(
-            CouncilMemberConfig(
-                member_id=member_id,
-                display_name=display_name,
-                role=role,
-                description=description,
-                system_prompt=system_prompt,
-                decision_weight=decision_weight,
-                max_turn_tokens=int(max_turn_tokens) if max_turn_tokens is not None else None,
-                metadata=metadata,
-            )
-        )
+        member_payload = {
+            **entry,
+            "member_id": member_id,
+            "display_name": display_name,
+            "role": role,
+            "persona": persona,
+            "system_prompt": system_prompt,
+            "model": model_name,
+            "temperature": float(entry.get("temperature", 0.3)),
+            "max_tokens": int(max_tokens) if max_tokens is not None else None,
+            "metadata": metadata,
+        }
 
-    council_config = CouncilConfig(
-        enabled=bool(raw_config.get("enabled", True)),
-        members=members,
-        quorum=raw_config.get("quorum"),
-        consensus_threshold=float(raw_config.get("consensus_threshold", 0.67)),
-        max_rounds=int(raw_config.get("max_rounds", 1)),
-        auto_record_transcript=bool(raw_config.get("auto_record_transcript", True)),
-        max_concurrent_calls=int(max_concurrent_calls) if max_concurrent_calls else None,
-        du_budget_per_question=(
-            float(du_budget_per_question) if du_budget_per_question is not None else None
-        ),
-        metadata={"raw_config": raw_config},
+        members.append(CouncilMemberConfig.model_validate(member_payload))
+
+    council_config = CouncilConfig.model_validate(
+        {
+            "enabled": bool(raw_config.get("enabled", True)),
+            "voting_mode": voting_mode,
+            "members": members,
+            "quorum": raw_config.get("quorum"),
+            "consensus_threshold": float(raw_config.get("consensus_threshold", 0.67)),
+            "max_rounds": int(raw_config.get("max_rounds", 1)),
+            "auto_record_transcript": bool(raw_config.get("auto_record_transcript", True)),
+            "max_concurrent_calls": int(max_concurrent_calls) if max_concurrent_calls else None,
+            "du_budget_per_question": (
+                float(du_budget_per_question) if du_budget_per_question is not None else None
+            ),
+            "metadata": {"raw_config": raw_config},
+        }
     )
 
     return CouncilContext(config=council_config, judge_model=judge_model, member_model=default_model)
@@ -678,13 +686,16 @@ class CouncilOrchestrator:
         winning_member_ids: list[str] = []
         resolution = "No consensus reached."
         summary = None
-        metadata: dict[str, Any] = {"metrics": dict(metrics)}
+        outcome_metrics: dict[str, Any] = dict(metrics)
+        votes: dict[str, float] = {}
+        metadata: dict[str, Any] = {}
         fitness_snapshot: Mapping[str, Any] | None = None
 
         if vote is not None:
             winning_member_ids = [vote.winning_member_id]
-            metadata.update({"scores": vote.scores, "judge_reasoning": vote.reasoning})
-            metadata.get("metrics", {}).update(vote.metrics)
+            votes = dict(vote.scores)
+            outcome_metrics.update(vote.metrics)
+            metadata.update({"scores": votes, "judge_reasoning": vote.reasoning})
             summary = vote.summary
             answer_lookup = {answer.member_id: answer.answer for answer in answers}
             resolution = vote.resolution or answer_lookup.get(
@@ -697,11 +708,16 @@ class CouncilOrchestrator:
         if fitness_snapshot is not None:
             metadata["fitness"] = fitness_snapshot
 
+        metadata["metrics"] = outcome_metrics
+
         return CouncilOutcome(
             question=question,
             answers=answers,
             resolution=resolution,
+            winner_id=winning_member_ids[0] if winning_member_ids else None,
             winning_member_ids=winning_member_ids,
+            votes=votes,
+            metrics=outcome_metrics,
             summary=summary,
             metadata=metadata,
         )

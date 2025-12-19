@@ -4,12 +4,13 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from itertools import combinations
+from typing import TYPE_CHECKING, Any
 
 from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
 
 if TYPE_CHECKING:  # pragma: no cover - avoid circular imports during runtime
-    from src.agents.council.orchestrator import CouncilVoteModel
+    pass
 
 
 @dataclass
