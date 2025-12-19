@@ -15,13 +15,11 @@ class CouncilMemberConfig(BaseModel):
 
     member_id: str = Field(validation_alias=AliasChoices("member_id", "id"))
     display_name: str = Field(validation_alias=AliasChoices("display_name", "name"))
-    persona: str = ""
-    role: str = "Generalist"
-    model: str | None = None
-    temperature: float = Field(default=0.3, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(
-        default=None, validation_alias=AliasChoices("max_tokens", "max_turn_tokens")
-    )
+    persona: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    temperature: float = Field(ge=0.0, le=2.0)
+    max_tokens: int = Field(ge=1, validation_alias=AliasChoices("max_tokens", "max_turn_tokens"))
+    role: str = Field(min_length=1)
     is_active: bool = True
     system_prompt: str = ""
     description: str = ""
@@ -39,14 +37,30 @@ class CouncilMemberConfig(BaseModel):
         normalized.setdefault(
             "display_name", normalized.get("name") or normalized.get("member_id") or "member"
         )
-        persona = normalized.get("persona") or normalized.get("description")
-        normalized.setdefault("persona", persona or "")
-        normalized.setdefault("description", persona or "")
-        normalized.setdefault("metadata", normalized.get("metadata") or {})
+        role = normalized.get("role") or "Generalist"
+        normalized.setdefault("role", role)
+
+        persona = (
+            normalized.get("persona")
+            or normalized.get("description")
+            or f"{normalized['display_name']} focuses on the {role} perspective."
+        )
+        normalized.setdefault("persona", persona)
+        normalized.setdefault("description", normalized.get("description") or persona)
+
+        metadata = normalized.get("metadata") or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {}
+        normalized.setdefault("metadata", metadata)
+        if "model" not in normalized and metadata.get("model"):
+            normalized["model"] = metadata.get("model")
 
         max_turn_tokens = normalized.get("max_turn_tokens")
         if max_turn_tokens is not None and "max_tokens" not in normalized:
             normalized["max_tokens"] = max_turn_tokens
+        normalized.setdefault("max_tokens", 256)
+        normalized.setdefault("temperature", 0.3)
+        normalized.setdefault("is_active", True)
 
         if not normalized.get("system_prompt"):
             role = normalized.get("role") or "Generalist"
@@ -64,7 +78,7 @@ class CouncilConfig(BaseModel):
 
     enabled: bool = True
     voting_mode: str = "single_winner"
-    members: list[CouncilMemberConfig]
+    members: list[CouncilMemberConfig] = Field(default_factory=list)
     quorum: int | None = None
     consensus_threshold: float = 0.67
     max_rounds: int = 1
@@ -78,10 +92,9 @@ class CouncilConfig(BaseModel):
     def _validate_members(cls, value: list[CouncilMemberConfig]) -> list[CouncilMemberConfig]:
         if not value:
             raise ValueError("Council configuration must include at least one member")
-        active_members = [member for member in value if member.is_active]
-        if not active_members:
+        if not any(member.is_active for member in value):
             raise ValueError("At least one council member must be active")
-        return active_members
+        return value
 
 
 class CouncilQuestion(BaseModel):

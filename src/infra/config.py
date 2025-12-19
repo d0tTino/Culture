@@ -167,7 +167,8 @@ def _build_default_council_config() -> dict[str, Any]:
     return {
         "members": [
             {
-                "name": "Innovator",
+                "member_id": "innovator",
+                "display_name": "Innovator",
                 "role": "Innovator",
                 "persona": "Creates bold ideas and alternatives.",
                 "model": model_name,
@@ -176,7 +177,8 @@ def _build_default_council_config() -> dict[str, Any]:
                 "is_active": True,
             },
             {
-                "name": "Analyzer",
+                "member_id": "analyzer",
+                "display_name": "Analyzer",
                 "role": "Analyzer",
                 "persona": "Evaluates risks and feasibility.",
                 "model": model_name,
@@ -185,7 +187,8 @@ def _build_default_council_config() -> dict[str, Any]:
                 "is_active": True,
             },
             {
-                "name": "Red Team",
+                "member_id": "red-team",
+                "display_name": "Red Team",
                 "role": "Red Team",
                 "persona": "Challenges assumptions and stress tests decisions.",
                 "model": model_name,
@@ -401,14 +404,35 @@ def load_council_config(*, path: str | None = None, reload: bool = False) -> dic
     raw_members = merged_config.get("members")
     if isinstance(raw_members, list):
         default_model = default_members[0].get("model") if default_members else None
+        default_max_tokens = default_members[0].get("max_tokens") if default_members else None
+        default_temperature = default_members[0].get("temperature") if default_members else None
         for entry in raw_members:
             if isinstance(entry, dict):
                 normalized = dict(entry)
+                display_name = (
+                    normalized.get("display_name")
+                    or normalized.get("name")
+                    or normalized.get("member_id")
+                    or normalized.get("id")
+                )
+                if display_name:
+                    normalized.setdefault("display_name", display_name)
+                if not normalized.get("member_id") and display_name:
+                    normalized["member_id"] = str(display_name)
                 if default_model and not normalized.get("model"):
                     normalized["model"] = default_model
+                if default_max_tokens and not normalized.get("max_tokens"):
+                    normalized["max_tokens"] = default_max_tokens
+                if default_temperature is not None and "temperature" not in normalized:
+                    normalized["temperature"] = default_temperature
+                normalized.setdefault("role", "Generalist")
+                persona = normalized.get("persona") or normalized.get("description")
+                if not persona and display_name:
+                    persona = f"{display_name} offers a {normalized['role']} perspective."
+                if persona:
+                    normalized.setdefault("persona", persona)
                 if "max_turn_tokens" in normalized and "max_tokens" not in normalized:
                     normalized["max_tokens"] = normalized.get("max_turn_tokens")
-                normalized.setdefault("temperature", 0.3)
                 normalized.setdefault("is_active", True)
                 members.append(normalized)
 

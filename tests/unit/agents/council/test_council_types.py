@@ -26,6 +26,7 @@ def sample_yaml_path(tmp_path: Path) -> Path:
         display_name: Facilitator
         role: Moderator
         persona: Guides the conversation and keeps members on track.
+        model: mistral:latest
         system_prompt: Maintain order and summarize the discussion.
         temperature: 0.2
         max_tokens: 256
@@ -52,6 +53,7 @@ def test_sample_yaml_loads_successfully(
     assert member.persona == "Guides the conversation and keeps members on track."
     assert member.temperature == pytest.approx(0.2)
     assert member.max_tokens == 256
+    assert member.model == "mistral:latest"
 
 
 def test_load_fails_with_empty_members(
@@ -70,8 +72,12 @@ def test_load_fails_with_misconfigured_member(
             {
                 "member_id": "facilitator",
                 "display_name": "Facilitator",
-                "description": "Missing required role and system prompt",
-                "is_active": False,
+                "role": "Moderator",
+                "persona": "Guides the discussion",
+                "model": "",
+                "temperature": 0.2,
+                "max_tokens": 256,
+                "is_active": True,
             }
         ],
     }
@@ -93,6 +99,9 @@ def test_load_fails_without_active_members(
                         "display_name": "Facilitator",
                         "role": "Moderator",
                         "persona": "Inactive member",
+                        "model": "mistral:latest",
+                        "temperature": 0.2,
+                        "max_tokens": 256,
                         "is_active": False,
                     }
                 ],
