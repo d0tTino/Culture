@@ -2,13 +2,26 @@
 # All members default to the local model placeholder defined in your settings.
 max_concurrent_calls: 3
 du_budget_per_question: 5.0
+voting_mode: single_winner
 members:
   - name: Innovator
     role: Innovator
+    persona: Creates bold ideas and alternatives.
     model: mistral:latest
+    temperature: 0.4
+    max_tokens: 256
+    is_active: true
   - name: Analyzer
     role: Analyzer
+    persona: Evaluates risks and feasibility.
     model: mistral:latest
+    temperature: 0.2
+    max_tokens: 256
+    is_active: true
   - name: Red Team
     role: Red Team
+    persona: Challenges assumptions and stress tests decisions.
     model: mistral:latest
+    temperature: 0.3
+    max_tokens: 256
+    is_active: true

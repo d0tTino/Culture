@@ -166,14 +166,39 @@ def _build_default_council_config() -> dict[str, Any]:
     model_name = str(getattr(settings, "DEFAULT_LLM_MODEL", "mistral:latest"))
     return {
         "members": [
-            {"name": "Innovator", "role": "Innovator", "model": model_name},
-            {"name": "Analyzer", "role": "Analyzer", "model": model_name},
-            {"name": "Red Team", "role": "Red Team", "model": model_name},
+            {
+                "name": "Innovator",
+                "role": "Innovator",
+                "persona": "Creates bold ideas and alternatives.",
+                "model": model_name,
+                "temperature": 0.4,
+                "max_tokens": 256,
+                "is_active": True,
+            },
+            {
+                "name": "Analyzer",
+                "role": "Analyzer",
+                "persona": "Evaluates risks and feasibility.",
+                "model": model_name,
+                "temperature": 0.2,
+                "max_tokens": 256,
+                "is_active": True,
+            },
+            {
+                "name": "Red Team",
+                "role": "Red Team",
+                "persona": "Challenges assumptions and stress tests decisions.",
+                "model": model_name,
+                "temperature": 0.3,
+                "max_tokens": 256,
+                "is_active": True,
+            },
         ],
         "max_concurrent_calls": int(
             getattr(settings, "COUNCIL_MAX_CONCURRENT_CALLS", 3)
         ),
         "du_budget_per_question": float(getattr(settings, "DU_BUDGET_PER_QUESTION", 0.0)),
+        "voting_mode": "single_winner",
     }
 
 # Define keys that should be floats and ints for type conversion
@@ -381,6 +406,10 @@ def load_council_config(*, path: str | None = None, reload: bool = False) -> dic
                 normalized = dict(entry)
                 if default_model and not normalized.get("model"):
                     normalized["model"] = default_model
+                if "max_turn_tokens" in normalized and "max_tokens" not in normalized:
+                    normalized["max_tokens"] = normalized.get("max_turn_tokens")
+                normalized.setdefault("temperature", 0.3)
+                normalized.setdefault("is_active", True)
                 members.append(normalized)
 
     if not members:
