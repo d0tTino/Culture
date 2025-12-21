@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 CouncilRole = Literal["Facilitator", "Innovator", "Analyzer", "Red Team", "Generalist"]
-CouncilVotingMode = Literal["single_winner", "consensus"]
+CouncilVotingMode = Literal["judge_llm", "peer_vote", "heuristic"]
 
 _ROLE_ALIASES = {
     "facilitator": "Facilitator",
@@ -21,9 +21,18 @@ _ROLE_ALIASES = {
     "generalist": "Generalist",
 }
 _VOTING_MODE_ALIASES = {
-    "single_winner": "single_winner",
-    "singlewinner": "single_winner",
-    "consensus": "consensus",
+    "judge_llm": "judge_llm",
+    "judge": "judge_llm",
+    "llm_judge": "judge_llm",
+    "single_winner": "judge_llm",
+    "singlewinner": "judge_llm",
+    "peer_vote": "peer_vote",
+    "peer-vote": "peer_vote",
+    "peer": "peer_vote",
+    "consensus": "peer_vote",
+    "heuristic": "heuristic",
+    "deterministic": "heuristic",
+    "rule_based": "heuristic",
 }
 
 
@@ -116,7 +125,7 @@ class CouncilConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     enabled: bool = True
-    voting_mode: CouncilVotingMode = "single_winner"
+    voting_mode: CouncilVotingMode = "judge_llm"
     members: list[CouncilMemberConfig] = Field(default_factory=list)
     quorum: int | None = None
     consensus_threshold: float = 0.67

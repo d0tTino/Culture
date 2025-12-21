@@ -67,6 +67,21 @@ class CouncilVoteModel(BaseModel):
     resolution: str | None = None
 
 
+class CouncilPeerVoteModel(BaseModel):
+    """Structured peer vote produced by an individual council member."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    winner_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("winner_id", "preferred_member_id", "preferred_member"),
+    )
+    votes: dict[str, Any] = Field(default_factory=dict)
+    scores: dict[str, Any] = Field(default_factory=dict)
+    summary: str | None = None
+    reasoning: str | None = None
+
+
 @dataclass(slots=True)
 class CouncilContext:
     """Container for derived council settings used during orchestration."""
@@ -166,7 +181,7 @@ def _build_council_context() -> CouncilContext:
     raw_config = load_council_config()
     default_model = _resolve_default_model()
     judge_model = str(raw_config.get("judge_model") or default_model)
-    voting_mode = str(raw_config.get("voting_mode") or "single_winner")
+    voting_mode = str(raw_config.get("voting_mode") or "judge_llm")
     max_concurrent_calls = raw_config.get("max_concurrent_calls")
     if max_concurrent_calls is None:
         max_concurrent_calls = get_config("COUNCIL_MAX_CONCURRENT_CALLS")
@@ -549,6 +564,244 @@ def _judge_council_answers(
     return structured
 
 
+def _build_peer_vote_prompt(
+    question: CouncilQuestion,
+    answers: Sequence[MemberAnswer],
+    *,
+    voter: CouncilMemberConfig,
+    extra_context: str | None = None,
+    rag_docs: Sequence[str] | None = None,
+) -> str:
+    rag_section = _format_rag_docs(rag_docs or [])
+    additional_context = extra_context or "(no extra context provided)"
+    member_blocks = []
+    for answer in answers:
+        member_blocks.append(
+            "\n".join(
+                [
+                    f"- id: {answer.member_id}",
+                    f"  answer: {answer.answer}",
+                    f"  reasoning: {answer.reasoning or '(no reasoning provided)'}",
+                    f"  confidence: {answer.confidence if answer.confidence is not None else 'n/a'}",
+                ]
+            )
+        )
+    member_section = "\n".join(member_blocks) or "(no member answers)"
+    return "\n".join(
+        [
+            "[council-peer-vote]",
+            f"Voter: {voter.member_id} ({voter.display_name})",
+            f"Question: {question.prompt}",
+            f"Context: {question.context or ''}",
+            f"Extra context: {additional_context}",
+            f"RAG docs: {rag_section}",
+            "Members:",
+            member_section,
+            "",
+            "Evaluate each member response. Provide a 0.0-1.0 score per member and select a winner.",
+            "Return ONLY valid JSON matching this schema:",
+            "{",
+            '  "winner_id": "<member_id>",',
+            '  "votes": {"<member_id>": 0.0},',
+            '  "summary": "<concise summary>",',
+            '  "reasoning": "<why the winner was selected>"',
+            "}",
+        ]
+    )
+
+
+def _ask_peer_vote(
+    member: CouncilMemberConfig,
+    question: CouncilQuestion,
+    answers: Sequence[MemberAnswer],
+    *,
+    extra_context: str | None = None,
+    rag_docs: Sequence[str] | None = None,
+    agent_state: Any | None = None,
+) -> CouncilPeerVoteModel | None:
+    prompt = _build_peer_vote_prompt(
+        question, answers, voter=member, extra_context=extra_context, rag_docs=rag_docs
+    )
+    model_name = (member.metadata or {}).get("model") if member.metadata else None
+    member_model = str(model_name).strip() if model_name else ""
+    if not member_model:
+        member_model = _resolve_default_model()
+    track_mock_usage = is_mock_mode_enabled()
+    errors: list[str] = []
+
+    structured: CouncilPeerVoteModel | None = None
+    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
+        try:
+            if track_mock_usage:
+                llm_client.client.generate(prompt=prompt)
+                structured = generate_structured_output(
+                    prompt,
+                    response_model=CouncilPeerVoteModel,
+                    model=member_model,
+                    temperature=0.2,
+                    agent_state=agent_state,
+                )
+            else:
+                structured = generate_structured_output(
+                    prompt,
+                    response_model=CouncilPeerVoteModel,
+                    model=member_model,
+                    temperature=0.2,
+                    agent_state=agent_state,
+                )
+            if structured is not None:
+                break
+        except Exception as exc:  # pragma: no cover - defensive
+            errors.append(str(exc))
+            logger.warning(
+                "Council peer vote failed",
+                extra={
+                    "event": "council.peer_vote.llm_error",
+                    "member_id": member.member_id,
+                    "attempt": attempt,
+                },
+                exc_info=True,
+            )
+
+    if structured is None and errors:
+        logger.error(
+            "Council peer vote failed after retries",
+            extra={
+                "event": "council.peer_vote.failure",
+                "member_id": member.member_id,
+                "errors": errors,
+            },
+        )
+    return structured
+
+
+def _select_winner_id(
+    answers: Sequence[MemberAnswer],
+    scores: Mapping[str, float],
+) -> str:
+    if not scores:
+        return ""
+    answer_lookup = {answer.member_id: answer for answer in answers}
+    order_lookup = {answer.member_id: index for index, answer in enumerate(answers)}
+
+    def _tie_key(member_id: str, score: float) -> tuple[float, float, int, int]:
+        answer = answer_lookup.get(member_id)
+        confidence = answer.confidence if answer and answer.confidence is not None else 0.5
+        length = len(answer.answer) if answer else 0
+        order = -order_lookup.get(member_id, 0)
+        return (score, confidence, length, order)
+
+    return max(scores.items(), key=lambda item: _tie_key(item[0], item[1]))[0]
+
+
+def _build_vote_from_scores(
+    answers: Sequence[MemberAnswer],
+    *,
+    votes: dict[str, float],
+    summary: str,
+    reasoning: str | None,
+    metrics: dict[str, Any],
+) -> CouncilVoteModel | None:
+    winner_id = _select_winner_id(answers, votes)
+    if not winner_id:
+        return None
+    answer_lookup = {answer.member_id: answer.answer for answer in answers}
+    resolution = answer_lookup.get(winner_id)
+    return CouncilVoteModel(
+        winning_member_id=winner_id,
+        votes=votes,
+        scores={},
+        metrics=metrics,
+        summary=summary,
+        reasoning=reasoning,
+        resolution=resolution,
+    )
+
+
+def _aggregate_peer_votes(
+    answers: Sequence[MemberAnswer],
+    peer_votes: Sequence[tuple[CouncilMemberConfig, CouncilPeerVoteModel]],
+) -> CouncilVoteModel | None:
+    if not peer_votes:
+        return None
+    valid_member_ids = {answer.member_id for answer in answers}
+    totals: dict[str, float] = {}
+    per_voter: dict[str, dict[str, float]] = {}
+    weights: dict[str, float] = {}
+
+    for voter, vote in peer_votes:
+        weight = float(voter.decision_weight or 1.0)
+        weights[voter.member_id] = weight
+        vote_scores: dict[str, float] = {}
+        for member_id, raw_score in vote.votes.items():
+            score = _coerce_score(raw_score)
+            if score is None:
+                continue
+            member_id_str = str(member_id)
+            if member_id_str not in valid_member_ids:
+                continue
+            vote_scores[member_id_str] = score
+        if not vote_scores and vote.winner_id:
+            winner_id = str(vote.winner_id)
+            if winner_id in valid_member_ids:
+                vote_scores[winner_id] = 1.0
+        if not vote_scores:
+            continue
+        per_voter[voter.member_id] = vote_scores
+        for member_id, score in vote_scores.items():
+            totals[member_id] = totals.get(member_id, 0.0) + score * weight
+
+    if not totals:
+        return None
+
+    metrics = {
+        "peer_vote": {
+            "voter_count": len(per_voter),
+            "votes": per_voter,
+            "weights": weights,
+        }
+    }
+    summary = "Peer vote aggregation complete."
+    reasoning = "Aggregated peer votes selected the highest-scoring response."
+    return _build_vote_from_scores(
+        answers,
+        votes=totals,
+        summary=summary,
+        reasoning=reasoning,
+        metrics=metrics,
+    )
+
+
+def _score_heuristic_votes(
+    answers: Sequence[MemberAnswer],
+    member_lookup: Mapping[str, CouncilMemberConfig],
+) -> CouncilVoteModel | None:
+    if not answers:
+        return None
+    totals: dict[str, float] = {}
+    for answer in answers:
+        confidence = answer.confidence if answer.confidence is not None else 0.5
+        member = member_lookup.get(answer.member_id)
+        weight = float(member.decision_weight) if member else 1.0
+        totals[answer.member_id] = confidence * weight
+
+    metrics = {
+        "heuristic": {
+            "scores": dict(totals),
+            "tie_breaker": "confidence, answer length, member order",
+        }
+    }
+    summary = "Heuristic scoring applied to council answers."
+    reasoning = "Confidence-weighted scores with deterministic tie-breakers."
+    return _build_vote_from_scores(
+        answers,
+        votes=totals,
+        summary=summary,
+        reasoning=reasoning,
+        metrics=metrics,
+    )
+
+
 class CouncilOrchestrator:
     """Coordinate concurrent council member calls with DU budgeting."""
 
@@ -685,14 +938,34 @@ class CouncilOrchestrator:
 
         vote = None
         if answers:
-            vote = await asyncio.to_thread(
-                _judge_council_answers,
-                context,
-                question,
-                answers,
-                extra_context=extra_context,
-                rag_docs=rag_docs,
-            )
+            if context.config.voting_mode == "judge_llm":
+                vote = await asyncio.to_thread(
+                    _judge_council_answers,
+                    context,
+                    question,
+                    answers,
+                    extra_context=extra_context,
+                    rag_docs=rag_docs,
+                )
+            elif context.config.voting_mode == "peer_vote":
+                peer_votes = await self._gather_peer_votes(
+                    context,
+                    question,
+                    answers,
+                    member_states,
+                    extra_context=extra_context,
+                    rag_docs=rag_docs or [],
+                    metrics=metrics,
+                )
+                vote = _aggregate_peer_votes(answers, peer_votes)
+            elif context.config.voting_mode == "heuristic":
+                member_lookup = {member.member_id: member for member in context.config.members}
+                vote = _score_heuristic_votes(answers, member_lookup)
+            else:
+                logger.warning(
+                    "Unknown council voting mode '%s'; skipping vote.",
+                    context.config.voting_mode,
+                )
 
         base_metrics = dict(metrics or {})
         base_metrics.setdefault("du_budget_exhausted", False)
@@ -798,6 +1071,77 @@ class CouncilOrchestrator:
             metrics.setdefault("completed_members", [answer.member_id for answer in answers])
             metrics.setdefault("partial", True)
         return answers
+
+    async def _gather_peer_votes(
+        self,
+        context: CouncilContext,
+        question: CouncilQuestion,
+        answers: Sequence[MemberAnswer],
+        member_states: Mapping[str, SimpleNamespace],
+        *,
+        extra_context: str | None,
+        rag_docs: Sequence[str],
+        metrics: dict[str, Any],
+    ) -> list[tuple[CouncilMemberConfig, CouncilPeerVoteModel]]:
+        semaphore = asyncio.Semaphore(
+            max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
+        )
+        failures: list[str] = []
+
+        async def _call_member(member: CouncilMemberConfig) -> tuple[
+            CouncilMemberConfig, CouncilPeerVoteModel
+        ] | None:
+            state = member_states.get(member.member_id)
+            try:
+                async with semaphore:
+                    result = await asyncio.to_thread(
+                        _ask_peer_vote,
+                        member,
+                        question,
+                        answers,
+                        extra_context=extra_context,
+                        rag_docs=rag_docs,
+                        agent_state=state,
+                    )
+                    if result is None:
+                        return None
+                    return (member, result)
+            except RuntimeError as exc:
+                if "budget" in str(exc).lower():
+                    metrics["du_budget_exhausted"] = True
+                    logger.warning(
+                        "DU budget exhausted during peer vote for %s: %s",
+                        member.member_id,
+                        exc,
+                    )
+                else:
+                    logger.exception("Council peer vote failed: %s", exc)
+                    failures.append(member.member_id)
+                return None
+
+        results = await asyncio.gather(
+            *[_call_member(member) for member in context.config.members],
+            return_exceptions=True,
+        )
+
+        votes: list[tuple[CouncilMemberConfig, CouncilPeerVoteModel]] = []
+        for member, result in zip(context.config.members, results):
+            if isinstance(result, Exception):
+                if "budget" in str(result).lower():
+                    metrics["du_budget_exhausted"] = True
+                else:
+                    logger.exception("Unexpected peer vote error", exc_info=result)
+                    failures.append(member.member_id)
+                continue
+            if result is None:
+                failures.append(member.member_id)
+                continue
+            votes.append(result)
+
+        if failures:
+            metrics["peer_vote_partial"] = True
+            metrics["peer_vote_failed_members"] = sorted(set(failures))
+        return votes
 
     def _build_outcome(
         self,
