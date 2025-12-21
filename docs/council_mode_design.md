@@ -2,12 +2,27 @@
 
 This document summarizes the proposed Council Mode for Culture's multi-agent simulation. It captures the goals, persona scaffolding, LangGraph orchestrator stages, success metrics, and phased milestones needed to ship the feature while reusing existing infrastructure (LangGraph orchestration, Decision Units, and Retrieval-Augmented Generation).
 
+## Problem Statement
+Implement local council mode (multiple AI agents + judge) on a single GPU.
+
 ## Goals for Council Mode
 - **Institutionalize collaborative governance:** Formalize a structured council process so agents can debate, prioritize, and ratify initiatives aligned with scenario goals instead of ad-hoc broadcasts.
 - **Highlight persona diversity:** Surface contrasting viewpoints across specialized agents (Facilitator vs. Analyzer) to stress-test ideas and promote convergence.
 - **Bound resource usage:** Keep DU/IP spend visible so high-agency council members remain accountable to `Ledger` controls in [`src/infra/ledger.py`](../src/infra/ledger.py).
 - **Improve memory grounding:** Increase the proportion of council outputs backed by retrieved memories through nodes like [`src/agents/graphs/retriever_node.py`](../src/agents/graphs/retriever_node.py) and [`src/agents/memory/multi_layer_retriever.py`](../src/agents/memory/multi_layer_retriever.py).
 - **Enable measurable progress:** Track council deliberation quality via Prometheus gauges in [`src/interfaces/metrics.py`](../src/interfaces/metrics.py) to support automated regression alerts.
+
+## Component Overview (Spec Alignment)
+Council Mode is composed of the following spec-aligned components and responsibilities:
+
+- **CouncilMemberConfig:** Per-member configuration (name, role, model, temperature, DU/IP budgets, and any tool restrictions) used to instantiate each council agent deterministically.
+- **CouncilConfig:** Top-level configuration describing roster, concurrency limits, shared DU budgets, and default settings for council runs.
+- **CouncilQuestion:** Structured input payload that packages the question, context, RAG documents, and a stable `question_id` for metrics/logging.
+- **CouncilOutcome:** Structured output capturing the winning answer, dissenting notes, judge rationale, and references to evidence used.
+- **CouncilOrchestrator:** The runtime coordinator that spawns members, dispatches turns, collects responses, and invokes the judge.
+- **CLI:** Entry-point for running a council question locally, wiring `CouncilConfig` + `CouncilQuestion` and emitting the `CouncilOutcome`.
+- **LangGraph node:** Dedicated node/subgraph that wraps council execution so it can be invoked from existing agent flows.
+- **Metrics:** Prometheus counters/gauges for question throughput, DU spend, latency, and judge outcome labeling.
 
 ## Persona Configuration Strategy
 Council Mode leans on the role scaffolding that already exists in [`src/agents/core/roles.py`](../src/agents/core/roles.py):
@@ -79,20 +94,21 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
 When the YAML file is missing or malformed, Culture falls back to defaults emitted by `_build_default_council_config`, so corrupted configs do not block simulations.
 
 ## Phased Milestones
-1. **Phase 0 – Stakeholder Alignment:** Circulate this design with PM/research partners, confirm KPIs, and prioritize persona coverage gaps before coding.
-2. **Phase 1 – LangGraph Extensions:** Add council-specific nodes/subgraphs referencing `basic_agent_graph.py`, keeping them pluggable with the compiled graph builder and compatible with existing tracing hooks.
-3. **Phase 2 – Persona & Ledger Hooks:** Wire persona packs into scenario configs, enforce DU gating for council turns via `Ledger` calls, and add UI hooks to show council rosters.
-4. **Phase 3 – Memory-Rich Deliberation:** Tune retriever prompts and token budgets so council turns must pass RAG hit-rate guardrails before finalizing actions.
-5. **Phase 4 – Metricized Rollout:** Build dashboards over the Prometheus metrics listed above, adding regression alerts when throughput, DU variance, or sentiment drift outside target bands.
-6. **Phase 5 – Iterative Governance:** Run controlled simulations, capture Knowledge Board diffs, and iterate on persona configurations based on qualitative and quantitative feedback.
-
-### Phase 8 – Readiness Checklist
-Track these blocking items before declaring Council Mode production-ready:
-
-- [ ] **Configuration hygiene:** `USE_COUNCIL_MODE` gating verified in staging, `COUNCIL_CONFIG_PATH` points to a validated roster, and DU envelopes (`DU_BUDGET_PER_QUESTION`, `COUNCIL_MAX_CONCURRENT_CALLS`) are tuned for your LLM capacity.
-- [ ] **Observability baseline:** Prometheus dashboards chart `PROPOSAL_THROUGHPUT`, `RAG_HIT_RATE`, `AGENT_REMAINING_DU`, sentiment/coalition gauges, and P95 latency with `question_id` filters wired through the CLI.
-- [ ] **Retrieval discipline:** Sampled council runs meet minimum RAG hit rate and cite retrieved evidence in L1/L2 summaries; Knowledge Board diffs capture resolutions plus dissent.
-- [ ] **Failure containment:** Fallback persona roster loaded from `_build_default_council_config` confirmed in chaos tests (missing YAML, timeouts), and ledger audits show DU/IP debits for cancelled or timed-out calls.
-- [ ] **UX/operational playbooks:** CLI runbook documents context, RAG doc, and question ID usage; stakeholders trained to trace a resolution from CLI input to Knowledge Board entry and ledger deltas.
+1. **Phase 1 – Council config scaffolding:** Define `CouncilMemberConfig`, `CouncilConfig`, and `CouncilQuestion` data structures, plus YAML loading/validation.  
+   **Readiness:** Configuration round-trips from YAML to runtime objects with validation errors surfaced clearly.
+2. **Phase 2 – Local orchestrator + judge:** Implement `CouncilOrchestrator` with local multi-agent execution and a judge step that outputs `CouncilOutcome`.  
+   **Readiness:** Local runs complete end-to-end on a single GPU with deterministic member ordering and a captured judge rationale.
+3. **Phase 3 – CLI wiring:** Deliver the council CLI to build `CouncilQuestion` inputs, execute the orchestrator, and print/serialize outcomes.  
+   **Readiness:** CLI supports context, RAG docs, and question IDs; outputs include verdict, dissent, and evidence references.
+4. **Phase 4 – LangGraph node integration:** Wrap council execution in a dedicated LangGraph node or subgraph to plug into existing flows.  
+   **Readiness:** Council node composes with `basic_agent_graph.py` without breaking existing tracing or turn state.
+5. **Phase 5 – Metrics & observability:** Instrument metrics for throughput, latency, DU spend, and judge outcomes, keyed by `question_id`.  
+   **Readiness:** Dashboards surface council runs with per-member labels and stable `question_id` filters.
+6. **Phase 6 – Memory & RAG alignment:** Ensure council deliberation uses the retriever stack and captures evidence in outcomes.  
+   **Readiness:** RAG hit-rate guardrails pass and outcomes cite retrieved sources.
+7. **Phase 7 – Resource governance:** Enforce DU/IP budgets and concurrency limits in council runs, aligned with ledger controls.  
+   **Readiness:** Budget overruns are blocked or logged, and ledger deltas reconcile with council activity.
+8. **Phase 8 – Production readiness:** Validate configuration hygiene, operational runbooks, and failure containment.  
+   **Readiness:** Fallback configs work, CLI runbooks are documented, and end-to-end runs are stable under fault injection.
 
 > **Stakeholder Review:** Please review this document with the designated research and product stakeholders before implementation to validate the milestones and success criteria.
