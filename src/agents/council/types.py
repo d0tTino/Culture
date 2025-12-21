@@ -2,10 +2,49 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+CouncilRole = Literal["Facilitator", "Innovator", "Analyzer", "Red Team", "Generalist"]
+CouncilVotingMode = Literal["single_winner", "consensus"]
+
+_ROLE_ALIASES = {
+    "facilitator": "Facilitator",
+    "moderator": "Facilitator",
+    "innovator": "Innovator",
+    "analyzer": "Analyzer",
+    "red team": "Red Team",
+    "redteam": "Red Team",
+    "generalist": "Generalist",
+}
+_VOTING_MODE_ALIASES = {
+    "single_winner": "single_winner",
+    "singlewinner": "single_winner",
+    "consensus": "consensus",
+}
+
+
+def _normalize_role(value: Any) -> str:
+    if value is None:
+        return "Generalist"
+    text = str(value).strip()
+    if not text:
+        return "Generalist"
+    key = re.sub(r"[\s_-]+", " ", text).strip().lower()
+    return _ROLE_ALIASES.get(key, text)
+
+
+def _normalize_voting_mode(value: Any) -> str:
+    if value is None:
+        return "single_winner"
+    text = str(value).strip()
+    if not text:
+        return "single_winner"
+    key = re.sub(r"[\s-]+", "_", text).strip().lower()
+    return _VOTING_MODE_ALIASES.get(key, text)
 
 
 class CouncilMemberConfig(BaseModel):
@@ -19,7 +58,7 @@ class CouncilMemberConfig(BaseModel):
     model: str = Field(min_length=1)
     temperature: float = Field(ge=0.0, le=2.0)
     max_tokens: int = Field(ge=1, validation_alias=AliasChoices("max_tokens", "max_turn_tokens"))
-    role: str = Field(min_length=1)
+    role: CouncilRole = Field(min_length=1)
     is_active: bool = True
     system_prompt: str = ""
     description: str = ""
@@ -37,8 +76,8 @@ class CouncilMemberConfig(BaseModel):
         normalized.setdefault(
             "display_name", normalized.get("name") or normalized.get("member_id") or "member"
         )
-        role = normalized.get("role") or "Generalist"
-        normalized.setdefault("role", role)
+        role = _normalize_role(normalized.get("role") or "Generalist")
+        normalized["role"] = role
 
         persona = (
             normalized.get("persona")
@@ -77,7 +116,7 @@ class CouncilConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     enabled: bool = True
-    voting_mode: str = "single_winner"
+    voting_mode: CouncilVotingMode = "single_winner"
     members: list[CouncilMemberConfig] = Field(default_factory=list)
     quorum: int | None = None
     consensus_threshold: float = 0.67
@@ -96,16 +135,34 @@ class CouncilConfig(BaseModel):
             raise ValueError("At least one council member must be active")
         return value
 
+    @field_validator("voting_mode", mode="before")
+    @classmethod
+    def _normalize_voting_mode(cls, value: Any) -> Any:
+        return _normalize_voting_mode(value)
+
 
 class CouncilQuestion(BaseModel):
     """Represents a structured question posed to the council."""
 
-    question_id: str
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    question_id: str = Field(validation_alias=AliasChoices("question_id", "id", "name"))
     prompt: str
-    context: str | None = None
+    user_id: str | None = Field(default=None, validation_alias=AliasChoices("user_id", "userId"))
+    extra_context: str | None = Field(
+        default=None, validation_alias=AliasChoices("extra_context", "context")
+    )
     rag_documents: list[str] = Field(default_factory=list)
     metadata: Mapping[str, Any] | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def context(self) -> str | None:
+        return self.extra_context
+
+    @context.setter
+    def context(self, value: str | None) -> None:
+        self.extra_context = value
 
 
 class MemberAnswer(BaseModel):

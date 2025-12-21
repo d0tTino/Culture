@@ -6,7 +6,7 @@ import pytest
 import yaml
 from pydantic import TypeAdapter, ValidationError
 
-from src.agents.council.types import CouncilConfig
+from src.agents.council.types import CouncilConfig, CouncilQuestion
 
 pytestmark = pytest.mark.unit
 
@@ -22,8 +22,8 @@ def sample_yaml_path(tmp_path: Path) -> Path:
     enabled: true
     voting_mode: single_winner
     members:
-      - member_id: facilitator
-        display_name: Facilitator
+      - id: facilitator
+        name: Facilitator
         role: Moderator
         persona: Guides the conversation and keeps members on track.
         model: mistral:latest
@@ -50,21 +50,20 @@ def test_sample_yaml_loads_successfully(
     member = config.members[0]
     assert member.member_id == "facilitator"
     assert member.display_name == "Facilitator"
+    assert member.role == "Facilitator"
     assert member.persona == "Guides the conversation and keeps members on track."
     assert member.temperature == pytest.approx(0.2)
     assert member.max_tokens == 256
     assert member.model == "mistral:latest"
 
 
-def test_load_fails_with_empty_members(
-    council_config_adapter: TypeAdapter[CouncilConfig]
-) -> None:
+def test_load_fails_with_empty_members(council_config_adapter: TypeAdapter[CouncilConfig]) -> None:
     with pytest.raises(ValidationError):
         council_config_adapter.validate_python({"enabled": True, "members": []})
 
 
 def test_load_fails_with_misconfigured_member(
-    council_config_adapter: TypeAdapter[CouncilConfig]
+    council_config_adapter: TypeAdapter[CouncilConfig],
 ) -> None:
     invalid_yaml = {
         "enabled": True,
@@ -87,7 +86,7 @@ def test_load_fails_with_misconfigured_member(
 
 
 def test_load_fails_without_active_members(
-    council_config_adapter: TypeAdapter[CouncilConfig]
+    council_config_adapter: TypeAdapter[CouncilConfig],
 ) -> None:
     with pytest.raises(ValidationError):
         council_config_adapter.validate_python(
@@ -107,3 +106,19 @@ def test_load_fails_without_active_members(
                 ],
             }
         )
+
+
+def test_council_question_aliases() -> None:
+    question = CouncilQuestion.model_validate(
+        {
+            "id": "question-1",
+            "prompt": "What should we do next?",
+            "user_id": "user-123",
+            "extra_context": "Focus on the roadmap.",
+        }
+    )
+
+    assert question.question_id == "question-1"
+    assert question.user_id == "user-123"
+    assert question.extra_context == "Focus on the roadmap."
+    assert question.context == "Focus on the roadmap."
