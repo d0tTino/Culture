@@ -57,6 +57,12 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
                 "reasoning": "deterministic reasoning",
                 "resolution": "facilitator proposal selected",
             },
+            "CouncilPeerVoteModel": {
+                "winner_id": "facilitator",
+                "votes": {"facilitator": 0.9, "innovator": 0.6, "analyst": 0.7},
+                "summary": "Peer vote summary",
+                "reasoning": "Peer vote reasoning",
+            },
             "MemberResponseModel": {
                 "answer": "facilitator proposal selected",
                 "reasoning": "deterministic reasoning",
@@ -77,7 +83,9 @@ def enable_council_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": True})
 
 
-def _build_council_config(num_members: int = 3) -> CouncilConfig:
+def _build_council_config(
+    num_members: int = 3, voting_mode: str = "judge_llm"
+) -> CouncilConfig:
     base_members = [
         CouncilMemberConfig(
             member_id="facilitator",
@@ -138,7 +146,9 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
             )
         )
 
-    return CouncilConfig(enabled=True, members=base_members + extra_members)
+    return CouncilConfig(
+        enabled=True, members=base_members + extra_members, voting_mode=voting_mode
+    )
 
 
 def _build_question(metadata: Mapping[str, Any] | None = None) -> CouncilQuestion:
@@ -168,7 +178,7 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     orchestrator = CouncilOrchestrator()
-    config = _build_council_config()
+    config = _build_council_config(voting_mode="judge_llm")
     question = _build_question()
 
     outcome = orchestrator.deliberate(config, question)
@@ -203,7 +213,7 @@ def test_council_orchestrator_limits_concurrent_generate_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     orchestrator = CouncilOrchestrator(max_concurrency=2)
-    config = _build_council_config(num_members=5)
+    config = _build_council_config(num_members=5, voting_mode="judge_llm")
     question = _build_question()
 
     llm_mocks.mock_generate_stats.reset()
@@ -217,7 +227,7 @@ def test_council_orchestrator_limits_concurrent_generate_calls(
 
 def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatch) -> None:
     orchestrator = CouncilOrchestrator(max_concurrency=3)
-    config = _build_council_config(num_members=4)
+    config = _build_council_config(num_members=4, voting_mode="judge_llm")
     question = _build_question()
 
     llm_mocks.set_mock_llm_du_budget(2)
@@ -240,7 +250,7 @@ def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatc
 
 def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPatch) -> None:
     orchestrator = CouncilOrchestrator()
-    config = _build_council_config()
+    config = _build_council_config(voting_mode="judge_llm")
     question = _build_question()
 
     rag_marker = "<mocked-rag-docs>"
@@ -286,7 +296,7 @@ def test_council_orchestrator_persists_metrics(
     monkeypatch.setattr(council_orchestrator, "council_stats_store", store)
 
     orchestrator = CouncilOrchestrator()
-    config = _build_council_config()
+    config = _build_council_config(voting_mode="judge_llm")
     question = _build_question()
 
     outcome = orchestrator.deliberate(config, question)
@@ -305,7 +315,7 @@ def test_council_orchestrator_flags_partial_metrics_on_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     orchestrator = CouncilOrchestrator()
-    config = _build_council_config()
+    config = _build_council_config(voting_mode="judge_llm")
     question = _build_question()
 
     original = council_orchestrator._ask_council_member
@@ -374,3 +384,36 @@ def test_build_council_context_requires_default_model(
 
     with pytest.raises(RuntimeError, match="DEFAULT_LLM_MODEL must be configured"):
         council_orchestrator._build_council_context()
+
+
+def test_council_orchestrator_peer_vote_mode() -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="peer_vote")
+    question = _build_question()
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.winner_id == "facilitator"
+    assert outcome.winning_member_ids == ["facilitator"]
+    assert outcome.resolution == "facilitator proposal selected"
+    assert outcome.votes["facilitator"] == pytest.approx(2.7)
+    assert outcome.summary == "Peer vote aggregation complete."
+    assert outcome.metadata is not None
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics["peer_vote"]["voter_count"] == len(config.members)
+    assert "facilitator" in metrics["peer_vote"]["votes"]["facilitator"]
+
+
+def test_council_orchestrator_heuristic_mode() -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="heuristic")
+    question = _build_question()
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.winner_id == "facilitator"
+    assert outcome.votes["facilitator"] == pytest.approx(0.82)
+    assert outcome.summary == "Heuristic scoring applied to council answers."
+    assert outcome.metadata is not None
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics["heuristic"]["scores"]["facilitator"] == pytest.approx(0.82)
