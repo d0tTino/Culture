@@ -35,4 +35,4 @@ dataset:
 
 .PHONY: council
 council:
-	python -m scripts.council_cli --question "$(Q)"
+	python -m scripts.council_cli --question "$(Q)" $(if $(SHOW_ALL),--show-all)
