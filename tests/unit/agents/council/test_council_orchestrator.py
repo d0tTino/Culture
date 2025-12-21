@@ -248,6 +248,25 @@ def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatc
     llm_mocks.set_mock_llm_du_budget(None)
 
 
+def test_council_orchestrator_stops_calls_after_du_exhaustion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator(max_concurrency=3)
+    config = _build_council_config(num_members=4, voting_mode="judge_llm")
+    question = _build_question()
+
+    llm_mocks.mock_generate_stats.reset()
+    llm_mocks.set_mock_llm_du_budget(2)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metadata is not None
+    assert outcome.metadata.get("du_exhausted") is True
+    assert llm_mocks.mock_generate_stats.call_count == 3
+
+    llm_mocks.set_mock_llm_du_budget(None)
+
+
 def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPatch) -> None:
     orchestrator = CouncilOrchestrator()
     config = _build_council_config(voting_mode="judge_llm")

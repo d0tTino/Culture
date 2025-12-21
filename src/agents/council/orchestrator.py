@@ -1019,6 +1019,29 @@ class CouncilOrchestrator:
             max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
         )
         failures: list[str] = []
+        answers: list[MemberAnswer] = []
+
+        def _has_available_budget(
+            member: CouncilMemberConfig, state: SimpleNamespace | None
+        ) -> bool:
+            try:
+                resource_manager = get_resource_manager()
+            except Exception:
+                resource_manager = None
+
+            if resource_manager is not None:
+                try:
+                    if resource_manager.get_du_budget(member.member_id) <= 0:
+                        return False
+                except Exception:
+                    pass
+
+            if state is not None:
+                remaining = getattr(state, "du", None)
+                if remaining is not None and remaining <= 0:
+                    return False
+
+            return True
 
         async def _call_member(member: CouncilMemberConfig) -> MemberAnswer | None:
             state = member_states.get(member.member_id)
@@ -1043,32 +1066,45 @@ class CouncilOrchestrator:
                     failures.append(member.member_id)
                 return None
 
-        results = await asyncio.gather(
-            *[_call_member(member) for member in context.config.members],
-            return_exceptions=True,
-        )
-
-        answers: list[MemberAnswer] = []
-        for member, result in zip(context.config.members, results):
-            if isinstance(result, Exception):
-                if "budget" in str(result).lower():
+        for member in context.config.members:
+            if metrics.get("du_budget_exhausted"):
+                break
+            state = member_states.get(member.member_id)
+            if not _has_available_budget(member, state):
+                metrics["du_budget_exhausted"] = True
+                logger.warning(
+                    "DU budget exhausted before scheduling member %s", member.member_id
+                )
+                break
+            try:
+                result = await _call_member(member)
+            except Exception as exc:
+                if "budget" in str(exc).lower():
                     metrics["du_budget_exhausted"] = True
                 else:
-                    logger.exception("Unexpected error during council call", exc_info=result)
+                    logger.exception("Unexpected error during council call", exc_info=exc)
                     failures.append(member.member_id)
-                continue
+                result = None
+
             if result is None:
                 failures.append(member.member_id)
+                if metrics.get("du_budget_exhausted"):
+                    break
                 continue
 
             answers.append(result)
+            if metrics.get("du_budget_exhausted"):
+                break
 
         if failures:
             metrics["partial"] = True
             metrics["failed_members"] = sorted(set(failures))
 
-        if metrics.get("du_budget_exhausted") and answers:
-            metrics.setdefault("completed_members", [answer.member_id for answer in answers])
+        if metrics.get("du_budget_exhausted"):
+            if answers:
+                metrics.setdefault(
+                    "completed_members", [answer.member_id for answer in answers]
+                )
             metrics.setdefault("partial", True)
         return answers
 
