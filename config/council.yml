@@ -4,24 +4,24 @@ max_concurrent_calls: 3
 du_budget_per_question: 5.0
 voting_mode: single_winner
 members:
-  - member_id: innovator
-    display_name: Innovator
+  - id: innovator
+    name: Innovator
     role: Innovator
     persona: Creates bold ideas and alternatives.
     model: mistral:latest
     temperature: 0.4
     max_tokens: 256
     is_active: true
-  - member_id: analyzer
-    display_name: Analyzer
+  - id: analyzer
+    name: Analyzer
     role: Analyzer
     persona: Evaluates risks and feasibility.
     model: mistral:latest
     temperature: 0.2
     max_tokens: 256
     is_active: true
-  - member_id: red-team
-    display_name: Red Team
+  - id: red-team
+    name: Red Team
     role: Red Team
     persona: Challenges assumptions and stress tests decisions.
     model: mistral:latest

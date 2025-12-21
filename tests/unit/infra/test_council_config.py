@@ -21,18 +21,14 @@ def test_load_council_config_returns_defaults_when_missing(
 ) -> None:
     _reset_cache(monkeypatch)
     missing = tmp_path / "council.yml"
-    monkeypatch.setattr(
-        infra_config.settings, "COUNCIL_CONFIG_PATH", str(missing), raising=False
-    )
+    monkeypatch.setattr(infra_config.settings, "COUNCIL_CONFIG_PATH", str(missing), raising=False)
 
     result = infra_config.load_council_config(reload=True)
 
     assert result["members"], "Expected default members when YAML file is missing"
     assert result["members"][0]["display_name"] == "Innovator"
     assert result["members"][0]["member_id"] == "innovator"
-    assert (
-        result["max_concurrent_calls"] == infra_config.settings.COUNCIL_MAX_CONCURRENT_CALLS
-    )
+    assert result["max_concurrent_calls"] == infra_config.settings.COUNCIL_MAX_CONCURRENT_CALLS
     assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
     assert result["voting_mode"] == "single_winner"
     assert result["members"][0]["is_active"] is True
@@ -44,8 +40,13 @@ def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_pat
     path = tmp_path / "council.yml"
     roster = {
         "members": [
-            {"name": "Strategist", "role": "Planner", "model": "local/mistral"},
-            {"name": "Scout", "role": "Observer"},
+            {
+                "id": "strategist",
+                "name": "Strategist",
+                "role": "Innovator",
+                "model": "local/mistral",
+            },
+            {"id": "scout", "name": "Scout", "role": "Analyzer"},
         ]
     }
     path.write_text(yaml.safe_dump(roster))
@@ -61,13 +62,15 @@ def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert all("temperature" in member for member in result["members"])
 
 
-def test_load_council_config_merges_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_load_council_config_merges_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     _reset_cache(monkeypatch)
     path = tmp_path / "council.yml"
     path.write_text(
         yaml.safe_dump(
             {
-                "members": [{"name": "Strategist", "role": "Planner"}],
+                "members": [{"id": "strategist", "name": "Strategist", "role": "Innovator"}],
                 "max_concurrent_calls": 5,
             }
         )

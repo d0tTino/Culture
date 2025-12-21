@@ -82,7 +82,7 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
         CouncilMemberConfig(
             member_id="facilitator",
             display_name="Facilitator",
-            role="Moderator",
+            role="Facilitator",
             description="Ensures everyone is heard",
             system_prompt="Lead with clarity",
             decision_weight=1.0,
@@ -95,7 +95,7 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
         CouncilMemberConfig(
             member_id="innovator",
             display_name="Innovator",
-            role="Idea generator",
+            role="Innovator",
             description="Pushes creative thinking",
             system_prompt="Bring new ideas",
             decision_weight=1.0,
@@ -108,7 +108,7 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
         CouncilMemberConfig(
             member_id="analyst",
             display_name="Analyst",
-            role="Evaluator",
+            role="Analyzer",
             description="Stress-tests ideas",
             system_prompt="Look for gaps",
             decision_weight=1.0,
@@ -126,7 +126,7 @@ def _build_council_config(num_members: int = 3) -> CouncilConfig:
             CouncilMemberConfig(
                 member_id=f"member-{idx}",
                 display_name=f"Member {idx}",
-                role="Specialist",
+                role="Generalist",
                 description="Brings domain expertise",
                 system_prompt="Share focused insight",
                 decision_weight=1.0,
@@ -164,7 +164,9 @@ class DummyRetriever:
         ]
 
 
-def test_council_orchestrator_invokes_all_members_and_aggregates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_council_orchestrator_invokes_all_members_and_aggregates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     orchestrator = CouncilOrchestrator()
     config = _build_council_config()
     question = _build_question()
@@ -246,9 +248,7 @@ def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPat
     member_prompts: list[str] = []
     judge_prompts: list[str] = []
 
-    monkeypatch.setattr(
-        "src.agents.council.orchestrator._format_rag_docs", lambda _: rag_marker
-    )
+    monkeypatch.setattr("src.agents.council.orchestrator._format_rag_docs", lambda _: rag_marker)
 
     original_generate = llm_client.client.generate
 
@@ -282,9 +282,7 @@ def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPat
 def test_council_orchestrator_persists_metrics(
     monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    store = CouncilStatsStore(
-        db_path=tmp_path_factory.mktemp("council-metrics") / "stats.sqlite3"
-    )
+    store = CouncilStatsStore(db_path=tmp_path_factory.mktemp("council-metrics") / "stats.sqlite3")
     monkeypatch.setattr(council_orchestrator, "council_stats_store", store)
 
     orchestrator = CouncilOrchestrator()
@@ -294,9 +292,7 @@ def test_council_orchestrator_persists_metrics(
     outcome = orchestrator.deliberate(config, question)
 
     snapshot = store.serialize_metrics()
-    facilitator_stats = next(
-        m for m in snapshot["members"] if m["member_id"] == "facilitator"
-    )
+    facilitator_stats = next(m for m in snapshot["members"] if m["member_id"] == "facilitator")
     assert facilitator_stats["wins"] == 1
     assert facilitator_stats["participations"] == 1
     assert len(snapshot["members"]) == len(config.members)
