@@ -267,6 +267,77 @@ def test_council_orchestrator_stops_calls_after_du_exhaustion(
     llm_mocks.set_mock_llm_du_budget(None)
 
 
+def test_council_orchestrator_peer_vote_du_exhaustion_stops_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator(max_concurrency=3)
+    config = _build_council_config(num_members=4, voting_mode="peer_vote")
+    question = _build_question()
+
+    llm_mocks.mock_generate_stats.reset()
+    llm_mocks.set_mock_llm_du_budget(2)
+
+    member_calls: list[str] = []
+    peer_vote_calls: list[str] = []
+
+    original_member = council_orchestrator._ask_council_member
+    original_peer = council_orchestrator._ask_peer_vote
+
+    def _count_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        member_calls.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    def _count_peer_vote(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        peer_vote_calls.append(member.member_id)
+        return original_peer(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _count_member)
+    monkeypatch.setattr(council_orchestrator, "_ask_peer_vote", _count_peer_vote)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metadata is not None
+    assert outcome.metadata.get("du_exhausted") is True
+    assert outcome.winning_member_ids == []
+    assert len(outcome.answers) == 2
+    assert len(member_calls) == 3
+    assert peer_vote_calls == []
+    assert llm_mocks.mock_generate_stats.call_count == 3
+
+    llm_mocks.set_mock_llm_du_budget(None)
+
+
+def test_council_orchestrator_heuristic_du_exhaustion_stops_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator(max_concurrency=3)
+    config = _build_council_config(num_members=4, voting_mode="heuristic")
+    question = _build_question()
+
+    llm_mocks.mock_generate_stats.reset()
+    llm_mocks.set_mock_llm_du_budget(2)
+
+    member_calls: list[str] = []
+    original_member = council_orchestrator._ask_council_member
+
+    def _count_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        member_calls.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _count_member)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metadata is not None
+    assert outcome.metadata.get("du_exhausted") is True
+    assert outcome.winning_member_ids == []
+    assert len(outcome.answers) == 2
+    assert len(member_calls) == 3
+    assert llm_mocks.mock_generate_stats.call_count == 3
+
+    llm_mocks.set_mock_llm_du_budget(None)
+
+
 def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPatch) -> None:
     orchestrator = CouncilOrchestrator()
     config = _build_council_config(voting_mode="judge_llm")
