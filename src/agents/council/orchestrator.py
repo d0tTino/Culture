@@ -164,7 +164,7 @@ def _build_council_context() -> CouncilContext:
     """Load the council configuration and normalize member metadata."""
 
     raw_config = load_council_config()
-    default_model = str(get_config("DEFAULT_LLM_MODEL") or "mistral:latest")
+    default_model = _resolve_default_model()
     judge_model = str(raw_config.get("judge_model") or default_model)
     voting_mode = str(raw_config.get("voting_mode") or "single_winner")
     max_concurrent_calls = raw_config.get("max_concurrent_calls")
@@ -236,6 +236,13 @@ def _build_council_context() -> CouncilContext:
     return CouncilContext(config=council_config, judge_model=judge_model, member_model=default_model)
 
 
+def _resolve_default_model() -> str:
+    default_model = get_config("DEFAULT_LLM_MODEL")
+    if not default_model or str(default_model).strip() == "":
+        raise RuntimeError("DEFAULT_LLM_MODEL must be configured for council orchestration.")
+    return str(default_model)
+
+
 def _format_rag_docs(rag_docs: Sequence[str]) -> str:
     if not rag_docs:
         return "- (no retrieved documents; placeholder RAG list)"
@@ -270,8 +277,10 @@ def _ask_council_member(
     agent_state: Any | None = None,
 ) -> MemberAnswer:
     prompt = _build_member_prompt(member, question, extra_context=extra_context, rag_docs=rag_docs)
-    model_name = str((member.metadata or {}).get("model")) if member.metadata else None
-    member_model = model_name or "mistral:latest"
+    model_name = (member.metadata or {}).get("model") if member.metadata else None
+    member_model = str(model_name).strip() if model_name else ""
+    if not member_model:
+        member_model = _resolve_default_model()
     track_mock_usage = is_mock_mode_enabled()
     errors: list[str] = []
 

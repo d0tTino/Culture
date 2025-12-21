@@ -338,3 +338,39 @@ def test_council_orchestrator_requires_members(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(ValidationError, match="at least one member"):
         CouncilConfig(enabled=True, members=[])
+
+
+def test_build_council_context_uses_config_default_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_get_config(key: str | None = None) -> str | None:
+        if key == "DEFAULT_LLM_MODEL":
+            return "configured-model"
+        return None
+
+    monkeypatch.setattr(council_orchestrator, "get_config", fake_get_config)
+    monkeypatch.setattr(
+        council_orchestrator,
+        "load_council_config",
+        lambda: {"members": [{"member_id": "member-1", "max_tokens": 128}]},
+    )
+
+    context = council_orchestrator._build_council_context()
+
+    assert context.member_model == "configured-model"
+    assert context.judge_model == "configured-model"
+    assert context.config.members[0].model == "configured-model"
+
+
+def test_build_council_context_requires_default_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(council_orchestrator, "get_config", lambda *_: None)
+    monkeypatch.setattr(
+        council_orchestrator,
+        "load_council_config",
+        lambda: {"members": [{"member_id": "member-1", "max_tokens": 128}]},
+    )
+
+    with pytest.raises(RuntimeError, match="DEFAULT_LLM_MODEL must be configured"):
+        council_orchestrator._build_council_context()
