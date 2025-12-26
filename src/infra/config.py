@@ -201,7 +201,7 @@ def _build_default_council_config() -> dict[str, Any]:
             getattr(settings, "COUNCIL_MAX_CONCURRENT_CALLS", 3)
         ),
         "du_budget_per_question": float(getattr(settings, "DU_BUDGET_PER_QUESTION", 0.0)),
-        "voting_mode": "single_winner",
+        "voting_mode": "judge_llm",
     }
 
 # Define keys that should be floats and ints for type conversion

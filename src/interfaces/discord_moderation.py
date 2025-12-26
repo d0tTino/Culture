@@ -1,9 +1,10 @@
 """Discord moderation commands with OPA-based per-user rate limiting."""
 
 import time
+from collections.abc import Callable
 from functools import wraps
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from src.infra.ledger import log_penalty
 from src.interfaces import discord_bot
@@ -17,7 +18,9 @@ bot = getattr(discord_bot, "bot")
 get_active_bot = discord_bot.get_active_bot
 has_admin_permission = discord_bot.has_admin_permission
 
-_APP_COMMANDS = getattr(discord_bot, "app_commands", SimpleNamespace(describe=lambda *a, **k: (lambda f: f)))
+_APP_COMMANDS = getattr(
+    discord_bot, "app_commands", SimpleNamespace(describe=lambda *a, **k: (lambda f: f))
+)
 
 _ACTION_COUNTS: dict[str, int] = {}
 _COOLDOWNS: dict[str, float] = {}
@@ -60,31 +63,9 @@ def moderation_rate_limit(action: str) -> Callable[[Callable[..., Any]], Callabl
 
             with discord_bot.command_span(action, interaction, agent_id=agent_id_value):
                 bot_instance = get_active_bot()
-                ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
                 if not await _rate_limit(
                     getattr(interaction, "user", None), action, agent_id_value
                 ):
-                    await ctx.get_event_queue().put(
-                        SimulationEvent(
-                            type="moderation",
-                            data={
-                                "command": action,
-                                "agent_id": agent_id_value,
-                                "violation": True,
-                            },
-                        )
-                    )
-                    await ctx.get_event_queue().put(
-                        SimulationEvent(
-                            type="moderation",
-                            data={
-                                "command": "penalty",
-                                "agent_id": agent_id_value,
-                                "ip": _IP_PENALTY,
-                                "du": _DU_PENALTY,
-                            },
-                        )
-                    )
                     try:  # pragma: no cover - best effort
                         log_penalty(
                             agent_id_value, _IP_PENALTY, _DU_PENALTY, "rate_limit_violation"
@@ -105,6 +86,7 @@ def _context_description(**kwargs: Any) -> Callable[[Callable[..., Any]], Callab
 
     describe = getattr(_APP_COMMANDS, "describe", None)
     if describe is None:
+
         def _noop(func: Callable[..., Any]) -> Callable[..., Any]:
             return func
 
@@ -126,12 +108,14 @@ def register_moderation_commands(
     @_context_description(agent_id="ID of the agent to reset")
     @moderation_rate_limit("reset_memory")
     async def slash_reset_memory(interaction: Any, agent_id: str) -> None:
-        ctx, event_queue = resolve_context()
+        _, event_queue = resolve_context()
         if not has_admin_permission(getattr(interaction, "user", None)):
             await interaction.response.send_message("unauthorized", ephemeral=True)
             return
         await event_queue.put(
-            SimulationEvent(type="moderation", data={"command": "reset_memory", "agent_id": agent_id})
+            SimulationEvent(
+                type="moderation", data={"command": "reset_memory", "agent_id": agent_id}
+            )
         )
         await discord_bot.send_interaction_response(interaction, "memory reset", ephemeral=True)
 
@@ -150,7 +134,7 @@ def register_moderation_commands(
         ip: float = 0.0,
         du: float = 0.0,
     ) -> None:
-        ctx, event_queue = resolve_context()
+        _, event_queue = resolve_context()
         if not has_admin_permission(getattr(interaction, "user", None)):
             await interaction.response.send_message("unauthorized", ephemeral=True)
             return
@@ -172,7 +156,7 @@ def register_moderation_commands(
     @_context_description(agent_id="ID of the agent to mute")
     @moderation_rate_limit("mute")
     async def slash_mute(interaction: Any, agent_id: str) -> None:
-        ctx, event_queue = resolve_context()
+        _, event_queue = resolve_context()
         await event_queue.put(
             SimulationEvent(type="moderation", data={"command": "mute", "agent_id": agent_id})
         )
@@ -184,7 +168,7 @@ def register_moderation_commands(
     @_context_description(agent_id="ID of the agent to unmute")
     @moderation_rate_limit("unmute")
     async def slash_unmute(interaction: Any, agent_id: str) -> None:
-        ctx, event_queue = resolve_context()
+        _, event_queue = resolve_context()
         await event_queue.put(
             SimulationEvent(type="moderation", data={"command": "unmute", "agent_id": agent_id})
         )

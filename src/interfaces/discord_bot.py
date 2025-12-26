@@ -10,13 +10,12 @@ import asyncio
 import json
 import logging
 import time
-import typing
 from collections import deque
-from collections.abc import Awaitable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from opentelemetry import trace
@@ -294,9 +293,7 @@ class SimulationDiscordBot:
         cls: type[Self],
         bot_token: str | list[str] | None,
         channel_id: int,
-        token_lookup: (
-            Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]] | None
-        ) = None,
+        token_lookup: (Callable[[str], Awaitable[str | None] | str] | None) = None,
         *,
         channel_map: dict[str, int] | None = None,
         context: SimulationContext | None = None,
@@ -334,9 +331,7 @@ class SimulationDiscordBot:
         self: Self,
         bot_token: str | list[str],
         channel_id: int,
-        token_lookup: (
-            Optional[typing.Callable[[str], typing.Awaitable[str | None] | str]] | None
-        ) = None,
+        token_lookup: (Callable[[str], Awaitable[str | None] | str] | None) = None,
         *,
         channel_map: dict[str, int] | None = None,
         context: SimulationContext = DEFAULT_CONTEXT,
@@ -383,7 +378,7 @@ class SimulationDiscordBot:
             token: discord.Client(intents=intents) for token in self.bot_tokens
         }
         self.client = self.clients[self.bot_tokens[0]]
-        queue = context._event_queue or db.get_event_queue()
+        queue = context.get_event_queue()
         self.context._event_queue = queue
         if self.context._event_queue_loop is None:
             try:
@@ -428,9 +423,7 @@ class SimulationDiscordBot:
                             "start",
                             agent_id=agent_id,
                         ):
-                            await interaction.response.send_message(
-                                "unauthorized", ephemeral=True
-                            )
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
                             return
                         try:
                             await start_simulation(self.context)
@@ -465,9 +458,7 @@ class SimulationDiscordBot:
                             "stop",
                             agent_id=agent_id,
                         ):
-                            await interaction.response.send_message(
-                                "unauthorized", ephemeral=True
-                            )
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
                             return
                         try:
                             await stop_simulation(self.context)
@@ -500,9 +491,7 @@ class SimulationDiscordBot:
                             "spawn",
                             agent_id=agent_id,
                         ):
-                            await interaction.response.send_message(
-                                "unauthorized", ephemeral=True
-                            )
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
                             return
                         try:
                             await spawn_agent_command(agent_id, self.context)
@@ -665,7 +654,7 @@ class SimulationDiscordBot:
                         data["recipient_id"] = recipient
                     await self.event_queue.put(SimulationEvent(type=evt_type, data=data))
 
-    async def _select_client(self: Self, agent_id: Optional[str]) -> Any:
+    async def _select_client(self: Self, agent_id: str | None) -> Any:
         """Return the Discord client for the given agent."""
         if agent_id and self.token_lookup:
             token = self.token_lookup(agent_id)
@@ -677,13 +666,13 @@ class SimulationDiscordBot:
 
     async def send_simulation_update(
         self: Self,
-        content: Optional[str] = None,
-        embed: Optional[Any] = None,
-        agent_id: Optional[str] = None,
+        content: str | None = None,
+        embed: Any | None = None,
+        agent_id: str | None = None,
         *,
-        target_channel_id: Optional[int] = None,
-        recipient: Optional[str] = None,
-    ) -> Optional[bool]:
+        target_channel_id: int | None = None,
+        recipient: str | None = None,
+    ) -> bool | None:
         """
         Send a simulation update message to Discord.
 
@@ -860,7 +849,7 @@ class SimulationDiscordBot:
         self: Self,
         agent_id: str,
         message_content: str,
-        recipient_id: Optional[str] = None,
+        recipient_id: str | None = None,
         action_intent: str = "continue_collaboration",
         agent_role: str = "Unknown",
         mood: str = "neutral",
