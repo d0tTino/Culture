@@ -1,8 +1,8 @@
 import asyncio
 import importlib
 import sys
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,11 +21,14 @@ class DummyBot:
 
 def reload_module(monkeypatch: pytest.MonkeyPatch):
     dummy_commands = SimpleNamespace(Bot=DummyBot)
+
     class DummyCommandTree:
         def __init__(self, *args: object, **kwargs: object) -> None:
             pass
 
-        def command(self, *a: object, **k: object) -> Callable[[Callable[..., object]], Callable[..., object]]:
+        def command(
+            self, *a: object, **k: object
+        ) -> Callable[[Callable[..., object]], Callable[..., object]]:
             return lambda f: f
 
         def add_check(self, *a: object, **k: object) -> None:
@@ -59,15 +62,28 @@ def discord_module(monkeypatch: pytest.MonkeyPatch):
     importlib.reload(module)
 
 
+@pytest.fixture(autouse=True)
+def reset_moderation_rate_limits(discord_module: object) -> None:
+    from src.interfaces import discord_moderation
+
+    discord_moderation._ACTION_COUNTS.clear()
+    discord_moderation._COOLDOWNS.clear()
+
+
 class DummyInteraction:
     def __init__(self) -> None:
         self.response = SimpleNamespace(send_message=AsyncMock())
         self.channel = None
+        self.user = SimpleNamespace(
+            id="user-1", guild_permissions=SimpleNamespace(administrator=True)
+        )
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_slash_start_broadcasts_success_embed(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_slash_start_broadcasts_success_embed(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
@@ -84,7 +100,9 @@ async def test_slash_start_broadcasts_success_embed(discord_module: object, monk
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_slash_start_broadcasts_failure_embed(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_slash_start_broadcasts_failure_embed(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
@@ -92,7 +110,9 @@ async def test_slash_start_broadcasts_failure_embed(discord_module: object, monk
         channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
-    monkeypatch.setattr(discord_module, "start_simulation", AsyncMock(side_effect=RuntimeError("boom")))
+    monkeypatch.setattr(
+        discord_module, "start_simulation", AsyncMock(side_effect=RuntimeError("boom"))
+    )
     interaction = DummyInteraction()
     await discord_module.slash_start(interaction)
     bot.create_start_embed.assert_called_once()
@@ -103,7 +123,9 @@ async def test_slash_start_broadcasts_failure_embed(discord_module: object, monk
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_slash_stop_broadcasts_success_embed(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_slash_stop_broadcasts_success_embed(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
@@ -120,7 +142,9 @@ async def test_slash_stop_broadcasts_success_embed(discord_module: object, monke
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_slash_spawn_broadcasts_success_embed(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_slash_spawn_broadcasts_success_embed(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
@@ -137,7 +161,9 @@ async def test_slash_spawn_broadcasts_success_embed(discord_module: object, monk
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_slash_spawn_broadcasts_failure_embed(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_slash_spawn_broadcasts_failure_embed(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bot = SimpleNamespace(
         context=discord_module.DEFAULT_CONTEXT,
         send_simulation_update=AsyncMock(),
@@ -145,7 +171,9 @@ async def test_slash_spawn_broadcasts_failure_embed(discord_module: object, monk
         channel_to_agent={},
     )
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
-    monkeypatch.setattr(discord_module, "spawn_agent_command", AsyncMock(side_effect=RuntimeError("bad")))
+    monkeypatch.setattr(
+        discord_module, "spawn_agent_command", AsyncMock(side_effect=RuntimeError("bad"))
+    )
     interaction = DummyInteraction()
     await discord_module.slash_spawn(interaction, "agent")
     bot.create_spawn_embed.assert_called_once()
@@ -176,6 +204,7 @@ async def test_kb_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_message_relay_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.sim.simulation as simulation_module
     from src.infra import ledger as ledger_module
     from src.sim.simulation import Simulation
 
@@ -188,6 +217,11 @@ async def test_message_relay_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None
 
     sim = Simulation([])
     sim.agents = [DummyAgent()]
+    monkeypatch.setattr(
+        simulation_module,
+        "get_resource_manager",
+        lambda: SimpleNamespace(ensure_du_budget=lambda *args, **kwargs: None),
+    )
     monkeypatch.setattr(ledger_module.ledger, "spend", AsyncMock())
     await sim._handle_human_command("hello")
     await sim._handle_human_command("hello again")
@@ -207,6 +241,4 @@ async def test_slash_nudge_enqueues_event(
     await discord_module.slash_nudge(interaction, "hi there")
     event = await queue.get()
     assert event.type == "nudge" and event.data == {"prompt": "hi there"}
-    interaction.response.send_message.assert_awaited_once_with(
-        "nudge sent", ephemeral=True
-    )
+    interaction.response.send_message.assert_awaited_once_with("nudge sent", ephemeral=True)

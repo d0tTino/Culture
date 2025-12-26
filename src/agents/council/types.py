@@ -48,10 +48,10 @@ def _normalize_role(value: Any) -> str:
 
 def _normalize_voting_mode(value: Any) -> str:
     if value is None:
-        return "single_winner"
+        return "judge_llm"
     text = str(value).strip()
     if not text:
-        return "single_winner"
+        return "judge_llm"
     key = re.sub(r"[\s-]+", "_", text).strip().lower()
     return _VOTING_MODE_ALIASES.get(key, text)
 
@@ -155,11 +155,15 @@ class CouncilQuestion(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    question_id: str = Field(validation_alias=AliasChoices("question_id", "id", "name"))
+    question_id: str = Field(
+        validation_alias=AliasChoices("question_id", "questionId", "id", "name")
+    )
     prompt: str
-    user_id: str | None = Field(default=None, validation_alias=AliasChoices("user_id", "userId"))
+    user_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("user_id", "userId")
+    )
     extra_context: str | None = Field(
-        default=None, validation_alias=AliasChoices("extra_context", "context")
+        default=None, validation_alias=AliasChoices("extra_context", "extraContext", "context")
     )
     rag_documents: list[str] = Field(default_factory=list)
     metadata: Mapping[str, Any] | None = None

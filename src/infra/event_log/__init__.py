@@ -41,6 +41,7 @@ _AGENT_ACTION_EXPLAIN_DEFAULT: dict[str, Any] = {
     "rag_summary": None,
 }
 
+
 def _jsonify(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {str(k): _jsonify(v) for k, v in value.items()}
@@ -133,6 +134,7 @@ def resolve_replay_event_log(
             return candidate
     return None
 
+
 tracer = trace.get_tracer(__name__)
 
 _broker = os.getenv("REDPANDA_BROKER", "localhost:9092")
@@ -194,11 +196,16 @@ _consumer_conf = {
 }
 
 
-def _kafka_bindings_available() -> bool:
+def _kafka_bindings_available(*, require_producer: bool = False) -> bool:
     """Return ``True`` when the Kafka bindings imported successfully."""
 
     global _KAFKA_WARNING_EMITTED
     if _KAFKA_IMPORT_ERROR is None:
+        return True
+    if require_producer:
+        if KafkaProducer is not Any:
+            return True
+    elif KafkaConsumer is not Any:
         return True
     if not _KAFKA_WARNING_EMITTED:
         logging.getLogger(__name__).warning(
@@ -439,7 +446,7 @@ def _filter_events(
 
 def _get_producer() -> Any | None:
     global _producer
-    if not _kafka_bindings_available():
+    if not _kafka_bindings_available(require_producer=True):
         return None
     if _producer is None:
         _producer = KafkaProducer({"bootstrap.servers": _broker})

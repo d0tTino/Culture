@@ -71,6 +71,8 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
             },
         },
     )
+    yield
+    llm_client.enable_mock_mode(False)
 
 
 @pytest.fixture(autouse=True)
@@ -83,9 +85,7 @@ def enable_council_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": True})
 
 
-def _build_council_config(
-    num_members: int = 3, voting_mode: str = "judge_llm"
-) -> CouncilConfig:
+def _build_council_config(num_members: int = 3, voting_mode: str = "judge_llm") -> CouncilConfig:
     base_members = [
         CouncilMemberConfig(
             member_id="facilitator",

@@ -1,8 +1,10 @@
+import asyncio
 import json
 
 import pytest
 
 from src.interfaces import dashboard_backend as db
+from src.sim.event_bus import get_event_bus
 
 
 class DummyRequest:
@@ -21,11 +23,13 @@ class DummyWS:
     async def send_text(self, text: str) -> None:
         self.sent.append(text)
 
+    async def close(self) -> None:
+        return None
 
-async def _clear_event_queue() -> None:
-    queue = db.get_event_queue()
-    while not queue.empty():
-        _ = await queue.get()
+
+async def _reset_event_bus() -> None:
+    bus = get_event_bus()
+    bus.shutdown()
 
 
 @pytest.mark.unit
@@ -38,15 +42,16 @@ async def test_map_action_sse(monkeypatch: pytest.MonkeyPatch) -> None:
             self.gen = gen
 
     monkeypatch.setattr(http_app, "EventSourceResponse", CaptureESR)
-    await _clear_event_queue()
-    await db.emit_map_action_event("A", 1, "move", position=(1, 0))
-    queue = db.get_event_queue()
-    await queue.put(None)
+    await _reset_event_bus()
     resp = await http_app.stream_events(DummyRequest())
-    event = await resp.gen.__anext__()
+    next_event = asyncio.create_task(resp.gen.__anext__())
+    await asyncio.sleep(0)
+    await db.emit_map_action_event("A", 1, "move", position=(1, 0))
+    event = await next_event
     data = json.loads(event["data"])
     assert data["type"] == "map_action"
     assert data["data"]["agent_id"] == "A"
+    get_event_bus().shutdown()
     with pytest.raises(StopAsyncIteration):
         await resp.gen.__anext__()
 
@@ -55,11 +60,12 @@ async def test_map_action_sse(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.asyncio
 async def test_map_action_websocket() -> None:
     ws = DummyWS()
-    await _clear_event_queue()
+    await _reset_event_bus()
+    task = asyncio.create_task(db.websocket_events(ws))
+    await asyncio.sleep(0)
     await db.emit_map_action_event("B", 2, "gather", resource="wood", success=True)
-    queue = db.get_event_queue()
-    await queue.put(None)
-    await db.websocket_events(ws)
+    get_event_bus().shutdown()
+    await task
     payload = json.loads(ws.sent[0])
     assert payload["type"] == "map_action"
     assert payload["data"]["agent_id"] == "B"

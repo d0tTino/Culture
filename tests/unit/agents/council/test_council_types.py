@@ -20,10 +20,10 @@ def council_config_adapter() -> TypeAdapter[CouncilConfig]:
 def sample_yaml_path(tmp_path: Path) -> Path:
     content = """
     enabled: true
-    voting_mode: single_winner
+    voting_mode: judge_llm
     members:
-      - id: facilitator
-        name: Facilitator
+      - member_id: facilitator
+        display_name: Facilitator
         role: Moderator
         persona: Guides the conversation and keeps members on track.
         model: mistral:latest
@@ -108,13 +108,38 @@ def test_load_fails_without_active_members(
         )
 
 
+def test_load_accepts_legacy_voting_mode(
+    council_config_adapter: TypeAdapter[CouncilConfig],
+) -> None:
+    config = council_config_adapter.validate_python(
+        {
+            "enabled": True,
+            "voting_mode": "single_winner",
+            "members": [
+                {
+                    "member_id": "facilitator",
+                    "display_name": "Facilitator",
+                    "role": "Moderator",
+                    "persona": "Guides the discussion",
+                    "model": "mistral:latest",
+                    "temperature": 0.2,
+                    "max_tokens": 256,
+                    "is_active": True,
+                }
+            ],
+        }
+    )
+
+    assert config.voting_mode == "judge_llm"
+
+
 def test_council_question_aliases() -> None:
     question = CouncilQuestion.model_validate(
         {
-            "id": "question-1",
+            "name": "question-1",
             "prompt": "What should we do next?",
-            "user_id": "user-123",
-            "extra_context": "Focus on the roadmap.",
+            "userId": "user-123",
+            "extraContext": "Focus on the roadmap.",
         }
     )
 

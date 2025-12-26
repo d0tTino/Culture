@@ -30,7 +30,7 @@ def test_load_council_config_returns_defaults_when_missing(
     assert result["members"][0]["member_id"] == "innovator"
     assert result["max_concurrent_calls"] == infra_config.settings.COUNCIL_MAX_CONCURRENT_CALLS
     assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
-    assert result["voting_mode"] == "single_winner"
+    assert result["voting_mode"] == "judge_llm"
     assert result["members"][0]["is_active"] is True
     assert result["members"][0]["temperature"] == pytest.approx(0.4)
 
@@ -82,4 +82,4 @@ def test_load_council_config_merges_defaults(
     assert result["max_concurrent_calls"] == 5
     assert result["du_budget_per_question"] == infra_config.settings.DU_BUDGET_PER_QUESTION
     assert result["members"][0]["model"], "Missing model should default to base model"
-    assert result["voting_mode"] == "single_winner"
+    assert result["voting_mode"] == "judge_llm"
