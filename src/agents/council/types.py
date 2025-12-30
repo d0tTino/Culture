@@ -112,8 +112,10 @@ class CouncilMemberConfig(BaseModel):
 
         if not normalized.get("system_prompt"):
             role = normalized.get("role") or "Generalist"
+            persona_summary = normalized.get("persona") or normalized.get("description")
             normalized["system_prompt"] = (
-                f"You are {normalized['display_name']}, a {role}. Offer concise, grounded answers."
+                f"You are {normalized['display_name']} ({role}). Embrace this persona: {persona_summary}. "
+                "Stay in-character while keeping answers concise and grounded."
             )
 
         return normalized

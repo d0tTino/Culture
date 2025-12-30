@@ -37,8 +37,8 @@ LLM_MAX_ATTEMPTS = 2
 JUDGE_SCORE_CATEGORIES = ("correctness", "clarity", "usefulness", "safety")
 
 DEFAULT_MEMBER_PROMPT = (
-    "You are participating in a council of AI personas. Provide a JSON object with keys: "
-    "answer (string), reasoning (string), confidence (0-1 float), citations (list of strings)."
+    "You are participating in a council of AI personas. Stay fully in character and keep your unique voice. "
+    "Provide a JSON object with keys: answer (string), reasoning (string), confidence (0-1 float), citations (list of strings)."
 )
 
 
@@ -209,7 +209,10 @@ def _build_council_context() -> CouncilContext:
         )
         system_prompt = str(
             entry.get("system_prompt")
-            or f"You are {display_name}, a {role}. Offer concise, grounded answers."
+            or (
+                f"You are {display_name} ({role}). Embrace this persona: {persona}. "
+                "Stay in-character while keeping answers concise and grounded."
+            )
         )
         metadata = dict(entry.get("metadata") or {})
         model_name = str(entry.get("model") or metadata.get("model") or default_model)
