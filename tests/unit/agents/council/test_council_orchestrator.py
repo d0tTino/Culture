@@ -160,6 +160,25 @@ def _build_question(metadata: Mapping[str, Any] | None = None) -> CouncilQuestio
     )
 
 
+def test_council_orchestrator_can_bypass_env_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    council_config = _build_council_config(voting_mode="judge_llm")
+    question = _build_question()
+
+    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": False})
+
+    with pytest.raises(RuntimeError):
+        orchestrator.deliberate(council_config, question)
+
+    outcome = orchestrator.deliberate(
+        council_config, question, allow_disabled_mode=True
+    )
+
+    assert outcome.winning_member_ids
+
+
 class DummyRetriever:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, int, int | None]] = []

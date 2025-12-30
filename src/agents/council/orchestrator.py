@@ -970,12 +970,19 @@ class CouncilOrchestrator:
         *,
         extra_context: str | None = None,
         rag_docs: Sequence[str] | None = None,
+        allow_disabled_mode: bool = False,
     ) -> CouncilOutcome:
         """Synchronously deliberate by awaiting the async implementation."""
 
         context = self._resolve_context(config)
         return asyncio.run(
-            self.adeliberate(context, question, extra_context=extra_context, rag_docs=rag_docs)
+            self.adeliberate(
+                context,
+                question,
+                extra_context=extra_context,
+                rag_docs=rag_docs,
+                allow_disabled_mode=allow_disabled_mode,
+            )
         )
 
     async def adeliberate(
@@ -985,11 +992,16 @@ class CouncilOrchestrator:
         *,
         extra_context: str | None = None,
         rag_docs: Sequence[str] | None = None,
+        allow_disabled_mode: bool = False,
     ) -> CouncilOutcome:
-        if not bool(get_config("USE_COUNCIL_MODE")) or not context.config.enabled:
+        council_enabled = bool(get_config("USE_COUNCIL_MODE"))
+        if not allow_disabled_mode and not council_enabled:
             raise RuntimeError(
                 "Council mode is disabled; set USE_COUNCIL_MODE=true to enable it."
             )
+
+        if not context.config.enabled:
+            raise RuntimeError("Council mode is disabled in the council configuration.")
 
         if not context.config.members:
             raise ValueError("Council configuration must include at least one member")
@@ -1395,6 +1407,7 @@ def run_council(
     *,
     extra_context: str | None = None,
     rag_docs: Sequence[str] | None = None,
+    allow_disabled_mode: bool = False,
 ) -> CouncilOutcome:
     """Gather answers from council members and select a winner using a judge model."""
 
@@ -1404,4 +1417,5 @@ def run_council(
         question,
         extra_context=extra_context,
         rag_docs=rag_docs,
+        allow_disabled_mode=allow_disabled_mode,
     )

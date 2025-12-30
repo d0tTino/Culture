@@ -45,6 +45,14 @@ def main(
         "--show-metrics",
         help="Display fitness or collusion metrics from the council outcome",
     ),
+    bypass_env_guard: bool = typer.Option(
+        True,
+        "--bypass-env-guard/--enforce-env-guard",
+        help=(
+            "Allow the council to run even when USE_COUNCIL_MODE is false. Disable to "
+            "respect the environment guard."
+        ),
+    ),
     question_id: str = typer.Option(
         "cli-question",
         "--question-id",
@@ -73,7 +81,12 @@ def main(
         rag_documents=rag_docs,
     )
 
-    outcome = run_council(question, extra_context=context, rag_docs=rag_docs)
+    outcome = run_council(
+        question,
+        extra_context=context,
+        rag_docs=rag_docs,
+        allow_disabled_mode=bypass_env_guard,
+    )
 
     typer.echo(f"Question: {outcome.question.prompt}")
     if outcome.question.context:
