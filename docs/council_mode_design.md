@@ -70,10 +70,11 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
 ### Quickstarts
 - **Makefile helper (no config changes):**
   ```bash
-  make council Q="Should we prioritize the supply-chain audit?"
+  USE_COUNCIL_MODE=true make council Q="Should we prioritize the supply-chain audit?"
   ```
 - **Direct CLI for richer context:**
   ```bash
+  USE_COUNCIL_MODE=true \
   python -m scripts.council_cli \
     "Should we prioritize the supply-chain audit?" \
     --context "Procurement stalled last sprint" \
@@ -82,6 +83,8 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
     --question-id "audit-priority-check"
   ```
   The CLI accepts repeated `--rag-doc/--rag-docs` flags to supply additional evidence, and `--question-id` is persisted in metrics to link answers to observability traces.
+
+> If `USE_COUNCIL_MODE` is omitted or set to `false`, the CLI will raise `RuntimeError: Council mode is disabled; set USE_COUNCIL_MODE=true to enable it.` instead of running the council deliberation.
 
 ### Council-specific toggles
 - `USE_COUNCIL_MODE`: Enable/disable council orchestration globally; set in `.env` or via `export USE_COUNCIL_MODE=true` before running simulations.
