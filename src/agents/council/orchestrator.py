@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -89,6 +90,119 @@ class CouncilContext:
     config: CouncilConfig
     judge_model: str
     member_model: str
+
+
+class CouncilRunMetrics:
+    """Record council metrics while tolerating disabled metric backends."""
+
+    def __init__(self) -> None:
+        try:  # pragma: no cover - optional dependency
+            from src.interfaces import metrics as prom_metrics
+        except Exception:  # pragma: no cover - defensive fallback
+            prom_metrics = None
+
+        self._metrics = prom_metrics
+        self.enabled = prom_metrics is not None
+        self._runs_total = getattr(prom_metrics, "COUNCIL_RUNS_TOTAL", None)
+        self._member_wins_total = getattr(prom_metrics, "COUNCIL_MEMBER_WINS_TOTAL", None)
+        self._member_score = getattr(prom_metrics, "COUNCIL_MEMBER_SCORE", None)
+        self._du_budget = getattr(prom_metrics, "COUNCIL_DU_BUDGET", None)
+        self._du_spend = getattr(prom_metrics, "COUNCIL_DU_SPEND", None)
+        self._latency_ms = getattr(prom_metrics, "COUNCIL_LATENCY_MS", None)
+
+    def _increment(
+        self, counter: Any | None, *, labels: Mapping[str, str] | None = None, amount: int = 1
+    ) -> None:
+        if not self.enabled or counter is None:
+            return
+        try:
+            if labels and hasattr(counter, "labels"):
+                counter.labels(**dict(labels)).inc(amount)
+            elif hasattr(counter, "inc"):
+                counter.inc(amount)
+        except Exception:
+            return
+
+    def _set_gauge(
+        self, gauge: Any | None, value: float, *, labels: Mapping[str, str] | None = None
+    ) -> None:
+        if not self.enabled or gauge is None:
+            return
+        try:
+            if labels and hasattr(gauge, "labels"):
+                gauge.labels(**dict(labels)).set(value)
+            elif hasattr(gauge, "set"):
+                gauge.set(value)
+        except Exception:
+            return
+
+    def record_run(self) -> None:
+        self._increment(self._runs_total)
+
+    def record_latency(self, stage: str, duration_ms: float) -> None:
+        self._set_gauge(self._latency_ms, duration_ms, labels={"stage": stage})
+
+    def record_member_wins(self, member_ids: Sequence[str]) -> None:
+        for member_id in member_ids:
+            if member_id:
+                self._increment(
+                    self._member_wins_total, labels={"member_id": str(member_id)}, amount=1
+                )
+
+    def record_member_scores_from_vote(self, vote: CouncilVoteModel | None) -> None:
+        if not vote:
+            return
+        member_scores = vote.metrics.get("member_scores") if vote.metrics else None
+        if isinstance(member_scores, Mapping):
+            for member_id, categories in member_scores.items():
+                if not isinstance(categories, Mapping):
+                    continue
+                for category, score in categories.items():
+                    if isinstance(score, (int, float)):
+                        self._set_gauge(
+                            self._member_score,
+                            float(score),
+                            labels={"member_id": str(member_id), "category": str(category)},
+                        )
+        self.record_member_wins([vote.winning_member_id])
+
+    def record_fitness_snapshot(self, snapshot: Mapping[str, Any] | None) -> None:
+        if not snapshot:
+            return
+        members = snapshot.get("members")
+        if not isinstance(members, Mapping):
+            return
+        for member_id, stats in members.items():
+            if not isinstance(stats, Mapping):
+                continue
+            for category in ("wins", "participations", "win_rate", "agreement_score"):
+                value = stats.get(category)
+                if isinstance(value, (int, float)):
+                    self._set_gauge(
+                        self._member_score,
+                        float(value),
+                        labels={"member_id": str(member_id), "category": category},
+                    )
+
+    def record_du_usage(
+        self, member_states: Mapping[str, SimpleNamespace], budget: float | None
+    ) -> None:
+        if budget is None:
+            return
+        try:
+            budget_value = float(budget)
+        except (TypeError, ValueError):
+            return
+        for member_id, state in member_states.items():
+            remaining = getattr(state, "du", None)
+            if remaining is None:
+                continue
+            try:
+                spent = max(budget_value - float(remaining), 0.0)
+            except (TypeError, ValueError):
+                continue
+            self._set_gauge(self._du_budget, budget_value, labels={"member_id": member_id})
+            self._set_gauge(self._du_spend, spent, labels={"member_id": member_id})
 
 
 def _stringify_memory_doc(doc: Any) -> str:
@@ -880,6 +994,10 @@ class CouncilOrchestrator:
         if not context.config.members:
             raise ValueError("Council configuration must include at least one member")
 
+        run_metrics = CouncilRunMetrics()
+        run_metrics.record_run()
+        total_start = time.perf_counter()
+
         rag_docs = await _populate_question_rag_documents(
             question,
             base_documents=rag_docs,
@@ -901,6 +1019,7 @@ class CouncilOrchestrator:
                     "question_id": question.question_id,
                 },
             )
+            run_metrics.record_latency("total", (time.perf_counter() - total_start) * 1000)
             return CouncilOutcome(
                 question=question,
                 answers=[],
@@ -911,6 +1030,7 @@ class CouncilOrchestrator:
             )
         member_states = self._allocate_du_budgets(context.config, metrics)
 
+        member_fanout_start = time.perf_counter()
         answers = await self._gather_member_answers(
             context,
             question,
@@ -919,10 +1039,14 @@ class CouncilOrchestrator:
             rag_docs=rag_docs,
             metrics=metrics,
         )
+        run_metrics.record_latency(
+            "member_fanout", (time.perf_counter() - member_fanout_start) * 1000
+        )
 
         if metrics.get("du_budget_exhausted"):
             metrics.setdefault("partial", True)
             metrics.setdefault("completed_members", [answer.member_id for answer in answers])
+            run_metrics.record_du_usage(member_states, metrics.get("du_budget_per_member"))
             outcome = CouncilOutcome(
                 question=question,
                 answers=answers,
@@ -936,11 +1060,13 @@ class CouncilOrchestrator:
                     "metrics": dict(metrics),
                 },
             )
+            run_metrics.record_latency("total", (time.perf_counter() - total_start) * 1000)
             await self._record_outcome_metrics(outcome)
             return outcome
 
         vote = None
         if answers:
+            judge_start = time.perf_counter()
             if context.config.voting_mode == "judge_llm":
                 vote = await asyncio.to_thread(
                     _judge_council_answers,
@@ -969,13 +1095,20 @@ class CouncilOrchestrator:
                     "Unknown council voting mode '%s'; skipping vote.",
                     context.config.voting_mode,
                 )
+            run_metrics.record_latency("judge", (time.perf_counter() - judge_start) * 1000)
+
+        run_metrics.record_member_scores_from_vote(vote)
+        run_metrics.record_du_usage(member_states, metrics.get("du_budget_per_member"))
 
         base_metrics = dict(metrics or {})
         base_metrics.setdefault("du_budget_exhausted", False)
         base_metrics.setdefault(
             "du_budget_per_member", self._resolve_du_budget(context.config)
         )
-        outcome = self._build_outcome(question, answers, vote, base_metrics)
+        outcome = self._build_outcome(
+            question, answers, vote, base_metrics, run_metrics=run_metrics
+        )
+        run_metrics.record_latency("total", (time.perf_counter() - total_start) * 1000)
         await self._record_outcome_metrics(outcome)
         return outcome
 
@@ -1188,6 +1321,7 @@ class CouncilOrchestrator:
         answers: list[MemberAnswer],
         vote: CouncilVoteModel | None,
         metrics: Mapping[str, Any],
+        run_metrics: CouncilRunMetrics | None = None,
     ) -> CouncilOutcome:
         winning_member_ids: list[str] = []
         resolution = "No consensus reached."
@@ -1207,9 +1341,15 @@ class CouncilOrchestrator:
             resolution = vote.resolution or answer_lookup.get(
                 vote.winning_member_id, resolution
             )
+            fitness_start = time.perf_counter()
             fitness_snapshot = self.fitness_store.update_from_vote(
                 question, answers, vote
             )
+            if run_metrics is not None:
+                run_metrics.record_latency(
+                    "fitness_update", (time.perf_counter() - fitness_start) * 1000
+                )
+                run_metrics.record_fitness_snapshot(fitness_snapshot)
 
         if fitness_snapshot is not None:
             metadata["fitness"] = fitness_snapshot

@@ -101,6 +101,28 @@ AGENT_LLM_LATENCY_P95_MS = Gauge(
     "95th percentile latency of recent LLM calls per agent in milliseconds",
     ["agent_id"],
 )
+COUNCIL_RUNS_TOTAL = Counter(
+    "council_runs_total", "Total number of council orchestration runs"
+)
+COUNCIL_MEMBER_WINS_TOTAL = Counter(
+    "council_member_wins_total",
+    "Total number of council wins per member",
+    ["member_id"],
+)
+COUNCIL_MEMBER_SCORE = Gauge(
+    "council_member_score", "Scores recorded for council members", ["member_id", "category"]
+)
+COUNCIL_DU_BUDGET = Gauge(
+    "council_du_budget", "DU budget allocated to council members", ["member_id"]
+)
+COUNCIL_DU_SPEND = Gauge(
+    "council_du_spend", "DU spend recorded for council members", ["member_id"]
+)
+COUNCIL_LATENCY_MS = Gauge(
+    "council_latency_ms",
+    "Council orchestration latency in milliseconds by stage",
+    ["stage"],
+)
 
 # Start the metrics HTTP server when this module is imported
 try:
