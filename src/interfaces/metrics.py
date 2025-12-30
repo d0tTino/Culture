@@ -88,6 +88,22 @@ ACTIVE_AGENT_COUNT = Gauge(
     "active_agent_count", "Number of active agents participating in the simulation"
 )
 
+# Council metrics
+COUNCIL_RUNS_TOTAL = Counter(
+    "council_runs_total", "Total number of council runs", ["question_id"]
+)
+COUNCIL_WIN_RATE = Gauge(
+    "council_win_rate", "Win rate per council member", ["member_id"]
+)
+COUNCIL_LATENCY_P95_MS = Gauge(
+    "council_latency_p95_ms",
+    "95th percentile latency of council executions in milliseconds",
+    ["question_id"],
+)
+COUNCIL_DU_SPEND = Gauge(
+    "council_du_spend", "Total DU spend per council member", ["member_id"]
+)
+
 # Gas price metrics updated by ``Ledger.calculate_gas_price``
 GAS_PRICE_PER_CALL = Gauge("gas_price_per_call", "Current gas price charged per LLM call")
 GAS_PRICE_PER_TOKEN = Gauge("gas_price_per_token", "Current gas price charged per generated token")
@@ -210,6 +226,10 @@ __all__ = [
     "AGENT_REMAINING_DU",
     "AVERAGE_SENTIMENT",
     "COALITION_COUNT",
+    "COUNCIL_DU_SPEND",
+    "COUNCIL_LATENCY_P95_MS",
+    "COUNCIL_RUNS_TOTAL",
+    "COUNCIL_WIN_RATE",
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
     "HUMAN_MESSAGES_TOTAL",
