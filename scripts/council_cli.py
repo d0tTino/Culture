@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 import typer
 
 from src.agents.council.orchestrator import run_council
@@ -32,6 +34,16 @@ def main(
         False,
         "--show-all",
         help="Print answers from all members instead of only winners",
+    ),
+    show_votes: bool = typer.Option(
+        False,
+        "--show-votes",
+        help="Display per-member votes and judge score summaries",
+    ),
+    show_metrics: bool = typer.Option(
+        False,
+        "--show-metrics",
+        help="Display fitness or collusion metrics from the council outcome",
     ),
     question_id: str = typer.Option(
         "cli-question",
@@ -92,6 +104,26 @@ def main(
             typer.echo("Answers:")
             for answer in answers:
                 typer.echo(f"- {answer.member_id}: {answer.answer}")
+
+    if show_votes:
+        if outcome.votes:
+            typer.echo("Judge Scores:")
+            for member_id, score in outcome.votes.items():
+                typer.echo(f"- {member_id}: {score}")
+
+        votes_to_display = [
+            (answer.member_id, answer.votes) for answer in outcome.answers if answer.votes
+        ]
+        if votes_to_display:
+            typer.echo("Votes:")
+            for member_id, votes in votes_to_display:
+                typer.echo(f"- {member_id}:")
+                for target_member, score in votes.items():
+                    typer.echo(f"  - {target_member}: {score}")
+
+    if show_metrics and outcome.metrics:
+        typer.echo("Metrics:")
+        typer.echo(json.dumps(outcome.metrics, indent=2))
 
 
 if __name__ == "__main__":  # pragma: no cover - manual tool
