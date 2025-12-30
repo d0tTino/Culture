@@ -93,6 +93,50 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
 
 When the YAML file is missing or malformed, Culture falls back to defaults emitted by `_build_default_council_config`, so corrupted configs do not block simulations.
 
+### PewDiePie-style roster (YouTube-friendly experiment)
+A creator-inspired loadout can help stress-test banter, cross-talk, and audience-facing recaps. Save the snippet below as `config/pewdiepie_council.yml` and point `COUNCIL_CONFIG_PATH` at it to try the roster:
+
+```yaml
+max_concurrent_calls: 3
+du_budget_per_question: 6.0
+voting_mode: judge_llm
+members:
+  - member_id: bro-facilitator
+    display_name: Bro Facilitator
+    role: Facilitator
+    persona: Keeps the pacing high, summarizes takes with signature "Bro Army" hype, and calls on others quickly.
+    model: mistral:latest
+    temperature: 0.35
+    max_tokens: 256
+    is_active: true
+  - member_id: meme-engineer
+    display_name: Meme Engineer
+    role: Innovator
+    persona: Drops punchy meme riffs and wildcard pivots to keep ideation lively, while citing receipts.
+    model: mistral:latest
+    temperature: 0.55
+    max_tokens: 256
+    is_active: true
+  - member_id: zero-deaths-critic
+    display_name: Zero Deaths Critic
+    role: Analyzer
+    persona: Applies "zero deaths" rigor to poke holes, spot contradictions, and demand clear receipts.
+    model: mistral:latest
+    temperature: 0.25
+    max_tokens: 256
+    is_active: true
+```
+
+Sample CLI invocation (enables council mode, swaps to the PewDiePie roster, and pins a question ID for observability):
+
+```bash
+USE_COUNCIL_MODE=true \
+COUNCIL_CONFIG_PATH=config/pewdiepie_council.yml \
+python -m scripts.council_cli "Is the Zero Deaths meme still on-brand?" --question-id "pewdiepie-zero-deaths"
+```
+
+To revert, unset or remove `COUNCIL_CONFIG_PATH` so it falls back to `config/council.yml`, or set `USE_COUNCIL_MODE=false` to return to the standard single-persona run.
+
 ## Phased Milestones
 1. **Phase 1 – Council config scaffolding:** Define `CouncilMemberConfig`, `CouncilConfig`, and `CouncilQuestion` data structures, plus YAML loading/validation.  
    **Readiness:** Configuration round-trips from YAML to runtime objects with validation errors surfaced clearly.
