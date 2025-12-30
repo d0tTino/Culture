@@ -138,6 +138,8 @@ Configuration flags that influence council behavior include:
 - `COUNCIL_MAX_CONCURRENT_CALLS` and `DU_BUDGET_PER_QUESTION` to bound LLM usage per council run.
 - `ROLE_DU_GENERATION` for persona-specific DU generation budgets.
 
+For a themed loadout, the [PewDiePie-style roster example](docs/council_mode_design.md#pewdiepie-style-roster-youtube-friendly-experiment) shows how to swap in a creator-inspired persona pack via `COUNCIL_CONFIG_PATH` and return to the defaults afterward.
+
 ## Technology Stack
 
 * **Core Language:** Python 3.11+
