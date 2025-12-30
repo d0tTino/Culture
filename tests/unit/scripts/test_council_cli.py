@@ -130,3 +130,77 @@ def test_council_cli_show_all_answers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0
     assert "- alpha: Alpha answer" in result.output
     assert "- bravo: Bravo answer" in result.output
+
+
+def test_council_cli_show_votes(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = CliRunner()
+
+    def fake_run_council(
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None,
+        rag_docs: list[str] | None,
+    ) -> CouncilOutcome:
+        return CouncilOutcome(
+            question=question,
+            answers=[
+                MemberAnswer(member_id="alpha", answer="Alpha answer", votes={"bravo": 0.6}),
+                MemberAnswer(member_id="bravo", answer="Bravo answer", votes={"alpha": 0.4}),
+            ],
+            resolution="Mock resolution",
+            winning_member_ids=["alpha"],
+            votes={"alpha": 0.55, "bravo": 0.45},
+            summary=None,
+            metrics={"fitness": {"score": 0.95}},
+        )
+
+    monkeypatch.setattr(council_cli, "run_council", fake_run_council)
+
+    result = runner.invoke(council_cli.app, ["Prompt", "--show-votes", "--show-all"])
+
+    assert result.exit_code == 0
+    assert "Judge Scores:" in result.output
+    assert "- alpha: 0.55" in result.output
+    assert "- bravo: 0.45" in result.output
+    assert "Votes:" in result.output
+    assert "- alpha:" in result.output
+    assert "  - bravo: 0.6" in result.output
+    assert "- bravo:" in result.output
+    assert "  - alpha: 0.4" in result.output
+
+    result_default = runner.invoke(council_cli.app, ["Prompt"])
+
+    assert "Judge Scores:" not in result_default.output
+    assert "Votes:" not in result_default.output
+
+
+def test_council_cli_show_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = CliRunner()
+
+    def fake_run_council(
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None,
+        rag_docs: list[str] | None,
+    ) -> CouncilOutcome:
+        return CouncilOutcome(
+            question=question,
+            answers=[MemberAnswer(member_id="alpha", answer="Alpha answer")],
+            resolution="Mock resolution",
+            winning_member_ids=["alpha"],
+            summary=None,
+            metrics={"fitness": {"score": 0.87}, "collusion": {"flagged": False}},
+        )
+
+    monkeypatch.setattr(council_cli, "run_council", fake_run_council)
+
+    result = runner.invoke(council_cli.app, ["Prompt", "--show-metrics"])
+
+    assert result.exit_code == 0
+    assert "Metrics:" in result.output
+    assert '"fitness"' in result.output
+    assert '"collusion"' in result.output
+
+    result_default = runner.invoke(council_cli.app, ["Prompt"])
+
+    assert "Metrics:" not in result_default.output
