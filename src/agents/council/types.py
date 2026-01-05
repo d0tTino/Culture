@@ -128,6 +128,7 @@ class CouncilConfig(BaseModel):
 
     enabled: bool = True
     voting_mode: CouncilVotingMode = "judge_llm"
+    allow_remote_models: bool = False
     members: list[CouncilMemberConfig] = Field(default_factory=list)
     quorum: int | None = None
     consensus_threshold: float = 0.67

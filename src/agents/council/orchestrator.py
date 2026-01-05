@@ -90,6 +90,7 @@ class CouncilContext:
     config: CouncilConfig
     judge_model: str
     member_model: str
+    allow_remote_models: bool
 
 
 class CouncilRunMetrics:
@@ -293,8 +294,18 @@ def _build_council_context() -> CouncilContext:
     """Load the council configuration and normalize member metadata."""
 
     raw_config = load_council_config()
-    default_model = _resolve_default_model()
+    allow_remote_models = bool(raw_config.get("allow_remote_models", False))
+    allowed_prefixes = _get_allowed_local_model_prefixes()
+    default_model = _resolve_default_model(
+        allow_remote=allow_remote_models, allowed_prefixes=allowed_prefixes
+    )
     judge_model = str(raw_config.get("judge_model") or default_model)
+    judge_model = _guard_local_model(
+        judge_model,
+        allow_remote=allow_remote_models,
+        allowed_prefixes=allowed_prefixes,
+        context="council judge",
+    )
     voting_mode = str(raw_config.get("voting_mode") or "judge_llm")
     max_concurrent_calls = raw_config.get("max_concurrent_calls")
     if max_concurrent_calls is None:
@@ -330,6 +341,12 @@ def _build_council_context() -> CouncilContext:
         )
         metadata = dict(entry.get("metadata") or {})
         model_name = str(entry.get("model") or metadata.get("model") or default_model)
+        model_name = _guard_local_model(
+            model_name,
+            allow_remote=allow_remote_models,
+            allowed_prefixes=allowed_prefixes,
+            context=f"council member {member_id}",
+        )
         metadata.setdefault("model", model_name)
         max_tokens = entry.get("max_tokens") or entry.get("max_turn_tokens")
 
@@ -362,17 +379,87 @@ def _build_council_context() -> CouncilContext:
                 float(du_budget_per_question) if du_budget_per_question is not None else None
             ),
             "metadata": {"raw_config": raw_config},
+            "allow_remote_models": allow_remote_models,
         }
     )
 
-    return CouncilContext(config=council_config, judge_model=judge_model, member_model=default_model)
+    return CouncilContext(
+        config=council_config,
+        judge_model=judge_model,
+        member_model=default_model,
+        allow_remote_models=allow_remote_models,
+    )
 
 
-def _resolve_default_model() -> str:
+def _get_allowed_local_model_prefixes() -> list[str]:
+    prefixes: list[str] = []
+    for key in ("LLM_API_BASE", "OLLAMA_API_BASE", "VLLM_API_BASE"):
+        value = str(get_config(key) or "").strip()
+        if value:
+            prefixes.append(value.rstrip("/"))
+    prefixes.extend(
+        [
+            "http://localhost",
+            "https://localhost",
+            "http://127.0.0.1",
+            "https://127.0.0.1",
+            "http://0.0.0.0",
+            "https://0.0.0.0",
+        ]
+    )
+    return prefixes
+
+
+def _is_remote_model(model_name: str, allowed_prefixes: Sequence[str]) -> bool:
+    normalized = model_name.strip()
+    for prefix in allowed_prefixes:
+        if normalized.startswith(prefix):
+            return False
+
+    lowered = normalized.lower()
+    if lowered.startswith(("http://", "https://")):
+        return True
+    if "/" in normalized:
+        return True
+    return False
+
+
+def _guard_local_model(
+    model_name: str,
+    *,
+    allow_remote: bool,
+    allowed_prefixes: Sequence[str] | None = None,
+    context: str = "council",
+) -> str:
+    normalized = str(model_name).strip()
+    if not normalized:
+        raise ValueError(f"{context} model must be configured.")
+
+    prefixes = list(allowed_prefixes or _get_allowed_local_model_prefixes())
+    if _is_remote_model(normalized, prefixes):
+        message = (
+            f"Remote model '{normalized}' detected for {context}; "
+            "configure a local model or enable allow_remote_models."
+        )
+        if allow_remote:
+            logger.warning(message)
+        else:
+            raise ValueError(message)
+    return normalized
+
+
+def _resolve_default_model(
+    *, allow_remote: bool = False, allowed_prefixes: Sequence[str] | None = None
+) -> str:
     default_model = get_config("DEFAULT_LLM_MODEL")
     if not default_model or str(default_model).strip() == "":
         raise RuntimeError("DEFAULT_LLM_MODEL must be configured for council orchestration.")
-    return str(default_model)
+    return _guard_local_model(
+        str(default_model),
+        allow_remote=allow_remote,
+        allowed_prefixes=allowed_prefixes,
+        context="council default",
+    )
 
 
 def _format_rag_docs(rag_docs: Sequence[str]) -> str:
@@ -961,6 +1048,7 @@ class CouncilOrchestrator:
             config=config,
             judge_model=base_context.judge_model,
             member_model=base_context.member_model,
+            allow_remote_models=config.allow_remote_models,
         )
 
     def deliberate(
