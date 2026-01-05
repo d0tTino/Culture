@@ -131,6 +131,9 @@ python -m scripts.council_cli \
   --question-id "audit-priority-check"
 ```
 
+The Typer CLI is now the canonical entry point for Council Mode and replaces the
+legacy `scripts/run_council_cli.py` helper.
+
 Configuration flags that influence council behavior include:
 
 - `USE_COUNCIL_MODE` to enable the feature gate.
