@@ -21,7 +21,10 @@ def test_resolve_default_model_rejects_remote(monkeypatch: pytest.MonkeyPatch) -
         orchestrator, "get_config", _stub_get_config({"DEFAULT_LLM_MODEL": "https://api.openai.com"})
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Remote model 'https://api.openai.com' detected for council default;",
+    ):
         orchestrator._resolve_default_model(allowed_prefixes=["http://localhost"], allow_remote=False)
 
 
@@ -35,6 +38,58 @@ def test_resolve_default_model_allows_local(monkeypatch: pytest.MonkeyPatch) -> 
     resolved = orchestrator._resolve_default_model()
 
     assert resolved == "mistral:latest"
+
+
+def test_resolve_default_model_rejects_remote_identifier(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        orchestrator, "get_config", _stub_get_config({"DEFAULT_LLM_MODEL": "openai/gpt-4o"})
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Remote model 'openai/gpt-4o' detected for council default;",
+    ):
+        orchestrator._resolve_default_model(allowed_prefixes=["http://localhost"], allow_remote=False)
+
+
+def test_build_context_accepts_local_default_with_allowed_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orchestrator, "_get_allowed_local_model_prefixes", lambda: ["http://localhost"])
+    monkeypatch.setattr(
+        orchestrator,
+        "get_config",
+        _stub_get_config({"DEFAULT_LLM_MODEL": "http://localhost:11434/llama3"}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "load_council_config",
+        lambda: {"members": [{"member_id": "member-1", "max_tokens": 128}]},
+    )
+
+    context = orchestrator._build_council_context()
+
+    assert context.member_model == "http://localhost:11434/llama3"
+    assert context.judge_model == "http://localhost:11434/llama3"
+    assert context.config.members[0].model == "http://localhost:11434/llama3"
+
+
+def test_build_context_rejects_remote_default_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orchestrator, "_get_allowed_local_model_prefixes", lambda: ["http://localhost"])
+    monkeypatch.setattr(
+        orchestrator,
+        "get_config",
+        _stub_get_config({"DEFAULT_LLM_MODEL": "https://api.remote.com/llm"}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "load_council_config",
+        lambda: {"members": [{"member_id": "member-1", "max_tokens": 128}]},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Remote model 'https://api.remote.com/llm' detected for council default;",
+    ):
+        orchestrator._build_council_context()
 
 
 def test_member_remote_models_warn_when_allowed(
