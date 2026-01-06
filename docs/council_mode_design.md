@@ -12,6 +12,11 @@ Implement local council mode (multiple AI agents + judge) on a single GPU.
 - **Improve memory grounding:** Increase the proportion of council outputs backed by retrieved memories through nodes like [`src/agents/graphs/retriever_node.py`](../src/agents/graphs/retriever_node.py) and [`src/agents/memory/multi_layer_retriever.py`](../src/agents/memory/multi_layer_retriever.py).
 - **Enable measurable progress:** Track council deliberation quality via Prometheus gauges in [`src/interfaces/metrics.py`](../src/interfaces/metrics.py) to support automated regression alerts.
 
+### Single-GPU performance & DU targets
+- **Latency (A100-class, 3 members, 1 round):** p95 end-to-end council latency ≤ **1.5s** with member fan-out ≤ **0.75s**.
+- **Throughput:** Sustain **≥25 questions/minute** on a single GPU with the default 3-member roster (judge + members).
+- **DU ceilings:** Cap per-member DU at **2.0** (≤**6 DU** aggregate for the default roster) and reserve **≤1 DU** for the judge step; runs that would exceed these ceilings should short-circuit with partial outcomes.
+
 ## Component Overview (Spec Alignment)
 Council Mode is composed of the following spec-aligned components and responsibilities:
 
