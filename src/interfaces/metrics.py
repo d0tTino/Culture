@@ -128,6 +128,16 @@ COUNCIL_MEMBER_WINS_TOTAL = Counter(
 COUNCIL_MEMBER_SCORE = Gauge(
     "council_member_score", "Scores recorded for council members", ["member_id", "category"]
 )
+COUNCIL_PAIRWISE_AGREEMENT = Gauge(
+    "council_pairwise_agreement",
+    "Pairwise agreement metrics recorded for council members",
+    ["member_a", "member_b", "category"],
+)
+COUNCIL_COLLUSION_WARNINGS_TOTAL = Counter(
+    "council_collusion_warnings_total",
+    "Total number of collusion warnings emitted for council member pairs",
+    ["member_a", "member_b"],
+)
 COUNCIL_DU_BUDGET = Gauge(
     "council_du_budget", "DU budget allocated to council members", ["member_id"]
 )

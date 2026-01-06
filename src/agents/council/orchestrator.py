@@ -107,6 +107,12 @@ class CouncilRunMetrics:
         self._runs_total = getattr(prom_metrics, "COUNCIL_RUNS_TOTAL", None)
         self._member_wins_total = getattr(prom_metrics, "COUNCIL_MEMBER_WINS_TOTAL", None)
         self._member_score = getattr(prom_metrics, "COUNCIL_MEMBER_SCORE", None)
+        self._pairwise_agreement = getattr(
+            prom_metrics, "COUNCIL_PAIRWISE_AGREEMENT", None
+        )
+        self._collusion_warnings_total = getattr(
+            prom_metrics, "COUNCIL_COLLUSION_WARNINGS_TOTAL", None
+        )
         self._du_budget = getattr(prom_metrics, "COUNCIL_DU_BUDGET", None)
         self._du_spend = getattr(prom_metrics, "COUNCIL_DU_SPEND", None)
         self._latency_ms = getattr(prom_metrics, "COUNCIL_LATENCY_MS", None)
@@ -185,6 +191,14 @@ class CouncilRunMetrics:
                         labels={"member_id": str(member_id), "category": category},
                     )
 
+        pairs = snapshot.get("pairs")
+        if isinstance(pairs, Mapping):
+            self.record_pairwise_agreements(pairs)
+
+        warnings = snapshot.get("warnings")
+        if isinstance(warnings, Sequence):
+            self.record_collusion_warnings(warnings)
+
     def record_du_usage(
         self, member_states: Mapping[str, SimpleNamespace], budget: float | None
     ) -> None:
@@ -204,6 +218,50 @@ class CouncilRunMetrics:
                 continue
             self._set_gauge(self._du_budget, budget_value, labels={"member_id": member_id})
             self._set_gauge(self._du_spend, spent, labels={"member_id": member_id})
+
+    def _parse_pair(self, pair_key: str) -> tuple[str, str] | None:
+        members = [part.strip() for part in str(pair_key).split("|") if part.strip()]
+        if len(members) != 2:
+            return None
+        left, right = sorted(members)
+        return left, right
+
+    def record_pairwise_agreements(self, pairs: Mapping[str, Any]) -> None:
+        for pair_key, stats in pairs.items():
+            if not isinstance(stats, Mapping):
+                continue
+            parsed = self._parse_pair(pair_key)
+            if parsed is None:
+                continue
+            member_a, member_b = parsed
+            for category in ("questions_together", "top_agreements", "agreement_rate"):
+                value = stats.get(category)
+                if isinstance(value, (int, float)):
+                    self._set_gauge(
+                        self._pairwise_agreement,
+                        float(value),
+                        labels={
+                            "member_a": member_a,
+                            "member_b": member_b,
+                            "category": category,
+                        },
+                    )
+
+    def record_collusion_warnings(self, warnings: Sequence[str]) -> None:
+        for warning in warnings:
+            if not isinstance(warning, str):
+                continue
+            match = re.search(r"between ([^\s]+)", warning)
+            pair_key = match.group(1) if match else warning
+            parsed = self._parse_pair(pair_key)
+            if parsed is None:
+                continue
+            member_a, member_b = parsed
+            self._increment(
+                self._collusion_warnings_total,
+                labels={"member_a": member_a, "member_b": member_b},
+                amount=1,
+            )
 
 
 def _stringify_memory_doc(doc: Any) -> str:
