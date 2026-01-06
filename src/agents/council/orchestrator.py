@@ -1539,13 +1539,15 @@ class CouncilOrchestrator:
                 exc_info=True,
             )
 
-    def serialize_metrics(self) -> dict[str, list[dict[str, float]]]:
+    def serialize_metrics(self, *, question_id: str | None = None) -> dict[str, list[dict[str, float]]]:
         """Return a snapshot of aggregated council metrics."""
 
-        return council_stats_store.serialize_metrics()
+        return council_stats_store.serialize_metrics(question_id=question_id)
 
-    async def serialize_metrics_async(self) -> dict[str, list[dict[str, float]]]:
-        return await council_stats_store.serialize_metrics_async()
+    async def serialize_metrics_async(
+        self, *, question_id: str | None = None
+    ) -> dict[str, list[dict[str, float]]]:
+        return await council_stats_store.serialize_metrics_async(question_id=question_id)
 
 
 def run_council(
