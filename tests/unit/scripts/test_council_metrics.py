@@ -30,25 +30,94 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
                 "agreements": 2,
                 "disagreements": 1,
                 "agreement_rate": 2 / 3,
+                "collusion_warning": "alpha vs bravo agreeing too often",
             }
         ],
+        "collusion_warnings": ["Global collusion alert"],
     }
 
     class FakeOrchestrator:
-        def serialize_metrics(self) -> dict[str, list[dict[str, float]]]:
+        def __init__(self) -> None:
+            self.received_question = None
+
+        def serialize_metrics(self, *, question_id: str | None = None) -> dict[str, list[dict[str, float]]]:
+            self.received_question = question_id
             return mock_metrics
 
-    monkeypatch.setattr(council_metrics, "CouncilOrchestrator", FakeOrchestrator)
+    orchestrator = FakeOrchestrator()
+    monkeypatch.setattr(council_metrics, "CouncilOrchestrator", lambda: orchestrator)
 
-    council_metrics.main()
+    council_metrics.main(["--show-collusion-flags"])
 
     output = capsys.readouterr().out
-    assert "Member Win Rates:" in output
+    assert orchestrator.received_question is None
+    assert "Council Metrics" in output
     assert "- alpha: 60.00% win rate (3/5 wins, avg confidence 0.80)" in output
     assert "- bravo: 0.00% win rate (0/0 wins, avg confidence 0.00)" in output
 
     assert "Pairwise Agreement Rates:" in output
-    assert "- alpha vs bravo: 66.67% agreement (2 agreements / 1 disagreements)" in output
+    assert "- alpha vs bravo: 66.67% agreement [FLAGGED] (2 agreements / 1 disagreements) - alpha vs bravo agreeing too often" in output
 
     assert "Warnings:" in output
     assert "Member bravo has no recorded participations." in output
+    assert "Global collusion alert" in output
+
+
+def test_council_metrics_filters_questions(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    mock_metrics = {
+        "members": [],
+        "pairwise": [],
+        "questions": [
+            {
+                "question_id": "target-question",
+                "prompt": "What now?",
+                "members": [
+                    {
+                        "member_id": "alpha",
+                        "participations": 2,
+                        "wins": 2,
+                        "win_rate": 1.0,
+                        "avg_confidence": 0.9,
+                    }
+                ],
+                "pairwise": [
+                    {
+                        "member_a": "alpha",
+                        "member_b": "bravo",
+                        "agreements": 3,
+                        "disagreements": 0,
+                        "agreement_rate": 1.0,
+                        "flagged": True,
+                        "collusion_warning": "Potential collusion detected",
+                    }
+                ],
+                "warnings": ["Custom question warning"],
+            },
+            {
+                "question_id": "other-question",
+                "members": [],
+                "pairwise": [],
+            },
+        ],
+    }
+
+    class FakeOrchestrator:
+        def __init__(self) -> None:
+            self.received_question: str | None = None
+
+        def serialize_metrics(self, *, question_id: str | None = None) -> dict[str, list[dict[str, float]]]:
+            self.received_question = question_id
+            return mock_metrics
+
+    orchestrator = FakeOrchestrator()
+    monkeypatch.setattr(council_metrics, "CouncilOrchestrator", lambda: orchestrator)
+
+    council_metrics.main(["--question-id", "target-question", "--show-collusion-flags"])
+
+    output = capsys.readouterr().out
+    assert orchestrator.received_question == "target-question"
+    assert "Question: target-question" in output
+    assert "Prompt: What now?" in output
+    assert "Custom question warning" in output
+    assert "Potential collusion detected" in output
+    assert "other-question" not in output

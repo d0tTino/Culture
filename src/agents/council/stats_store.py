@@ -174,7 +174,7 @@ class CouncilStatsStore:
             "agreement_rate": agreement_rate,
         }
 
-    def serialize_metrics(self) -> dict[str, list[dict[str, float]]]:
+    def serialize_metrics(self, *, question_id: str | None = None) -> dict[str, list[dict[str, float]]]:
         with self._lock:
             member_rows = self.conn.execute(
                 "SELECT member_id, participations, wins, total_confidence FROM council_member_stats"
@@ -213,10 +213,12 @@ class CouncilStatsStore:
                 }
             )
 
+        # ``question_id`` is accepted for forward compatibility with question-scoped
+        # metrics but currently returns global aggregates only.
         return {"members": members, "pairwise": pairwise}
 
-    async def serialize_metrics_async(self) -> dict[str, list[dict[str, float]]]:
-        return await asyncio.to_thread(self.serialize_metrics)
+    async def serialize_metrics_async(self, *, question_id: str | None = None) -> dict[str, list[dict[str, float]]]:
+        return await asyncio.to_thread(self.serialize_metrics, question_id=question_id)
 
     def record_batch(self, outcomes: Iterable[CouncilOutcome]) -> None:
         """Convenience helper to persist multiple outcomes."""
