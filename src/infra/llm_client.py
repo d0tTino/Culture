@@ -833,6 +833,7 @@ def generate_text(
     prompt: str,
     model: str = "mistral:latest",
     temperature: float = 0.7,
+    max_tokens: int | None = None,
     *,
     agent_state: Any | None = None,
 ) -> str | None:
@@ -846,6 +847,7 @@ def generate_text(
         prompt (str): The prompt to send to the model.
         model (str): The model to use for generation.
         temperature (float): The temperature for text generation.
+        max_tokens (int | None): Optional cap on generated tokens.
         agent_state (Any, optional): The state of the agent making the call.
 
     Returns:
@@ -884,10 +886,13 @@ def generate_text(
 
                 wrapper = LLMClient(LLMClientConfig())
                 messages: list[LLMMessage] = [{"role": "user", "content": prompt}]
+                options = {"temperature": temperature}
+                if max_tokens is not None:
+                    options["num_predict"] = max_tokens
                 return wrapper.chat_sync(
                     model=model,
                     messages=messages,
-                    options={"temperature": temperature},
+                    options=options,
                 )
 
             try:
@@ -1131,6 +1136,7 @@ async def async_generate_structured_output(
     model: str = "mistral:latest",
     temperature: float = 0.2,
     timeout: int | None = None,
+    max_tokens: int | None = None,
     *,
     agent_state: Any | None = None,
 ) -> BaseModel | None:
@@ -1145,6 +1151,7 @@ async def async_generate_structured_output(
         temperature (float): The temperature for generation
         timeout (int | None): Request timeout in seconds. Defaults to the
             `OLLAMA_REQUEST_TIMEOUT` config value.
+        max_tokens (int | None): Optional cap on generated tokens.
 
     Returns:
         T | None: An instance of the response_model, or None if parsing failed
@@ -1295,14 +1302,17 @@ async def async_generate_structured_output(
                 "messages": [{"role": "user", "content": structured_prompt}],
                 "temperature": temperature,
             }
+            if max_tokens is not None:
+                payload["max_tokens"] = max_tokens
         else:
             url = f"{LLM_API_BASE.rstrip('/')}/api/generate"
+            num_predict = max_tokens if max_tokens is not None else 400
             payload = {
                 "model": model,
                 "prompt": structured_prompt,
                 "format": "json",
                 "stream": False,
-                "options": {"temperature": temperature, "top_p": 0.95, "num_predict": 400},
+                "options": {"temperature": temperature, "top_p": 0.95, "num_predict": num_predict},
             }
         async with httpx.AsyncClient() as http_client:
             response = await http_client.post(url, json=payload, timeout=timeout_value)
@@ -1357,6 +1367,7 @@ def generate_structured_output(
     model: str = "mistral:latest",
     temperature: float = 0.2,
     timeout: int | None = None,
+    max_tokens: int | None = None,
     *,
     agent_state: Any | None = None,
 ) -> BaseModel | None:
@@ -1369,6 +1380,7 @@ def generate_structured_output(
                 model=model,
                 temperature=temperature,
                 timeout=timeout,
+                max_tokens=max_tokens,
                 agent_state=agent_state,
             )
         )

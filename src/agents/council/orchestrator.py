@@ -560,6 +560,28 @@ def _build_member_prompt(
     )
 
 
+def _resolve_member_generation_params(member: CouncilMemberConfig) -> dict[str, float | int]:
+    temperature = getattr(member, "temperature", None)
+    if temperature is None:
+        temperature_value = 0.3
+    else:
+        try:
+            temperature_value = float(temperature)
+        except (TypeError, ValueError):
+            temperature_value = 0.3
+
+    max_tokens = getattr(member, "max_tokens", None)
+    if max_tokens is None:
+        max_tokens_value = 256
+    else:
+        try:
+            max_tokens_value = int(max_tokens)
+        except (TypeError, ValueError):
+            max_tokens_value = 256
+
+    return {"temperature": temperature_value, "max_tokens": max_tokens_value}
+
+
 def _ask_council_member(
     member: CouncilMemberConfig,
     question: CouncilQuestion,
@@ -575,6 +597,7 @@ def _ask_council_member(
         member_model = _resolve_default_model()
     track_mock_usage = is_mock_mode_enabled()
     errors: list[str] = []
+    generation_params = _resolve_member_generation_params(member)
 
     structured: MemberResponseModel | None = None
     for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
@@ -585,7 +608,8 @@ def _ask_council_member(
                     prompt,
                     response_model=MemberResponseModel,
                     model=member_model,
-                    temperature=0.3,
+                    temperature=generation_params["temperature"],
+                    max_tokens=generation_params["max_tokens"],
                     agent_state=agent_state,
                 )
             else:
@@ -593,7 +617,8 @@ def _ask_council_member(
                     prompt,
                     response_model=MemberResponseModel,
                     model=member_model,
-                    temperature=0.3,
+                    temperature=generation_params["temperature"],
+                    max_tokens=generation_params["max_tokens"],
                     agent_state=agent_state,
                 )
             if structured is not None:
@@ -619,7 +644,8 @@ def _ask_council_member(
                 generate_text(
                     prompt,
                     model=member_model,
-                    temperature=0.3,
+                    temperature=generation_params["temperature"],
+                    max_tokens=generation_params["max_tokens"],
                     agent_state=agent_state,
                 )
                 or ""
@@ -905,6 +931,7 @@ def _ask_peer_vote(
         member_model = _resolve_default_model()
     track_mock_usage = is_mock_mode_enabled()
     errors: list[str] = []
+    generation_params = _resolve_member_generation_params(member)
 
     structured: CouncilPeerVoteModel | None = None
     for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
@@ -915,7 +942,8 @@ def _ask_peer_vote(
                     prompt,
                     response_model=CouncilPeerVoteModel,
                     model=member_model,
-                    temperature=0.2,
+                    temperature=generation_params["temperature"],
+                    max_tokens=generation_params["max_tokens"],
                     agent_state=agent_state,
                 )
             else:
@@ -923,7 +951,8 @@ def _ask_peer_vote(
                     prompt,
                     response_model=CouncilPeerVoteModel,
                     model=member_model,
-                    temperature=0.2,
+                    temperature=generation_params["temperature"],
+                    max_tokens=generation_params["max_tokens"],
                     agent_state=agent_state,
                 )
             if structured is not None:

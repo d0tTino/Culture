@@ -88,8 +88,10 @@ def enable_council_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         config,
         "_CONFIG",
-        {"USE_COUNCIL_MODE": True, "DEFAULT_LLM_MODEL": "http://localhost/mock"},
+        {"USE_COUNCIL_MODE": True, "DEFAULT_LLM_MODEL": "mistral:latest"},
     )
+    monkeypatch.setattr(config, "_COUNCIL_CONFIG", None)
+    monkeypatch.setattr(config.settings, "DEFAULT_LLM_MODEL", "mistral:latest")
 
 
 def _build_council_config(num_members: int = 3, voting_mode: str = "judge_llm") -> CouncilConfig:
@@ -165,6 +167,87 @@ def _build_question(metadata: Mapping[str, Any] | None = None) -> CouncilQuestio
         context="We have budget for only one initiative this quarter.",
         metadata=metadata,
     )
+
+
+def test_council_member_forwards_generation_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _build_council_config()
+    member = config.members[0]
+    question = _build_question()
+    captured: dict[str, float | int] = {}
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        captured["temperature"] = float(kwargs.get("temperature"))
+        captured["max_tokens"] = int(kwargs.get("max_tokens"))
+        return council_orchestrator.MemberResponseModel(
+            answer="captured answer",
+            reasoning="captured reasoning",
+            confidence=0.5,
+            citations=[],
+        )
+
+    monkeypatch.setattr(council_orchestrator, "generate_structured_output", fake_generate_structured_output)
+
+    answer = council_orchestrator._ask_council_member(member, question)
+
+    assert answer.answer == "captured answer"
+    assert captured["temperature"] == pytest.approx(member.temperature)
+    assert captured["max_tokens"] == member.max_tokens
+
+
+def test_council_member_fallback_forwards_generation_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _build_council_config()
+    member = config.members[1]
+    question = _build_question()
+    captured: dict[str, float | int] = {}
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        return None
+
+    def fake_generate_text(*args: object, **kwargs: object) -> str:
+        captured["temperature"] = float(kwargs.get("temperature"))
+        captured["max_tokens"] = int(kwargs.get("max_tokens"))
+        return "fallback answer"
+
+    monkeypatch.setattr(council_orchestrator, "generate_structured_output", fake_generate_structured_output)
+    monkeypatch.setattr(council_orchestrator, "generate_text", fake_generate_text)
+
+    answer = council_orchestrator._ask_council_member(member, question)
+
+    assert answer.answer == "fallback answer"
+    assert captured["temperature"] == pytest.approx(member.temperature)
+    assert captured["max_tokens"] == member.max_tokens
+
+
+def test_peer_vote_forwards_generation_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _build_council_config()
+    member = config.members[2]
+    question = _build_question()
+    answers = [
+        MemberAnswer(member_id="facilitator", answer="Answer A"),
+        MemberAnswer(member_id="innovator", answer="Answer B"),
+    ]
+    captured: dict[str, float | int] = {}
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        captured["temperature"] = float(kwargs.get("temperature"))
+        captured["max_tokens"] = int(kwargs.get("max_tokens"))
+        return council_orchestrator.CouncilPeerVoteModel(
+            winner_id="facilitator",
+            votes={"facilitator": 0.9},
+            summary="Peer vote summary",
+            reasoning="Peer vote reasoning",
+        )
+
+    monkeypatch.setattr(council_orchestrator, "generate_structured_output", fake_generate_structured_output)
+
+    result = council_orchestrator._ask_peer_vote(member, question, answers)
+
+    assert result is not None
+    assert result.winner_id == "facilitator"
+    assert captured["temperature"] == pytest.approx(member.temperature)
+    assert captured["max_tokens"] == member.max_tokens
 
 
 def test_council_orchestrator_can_bypass_env_guard(
