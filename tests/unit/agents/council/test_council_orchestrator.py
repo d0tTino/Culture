@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -13,6 +15,7 @@ from src.agents.council import (
     CouncilMemberConfig,
     CouncilOrchestrator,
     CouncilQuestion,
+    MemberAnswer,
 )
 from src.agents.council.fitness_store import council_fitness_store
 from src.agents.council.stats_store import CouncilStatsStore
@@ -242,6 +245,30 @@ def test_council_orchestrator_limits_concurrent_generate_calls(
     assert outcome.winning_member_ids
     assert llm_mocks.mock_generate_stats.peak_concurrent_calls <= orchestrator.max_concurrency
     assert llm_mocks.mock_generate_stats.call_count == len(config.members) + 1
+
+
+def test_council_orchestrator_runs_member_calls_concurrently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator(max_concurrency=3)
+    config = _build_council_config(num_members=3, voting_mode="judge_llm")
+    question = _build_question()
+
+    barrier = threading.Barrier(len(config.members))
+    delays = {"facilitator": 0.15, "innovator": 0.05, "analyst": 0.1}
+
+    def _slow_member(member: CouncilMemberConfig, *args: object, **kwargs: object) -> MemberAnswer:
+        barrier.wait(timeout=1.0)
+        time.sleep(delays[member.member_id])
+        return MemberAnswer(member_id=member.member_id, answer=f"Answer {member.member_id}")
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _slow_member)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert [answer.member_id for answer in outcome.answers] == [
+        member.member_id for member in config.members
+    ]
 
 
 def test_council_orchestrator_marks_du_exhaustion(monkeypatch: pytest.MonkeyPatch) -> None:

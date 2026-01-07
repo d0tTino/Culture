@@ -1309,9 +1309,10 @@ class CouncilOrchestrator:
         rag_docs: Sequence[str],
         metrics: dict[str, Any],
     ) -> list[MemberAnswer]:
-        semaphore = asyncio.Semaphore(
-            max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
+        max_concurrent = max(
+            1, context.config.max_concurrent_calls or self.max_concurrent_calls
         )
+        semaphore = asyncio.Semaphore(max_concurrent)
         failures: list[str] = []
         answers: list[MemberAnswer] = []
 
@@ -1337,11 +1338,13 @@ class CouncilOrchestrator:
 
             return True
 
-        async def _call_member(member: CouncilMemberConfig) -> MemberAnswer | None:
+        async def _call_member(
+            member: CouncilMemberConfig,
+        ) -> tuple[str, MemberAnswer | None]:
             state = member_states.get(member.member_id)
             try:
                 async with semaphore:
-                    return await asyncio.to_thread(
+                    result = await asyncio.to_thread(
                         _ask_council_member,
                         member,
                         question,
@@ -1349,6 +1352,7 @@ class CouncilOrchestrator:
                         rag_docs=rag_docs,
                         agent_state=state,
                     )
+                    return member.member_id, result
             except RuntimeError as exc:
                 if "budget" in str(exc).lower():
                     metrics["du_budget_exhausted"] = True
@@ -1357,8 +1361,28 @@ class CouncilOrchestrator:
                     )
                 else:
                     logger.exception("Council member call failed: %s", exc)
-                    failures.append(member.member_id)
-                return None
+                return member.member_id, None
+            except Exception as exc:
+                if "budget" in str(exc).lower():
+                    metrics["du_budget_exhausted"] = True
+                else:
+                    logger.exception("Unexpected error during council call", exc_info=exc)
+                return member.member_id, None
+
+        async def _drain_tasks(
+            tasks: list[asyncio.Task[tuple[str, MemberAnswer | None]]],
+        ) -> None:
+            if not tasks:
+                return
+            results = await asyncio.gather(*tasks)
+            tasks.clear()
+            for member_id, result in results:
+                if result is None:
+                    failures.append(member_id)
+                else:
+                    answers.append(result)
+
+        tasks: list[asyncio.Task[tuple[str, MemberAnswer | None]]] = []
 
         for member in context.config.members:
             if metrics.get("du_budget_exhausted"):
@@ -1370,25 +1394,14 @@ class CouncilOrchestrator:
                     "DU budget exhausted before scheduling member %s", member.member_id
                 )
                 break
-            try:
-                result = await _call_member(member)
-            except Exception as exc:
-                if "budget" in str(exc).lower():
-                    metrics["du_budget_exhausted"] = True
-                else:
-                    logger.exception("Unexpected error during council call", exc_info=exc)
-                    failures.append(member.member_id)
-                result = None
-
-            if result is None:
-                failures.append(member.member_id)
+            tasks.append(asyncio.create_task(_call_member(member)))
+            if len(tasks) >= max_concurrent:
+                await _drain_tasks(tasks)
                 if metrics.get("du_budget_exhausted"):
                     break
-                continue
 
-            answers.append(result)
-            if metrics.get("du_budget_exhausted"):
-                break
+        if tasks:
+            await _drain_tasks(tasks)
 
         if failures:
             metrics["partial"] = True
