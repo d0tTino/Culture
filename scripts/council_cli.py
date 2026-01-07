@@ -11,7 +11,7 @@ from typing import Any
 import typer
 
 from src.agents.council.orchestrator import run_council
-from src.agents.council.types import CouncilQuestion
+from src.agents.council.types import CouncilOutcome, CouncilQuestion
 from src.infra import config as infra_config
 from src.infra.config import get_config, load_council_config
 
@@ -58,7 +58,9 @@ def _format_metrics(outcome_metrics: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_answers(outcome, members: Mapping[str, str], show_all: bool) -> str:
+def _format_answers(
+    outcome: CouncilOutcome, members: Mapping[str, str], show_all: bool
+) -> str:
     answers = outcome.answers
     if not show_all and outcome.winning_member_ids:
         winner_ids = set(outcome.winning_member_ids)
@@ -101,7 +103,7 @@ def _ensure_council_enabled(
         raise typer.Exit(code=1)
 
 
-def _collect_metrics(outcome) -> Mapping[str, Any]:
+def _collect_metrics(outcome: CouncilOutcome) -> Mapping[str, Any]:
     if outcome.metrics:
         return outcome.metrics
     if isinstance(outcome.metadata, Mapping):
@@ -112,7 +114,7 @@ def _collect_metrics(outcome) -> Mapping[str, Any]:
 
 
 def _print_outcome(
-    outcome,
+    outcome: CouncilOutcome,
     members: Mapping[str, str],
     *,
     show_all: bool,
@@ -236,14 +238,14 @@ def main(
     rag_docs = list(rag_doc or [])
     question = CouncilQuestion(
         question_id=question_id or str(uuid.uuid4()),
-        prompt=resolved_prompt,
+        question=resolved_prompt,
         context=context,
         rag_documents=rag_docs,
     )
 
     outcome = run_council(
         question,
-        extra_context=context,
+        extra_context=question.extra_context,
         rag_docs=rag_docs,
         allow_disabled_mode=bypass_env_guard,
     )

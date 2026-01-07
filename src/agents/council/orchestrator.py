@@ -526,15 +526,30 @@ def _format_rag_docs(rag_docs: Sequence[str]) -> str:
     return "\n".join(f"- {doc}" for doc in rag_docs)
 
 
+def _stringify_extra_context(extra_context: Mapping[str, Any] | None) -> str:
+    if not extra_context:
+        return "(no extra context provided)"
+    text = extra_context.get("text")
+    if isinstance(text, str) and text:
+        return text
+    summary = extra_context.get("summary")
+    if isinstance(summary, str) and summary:
+        return summary
+    try:
+        return json.dumps(extra_context, ensure_ascii=False)
+    except TypeError:
+        return str(extra_context)
+
+
 def _build_member_prompt(
     member: CouncilMemberConfig,
     question: CouncilQuestion,
     *,
-    extra_context: str | None = None,
+    extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
 ) -> str:
     rag_section = _format_rag_docs(rag_docs or [])
-    additional_context = extra_context or "(no extra context provided)"
+    additional_context = _stringify_extra_context(extra_context)
     return (
         "[council-member-answer] "
         f"member_id={member.member_id} question={question.prompt} context={question.context or ''} "
@@ -549,7 +564,7 @@ def _ask_council_member(
     member: CouncilMemberConfig,
     question: CouncilQuestion,
     *,
-    extra_context: str | None = None,
+    extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
     agent_state: Any | None = None,
 ) -> MemberAnswer:
@@ -642,11 +657,11 @@ def _build_judge_prompt(
     question: CouncilQuestion,
     answers: Sequence[MemberAnswer],
     *,
-    extra_context: str | None = None,
+    extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
 ) -> str:
     rag_section = _format_rag_docs(rag_docs or [])
-    additional_context = extra_context or "(no extra context provided)"
+    additional_context = _stringify_extra_context(extra_context)
     member_blocks = []
     for answer in answers:
         member_blocks.append(
@@ -831,11 +846,11 @@ def _build_peer_vote_prompt(
     answers: Sequence[MemberAnswer],
     *,
     voter: CouncilMemberConfig,
-    extra_context: str | None = None,
+    extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
 ) -> str:
     rag_section = _format_rag_docs(rag_docs or [])
-    additional_context = extra_context or "(no extra context provided)"
+    additional_context = _stringify_extra_context(extra_context)
     member_blocks = []
     for answer in answers:
         member_blocks.append(
@@ -877,7 +892,7 @@ def _ask_peer_vote(
     question: CouncilQuestion,
     answers: Sequence[MemberAnswer],
     *,
-    extra_context: str | None = None,
+    extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
     agent_state: Any | None = None,
 ) -> CouncilPeerVoteModel | None:
@@ -1114,7 +1129,7 @@ class CouncilOrchestrator:
         config: CouncilConfig | None,
         question: CouncilQuestion,
         *,
-        extra_context: str | None = None,
+        extra_context: Mapping[str, Any] | None = None,
         rag_docs: Sequence[str] | None = None,
         allow_disabled_mode: bool = False,
     ) -> CouncilOutcome:
@@ -1136,7 +1151,7 @@ class CouncilOrchestrator:
         context: CouncilContext,
         question: CouncilQuestion,
         *,
-        extra_context: str | None = None,
+        extra_context: Mapping[str, Any] | None = None,
         rag_docs: Sequence[str] | None = None,
         allow_disabled_mode: bool = False,
     ) -> CouncilOutcome:
@@ -1305,7 +1320,7 @@ class CouncilOrchestrator:
         question: CouncilQuestion,
         member_states: Mapping[str, SimpleNamespace],
         *,
-        extra_context: str | None,
+        extra_context: Mapping[str, Any] | None,
         rag_docs: Sequence[str],
         metrics: dict[str, Any],
     ) -> list[MemberAnswer]:
@@ -1422,7 +1437,7 @@ class CouncilOrchestrator:
         answers: Sequence[MemberAnswer],
         member_states: Mapping[str, SimpleNamespace],
         *,
-        extra_context: str | None,
+        extra_context: Mapping[str, Any] | None,
         rag_docs: Sequence[str],
         metrics: dict[str, Any],
     ) -> list[tuple[CouncilMemberConfig, CouncilPeerVoteModel]]:
@@ -1501,6 +1516,7 @@ class CouncilOrchestrator:
         votes: dict[str, float] = {}
         metadata: dict[str, Any] = {}
         fitness_snapshot: Mapping[str, Any] | None = None
+        winner_answer: str | None = None
 
         if vote is not None:
             winning_member_ids = [vote.winning_member_id]
@@ -1512,6 +1528,7 @@ class CouncilOrchestrator:
             resolution = vote.resolution or answer_lookup.get(
                 vote.winning_member_id, resolution
             )
+            winner_answer = answer_lookup.get(vote.winning_member_id)
             fitness_start = time.perf_counter()
             fitness_snapshot = self.fitness_store.update_from_vote(
                 question, answers, vote
@@ -1533,6 +1550,7 @@ class CouncilOrchestrator:
             resolution=resolution,
             winner_id=winning_member_ids[0] if winning_member_ids else None,
             winning_member_ids=winning_member_ids,
+            winner_answer=winner_answer,
             votes=votes,
             metrics=outcome_metrics,
             summary=summary,
@@ -1566,7 +1584,7 @@ class CouncilOrchestrator:
 def run_council(
     question: CouncilQuestion,
     *,
-    extra_context: str | None = None,
+    extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
     allow_disabled_mode: bool = False,
 ) -> CouncilOutcome:

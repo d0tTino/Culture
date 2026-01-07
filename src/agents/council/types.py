@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
@@ -54,6 +55,18 @@ def _normalize_voting_mode(value: Any) -> str:
         return "judge_llm"
     key = re.sub(r"[\s-]+", "_", text).strip().lower()
     return _VOTING_MODE_ALIASES.get(key, text)
+
+
+def _normalize_extra_context(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        return dict(value)
+    if isinstance(value, str):
+        if not value:
+            return None
+        return {"text": value}
+    return {"value": value}
 
 
 class CouncilMemberConfig(BaseModel):
@@ -161,24 +174,48 @@ class CouncilQuestion(BaseModel):
     question_id: str = Field(
         validation_alias=AliasChoices("question_id", "questionId", "id", "name")
     )
-    prompt: str
+    prompt: str = Field(validation_alias=AliasChoices("prompt", "question"))
     user_id: str | None = Field(
         default=None, validation_alias=AliasChoices("user_id", "userId")
     )
-    extra_context: str | None = Field(
+    extra_context: dict[str, Any] | None = Field(
         default=None, validation_alias=AliasChoices("extra_context", "extraContext", "context")
     )
     rag_documents: list[str] = Field(default_factory=list)
     metadata: Mapping[str, Any] | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("extra_context", mode="before")
+    @classmethod
+    def _normalize_extra_context(cls, value: Any) -> dict[str, Any] | None:
+        return _normalize_extra_context(value)
+
+    @property
+    def question(self) -> str:
+        return self.prompt
+
+    @question.setter
+    def question(self, value: str) -> None:
+        self.prompt = value
+
     @property
     def context(self) -> str | None:
-        return self.extra_context
+        if not self.extra_context:
+            return None
+        text = self.extra_context.get("text")
+        if isinstance(text, str):
+            return text
+        summary = self.extra_context.get("summary")
+        if isinstance(summary, str):
+            return summary
+        try:
+            return json.dumps(self.extra_context, ensure_ascii=False)
+        except TypeError:
+            return str(self.extra_context)
 
     @context.setter
     def context(self, value: str | None) -> None:
-        self.extra_context = value
+        self.extra_context = _normalize_extra_context(value)
 
 
 class MemberAnswer(BaseModel):
@@ -202,6 +239,7 @@ class CouncilOutcome(BaseModel):
     resolution: str
     winner_id: str | None = None
     winning_member_ids: list[str] = Field(default_factory=list)
+    winner_answer: str | None = None
     votes: dict[str, float] = Field(default_factory=dict)
     metrics: dict[str, Any] = Field(default_factory=dict)
     summary: str | None = None
@@ -213,6 +251,9 @@ class CouncilOutcome(BaseModel):
             self.winning_member_ids = [self.winner_id]
         elif self.winning_member_ids and not self.winner_id:
             self.winner_id = self.winning_member_ids[0]
+        if self.winner_id and not self.winner_answer:
+            answer_map = {answer.member_id: answer.answer for answer in self.answers}
+            self.winner_answer = answer_map.get(self.winner_id)
         return self
 
     def has_consensus(self) -> bool:
