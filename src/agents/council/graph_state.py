@@ -41,14 +41,14 @@ async def council_outcome_node(state: CouncilState) -> dict[str, CouncilOutcome 
     rag_docs = [str(message) for message in state.get("messages", [])]
     question = CouncilQuestion(
         question_id="council-question",
-        prompt=state.get("question", ""),
+        question=state.get("question", ""),
         context="\n".join(rag_docs) if rag_docs else None,
         rag_documents=rag_docs,
     )
 
     try:
         outcome: CouncilOutcome = await asyncio.to_thread(
-            run_council, question, extra_context=question.context, rag_docs=rag_docs
+            run_council, question, extra_context=question.extra_context, rag_docs=rag_docs
         )
     except Exception as exc:  # pragma: no cover - defensive logging only
         logger.error("Council deliberation failed: %s", exc, exc_info=True)
@@ -56,4 +56,3 @@ async def council_outcome_node(state: CouncilState) -> dict[str, CouncilOutcome 
 
     final_answer = outcome.resolution or outcome.summary or ""
     return {"council_outcome": outcome, "final_answer": final_answer}
-

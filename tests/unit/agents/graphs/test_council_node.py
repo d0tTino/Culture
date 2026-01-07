@@ -3,9 +3,13 @@ import pytest
 pytest.importorskip("langgraph")
 pytestmark = pytest.mark.unit
 
-from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
-from src.agents.graphs import council_graph
-from src.agents.graphs.council_graph import CouncilGraphState, build_graph
+from src.agents.council.types import (  # noqa: E402
+    CouncilOutcome,
+    CouncilQuestion,
+    MemberAnswer,
+)
+from src.agents.graphs import council_graph  # noqa: E402
+from src.agents.graphs.council_graph import CouncilGraphState, build_graph  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -18,12 +22,16 @@ async def test_council_node_sets_outcome_and_final_answer(
         answers=[MemberAnswer(member_id="alpha", answer="Proceed")],
         resolution="Resolution text",
         winning_member_ids=["alpha"],
+        winner_answer="Proceed",
         summary="Summary text",
         metadata={},
     )
 
     def fake_run_council(
-        question: CouncilQuestion, *, extra_context: str | None, rag_docs: list[str] | None
+        question: CouncilQuestion,
+        *,
+        extra_context: dict[str, object] | None,
+        rag_docs: list[str] | None,
     ) -> CouncilOutcome:
         recorded["question"] = question
         recorded["extra_context"] = extra_context
@@ -46,5 +54,5 @@ async def test_council_node_sets_outcome_and_final_answer(
     assert result["final_answer"] == dummy_outcome.summary
     assert isinstance(recorded["question"], CouncilQuestion)
     assert recorded["question"].prompt == starting_state["question"]
-    assert recorded["extra_context"] == starting_state["context"]
+    assert recorded["extra_context"] == {"text": starting_state["context"]}
     assert recorded["rag_docs"] == starting_state["rag_documents"]

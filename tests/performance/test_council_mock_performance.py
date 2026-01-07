@@ -6,11 +6,16 @@ import pytest
 from src.agents.council import orchestrator as council_orchestrator
 from src.agents.council.orchestrator import CouncilVoteModel, MemberAnswer
 from src.agents.council.types import CouncilConfig, CouncilMemberConfig, CouncilQuestion
+from src.infra import config as infra_config
 
 
 @pytest.mark.performance
 @pytest.mark.parametrize("member_count", [3])
 def test_council_run_meets_latency_and_budget(member_count: int) -> None:
+    infra_config._CONFIG = {
+        "USE_COUNCIL_MODE": True,
+        "DEFAULT_LLM_MODEL": "http://localhost/mock",
+    }
     members = [
         CouncilMemberConfig(
             member_id=f"member-{idx}",
@@ -69,7 +74,7 @@ def test_council_run_meets_latency_and_budget(member_count: int) -> None:
         outcome = orchestrator.deliberate(
             config,
             question,
-            extra_context="throughput check",
+            extra_context={"text": "throughput check"},
             allow_disabled_mode=True,
         )
         duration = time.perf_counter() - start

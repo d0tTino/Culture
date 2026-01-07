@@ -244,7 +244,7 @@ async def council_decision_node(state: AgentTurnState) -> dict[str, AgentActionO
 
     question = CouncilQuestion(
         question_id=f"{state.get('agent_id', 'agent')}-{state.get('simulation_step', 0)}",
-        prompt=(
+        question=(
             "Given the agent context and proposed action below, propose the best response. "
             "Return a concise resolution summarizing the recommended action."
             f"\n\nGoal: {state.get('agent_goal', '')}"
@@ -255,6 +255,7 @@ async def council_decision_node(state: AgentTurnState) -> dict[str, AgentActionO
             f"\nThought: {getattr(output, 'thought', '')}"
             f"\nMessage: {getattr(output, 'message_content', '') or '(no message)'}"
         ),
+        extra_context=state.get("prompt_modifier"),
         metadata={
             "agent_id": state.get("agent_id"),
             "simulation_step": state.get("simulation_step"),
@@ -273,7 +274,7 @@ async def council_decision_node(state: AgentTurnState) -> dict[str, AgentActionO
         outcome: CouncilOutcome = await asyncio.to_thread(
             run_council,
             question,
-            extra_context=state.get("prompt_modifier"),
+            extra_context=question.extra_context,
             rag_docs=rag_docs,
         )
     except Exception as exc:  # pragma: no cover - defensive

@@ -137,7 +137,7 @@ def test_council_question_aliases() -> None:
     question = CouncilQuestion.model_validate(
         {
             "name": "question-1",
-            "prompt": "What should we do next?",
+            "question": "What should we do next?",
             "userId": "user-123",
             "extraContext": "Focus on the roadmap.",
         }
@@ -145,5 +145,15 @@ def test_council_question_aliases() -> None:
 
     assert question.question_id == "question-1"
     assert question.user_id == "user-123"
-    assert question.extra_context == "Focus on the roadmap."
+    assert question.prompt == "What should we do next?"
+    assert question.question == "What should we do next?"
+    assert question.extra_context == {"text": "Focus on the roadmap."}
     assert question.context == "Focus on the roadmap."
+
+    question.question = "Updated prompt"
+    assert question.prompt == "Updated prompt"
+
+    prompt_only = CouncilQuestion.model_validate(
+        {"question_id": "question-2", "prompt": "What is next?"}
+    )
+    assert prompt_only.question == "What is next?"

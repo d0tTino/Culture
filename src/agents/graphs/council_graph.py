@@ -6,7 +6,6 @@ import asyncio
 from typing import Any, TypedDict, cast
 
 from langgraph.graph import END, StateGraph
-
 from src.agents.council.orchestrator import run_council
 from src.agents.council.types import CouncilOutcome, CouncilQuestion
 
@@ -16,7 +15,7 @@ class CouncilGraphState(TypedDict, total=False):
 
     question: str
     question_id: str
-    context: str | None
+    context: dict[str, Any] | str | None
     rag_documents: list[str]
     council_outcome: CouncilOutcome
     final_answer: str
@@ -27,7 +26,7 @@ async def council_node(state: CouncilGraphState) -> dict[str, Any]:
 
     question = CouncilQuestion(
         question_id=cast(str, state.get("question_id", "council-question")),
-        prompt=cast(str, state.get("question", "")),
+        question=cast(str, state.get("question", "")),
         context=state.get("context"),
         rag_documents=state.get("rag_documents", []),
     )
@@ -35,7 +34,7 @@ async def council_node(state: CouncilGraphState) -> dict[str, Any]:
     outcome = await asyncio.to_thread(
         run_council,
         question,
-        extra_context=state.get("context"),
+        extra_context=question.extra_context,
         rag_docs=state.get("rag_documents"),
     )
 

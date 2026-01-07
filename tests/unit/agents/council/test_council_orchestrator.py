@@ -257,7 +257,11 @@ def test_council_orchestrator_can_bypass_env_guard(
     council_config = _build_council_config(voting_mode="judge_llm")
     question = _build_question()
 
-    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": False})
+    monkeypatch.setattr(
+        config,
+        "_CONFIG",
+        {"USE_COUNCIL_MODE": False, "DEFAULT_LLM_MODEL": "http://localhost/mock"},
+    )
 
     with pytest.raises(RuntimeError):
         orchestrator.deliberate(council_config, question)
@@ -299,6 +303,7 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
 
     assert outcome.winning_member_ids == ["facilitator"]
     assert outcome.winner_id == "facilitator"
+    assert outcome.winner_answer == "facilitator proposal selected"
     assert outcome.resolution == "facilitator proposal selected"
     assert outcome.votes["facilitator"] == pytest.approx(0.8375)
     assert outcome.metadata is not None
@@ -477,7 +482,7 @@ def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPat
     question = _build_question()
 
     rag_marker = "<mocked-rag-docs>"
-    extra_context = "<extra-context>"
+    extra_context = {"text": "<extra-context>"}
     member_prompts: list[str] = []
     judge_prompts: list[str] = []
 
@@ -507,8 +512,8 @@ def test_council_orchestrator_includes_rag_markers(monkeypatch: pytest.MonkeyPat
 
     assert all(rag_marker in prompt for prompt in member_prompts)
     assert all(rag_marker in prompt for prompt in judge_prompts)
-    assert all(extra_context in prompt for prompt in member_prompts)
-    assert all(extra_context in prompt for prompt in judge_prompts)
+    assert all("<extra-context>" in prompt for prompt in member_prompts)
+    assert all("<extra-context>" in prompt for prompt in judge_prompts)
     assert all("facilitator proposal selected" in prompt for prompt in judge_prompts)
 
 
@@ -559,7 +564,11 @@ def test_council_orchestrator_flags_partial_metrics_on_errors(
 
 
 def test_council_orchestrator_requires_enabled_council(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": False})
+    monkeypatch.setattr(
+        config,
+        "_CONFIG",
+        {"USE_COUNCIL_MODE": False, "DEFAULT_LLM_MODEL": "http://localhost/mock"},
+    )
     orchestrator = CouncilOrchestrator()
 
     with pytest.raises(RuntimeError, match="Council mode is disabled"):
