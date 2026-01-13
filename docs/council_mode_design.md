@@ -97,7 +97,7 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
 - `COUNCIL_MAX_CONCURRENT_CALLS`: Maximum concurrent LLM invocations per council run, used to bound latency and spend.
 - `DU_BUDGET_PER_QUESTION`: DU envelope shared by all council members for a single prompt.
 - `ROLE_DU_GENERATION`: Per-persona DU generation settings that control how the Facilitator/Innovator/Analyzer accumulate budget across ticks.
-- `config/council.yml`: Example roster showing `max_concurrent_calls`, `du_budget_per_question`, and `members` with per-role models; override values here or through environment variables consumed in [`src/infra/config.py`](../src/infra/config.py) and [`src/infra/settings.py`](../src/infra/settings.py).
+- `config/council.yml`: Example roster showing `max_concurrent_calls`, `du_budget_per_question`, and `members`. Member `model` values are optional and default to `DEFAULT_LLM_MODEL` when omitted; override values here or through environment variables consumed in [`src/infra/config.py`](../src/infra/config.py) and [`src/infra/settings.py`](../src/infra/settings.py).
 
 When the YAML file is missing or malformed, Culture falls back to defaults emitted by `_build_default_council_config`, so corrupted configs do not block simulations.
 
@@ -113,7 +113,6 @@ members:
     display_name: Bro Facilitator
     role: Facilitator
     persona: Keeps the pacing high, summarizes takes with signature "Bro Army" hype, and calls on others quickly.
-    model: mistral:latest
     temperature: 0.35
     max_tokens: 256
     is_active: true
@@ -121,7 +120,6 @@ members:
     display_name: Meme Engineer
     role: Innovator
     persona: Drops punchy meme riffs and wildcard pivots to keep ideation lively, while citing receipts.
-    model: mistral:latest
     temperature: 0.55
     max_tokens: 256
     is_active: true
@@ -129,7 +127,6 @@ members:
     display_name: Zero Deaths Critic
     role: Analyzer
     persona: Applies "zero deaths" rigor to poke holes, spot contradictions, and demand clear receipts.
-    model: mistral:latest
     temperature: 0.25
     max_tokens: 256
     is_active: true
