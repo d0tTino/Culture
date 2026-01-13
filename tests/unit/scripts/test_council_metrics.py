@@ -10,9 +10,9 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
         "members": [
             {
                 "member_id": "alpha",
-                "participations": 5,
+                "participations": 12,
                 "wins": 3,
-                "win_rate": 0.6,
+                "win_rate": 0.1,
                 "avg_confidence": 0.8,
             },
             {
@@ -52,7 +52,7 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
     output = capsys.readouterr().out
     assert orchestrator.received_question is None
     assert "Council Metrics" in output
-    assert "- alpha: 60.00% win rate (3/5 wins, avg confidence 0.80)" in output
+    assert "- alpha: 10.00% win rate (3/12 wins, avg confidence 0.80)" in output
     assert "- bravo: 0.00% win rate (0/0 wins, avg confidence 0.00)" in output
 
     assert "Pairwise Agreement Rates:" in output
@@ -61,6 +61,7 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
     assert "Warnings:" in output
     assert "Member bravo has no recorded participations." in output
     assert "Global collusion alert" in output
+    assert "Member alpha is a candidate for deactivation" in output
 
 
 def test_council_metrics_filters_questions(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -74,9 +75,9 @@ def test_council_metrics_filters_questions(monkeypatch: pytest.MonkeyPatch, caps
                 "members": [
                     {
                         "member_id": "alpha",
-                        "participations": 2,
-                        "wins": 2,
-                        "win_rate": 1.0,
+                        "participations": 12,
+                        "wins": 1,
+                        "win_rate": 1 / 12,
                         "avg_confidence": 0.9,
                     }
                 ],
@@ -119,5 +120,6 @@ def test_council_metrics_filters_questions(monkeypatch: pytest.MonkeyPatch, caps
     assert "Question: target-question" in output
     assert "Prompt: What now?" in output
     assert "Custom question warning" in output
+    assert "Member alpha is a candidate for deactivation" in output
     assert "Potential collusion detected" in output
     assert "other-question" not in output
