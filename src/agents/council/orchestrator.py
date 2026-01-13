@@ -291,13 +291,15 @@ def _resolve_question_agent_id(question: CouncilQuestion, explicit: str | None) 
         return explicit
 
     metadata = question.metadata or {}
-    if not isinstance(metadata, Mapping):
-        return None
+    if isinstance(metadata, Mapping):
+        for key in ("agent_id", "originator_id", "requester_id", "author_id"):
+            value = metadata.get(key)
+            if value:
+                return str(value)
 
-    for key in ("agent_id", "originator_id", "requester_id", "author_id"):
-        value = metadata.get(key)
-        if value:
-            return str(value)
+    if question.user_id:
+        return str(question.user_id)
+
     return None
 
 

@@ -1,7 +1,10 @@
+import asyncio
+
 import pytest
 from typer.testing import CliRunner
 
 from scripts import council_cli
+from src.agents.council import orchestrator
 from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
 
 pytestmark = pytest.mark.unit
@@ -91,7 +94,64 @@ def test_council_cli_reports_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
     assert question.prompt == "What should we do?"
     assert question.context == "Extra context"
     assert rag_docs == ["doc-a", "doc-b"]
-    assert extra_context == "Extra context"
+    assert extra_context == {"text": "Extra context"}
+
+
+def test_council_cli_sets_agent_metadata_and_invokes_rag_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    recorded_question: CouncilQuestion | None = None
+
+    class FakeRetriever:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, int, int | None]] = []
+
+        async def retrieve(
+            self, agent_identifier: str, query: str, k: int = 5, token_budget: int | None = None
+        ) -> list[str]:
+            self.calls.append((agent_identifier, query, k, token_budget))
+            return []
+
+    retriever = FakeRetriever()
+
+    def fake_run_council(
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None,
+        rag_docs: list[str] | None,
+        allow_disabled_mode: bool,
+    ) -> CouncilOutcome:
+        nonlocal recorded_question
+        recorded_question = question
+        asyncio.run(
+            orchestrator._populate_question_rag_documents(
+                question,
+                base_documents=rag_docs,
+                memory_retriever=retriever,
+                top_k=1,
+            )
+        )
+        return CouncilOutcome(
+            question=question,
+            answers=[],
+            resolution="Mock resolution",
+            winning_member_ids=[],
+            summary=None,
+            metadata={"fitness": {"scores": []}},
+        )
+
+    monkeypatch.setattr(council_cli, "run_council", fake_run_council)
+
+    result = runner.invoke(
+        council_cli.app,
+        ["Prompt", "--context", "Context", "--agent-id", "cli-agent"],
+    )
+
+    assert result.exit_code == 0
+    assert recorded_question is not None
+    assert recorded_question.metadata == {"agent_id": "cli-agent"}
+    assert retriever.calls == [("cli-agent", "Prompt\n\nContext", 1, None)]
 
 
 def test_council_cli_accepts_question_option(monkeypatch: pytest.MonkeyPatch) -> None:
