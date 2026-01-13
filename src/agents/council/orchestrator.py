@@ -1572,6 +1572,7 @@ class CouncilOrchestrator:
 
         if fitness_snapshot is not None:
             metadata["fitness"] = fitness_snapshot
+            outcome_metrics["fitness_snapshot"] = fitness_snapshot
 
         metadata["metrics"] = outcome_metrics
 
