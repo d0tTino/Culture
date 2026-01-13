@@ -313,6 +313,7 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
     assert "member_scores" in metrics
     assert outcome.metrics["member_scores"]["facilitator"]["total"] == pytest.approx(0.8375)
     assert outcome.summary == "Deterministic council summary"
+    assert "fitness_snapshot" in outcome.metrics
 
     serialized = json.loads(json.dumps(outcome.metadata))
     assert serialized["metrics"]["cohesion"] == pytest.approx(0.91)
@@ -321,6 +322,7 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
     assert member_fitness["facilitator"]["wins"] == 1
     assert member_fitness["facilitator"]["win_rate"] == pytest.approx(1.0)
     assert not fitness.get("warnings")
+    assert outcome.metrics["fitness_snapshot"]["members"]["facilitator"]["wins"] == 1
 
 
 def test_council_orchestrator_limits_concurrent_generate_calls(
