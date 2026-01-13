@@ -35,6 +35,18 @@ def test_load_council_config_returns_defaults_when_missing(
     assert result["members"][0]["temperature"] == pytest.approx(0.4)
 
 
+def test_load_council_config_requires_default_model(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _reset_cache(monkeypatch)
+    missing = tmp_path / "council.yml"
+    monkeypatch.setattr(infra_config.settings, "COUNCIL_CONFIG_PATH", str(missing), raising=False)
+    monkeypatch.setattr(infra_config.settings, "DEFAULT_LLM_MODEL", "", raising=False)
+
+    with pytest.raises(RuntimeError, match="DEFAULT_LLM_MODEL must be configured"):
+        infra_config.load_council_config(reload=True)
+
+
 def test_load_council_config_reads_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _reset_cache(monkeypatch)
     path = tmp_path / "council.yml"

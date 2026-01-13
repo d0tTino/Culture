@@ -163,7 +163,12 @@ _CONFIG: dict[str, object] = {}
 
 def _build_default_council_config() -> dict[str, Any]:
     """Return default council roster entries."""
-    model_name = str(getattr(settings, "DEFAULT_LLM_MODEL", "mistral:latest"))
+    model_name = str(getattr(settings, "DEFAULT_LLM_MODEL", "")).strip()
+    if not model_name:
+        raise RuntimeError(
+            "DEFAULT_LLM_MODEL must be configured to build council defaults. "
+            "Set DEFAULT_LLM_MODEL in the environment or config."
+        )
     return {
         "members": [
             {

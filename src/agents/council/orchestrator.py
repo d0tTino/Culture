@@ -513,7 +513,10 @@ def _resolve_default_model(
 ) -> str:
     default_model = get_config("DEFAULT_LLM_MODEL")
     if not default_model or str(default_model).strip() == "":
-        raise RuntimeError("DEFAULT_LLM_MODEL must be configured for council orchestration.")
+        raise RuntimeError(
+            "DEFAULT_LLM_MODEL must be configured for council orchestration. "
+            "Set DEFAULT_LLM_MODEL in the environment or config."
+        )
     return _guard_local_model(
         str(default_model),
         allow_remote=allow_remote,
