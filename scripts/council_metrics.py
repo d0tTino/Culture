@@ -5,6 +5,7 @@ import argparse
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from src.agents.council.health import iter_health_warnings
 from src.agents.council.orchestrator import CouncilOrchestrator
 
 
@@ -77,6 +78,7 @@ def _collect_warnings(
             if int(member.get("participations", 0)) <= 0:
                 member_id = member.get("member_id", "unknown")
                 warnings.append(f"Member {member_id} has no recorded participations.")
+        warnings.extend(iter_health_warnings(members))
 
     if not pairwise:
         warnings.append("No pairwise agreement metrics available.")
