@@ -218,6 +218,11 @@ def main(
         "--question-id",
         help="Identifier for the question posed to the council",
     ),
+    agent_id: str | None = typer.Option(
+        None,
+        "--agent-id",
+        help="Identifier for the agent making the request (used for RAG lookups)",
+    ),
 ) -> None:
     """Run the council with the provided ``prompt`` and display the outcome."""
 
@@ -236,11 +241,14 @@ def main(
     _ensure_council_enabled(council_config, bypass_env_guard)
 
     rag_docs = list(rag_doc or [])
+    resolved_question_id = question_id or str(uuid.uuid4())
+    resolved_agent_id = agent_id or question_id or "council-cli"
     question = CouncilQuestion(
-        question_id=question_id or str(uuid.uuid4()),
+        question_id=resolved_question_id,
         question=resolved_prompt,
         context=context,
         rag_documents=rag_docs,
+        metadata={"agent_id": resolved_agent_id},
     )
 
     outcome = run_council(
