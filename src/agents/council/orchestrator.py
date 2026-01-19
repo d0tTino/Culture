@@ -1719,6 +1719,21 @@ class CouncilOrchestrator:
     async def _record_outcome_metrics(self, outcome: CouncilOutcome) -> None:
         try:
             await council_stats_store.record_outcome_async(outcome)
+            stats_snapshot = await council_stats_store.serialize_metrics_async(
+                question_id=outcome.question.question_id
+            )
+            pairwise_stats = stats_snapshot.get("pairwise")
+            if isinstance(pairwise_stats, list):
+                outcome.metrics["pairwise_ema_stats"] = pairwise_stats
+                metadata: dict[str, Any] = dict(outcome.metadata or {})
+                metrics = metadata.get("metrics")
+                if isinstance(metrics, Mapping):
+                    metrics = dict(metrics)
+                else:
+                    metrics = {}
+                metrics["pairwise_ema_stats"] = pairwise_stats
+                metadata["metrics"] = metrics
+                outcome.metadata = metadata
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(
                 "Failed to persist council metrics",

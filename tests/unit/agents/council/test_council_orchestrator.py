@@ -322,9 +322,18 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
         "analyst|innovator",
         "facilitator|innovator",
     }
+    pairwise_stats = outcome.metrics["pairwise_ema_stats"]
+    pairwise_pairs = {(entry["member_a"], entry["member_b"]) for entry in pairwise_stats}
+    assert pairwise_pairs == {
+        ("analyst", "facilitator"),
+        ("analyst", "innovator"),
+        ("facilitator", "innovator"),
+    }
+    assert all(entry["ema_last_updated"] for entry in pairwise_stats)
 
     serialized = json.loads(json.dumps(outcome.metadata))
     assert serialized["metrics"]["cohesion"] == pytest.approx(0.91)
+    assert serialized["metrics"]["pairwise_ema_stats"] == pairwise_stats
     fitness = serialized.get("fitness", {})
     member_fitness = fitness.get("members", {})
     assert member_fitness["facilitator"]["wins"] == 1
