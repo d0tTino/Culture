@@ -1,12 +1,18 @@
+from pathlib import Path
+
 import pytest
 
 from src.agents.council.stats_store import CouncilStatsStore
 from src.agents.council.types import CouncilOutcome, CouncilQuestion, MemberAnswer
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture()
-def store(tmp_path: pytest.TempPathFactory) -> CouncilStatsStore:
-    return CouncilStatsStore(db_path=tmp_path.mktemp("council") / "stats.sqlite3")
+def store(tmp_path: Path) -> CouncilStatsStore:
+    db_dir = tmp_path / "council"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return CouncilStatsStore(db_path=db_dir / "stats.sqlite3")
 
 
 def _build_outcome() -> CouncilOutcome:
@@ -29,7 +35,11 @@ def test_stats_store_records_member_and_pairwise_metrics(
 ) -> None:
     outcome = _build_outcome()
 
-    store.record_outcome(outcome)
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 0.5, "gamma": 0.0},
+        ema_alpha=0.5,
+    )
 
     alpha_stats = store.get_member_stats("alpha")
     assert alpha_stats["participations"] == 1
@@ -44,6 +54,9 @@ def test_stats_store_records_member_and_pairwise_metrics(
     pairwise = store.get_pairwise_agreement("alpha", "beta")
     assert pairwise["agreements"] == 1
     assert pairwise["disagreements"] == 0
+    assert pairwise["ema_agreement"] == pytest.approx(0.5)
+    assert pairwise["ema_last_updated"]
+    assert pairwise["ema_high_agreement"] is False
     divergent = store.get_pairwise_agreement("alpha", "gamma")
     assert divergent["agreements"] == 0
     assert divergent["disagreements"] == 1
@@ -62,4 +75,25 @@ def test_stats_store_serializes_aggregates(store: CouncilStatsStore) -> None:
 
     pairwise_entries = {(p["member_a"], p["member_b"]): p for p in snapshot["pairwise"]}
     assert pairwise_entries[("alpha", "beta")]["agreement_rate"] == 1.0
+    assert pairwise_entries[("alpha", "beta")]["ema_agreement"] == 1.0
+    assert pairwise_entries[("alpha", "beta")]["ema_high_agreement"] is True
+    assert pairwise_entries[("alpha", "beta")]["ema_last_updated"]
     assert pairwise_entries[("alpha", "gamma")]["agreements"] == 0
+
+
+def test_stats_store_updates_pairwise_ema(store: CouncilStatsStore) -> None:
+    outcome = _build_outcome()
+
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 0.5, "gamma": 0.0},
+        ema_alpha=0.5,
+    )
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 1.0, "gamma": 0.0},
+        ema_alpha=0.5,
+    )
+
+    pairwise = store.get_pairwise_agreement("alpha", "beta")
+    assert pairwise["ema_agreement"] == pytest.approx(0.75)
