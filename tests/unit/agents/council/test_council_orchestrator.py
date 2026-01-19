@@ -314,6 +314,14 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
     assert outcome.metrics["member_scores"]["facilitator"]["total"] == pytest.approx(0.8375)
     assert outcome.summary == "Deterministic council summary"
     assert "fitness_snapshot" in outcome.metrics
+    assert outcome.metrics["agreement_score"] == pytest.approx(1.0 / 3.0)
+    assert outcome.metrics["collusion_warnings"] == []
+    pairwise_ema = outcome.metrics["pairwise_ema"]
+    assert set(pairwise_ema.keys()) == {
+        "analyst|facilitator",
+        "analyst|innovator",
+        "facilitator|innovator",
+    }
 
     serialized = json.loads(json.dumps(outcome.metadata))
     assert serialized["metrics"]["cohesion"] == pytest.approx(0.91)

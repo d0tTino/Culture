@@ -36,6 +36,7 @@ from src.sim.resource_manager import get_resource_manager
 logger = logging.getLogger(__name__)
 LLM_MAX_ATTEMPTS = 2
 JUDGE_SCORE_CATEGORIES = ("correctness", "clarity", "usefulness", "safety")
+PAIRWISE_EMA_ALPHA = 0.3
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Stay fully in character and keep your unique voice. "
@@ -746,6 +747,10 @@ def _coerce_score(value: Any) -> float | None:
     return None
 
 
+def _normalize_answer_text(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
 def _extract_category_scores(raw: Mapping[str, Any]) -> dict[str, float]:
     scores: dict[str, float] = {}
     for category in JUDGE_SCORE_CATEGORIES:
@@ -755,11 +760,43 @@ def _extract_category_scores(raw: Mapping[str, Any]) -> dict[str, float]:
     return scores
 
 
+def _extract_metrics_member_scores(metrics: Mapping[str, Any] | None) -> dict[str, dict[str, float]]:
+    if not isinstance(metrics, Mapping):
+        return {}
+    raw_member_scores = metrics.get("member_scores")
+    if not isinstance(raw_member_scores, Mapping):
+        return {}
+    member_scores: dict[str, dict[str, float]] = {}
+    for member_id, score_map in raw_member_scores.items():
+        if isinstance(score_map, Mapping):
+            category_scores = _extract_category_scores(score_map)
+            total_score = _coerce_score(score_map.get("total"))
+            if total_score is None and category_scores:
+                total_score = sum(category_scores.values()) / len(category_scores)
+            scores = dict(category_scores)
+            if total_score is not None:
+                scores["total"] = total_score
+        else:
+            total_score = _coerce_score(score_map)
+            scores = {"total": total_score} if total_score is not None else {}
+        if scores:
+            member_scores[str(member_id)] = scores
+    return member_scores
+
+
 def _normalize_vote_metrics(
     structured: CouncilVoteModel, answers: Sequence[MemberAnswer]
 ) -> CouncilVoteModel:
     totals: dict[str, float] = {}
     breakdown: dict[str, dict[str, float]] = {}
+
+    metrics_scores = _extract_metrics_member_scores(structured.metrics)
+    for member_id, score_map in metrics_scores.items():
+        if score_map:
+            breakdown[member_id] = dict(score_map)
+            total_score = _coerce_score(score_map.get("total"))
+            if total_score is not None:
+                totals.setdefault(member_id, total_score)
 
     for member_id, score_map in structured.scores.items():
         if isinstance(score_map, Mapping):
@@ -808,6 +845,91 @@ def _normalize_vote_metrics(
             "score_categories": list(JUDGE_SCORE_CATEGORIES),
         }
     return structured
+
+
+def _extract_total_scores_from_vote(vote: CouncilVoteModel | None) -> dict[str, float]:
+    if vote is None:
+        return {}
+    totals: dict[str, float] = {}
+    metrics_scores = _extract_metrics_member_scores(vote.metrics)
+    for member_id, score_map in metrics_scores.items():
+        total = _coerce_score(score_map.get("total"))
+        if total is not None:
+            totals[member_id] = total
+
+    def _update_from_mapping(raw: Mapping[str, Any]) -> None:
+        for member_id, value in raw.items():
+            total_value: float | None = None
+            if isinstance(value, Mapping):
+                total_value = _coerce_score(value.get("total"))
+                if total_value is None:
+                    numeric_values = [
+                        score
+                        for score in (_coerce_score(item) for item in value.values())
+                        if score is not None
+                    ]
+                    if numeric_values:
+                        total_value = sum(numeric_values) / len(numeric_values)
+            else:
+                total_value = _coerce_score(value)
+            if total_value is not None:
+                totals.setdefault(str(member_id), total_value)
+
+    if isinstance(vote.scores, Mapping):
+        _update_from_mapping(vote.scores)
+    if isinstance(vote.votes, Mapping):
+        _update_from_mapping(vote.votes)
+
+    return totals
+
+
+def _derive_agreement_summary(
+    answers: Sequence[MemberAnswer],
+    vote: CouncilVoteModel | None,
+    fitness_snapshot: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    total_scores = _extract_total_scores_from_vote(vote)
+    score_min = min(total_scores.values()) if total_scores else 0.0
+    score_max = max(total_scores.values()) if total_scores else 0.0
+    score_range = score_max - score_min
+    pairwise_ema: dict[str, dict[str, float]] = {}
+    agreement_scores: list[float] = []
+
+    for idx, left in enumerate(answers):
+        for right in answers[idx + 1 :]:
+            member_a, member_b = sorted((left.member_id, right.member_id))
+            if member_a in total_scores and member_b in total_scores:
+                delta = abs(total_scores[member_a] - total_scores[member_b])
+                agreement_score = 1.0 - (delta / score_range) if score_range else 1.0
+                agreement_score = max(0.0, min(1.0, agreement_score))
+            else:
+                agreement_score = (
+                    1.0
+                    if _normalize_answer_text(left.answer)
+                    == _normalize_answer_text(right.answer)
+                    else 0.0
+                )
+            agreement_scores.append(agreement_score)
+            pair_key = "|".join((member_a, member_b))
+            pairwise_ema[pair_key] = {
+                "agreement_score": agreement_score,
+                "ema_agreement": agreement_score * PAIRWISE_EMA_ALPHA,
+            }
+
+    collusion_warnings: list[str] = []
+    if isinstance(fitness_snapshot, Mapping):
+        warnings = fitness_snapshot.get("warnings")
+        if isinstance(warnings, Sequence) and not isinstance(warnings, (str, bytes)):
+            collusion_warnings = [warning for warning in warnings if isinstance(warning, str)]
+
+    agreement_score = (
+        sum(agreement_scores) / len(agreement_scores) if agreement_scores else 0.0
+    )
+    return {
+        "agreement_score": agreement_score,
+        "pairwise_ema": pairwise_ema,
+        "collusion_warnings": collusion_warnings,
+    }
 
 
 def _judge_council_answers(
@@ -1576,6 +1698,8 @@ class CouncilOrchestrator:
         if fitness_snapshot is not None:
             metadata["fitness"] = fitness_snapshot
             outcome_metrics["fitness_snapshot"] = fitness_snapshot
+            agreement_summary = _derive_agreement_summary(answers, vote, fitness_snapshot)
+            outcome_metrics.update(agreement_summary)
 
         metadata["metrics"] = outcome_metrics
 
