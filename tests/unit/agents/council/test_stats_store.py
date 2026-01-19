@@ -97,3 +97,47 @@ def test_stats_store_updates_pairwise_ema(store: CouncilStatsStore) -> None:
 
     pairwise = store.get_pairwise_agreement("alpha", "beta")
     assert pairwise["ema_agreement"] == pytest.approx(0.75)
+
+
+def test_stats_store_updates_pairwise_ema_across_outcomes(
+    store: CouncilStatsStore,
+) -> None:
+    outcome = _build_outcome()
+
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 1.0, "gamma": 1.0},
+        ema_alpha=0.5,
+    )
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 0.0, "gamma": 0.0},
+        ema_alpha=0.5,
+    )
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 0.8, "gamma": 0.0},
+        ema_alpha=0.5,
+    )
+
+    pairwise = store.get_pairwise_agreement("alpha", "beta")
+    assert pairwise["ema_agreement"] == pytest.approx(0.65)
+
+
+def test_stats_store_serializes_ema_flags(store: CouncilStatsStore) -> None:
+    outcome = _build_outcome()
+
+    store.record_outcome(
+        outcome,
+        score_map={"alpha": 1.0, "beta": 0.0, "gamma": 0.0},
+        ema_alpha=0.5,
+    )
+
+    snapshot = store.serialize_metrics()
+
+    pairwise_entries = {(p["member_a"], p["member_b"]): p for p in snapshot["pairwise"]}
+    alpha_beta = pairwise_entries[("alpha", "beta")]
+    assert alpha_beta["ema_agreement"] == pytest.approx(0.0)
+    assert alpha_beta["ema_high_agreement"] is False
+    assert alpha_beta["ema_low_agreement"] is True
+    assert alpha_beta["ema_last_updated"]
