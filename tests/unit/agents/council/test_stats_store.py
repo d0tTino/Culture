@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -15,8 +16,8 @@ def store(tmp_path: Path) -> CouncilStatsStore:
     return CouncilStatsStore(db_path=db_dir / "stats.sqlite3")
 
 
-def _build_outcome() -> CouncilOutcome:
-    question = CouncilQuestion(question_id="q-1", prompt="What now?")
+def _build_outcome(question_id: str = "q-1") -> CouncilOutcome:
+    question = CouncilQuestion(question_id=question_id, prompt="What now?")
     answers = [
         MemberAnswer(member_id="alpha", answer="Option A", confidence=0.8),
         MemberAnswer(member_id="beta", answer="Option A", confidence=0.6),
@@ -81,6 +82,30 @@ def test_stats_store_serializes_aggregates(store: CouncilStatsStore) -> None:
     assert pairwise_entries[("alpha", "gamma")]["agreements"] == 0
 
 
+def test_stats_store_serializes_filtered_metrics(store: CouncilStatsStore) -> None:
+    store.record_outcome(_build_outcome("q-1"))
+    store.record_outcome(_build_outcome("q-2"))
+
+    snapshot = store.serialize_metrics()
+    filtered = store.serialize_metrics(question_id="q-1")
+
+    alpha_snapshot = next(m for m in snapshot["members"] if m["member_id"] == "alpha")
+    alpha_filtered = next(m for m in filtered["members"] if m["member_id"] == "alpha")
+
+    assert alpha_snapshot["participations"] == 2
+    assert alpha_filtered["participations"] == 1
+    assert alpha_filtered["wins"] == 1
+
+    pairwise_global = next(
+        p for p in snapshot["pairwise"] if p["member_a"] == "alpha" and p["member_b"] == "beta"
+    )
+    pairwise_filtered = next(
+        p for p in filtered["pairwise"] if p["member_a"] == "alpha" and p["member_b"] == "beta"
+    )
+    assert pairwise_global["agreements"] == 2
+    assert pairwise_filtered["agreements"] == 1
+
+
 def test_stats_store_updates_pairwise_ema(store: CouncilStatsStore) -> None:
     outcome = _build_outcome()
 
@@ -141,3 +166,69 @@ def test_stats_store_serializes_ema_flags(store: CouncilStatsStore) -> None:
     assert alpha_beta["ema_high_agreement"] is False
     assert alpha_beta["ema_low_agreement"] is True
     assert alpha_beta["ema_last_updated"]
+
+
+def test_stats_store_migrates_schema(tmp_path: Path) -> None:
+    db_dir = tmp_path / "council"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    db_path = db_dir / "legacy.sqlite3"
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE council_member_stats (
+            member_id TEXT PRIMARY KEY,
+            participations INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0,
+            total_confidence REAL DEFAULT 0.0
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE council_pairwise_agreements (
+            member_a TEXT,
+            member_b TEXT,
+            agreements INTEGER DEFAULT 0,
+            disagreements INTEGER DEFAULT 0,
+            PRIMARY KEY(member_a, member_b)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO council_member_stats(member_id, participations, wins, total_confidence)
+        VALUES('alpha', 2, 1, 1.2)
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO council_pairwise_agreements(member_a, member_b, agreements, disagreements)
+        VALUES('alpha', 'beta', 3, 1)
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = CouncilStatsStore(db_path=db_path)
+
+    member_columns = {
+        row[1] for row in store.conn.execute("PRAGMA table_info(council_member_stats)")
+    }
+    pairwise_columns = {
+        row[1] for row in store.conn.execute("PRAGMA table_info(council_pairwise_agreements)")
+    }
+    assert "question_id" in member_columns
+    assert "question_id" in pairwise_columns
+
+    stats = store.get_member_stats("alpha")
+    assert stats["participations"] == 2
+
+    pairwise = store.get_pairwise_agreement("alpha", "beta")
+    assert pairwise["agreements"] == 3
+
+    question_id = store.conn.execute(
+        "SELECT question_id FROM council_member_stats WHERE member_id='alpha'"
+    ).fetchone()
+    assert question_id
+    assert question_id[0] == ""
