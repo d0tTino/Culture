@@ -22,6 +22,13 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
                 "win_rate": 0.0,
                 "avg_confidence": 0.0,
             },
+            {
+                "member_id": "charlie",
+                "participations": 20,
+                "wins": 1,
+                "win_rate": 0.05,
+                "avg_confidence": 0.4,
+            },
         ],
         "pairwise": [
             {
@@ -30,6 +37,7 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
                 "agreements": 2,
                 "disagreements": 1,
                 "agreement_rate": 2 / 3,
+                "flagged": True,
                 "collusion_warning": "alpha vs bravo agreeing too often",
             }
         ],
@@ -54,12 +62,15 @@ def test_council_metrics_reports_stats(monkeypatch: pytest.MonkeyPatch, capsys: 
     assert "Council Metrics" in output
     assert "- alpha: 10.00% win rate (3/12 wins, avg confidence 0.80)" in output
     assert "- bravo: 0.00% win rate (0/0 wins, avg confidence 0.00)" in output
+    assert "- charlie: 5.00% win rate (1/20 wins, avg confidence 0.40)" in output
 
     assert "Pairwise Agreement Rates:" in output
     assert "- alpha vs bravo: 66.67% agreement [FLAGGED] (2 agreements / 1 disagreements) - alpha vs bravo agreeing too often" in output
 
     assert "Warnings:" in output
     assert "Member bravo has no recorded participations." in output
+    assert "Member charlie is a candidate for deactivation (win rate 5.00% below 20.00% after 20 participations)." in output
+    assert "alpha vs bravo agreeing too often" in output
     assert "Global collusion alert" in output
     assert "Member alpha is a candidate for deactivation" in output
 
