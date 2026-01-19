@@ -24,7 +24,16 @@ async def test_council_node_sets_outcome_and_final_answer(
         winning_member_ids=["alpha"],
         winner_answer="Proceed",
         summary="Summary text",
-        metadata={},
+        metrics={
+            "fitness_snapshot": {"members": {}, "pairs": {}, "warnings": ["collusion"]},
+            "collusion_warnings": ["collusion"],
+        },
+        metadata={
+            "metrics": {
+                "fitness_snapshot": {"members": {}, "pairs": {}, "warnings": ["collusion"]},
+                "collusion_warnings": ["collusion"],
+            }
+        },
     )
 
     def fake_run_council(
@@ -52,6 +61,14 @@ async def test_council_node_sets_outcome_and_final_answer(
 
     assert result["council_outcome"] == dummy_outcome
     assert result["final_answer"] == dummy_outcome.summary
+    assert {
+        "fitness_snapshot",
+        "collusion_warnings",
+    }.issubset(result["council_outcome"].metrics)
+    assert {
+        "fitness_snapshot",
+        "collusion_warnings",
+    }.issubset(result["council_outcome"].metadata["metrics"])
     assert isinstance(recorded["question"], CouncilQuestion)
     assert recorded["question"].prompt == starting_state["question"]
     assert recorded["extra_context"] == {"text": starting_state["context"]}
