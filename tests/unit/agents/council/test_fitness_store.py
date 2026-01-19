@@ -22,10 +22,10 @@ def _build_vote(winner: str, scores: dict[str, float]) -> CouncilVoteModel:
 
 
 def test_fitness_store_tracks_win_rates_and_pairs() -> None:
-    store = CouncilFitnessStore()
+    store = CouncilFitnessStore(score_tolerance=0.05)
     question = CouncilQuestion(question_id="q1", prompt="p")
     answers = _build_answers(["a", "b", "c"])
-    vote = _build_vote("a", {"a": 0.9, "b": 0.4, "c": 0.4})
+    vote = _build_vote("a", {"a": 0.9, "b": 0.92, "c": 0.4})
 
     snapshot = store.update_from_vote(question, answers, vote)
 
@@ -38,13 +38,32 @@ def test_fitness_store_tracks_win_rates_and_pairs() -> None:
     assert pair_stats["a|b"]["questions_together"] == 1
     assert pair_stats["a|b"]["top_agreements"] == 1
     assert pair_stats["a|b"]["agreement_rate"] == pytest.approx(1.0)
+    assert pair_stats["a|c"]["top_agreements"] == 0
+    assert pair_stats["a|c"]["agreement_rate"] == pytest.approx(0.0)
+
+
+def test_fitness_store_treats_large_score_deltas_as_disagreement() -> None:
+    store = CouncilFitnessStore(score_tolerance=0.05)
+    question = CouncilQuestion(question_id="q-gap", prompt="p")
+    answers = _build_answers(["a", "b"])
+    vote = _build_vote("a", {"a": 0.9, "b": 0.7})
+
+    snapshot = store.update_from_vote(question, answers, vote)
+
+    pair_stats = snapshot["pairs"]
+    assert pair_stats["a|b"]["top_agreements"] == 0
+    assert pair_stats["a|b"]["agreement_rate"] == pytest.approx(0.0)
 
 
 def test_fitness_store_flags_collusion_when_pairs_align_repeatedly() -> None:
-    store = CouncilFitnessStore(agreement_threshold=0.6, min_samples=2)
+    store = CouncilFitnessStore(
+        agreement_threshold=0.6,
+        min_samples=2,
+        score_tolerance=0.05,
+    )
     question = CouncilQuestion(question_id="q2", prompt="p")
     answers = _build_answers(["x", "y"])
-    vote = _build_vote("x", {"x": 0.8, "y": 0.8})
+    vote = _build_vote("x", {"x": 0.8, "y": 0.82})
 
     store.update_from_vote(question, answers, vote)
     snapshot = store.update_from_vote(question, answers, vote)

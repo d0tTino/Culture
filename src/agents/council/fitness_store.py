@@ -1,4 +1,5 @@
 """Fitness tracking for council outcomes."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -31,6 +32,7 @@ class CouncilFitnessStore:
         *,
         agreement_threshold: float = 0.75,
         min_samples: int = 3,
+        score_tolerance: float = 0.05,
     ) -> None:
         self._wins: Counter[str] = Counter()
         self._appearances: Counter[str] = Counter()
@@ -39,6 +41,7 @@ class CouncilFitnessStore:
         self._agreement_scores: list[float] = []
         self.agreement_threshold = float(agreement_threshold)
         self.min_samples = int(min_samples)
+        self.score_tolerance = float(score_tolerance)
 
     def reset(self) -> None:
         """Clear accumulated fitness statistics."""
@@ -50,8 +53,56 @@ class CouncilFitnessStore:
         self._agreement_scores.clear()
 
     @staticmethod
-    def _normalize_answer(answer: str | None) -> str:
-        return (answer or "").strip().lower()
+    def _coerce_score(value: Any) -> float | None:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return None
+
+    def _extract_total_scores(self, vote: Any) -> dict[str, float]:
+        totals: dict[str, float] = {}
+        metrics = getattr(vote, "metrics", None)
+        if isinstance(metrics, Mapping):
+            member_scores = metrics.get("member_scores")
+            if isinstance(member_scores, Mapping):
+                for member_id, score_map in member_scores.items():
+                    if not isinstance(score_map, Mapping):
+                        continue
+                    total_value = self._coerce_score(score_map.get("total"))
+                    if total_value is not None:
+                        totals[str(member_id)] = total_value
+
+        def _update_from_mapping(raw: Mapping[str, Any]) -> None:
+            for member_id, value in raw.items():
+                total_value: float | None = None
+                if isinstance(value, Mapping):
+                    total_value = self._coerce_score(value.get("total"))
+                    if total_value is None:
+                        numeric_values = [
+                            score
+                            for score in (self._coerce_score(item) for item in value.values())
+                            if score is not None
+                        ]
+                        if numeric_values:
+                            total_value = sum(numeric_values) / len(numeric_values)
+                else:
+                    total_value = self._coerce_score(value)
+                if total_value is not None:
+                    totals.setdefault(str(member_id), total_value)
+
+        scores = getattr(vote, "scores", None)
+        if isinstance(scores, Mapping):
+            _update_from_mapping(scores)
+
+        votes = getattr(vote, "votes", None)
+        if isinstance(votes, Mapping):
+            _update_from_mapping(votes)
+
+        return totals
 
     def update_from_vote(
         self, question: CouncilQuestion, answers: Sequence[MemberAnswer], vote: Any
@@ -60,6 +111,7 @@ class CouncilFitnessStore:
 
         winners = {getattr(vote, "winning_member_id", "")}
         winners.discard("")
+        total_scores = self._extract_total_scores(vote)
 
         for answer in answers:
             member_id = str(answer.member_id)
@@ -70,7 +122,13 @@ class CouncilFitnessStore:
         for left, right in combinations(answers, 2):
             key = "|".join(sorted((left.member_id, right.member_id)))
             self._pair_counts[key] += 1
-            if self._normalize_answer(left.answer) == self._normalize_answer(right.answer):
+            left_score = total_scores.get(left.member_id)
+            right_score = total_scores.get(right.member_id)
+            if (
+                left_score is not None
+                and right_score is not None
+                and abs(left_score - right_score) <= self.score_tolerance
+            ):
                 self._pair_agreements[key] += 1
 
         members_snapshot: dict[str, Any] = {}
@@ -96,7 +154,7 @@ class CouncilFitnessStore:
             }
             if together >= self.min_samples and rate >= self.agreement_threshold:
                 warnings.append(
-                    f"Potential collusion detected between {pair} (agreement rate {rate:.2f})"
+                    f"Repeated high agreement detected between {pair} (agreement rate {rate:.2f})"
                 )
 
         return {"members": members_snapshot, "pairs": pairs_snapshot, "warnings": warnings}
@@ -150,7 +208,6 @@ class CouncilFitnessStore:
         if not self._agreement_scores:
             return 0.0
         return sum(self._agreement_scores) / len(self._agreement_scores)
-
 
 
 council_fitness_store = CouncilFitnessStore()
