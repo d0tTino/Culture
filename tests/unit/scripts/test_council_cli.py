@@ -303,14 +303,46 @@ def test_council_cli_show_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Key metrics:" not in result_default.output
 
 
-def test_council_cli_honors_env_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_council_cli_defaults_to_env_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(council_cli, "get_config", lambda *_args, **_kwargs: False)
 
-    result = runner.invoke(council_cli.app, ["Prompt", "--enforce-env-guard"])
+    result = runner.invoke(council_cli.app, ["Prompt"])
 
     assert result.exit_code == 1
     assert "Council Mode is disabled" in result.output
+
+
+def test_council_cli_bypass_env_guard_allows_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(council_cli, "get_config", lambda *_args, **_kwargs: False)
+    recorded_allow_disabled: list[bool] = []
+
+    def fake_run_council(
+        question: CouncilQuestion,
+        *,
+        extra_context: str | None,
+        rag_docs: list[str] | None,
+        allow_disabled_mode: bool,
+    ) -> CouncilOutcome:
+        recorded_allow_disabled.append(allow_disabled_mode)
+        return CouncilOutcome(
+            question=question,
+            answers=[],
+            resolution="Mock resolution",
+            winning_member_ids=[],
+            summary=None,
+            metadata={"fitness": {"scores": []}},
+        )
+
+    monkeypatch.setattr(council_cli, "run_council", fake_run_council)
+
+    result = runner.invoke(council_cli.app, ["Prompt", "--bypass-env-guard"])
+
+    assert result.exit_code == 0
+    assert recorded_allow_disabled == [True]
 
 
 def test_council_cli_supports_legacy_short_flags(monkeypatch: pytest.MonkeyPatch) -> None:

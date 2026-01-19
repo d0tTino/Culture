@@ -89,7 +89,7 @@ Qualitative checks should include manual review of L1/L2 summaries and Knowledge
   ```
   The CLI accepts repeated `--rag-doc/--rag-docs` flags to supply additional evidence, and `--question-id` is persisted in metrics to link answers to observability traces.
 
-> If `USE_COUNCIL_MODE` is omitted or set to `false`, the CLI will raise `RuntimeError: Council mode is disabled; set USE_COUNCIL_MODE=true to enable it.` instead of running the council deliberation.
+> If `USE_COUNCIL_MODE` is omitted or set to `false`, the CLI exits with a guardrail message and status 1 unless you pass `--bypass-env-guard` to override the default enforcement.
 
 ### Council-specific toggles
 - `USE_COUNCIL_MODE`: Enable/disable council orchestration globally; set in `.env` or via `export USE_COUNCIL_MODE=true` before running simulations.

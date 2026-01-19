@@ -209,11 +209,11 @@ def main(
         help="Display fitness or collusion metrics from the council outcome",
     ),
     bypass_env_guard: bool = typer.Option(
-        True,
+        False,
         "--bypass-env-guard/--enforce-env-guard",
         help=(
-            "Allow the council to run even when USE_COUNCIL_MODE is false. Disable to "
-            "respect the environment guard."
+            "Enforce the USE_COUNCIL_MODE guard by default; pass --bypass-env-guard to "
+            "run even when USE_COUNCIL_MODE is false."
         ),
     ),
     question_id: str | None = typer.Option(
