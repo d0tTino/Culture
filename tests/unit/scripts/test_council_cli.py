@@ -15,12 +15,12 @@ def stub_council_config(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_load_settings() -> tuple[dict, dict[str, str]]:
         config = {
             "members": [
-                {"member_id": "alpha-id", "id": "alpha", "display_name": "Alpha Prime"},
-                {"member_id": "bravo-id", "id": "bravo", "display_name": "Bravo Squad"},
+                {"member_id": "alpha-member", "id": "alpha", "display_name": "Alpha Prime"},
+                {"member_id": "bravo-member", "id": "bravo", "display_name": "Bravo Squad"},
             ],
             "enabled": True,
         }
-        members = {"alpha-id": "Alpha Prime", "bravo-id": "Bravo Squad"}
+        members = council_cli._build_member_lookup(config)
         return config, members
 
     monkeypatch.setattr(council_cli, "_load_council_settings", fake_load_settings)
@@ -48,14 +48,14 @@ def test_council_cli_reports_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
             ),
             answers=[
                 MemberAnswer(
-                    member_id="alpha-id",
+                    member_id="alpha-member",
                     answer="Alpha answer",
                     confidence=0.7,
                     reasoning="Alpha reasoning",
                 )
             ],
             resolution="Mock resolution",
-            winning_member_ids=["alpha-id"],
+            winning_member_ids=["alpha-member"],
             summary="Mock summary",
             metrics={"fitness": {"score": 1}},
         )
@@ -83,9 +83,9 @@ def test_council_cli_reports_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "- doc-b" in result.output
     assert "Resolution: Mock resolution" in result.output
     assert "Summary: Mock summary" in result.output
-    assert "Winners: Alpha Prime (alpha-id)" in result.output
+    assert "Winners: Alpha Prime (alpha-member)" in result.output
     assert "Answers:" in result.output
-    assert "- Alpha Prime (alpha-id)" in result.output
+    assert "- Alpha Prime (alpha-member)" in result.output
     assert "Confidence: 0.7" in result.output
     assert "Reasoning: Alpha reasoning" in result.output
     assert "Answer: Alpha answer" in result.output
@@ -199,11 +199,11 @@ def test_council_cli_show_all_answers(monkeypatch: pytest.MonkeyPatch) -> None:
         return CouncilOutcome(
             question=question,
             answers=[
-                MemberAnswer(member_id="alpha-id", answer="Alpha answer"),
-                MemberAnswer(member_id="bravo-id", answer="Bravo answer"),
+                MemberAnswer(member_id="alpha-member", answer="Alpha answer"),
+                MemberAnswer(member_id="bravo-member", answer="Bravo answer"),
             ],
             resolution="Mock resolution",
-            winning_member_ids=["alpha-id"],
+            winning_member_ids=["alpha-member"],
             summary=None,
             metadata={"fitness": {"scores": []}},
         )
@@ -213,14 +213,14 @@ def test_council_cli_show_all_answers(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(council_cli.app, ["Prompt"])
 
     assert result.exit_code == 0
-    assert "- Alpha Prime (alpha-id)" in result.output
-    assert "- Bravo Squad (bravo-id)" not in result.output
+    assert "- Alpha Prime (alpha-member)" in result.output
+    assert "- Bravo Squad (bravo-member)" not in result.output
 
     result = runner.invoke(council_cli.app, ["Prompt", "--show-all"])
 
     assert result.exit_code == 0
-    assert "- Alpha Prime (alpha-id)" in result.output
-    assert "- Bravo Squad (bravo-id)" in result.output
+    assert "- Alpha Prime (alpha-member)" in result.output
+    assert "- Bravo Squad (bravo-member)" in result.output
 
 
 def test_council_cli_show_votes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -237,15 +237,15 @@ def test_council_cli_show_votes(monkeypatch: pytest.MonkeyPatch) -> None:
             question=question,
             answers=[
                 MemberAnswer(
-                    member_id="alpha-id", answer="Alpha answer", votes={"bravo-id": 0.6}
+                    member_id="alpha-member", answer="Alpha answer", votes={"bravo-member": 0.6}
                 ),
                 MemberAnswer(
-                    member_id="bravo-id", answer="Bravo answer", votes={"alpha-id": 0.4}
+                    member_id="bravo-member", answer="Bravo answer", votes={"alpha-member": 0.4}
                 ),
             ],
             resolution="Mock resolution",
-            winning_member_ids=["alpha-id"],
-            votes={"alpha-id": 0.55, "bravo-id": 0.45},
+            winning_member_ids=["alpha-member"],
+            votes={"alpha-member": 0.55, "bravo-member": 0.45},
             summary=None,
             metrics={"fitness": {"score": 0.95}},
         )
@@ -256,13 +256,13 @@ def test_council_cli_show_votes(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert "Judge Scores:" in result.output
-    assert "- Alpha Prime (alpha-id): 0.55" in result.output
-    assert "- Bravo Squad (bravo-id): 0.45" in result.output
+    assert "- Alpha Prime (alpha-member): 0.55" in result.output
+    assert "- Bravo Squad (bravo-member): 0.45" in result.output
     assert "Votes:" in result.output
-    assert "- Alpha Prime (alpha-id):" in result.output
-    assert "  - Bravo Squad (bravo-id): 0.6" in result.output
-    assert "- Bravo Squad (bravo-id):" in result.output
-    assert "  - Alpha Prime (alpha-id): 0.4" in result.output
+    assert "- Alpha Prime (alpha-member):" in result.output
+    assert "  - Bravo Squad (bravo-member): 0.6" in result.output
+    assert "- Bravo Squad (bravo-member):" in result.output
+    assert "  - Alpha Prime (alpha-member): 0.4" in result.output
 
     result_default = runner.invoke(council_cli.app, ["Prompt"])
 
@@ -282,9 +282,9 @@ def test_council_cli_show_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
     ) -> CouncilOutcome:
         return CouncilOutcome(
             question=question,
-            answers=[MemberAnswer(member_id="alpha-id", answer="Alpha answer")],
+            answers=[MemberAnswer(member_id="alpha-member", answer="Alpha answer")],
             resolution="Mock resolution",
-            winning_member_ids=["alpha-id"],
+            winning_member_ids=["alpha-member"],
             summary=None,
             metrics={"fitness": {"score": 0.87}, "collusion": {"flagged": False}},
         )
@@ -358,11 +358,11 @@ def test_council_cli_supports_legacy_short_flags(monkeypatch: pytest.MonkeyPatch
         return CouncilOutcome(
             question=question,
             answers=[
-                MemberAnswer(member_id="alpha-id", answer="Alpha answer"),
-                MemberAnswer(member_id="bravo-id", answer="Bravo answer"),
+                MemberAnswer(member_id="alpha-member", answer="Alpha answer"),
+                MemberAnswer(member_id="bravo-member", answer="Bravo answer"),
             ],
             resolution="Mock resolution",
-            winning_member_ids=["alpha-id"],
+            winning_member_ids=["alpha-member"],
             summary=None,
             metadata={"fitness": {"scores": []}},
         )
@@ -372,5 +372,5 @@ def test_council_cli_supports_legacy_short_flags(monkeypatch: pytest.MonkeyPatch
     result = runner.invoke(council_cli.app, ["-q", "Prompt", "-a"])
 
     assert result.exit_code == 0
-    assert "- Alpha Prime (alpha-id)" in result.output
-    assert "- Bravo Squad (bravo-id)" in result.output
+    assert "- Alpha Prime (alpha-member)" in result.output
+    assert "- Bravo Squad (bravo-member)" in result.output
