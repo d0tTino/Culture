@@ -51,6 +51,7 @@ class CouncilStatsStore:
             self._ensure_member_stats_schema()
             self._ensure_pairwise_schema()
             self._ensure_pairwise_columns()
+            self._ensure_outcomes_schema()
             self.conn.commit()
 
     def _ensure_member_stats_schema(self) -> None:
@@ -185,6 +186,45 @@ class CouncilStatsStore:
             self.conn.execute(
                 "ALTER TABLE council_pairwise_agreements ADD COLUMN last_updated TEXT"
             )
+
+    def _ensure_outcomes_schema(self) -> None:
+        columns = {row[1] for row in self.conn.execute("PRAGMA table_info(council_outcomes)")}
+        if not columns:
+            self.conn.execute(
+                """
+                CREATE TABLE council_outcomes (
+                    outcome_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    question_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT ''
+                )
+                """
+            )
+            return
+        if "question_id" in columns:
+            return
+        outcome_id_expr = "outcome_id" if "outcome_id" in columns else "NULL"
+        created_expr = "created_at" if "created_at" in columns else "''"
+        self.conn.execute(
+            """
+            CREATE TABLE council_outcomes_new (
+                outcome_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        self.conn.execute(
+            f"""
+            INSERT INTO council_outcomes_new(outcome_id, question_id, created_at)
+            SELECT
+                {outcome_id_expr},
+                '',
+                {created_expr}
+            FROM council_outcomes
+            """
+        )
+        self.conn.execute("DROP TABLE council_outcomes")
+        self.conn.execute("ALTER TABLE council_outcomes_new RENAME TO council_outcomes")
 
     def _normalize_answer(self, answer: str | None) -> str:
         return (answer or "").strip().lower()
@@ -363,6 +403,13 @@ class CouncilStatsStore:
         winning_ids = {member_id for member_id in outcome.winning_member_ids}
         with self._lock:
             cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO council_outcomes(question_id, created_at)
+                VALUES(?, ?)
+                """,
+                (question_id, timestamp),
+            )
             self._update_member_stats(cur, question_id, answers, winning_ids)
             self._update_pairwise_agreements(
                 cur,
@@ -461,7 +508,9 @@ class CouncilStatsStore:
     def serialize_metrics(
         self, *, question_id: str | None = None
     ) -> dict[str, list[dict[str, float | str | bool]]]:
-        filter_question_id = (question_id or "").strip() if question_id else None
+        filter_question_id = None
+        if question_id is not None:
+            filter_question_id = question_id.strip()
         with self._lock:
             if filter_question_id is None:
                 member_rows = self.conn.execute(
