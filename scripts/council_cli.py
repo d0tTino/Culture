@@ -37,16 +37,14 @@ def _build_member_lookup(raw_config: Mapping[str, Any] | None) -> dict[str, str]
     for index, entry in enumerate(members):
         if not isinstance(entry, Mapping):
             continue
+        raw_member_id = entry.get("member_id") or entry.get("id")
         display_name = str(
             entry.get("display_name")
             or entry.get("name")
-            or entry.get("member_id")
-            or entry.get("id")
+            or raw_member_id
             or f"Member {index + 1}"
         )
-        member_id = str(
-            entry.get("member_id") or entry.get("id") or _slugify(display_name)
-        )
+        member_id = str(raw_member_id or _slugify(display_name))
         lookup[member_id] = display_name
     return lookup
 
