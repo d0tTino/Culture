@@ -106,6 +106,17 @@ def test_stats_store_serializes_filtered_metrics(store: CouncilStatsStore) -> No
     assert pairwise_filtered["agreements"] == 1
 
 
+def test_stats_store_records_outcome_question_id(store: CouncilStatsStore) -> None:
+    store.record_outcome(_build_outcome("q-9"))
+
+    row = store.conn.execute(
+        "SELECT question_id FROM council_outcomes ORDER BY outcome_id DESC LIMIT 1"
+    ).fetchone()
+
+    assert row
+    assert row[0] == "q-9"
+
+
 def test_stats_store_updates_pairwise_ema(store: CouncilStatsStore) -> None:
     outcome = _build_outcome()
 
@@ -197,6 +208,14 @@ def test_stats_store_migrates_schema(tmp_path: Path) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE council_outcomes (
+            outcome_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
         INSERT INTO council_member_stats(member_id, participations, wins, total_confidence)
         VALUES('alpha', 2, 1, 1.2)
         """
@@ -205,6 +224,12 @@ def test_stats_store_migrates_schema(tmp_path: Path) -> None:
         """
         INSERT INTO council_pairwise_agreements(member_a, member_b, agreements, disagreements)
         VALUES('alpha', 'beta', 3, 1)
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO council_outcomes(created_at)
+        VALUES('2024-01-01T00:00:00+00:00')
         """
     )
     conn.commit()
@@ -218,8 +243,12 @@ def test_stats_store_migrates_schema(tmp_path: Path) -> None:
     pairwise_columns = {
         row[1] for row in store.conn.execute("PRAGMA table_info(council_pairwise_agreements)")
     }
+    outcomes_columns = {
+        row[1] for row in store.conn.execute("PRAGMA table_info(council_outcomes)")
+    }
     assert "question_id" in member_columns
     assert "question_id" in pairwise_columns
+    assert "question_id" in outcomes_columns
 
     stats = store.get_member_stats("alpha")
     assert stats["participations"] == 2
@@ -232,3 +261,9 @@ def test_stats_store_migrates_schema(tmp_path: Path) -> None:
     ).fetchone()
     assert question_id
     assert question_id[0] == ""
+
+    outcome_question = store.conn.execute(
+        "SELECT question_id FROM council_outcomes WHERE outcome_id=1"
+    ).fetchone()
+    assert outcome_question
+    assert outcome_question[0] == ""
