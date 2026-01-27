@@ -210,7 +210,7 @@ def main(
         False,
         "--bypass-env-guard/--enforce-env-guard",
         help=(
-            "Enforce the USE_COUNCIL_MODE guard by default; pass --bypass-env-guard to "
+            "Require USE_COUNCIL_MODE=true by default; pass --bypass-env-guard to "
             "run even when USE_COUNCIL_MODE is false."
         ),
     ),
