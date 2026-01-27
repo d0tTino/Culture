@@ -1724,7 +1724,18 @@ class CouncilOrchestrator:
             )
             pairwise_stats = stats_snapshot.get("pairwise")
             if isinstance(pairwise_stats, list):
+                pairwise_map: dict[str, dict[str, Any]] = {}
+                for entry in pairwise_stats:
+                    if not isinstance(entry, Mapping):
+                        continue
+                    member_a = entry.get("member_a")
+                    member_b = entry.get("member_b")
+                    if not member_a or not member_b:
+                        continue
+                    pair_key = "|".join(sorted((str(member_a), str(member_b))))
+                    pairwise_map[pair_key] = dict(entry)
                 outcome.metrics["pairwise_ema_stats"] = pairwise_stats
+                outcome.metrics["pairwise_ema_by_pair"] = pairwise_map
                 metadata: dict[str, Any] = dict(outcome.metadata or {})
                 metrics = metadata.get("metrics")
                 if isinstance(metrics, Mapping):
@@ -1732,6 +1743,7 @@ class CouncilOrchestrator:
                 else:
                     metrics = {}
                 metrics["pairwise_ema_stats"] = pairwise_stats
+                metrics["pairwise_ema_by_pair"] = pairwise_map
                 metadata["metrics"] = metrics
                 outcome.metadata = metadata
         except Exception as exc:  # pragma: no cover - defensive
