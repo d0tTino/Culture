@@ -158,6 +158,33 @@ class CouncilConfig(BaseModel):
             raise ValueError("Council configuration must include at least one member")
         if not any(member.is_active for member in value):
             raise ValueError("At least one council member must be active")
+
+        seen_member_ids: set[str] = set()
+        duplicate_member_ids: set[str] = set()
+        seen_display_names: set[str] = set()
+        duplicate_display_names: set[str] = set()
+        for member in value:
+            if member.member_id in seen_member_ids:
+                duplicate_member_ids.add(member.member_id)
+            else:
+                seen_member_ids.add(member.member_id)
+
+            display_name = member.display_name.strip()
+            if not display_name:
+                continue
+            if display_name in seen_display_names:
+                duplicate_display_names.add(display_name)
+            else:
+                seen_display_names.add(display_name)
+
+        if duplicate_member_ids:
+            duplicates = ", ".join(sorted(duplicate_member_ids))
+            raise ValueError(f"Council member IDs must be unique; duplicates: {duplicates}")
+
+        if duplicate_display_names:
+            duplicates = ", ".join(sorted(duplicate_display_names))
+            raise ValueError(f"Council member display names should be unique; duplicates: {duplicates}")
+
         return value
 
     @field_validator("voting_mode", mode="before")
