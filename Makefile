@@ -36,3 +36,13 @@ dataset:
 .PHONY: council
 council:
 	python -m scripts.council_cli --question "$(Q)" $(if $(SHOW_ALL),--show-all)
+
+.PHONY: council-gate-tests
+council-gate-tests:
+	python -m pytest -m "unit or integration" \
+		tests/unit/agents/council/ \
+		tests/unit/agents/graphs/test_council_node.py \
+		tests/unit/infra/test_council_config.py \
+		tests/unit/scripts/test_council_cli.py \
+		tests/unit/scripts/test_council_metrics.py \
+		tests/integration/agents/council/test_council_du_budget.py
