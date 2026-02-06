@@ -1445,7 +1445,7 @@ class CouncilOrchestrator:
         )
         metrics: dict[str, Any] = {
             "du_budget_exhausted": False,
-            "du_budget_per_member": self._resolve_du_budgets(context.config),
+            "du_budget_per_member": {},
         }
         if not active_members:
             metrics.update(
@@ -1485,6 +1485,7 @@ class CouncilOrchestrator:
         member_fanout_start = time.perf_counter()
         answers = await self._gather_member_answers(
             context,
+            active_members,
             question,
             member_states,
             extra_context=extra_context,
@@ -1531,6 +1532,7 @@ class CouncilOrchestrator:
             elif context.config.voting_mode == "peer_vote":
                 peer_votes = await self._gather_peer_votes(
                     context,
+                    active_members,
                     question,
                     answers,
                     member_states,
@@ -1540,7 +1542,7 @@ class CouncilOrchestrator:
                 )
                 vote = _aggregate_peer_votes(answers, peer_votes)
             elif context.config.voting_mode == "heuristic":
-                member_lookup = {member.member_id: member for member in context.config.members}
+                member_lookup = {member.member_id: member for member in active_members}
                 vote = _score_heuristic_votes(answers, member_lookup)
             else:
                 logger.warning(
@@ -1554,7 +1556,7 @@ class CouncilOrchestrator:
 
         base_metrics = dict(metrics or {})
         base_metrics.setdefault("du_budget_exhausted", False)
-        base_metrics.setdefault("du_budget_per_member", self._resolve_du_budgets(context.config))
+        base_metrics.setdefault("du_budget_per_member", self._resolve_du_budgets(context.config, active_members))
         outcome = self._build_outcome(
             question, answers, vote, base_metrics, run_metrics=run_metrics
         )
@@ -1567,19 +1569,24 @@ class CouncilOrchestrator:
             return float(config.du_budget_per_question)
         return float(self.du_budget_per_question)
 
-    def _resolve_du_budgets(self, config: CouncilConfig) -> dict[str, float]:
+    def _resolve_du_budgets(
+        self, config: CouncilConfig, members: Sequence[CouncilMemberConfig]
+    ) -> dict[str, float]:
         default_budget = self._resolve_du_budget(config)
         return {
             member.member_id: (
                 float(member.du_budget) if member.du_budget is not None else default_budget
             )
-            for member in config.members
+            for member in members
         }
 
     def _allocate_du_budgets(
-        self, config: CouncilConfig, metrics: dict[str, Any]
+        self,
+        config: CouncilConfig,
+        members: Sequence[CouncilMemberConfig],
+        metrics: dict[str, Any],
     ) -> dict[str, SimpleNamespace]:
-        budgets = self._resolve_du_budgets(config)
+        budgets = self._resolve_du_budgets(config, members)
         member_states: dict[str, SimpleNamespace] = {}
         try:
             resource_manager = get_resource_manager()
@@ -1587,7 +1594,7 @@ class CouncilOrchestrator:
             logger.debug("Resource manager unavailable for council DU budgeting: %s", exc)
             resource_manager = None
 
-        for member in config.members:
+        for member in members:
             budget = budgets.get(member.member_id, 0.0)
             ip_budget = float(member.ip_budget) if member.ip_budget is not None else 0.0
             state = SimpleNamespace(agent_id=member.member_id, du=budget, ip=ip_budget)
@@ -1605,6 +1612,7 @@ class CouncilOrchestrator:
     async def _gather_member_answers(
         self,
         context: CouncilContext,
+        members: Sequence[CouncilMemberConfig],
         question: CouncilQuestion,
         member_states: Mapping[str, SimpleNamespace],
         *,
@@ -1683,7 +1691,7 @@ class CouncilOrchestrator:
 
         tasks: list[asyncio.Task[tuple[str, MemberAnswer | None]]] = []
 
-        for member in context.config.members:
+        for member in members:
             if metrics.get("du_budget_exhausted"):
                 break
             state = member_states.get(member.member_id)
@@ -1713,6 +1721,7 @@ class CouncilOrchestrator:
     async def _gather_peer_votes(
         self,
         context: CouncilContext,
+        members: Sequence[CouncilMemberConfig],
         question: CouncilQuestion,
         answers: Sequence[MemberAnswer],
         member_states: Mapping[str, SimpleNamespace],
@@ -1758,7 +1767,7 @@ class CouncilOrchestrator:
                 return None
 
         results = await asyncio.gather(
-            *[_call_member(member) for member in context.config.members],
+            *[_call_member(member) for member in members],
             return_exceptions=True,
         )
 
