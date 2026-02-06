@@ -612,6 +612,55 @@ def test_council_orchestrator_flags_partial_metrics_on_errors(
     assert len(outcome.answers) == len(config.members) - 1
 
 
+def test_council_orchestrator_filters_inactive_members_for_fanout(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="peer_vote")
+    config.members[1].is_active = False
+    question = _build_question()
+
+    member_calls: list[str] = []
+    peer_vote_calls: list[str] = []
+    original_member = council_orchestrator._ask_council_member
+    original_peer_vote = council_orchestrator._ask_peer_vote
+
+    def _count_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        member_calls.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    def _count_peer_vote(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        peer_vote_calls.append(member.member_id)
+        return original_peer_vote(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _count_member)
+    monkeypatch.setattr(council_orchestrator, "_ask_peer_vote", _count_peer_vote)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    metrics = outcome.metadata.get("metrics", {})
+    assert set(member_calls) == {"facilitator", "analyst"}
+    assert set(peer_vote_calls) == {"facilitator", "analyst"}
+    assert {answer.member_id for answer in outcome.answers} == {"facilitator", "analyst"}
+    assert metrics.get("member_count") == 2
+    assert set(metrics.get("du_budget_per_member", {}).keys()) == {"facilitator", "analyst"}
+    assert metrics["peer_vote"]["voter_count"] == 2
+
+
+def test_council_orchestrator_returns_empty_outcome_when_no_active_members() -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    for member in config.members:
+        member.is_active = False
+
+    outcome = orchestrator.deliberate(config, _build_question())
+
+    assert outcome.answers == []
+    assert outcome.winning_member_ids == []
+    assert outcome.resolution == "No active council members available"
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics.get("error") == "no_active_members"
+    assert metrics.get("member_count") == 0
+    assert metrics.get("du_budget_per_member") == {}
+
 def test_council_orchestrator_requires_enabled_council(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         config,
