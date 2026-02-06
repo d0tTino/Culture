@@ -667,6 +667,83 @@ def test_build_council_context_requires_default_model(
         council_orchestrator._build_council_context()
 
 
+def test_council_orchestrator_skips_inactive_members_for_answer_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    config.members[1].is_active = False
+    question = _build_question()
+
+    invoked_member_ids: list[str] = []
+    original_member = council_orchestrator._ask_council_member
+
+    def _capture_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        invoked_member_ids.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _capture_member)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    active_member_ids = [member.member_id for member in config.members if member.is_active]
+
+    assert invoked_member_ids == active_member_ids
+    assert [answer.member_id for answer in outcome.answers] == active_member_ids
+
+
+def test_council_orchestrator_skips_inactive_members_for_peer_vote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="peer_vote")
+    config.members[2].is_active = False
+    question = _build_question()
+
+    member_call_ids: list[str] = []
+    peer_vote_call_ids: list[str] = []
+    original_member = council_orchestrator._ask_council_member
+    original_peer_vote = council_orchestrator._ask_peer_vote
+
+    def _capture_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        member_call_ids.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    def _capture_peer_vote(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        peer_vote_call_ids.append(member.member_id)
+        return original_peer_vote(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _capture_member)
+    monkeypatch.setattr(council_orchestrator, "_ask_peer_vote", _capture_peer_vote)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    active_member_ids = [member.member_id for member in config.members if member.is_active]
+
+    assert member_call_ids == active_member_ids
+    assert peer_vote_call_ids == active_member_ids
+    assert [answer.member_id for answer in outcome.answers] == active_member_ids
+
+
+def test_council_orchestrator_returns_deterministic_outcome_without_active_members() -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    for member in config.members:
+        member.is_active = False
+    question = _build_question()
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.answers == []
+    assert outcome.winning_member_ids == []
+    assert outcome.resolution == "No active council members available"
+    assert outcome.metadata is not None
+    assert outcome.metadata.get("no_active_members") is True
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics.get("error") == "no_active_members"
+    assert metrics.get("no_active_members") is True
+
+
 def test_council_orchestrator_peer_vote_mode() -> None:
     orchestrator = CouncilOrchestrator()
     config = _build_council_config(voting_mode="peer_vote")

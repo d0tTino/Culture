@@ -1333,6 +1333,8 @@ class CouncilOrchestrator:
         if not context.config.members:
             raise ValueError("Council configuration must include at least one member")
 
+        active_members = [member for member in context.config.members if member.is_active]
+
         run_metrics = CouncilRunMetrics()
         run_metrics.record_run()
         total_start = time.perf_counter()
@@ -1349,8 +1351,14 @@ class CouncilOrchestrator:
             "du_budget_exhausted": False,
             "du_budget_per_member": self._resolve_du_budgets(context.config),
         }
-        if not context.config.members:
-            metrics.update({"member_count": 0, "error": "no_active_members"})
+        if not active_members:
+            metrics.update(
+                {
+                    "member_count": 0,
+                    "error": "no_active_members",
+                    "no_active_members": True,
+                }
+            )
             logger.warning(
                 "No active council members available",
                 extra={
@@ -1365,8 +1373,17 @@ class CouncilOrchestrator:
                 resolution="No active council members available",
                 winning_member_ids=[],
                 summary=None,
-                metadata={"metrics": metrics},
+                metadata={"no_active_members": True, "metrics": metrics},
             )
+
+        if len(active_members) != len(context.config.members):
+            context = CouncilContext(
+                config=context.config.model_copy(update={"members": active_members}),
+                judge_model=context.judge_model,
+                member_model=context.member_model,
+                allow_remote_models=context.allow_remote_models,
+            )
+
         member_states = self._allocate_du_budgets(context.config, metrics)
 
         member_fanout_start = time.perf_counter()
