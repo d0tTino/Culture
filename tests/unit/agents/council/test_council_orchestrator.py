@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 import time
@@ -271,6 +272,21 @@ def test_council_orchestrator_can_bypass_env_guard(
     )
 
     assert outcome.winning_member_ids
+
+
+def test_run_council_raises_clear_error_inside_event_loop() -> None:
+    question = _build_question()
+
+    async def invoke_inside_loop() -> None:
+        with pytest.raises(RuntimeError) as excinfo:
+            council_orchestrator.run_council(question)
+
+        assert (
+            "cannot run inside an active event loop" in str(excinfo.value)
+        )
+        assert "await CouncilOrchestrator.adeliberate(...)" in str(excinfo.value)
+
+    asyncio.run(invoke_inside_loop())
 
 
 class DummyRetriever:
