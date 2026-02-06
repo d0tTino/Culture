@@ -76,6 +76,48 @@ class FakeResourceManager:
         return float(self.du_budgets.get(agent_id, 0.0))
 
 
+def _sum_du_debits(ledger: FakeLedger, *, agent_id: str) -> float:
+    return abs(
+        sum(delta_du for logged_agent_id, delta_du, _ in ledger.log_entries if logged_agent_id == agent_id)
+    )
+
+
+def _build_council_config_with_two_members(*, member_budget: float = 2.0) -> CouncilConfig:
+    return CouncilConfig(
+        members=[
+            CouncilMemberConfig(
+                member_id="member-a",
+                display_name="Member A",
+                role="Analyzer",
+                description="",
+                system_prompt="",
+                decision_weight=1.0,
+                persona="Curious analyst persona",
+                model="mistral:latest",
+                temperature=0.1,
+                max_tokens=32,
+                is_active=True,
+            ),
+            CouncilMemberConfig(
+                member_id="member-b",
+                display_name="Member B",
+                role="Generalist",
+                description="",
+                system_prompt="",
+                decision_weight=1.0,
+                persona="Helpful generalist persona",
+                model="mistral:latest",
+                temperature=0.1,
+                max_tokens=32,
+                is_active=True,
+            ),
+        ],
+        voting_mode="judge_llm",
+        enabled=True,
+        du_budget_per_question=member_budget,
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -269,3 +311,122 @@ async def test_council_orchestrator_honors_per_member_du_budget_overrides(
         ("member-a", pytest.approx(1.0)),
         ("member-b", pytest.approx(1.0)),
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_council_orchestrator_blocks_member_launch_when_owner_du_budget_is_below_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(infra_config, "_CONFIG", {"USE_COUNCIL_MODE": True})
+
+    fake_ledger = FakeLedger()
+    fake_resource_manager = FakeResourceManager(fake_ledger)
+
+    monkeypatch.setattr(resource_manager_module, "_resource_manager", fake_resource_manager)
+    monkeypatch.setattr(resource_manager_module, "get_resource_manager", lambda: fake_resource_manager)
+    monkeypatch.setattr("src.agents.council.orchestrator.get_resource_manager", lambda: fake_resource_manager)
+
+    monkeypatch.setattr(llm_client, "ledger", fake_ledger)
+    monkeypatch.setattr(infra_metrics, "ledger", fake_ledger)
+
+    llm_client.enable_mock_mode(
+        True,
+        {
+            "MemberResponseModel": {
+                "answer": "stubbed",
+                "reasoning": "",
+                "confidence": 1.0,
+                "citations": [],
+            }
+        },
+    )
+
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config_with_two_members(member_budget=2.0)
+    question = CouncilQuestion(
+        question_id="q-owner-insufficient",
+        prompt="What is DU?",
+        context="",
+        metadata={"agent_id": "owner-1", "owner_du_budget": 0.5, "owner_du_required": 1.0},
+        task_context=None,
+    )
+
+    context = orchestrator._resolve_context(config)
+    outcome = await orchestrator.adeliberate(context, question)
+
+    assert not outcome.answers
+    assert outcome.metadata
+    assert outcome.metadata.get("du_exhausted", False)
+    assert fake_resource_manager.charge_calls == []
+    assert fake_resource_manager.ensure_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_council_orchestrator_reports_partial_outcome_and_owner_du_accounting_when_budget_partially_sufficient(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(infra_config, "_CONFIG", {"USE_COUNCIL_MODE": True})
+
+    fake_ledger = FakeLedger()
+    fake_resource_manager = FakeResourceManager(fake_ledger)
+
+    monkeypatch.setattr(resource_manager_module, "_resource_manager", fake_resource_manager)
+    monkeypatch.setattr(resource_manager_module, "get_resource_manager", lambda: fake_resource_manager)
+    monkeypatch.setattr("src.agents.council.orchestrator.get_resource_manager", lambda: fake_resource_manager)
+
+    monkeypatch.setattr(llm_client, "ledger", fake_ledger)
+    monkeypatch.setattr(infra_metrics, "ledger", fake_ledger)
+
+    llm_client.enable_mock_mode(
+        True,
+        {
+            "MemberResponseModel": {
+                "answer": "stubbed",
+                "reasoning": "",
+                "confidence": 1.0,
+                "citations": [],
+            }
+        },
+    )
+
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config_with_two_members(member_budget=1.0)
+    question = CouncilQuestion(
+        question_id="q-owner-partial",
+        prompt="What is DU?",
+        context="",
+        metadata={"agent_id": "owner-1", "owner_du_budget": 1.1, "owner_du_required": 2.0},
+        task_context=None,
+    )
+
+    context = orchestrator._resolve_context(config)
+
+    outcome = await orchestrator.adeliberate(context, question)
+
+    owner_before = 1.1
+    owner_after = fake_resource_manager.get_du_budget("owner-1")
+
+    assert outcome.metadata
+    assert outcome.metadata.get("partial", False)
+    assert outcome.metadata.get("du_exhausted", False)
+    assert 0 < len(outcome.answers) < 2
+
+    for member_id in ("member-a", "member-b"):
+        initial_budget = fake_resource_manager.initial_budgets[member_id]
+        debited = _sum_du_debits(fake_ledger, agent_id=member_id)
+        remaining = fake_resource_manager.get_du_budget(member_id)
+        assert remaining == pytest.approx(initial_budget - debited)
+        assert fake_ledger.du_budgets.get(member_id, 0.0) == pytest.approx(remaining)
+
+    owner_debited = _sum_du_debits(fake_ledger, agent_id="owner-1")
+    assert owner_after == pytest.approx(owner_before - owner_debited)
+    assert fake_ledger.du_budgets.get("owner-1", 0.0) == pytest.approx(owner_after)
+
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics.get("du_budget_exhausted", False)
+    assert metrics.get("owner_agent_id") == "owner-1"
+    assert metrics.get("owner_du_before") == pytest.approx(owner_before)
+    assert metrics.get("owner_du_after") == pytest.approx(owner_after)
+    assert metrics.get("owner_du_debited") == pytest.approx(owner_debited)

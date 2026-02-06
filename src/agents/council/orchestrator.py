@@ -1481,7 +1481,9 @@ class CouncilOrchestrator:
                 allow_remote_models=context.allow_remote_models,
             )
 
-        member_states = self._allocate_du_budgets(context.config, question, active_members, metrics)
+        member_states = self._allocate_du_budgets(context.config, active_members, metrics)
+
+        self._initialize_owner_du_budget(question, active_members, metrics)
 
         member_fanout_start = time.perf_counter()
         answers = await self._gather_member_answers(
@@ -1676,6 +1678,53 @@ class CouncilOrchestrator:
         metrics["du_budget_per_member"] = budgets
         return member_states
 
+    def _initialize_owner_du_budget(
+        self,
+        question: CouncilQuestion,
+        members: Sequence[CouncilMemberConfig],
+        metrics: dict[str, Any],
+    ) -> None:
+        metadata = question.metadata if isinstance(question.metadata, Mapping) else {}
+        owner_budget = metadata.get("owner_du_budget")
+        if owner_budget is None:
+            return
+
+        owner_agent_id = _resolve_question_agent_id(question, None) or "owner"
+        try:
+            owner_budget_value = float(owner_budget)
+        except (TypeError, ValueError):
+            return
+
+        metrics["owner_agent_id"] = owner_agent_id
+        metrics["owner_du_before"] = owner_budget_value
+
+        try:
+            base_price, _ = llm_client.ledger.calculate_gas_price(owner_agent_id)
+        except Exception:
+            base_price = 1.0
+
+        required_raw = metadata.get("owner_du_required")
+        try:
+            required_value = (
+                float(required_raw) if required_raw is not None else float(len(members)) * float(base_price)
+            )
+        except (TypeError, ValueError):
+            required_value = float(len(members)) * float(base_price)
+
+        metrics["owner_du_required"] = required_value
+        metrics["owner_du_after"] = owner_budget_value
+        metrics["owner_du_debited"] = 0.0
+
+        try:
+            resource_manager = get_resource_manager()
+            resource_manager.set_du_budget(owner_agent_id, owner_budget_value)
+        except Exception:
+            pass
+
+        if owner_budget_value < float(base_price):
+            metrics["du_budget_exhausted"] = True
+            metrics["partial"] = True
+
     async def _gather_member_answers(
         self,
         context: CouncilContext,
@@ -1691,6 +1740,30 @@ class CouncilOrchestrator:
         semaphore = asyncio.Semaphore(max_concurrent)
         failures: list[str] = []
         answers: list[MemberAnswer] = []
+        owner_agent_id = metrics.get("owner_agent_id")
+
+        def _charge_owner_budget_for_member_call() -> bool:
+            if not owner_agent_id:
+                return True
+            owner_id = str(owner_agent_id)
+            try:
+                base_price, _ = llm_client.ledger.calculate_gas_price(owner_id)
+            except Exception:
+                base_price = 1.0
+            try:
+                resource_manager = get_resource_manager()
+                resource_manager.ensure_du_budget(owner_id, float(base_price))
+                resource_manager.charge_du(owner_id, float(base_price))
+                llm_client.ledger.log_change(owner_id, 0.0, -float(base_price), "llm_gas")
+                metrics["owner_du_debited"] = float(metrics.get("owner_du_debited", 0.0)) + float(
+                    base_price
+                )
+                metrics["owner_du_after"] = resource_manager.get_du_budget(owner_id)
+                return True
+            except Exception:
+                metrics["du_budget_exhausted"] = True
+                metrics["partial"] = True
+                return False
 
         def _has_available_budget(
             member: CouncilMemberConfig, state: SimpleNamespace | None
@@ -1765,6 +1838,9 @@ class CouncilOrchestrator:
             if not _has_available_budget(member, state):
                 metrics["du_budget_exhausted"] = True
                 logger.warning("DU budget exhausted before scheduling member %s", member.member_id)
+                break
+            if not _charge_owner_budget_for_member_call():
+                logger.warning("Owner DU budget exhausted before scheduling member %s", member.member_id)
                 break
             tasks.append(asyncio.create_task(_call_member(member)))
             if len(tasks) >= max_concurrent:
