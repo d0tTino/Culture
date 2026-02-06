@@ -1291,6 +1291,17 @@ class CouncilOrchestrator:
     ) -> CouncilOutcome:
         """Synchronously deliberate by awaiting the async implementation."""
 
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError(
+                "CouncilOrchestrator.deliberate() and run_council() cannot run inside an active "
+                "event loop. In async code, call `await CouncilOrchestrator.adeliberate(...)` "
+                "with a resolved council context instead."
+            )
+
         context = self._resolve_context(config)
         return asyncio.run(
             self.adeliberate(
