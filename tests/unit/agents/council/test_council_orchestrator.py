@@ -19,7 +19,7 @@ from src.agents.council import (
     MemberAnswer,
 )
 from src.agents.council.fitness_store import council_fitness_store
-from src.agents.council.stats_store import CouncilStatsStore
+from src.agents.council.stats_store import CouncilStatsStore, council_stats_store
 from src.infra import config, llm_client
 from src.shared import llm_mocks
 
@@ -82,6 +82,14 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def reset_fitness_store() -> None:
     council_fitness_store.reset()
+
+
+@pytest.fixture(autouse=True)
+def reset_stats_store() -> None:
+    council_stats_store.conn.execute("DELETE FROM council_member_stats")
+    council_stats_store.conn.execute("DELETE FROM council_pairwise_agreements")
+    council_stats_store.conn.execute("DELETE FROM council_outcomes")
+    council_stats_store.conn.commit()
 
 
 @pytest.fixture(autouse=True)
@@ -252,9 +260,83 @@ def test_peer_vote_forwards_generation_params(monkeypatch: pytest.MonkeyPatch) -
     result = council_orchestrator._ask_peer_vote(member, question, answers)
 
     assert result is not None
-    assert result.winner_id == "facilitator"
+    assert result.vote.winner_id == "facilitator"
     assert captured["temperature"] == pytest.approx(member.temperature)
     assert captured["max_tokens"] == member.max_tokens
+
+
+def test_council_retry_success_updates_outcome_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    question = _build_question()
+    call_state = {"member_attempts": 0}
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        response_model = kwargs.get("response_model")
+        if response_model is council_orchestrator.MemberResponseModel:
+            call_state["member_attempts"] += 1
+            if call_state["member_attempts"] == 1:
+                raise TimeoutError("temporary timeout")
+            return council_orchestrator.MemberResponseModel(
+                answer="Recovered member answer",
+                reasoning="Recovered after retry",
+                confidence=0.7,
+                citations=[],
+            )
+        if response_model is council_orchestrator.CouncilVoteModel:
+            return council_orchestrator.CouncilVoteModel(
+                winning_member_id="facilitator",
+                votes={"facilitator": 1.0},
+                scores={},
+                metrics={},
+                summary="Judge summary",
+                reasoning="Judge reasoning",
+                resolution="Recovered member answer",
+            )
+        raise AssertionError("Unexpected response model")
+
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metrics["retry_count"] == 1
+    assert outcome.metrics["failed_after_retries"] is False
+
+
+def test_council_retry_exhaustion_updates_outcome_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    question = _build_question()
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        response_model = kwargs.get("response_model")
+        if response_model is council_orchestrator.MemberResponseModel:
+            raise TimeoutError("persistent timeout")
+        if response_model is council_orchestrator.CouncilVoteModel:
+            return council_orchestrator.CouncilVoteModel(
+                winning_member_id="facilitator",
+                votes={"facilitator": 1.0},
+                scores={},
+                metrics={},
+                summary="Judge summary",
+                reasoning="Judge reasoning",
+                resolution="Fallback resolution",
+            )
+        raise AssertionError("Unexpected response model")
+
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
+    monkeypatch.setattr(council_orchestrator, "generate_text", lambda *args, **kwargs: "fallback")
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metrics["retry_count"] == len(config.members)
+    assert outcome.metrics["failed_after_retries"] is True
 
 
 def test_council_orchestrator_can_bypass_env_guard(
@@ -714,6 +796,83 @@ def test_build_council_context_requires_default_model(
 
     with pytest.raises(RuntimeError, match="DEFAULT_LLM_MODEL must be configured"):
         council_orchestrator._build_council_context()
+
+
+def test_council_orchestrator_skips_inactive_members_for_answer_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    config.members[1].is_active = False
+    question = _build_question()
+
+    invoked_member_ids: list[str] = []
+    original_member = council_orchestrator._ask_council_member
+
+    def _capture_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        invoked_member_ids.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _capture_member)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    active_member_ids = [member.member_id for member in config.members if member.is_active]
+
+    assert invoked_member_ids == active_member_ids
+    assert [answer.member_id for answer in outcome.answers] == active_member_ids
+
+
+def test_council_orchestrator_skips_inactive_members_for_peer_vote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="peer_vote")
+    config.members[2].is_active = False
+    question = _build_question()
+
+    member_call_ids: list[str] = []
+    peer_vote_call_ids: list[str] = []
+    original_member = council_orchestrator._ask_council_member
+    original_peer_vote = council_orchestrator._ask_peer_vote
+
+    def _capture_member(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        member_call_ids.append(member.member_id)
+        return original_member(member, *args, **kwargs)
+
+    def _capture_peer_vote(member: CouncilMemberConfig, *args: object, **kwargs: object):
+        peer_vote_call_ids.append(member.member_id)
+        return original_peer_vote(member, *args, **kwargs)
+
+    monkeypatch.setattr(council_orchestrator, "_ask_council_member", _capture_member)
+    monkeypatch.setattr(council_orchestrator, "_ask_peer_vote", _capture_peer_vote)
+
+    outcome = orchestrator.deliberate(config, question)
+
+    active_member_ids = [member.member_id for member in config.members if member.is_active]
+
+    assert member_call_ids == active_member_ids
+    assert peer_vote_call_ids == active_member_ids
+    assert [answer.member_id for answer in outcome.answers] == active_member_ids
+
+
+def test_council_orchestrator_returns_deterministic_outcome_without_active_members() -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    for member in config.members:
+        member.is_active = False
+    question = _build_question()
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.answers == []
+    assert outcome.winning_member_ids == []
+    assert outcome.resolution == "No active council members available"
+    assert outcome.metadata is not None
+    assert outcome.metadata.get("no_active_members") is True
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics.get("error") == "no_active_members"
+    assert metrics.get("no_active_members") is True
 
 
 def test_council_orchestrator_peer_vote_mode() -> None:

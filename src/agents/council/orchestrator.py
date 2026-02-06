@@ -7,12 +7,12 @@ import json
 import logging
 import re
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, TypeVar
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
 from src.agents.council.fitness_store import CouncilFitnessStore, council_fitness_store
 from src.agents.council.stats_store import council_stats_store
@@ -35,8 +35,11 @@ from src.sim.resource_manager import get_resource_manager
 
 logger = logging.getLogger(__name__)
 LLM_MAX_ATTEMPTS = 2
+LLM_RETRY_BASE_DELAY_SECONDS = 0.05
+LLM_RETRY_MAX_DELAY_SECONDS = 0.2
 JUDGE_SCORE_CATEGORIES = ("correctness", "clarity", "usefulness", "safety")
 PAIRWISE_EMA_ALPHA = 0.3
+TModel = TypeVar("TModel")
 
 DEFAULT_MEMBER_PROMPT = (
     "You are participating in a council of AI personas. Stay fully in character and keep your unique voice. "
@@ -92,6 +95,106 @@ class CouncilContext:
     judge_model: str
     member_model: str
     allow_remote_models: bool
+
+
+@dataclass(slots=True)
+class LLMRetryResult:
+    """Result envelope for LLM retries."""
+
+    value: Any | None
+    retry_count: int
+    failed_after_retries: bool
+    errors: list[str]
+
+
+@dataclass(slots=True)
+class PeerVoteResult:
+    """Peer vote payload including retry metadata."""
+
+    vote: CouncilPeerVoteModel
+    retry_count: int
+    failed_after_retries: bool
+
+
+def _is_retryable_llm_exception(exc: Exception) -> bool:
+    """Return True for transient/time-bound failures that should be retried."""
+
+    if isinstance(exc, ValidationError):
+        return False
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError, ConnectionError)):
+        return True
+
+    retryable_markers = (
+        "timeout",
+        "timed out",
+        "temporarily unavailable",
+        "connection reset",
+        "connection aborted",
+        "connection refused",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "rate limit",
+        "transport",
+    )
+    text = str(exc).lower()
+    return any(marker in text for marker in retryable_markers)
+
+
+def _call_with_retries(
+    call: Callable[[], TModel | None],
+    *,
+    max_attempts: int = LLM_MAX_ATTEMPTS,
+    base_delay_seconds: float = LLM_RETRY_BASE_DELAY_SECONDS,
+    max_delay_seconds: float = LLM_RETRY_MAX_DELAY_SECONDS,
+    log_message: str,
+    log_extra: Mapping[str, Any],
+) -> LLMRetryResult:
+    """Execute an LLM call with bounded exponential backoff for retryable errors."""
+
+    errors: list[str] = []
+    retry_count = 0
+    for attempt in range(1, max(1, max_attempts) + 1):
+        try:
+            value = call()
+            if value is not None:
+                return LLMRetryResult(
+                    value=value,
+                    retry_count=retry_count,
+                    failed_after_retries=False,
+                    errors=errors,
+                )
+            if attempt < max_attempts:
+                retry_count += 1
+        except Exception as exc:  # pragma: no cover - defensive logging behavior
+            if isinstance(exc, RuntimeError) and "budget" in str(exc).lower():
+                raise
+            errors.append(str(exc))
+            retryable = _is_retryable_llm_exception(exc)
+            logger.warning(
+                log_message,
+                extra={**dict(log_extra), "attempt": attempt, "retryable": retryable},
+                exc_info=True,
+            )
+            if not retryable:
+                return LLMRetryResult(
+                    value=None,
+                    retry_count=retry_count,
+                    failed_after_retries=True,
+                    errors=errors,
+                )
+            if attempt >= max_attempts:
+                break
+            retry_count += 1
+            delay = min(base_delay_seconds * (2 ** (attempt - 1)), max_delay_seconds)
+            time.sleep(max(0.0, delay))
+
+    return LLMRetryResult(
+        value=None,
+        retry_count=retry_count,
+        failed_after_retries=bool(errors),
+        errors=errors,
+    )
 
 
 class CouncilRunMetrics:
@@ -603,46 +706,38 @@ def _ask_council_member(
     if not member_model:
         member_model = _resolve_default_model()
     track_mock_usage = is_mock_mode_enabled()
-    errors: list[str] = []
     generation_params = _resolve_member_generation_params(member)
-
-    structured: MemberResponseModel | None = None
-    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
-        try:
-            if track_mock_usage:
-                llm_client.client.generate(prompt=prompt)
-                structured = generate_structured_output(
-                    prompt,
-                    response_model=MemberResponseModel,
-                    model=member_model,
-                    temperature=generation_params["temperature"],
-                    max_tokens=generation_params["max_tokens"],
-                    agent_state=agent_state,
-                )
-            else:
-                structured = generate_structured_output(
-                    prompt,
-                    response_model=MemberResponseModel,
-                    model=member_model,
-                    temperature=generation_params["temperature"],
-                    max_tokens=generation_params["max_tokens"],
-                    agent_state=agent_state,
-                )
-            if structured is not None:
-                break
-        except Exception as exc:  # pragma: no cover - defensive
-            if isinstance(exc, RuntimeError) and "budget" in str(exc).lower():
-                raise
-            errors.append(str(exc))
-            logger.warning(
-                "Council member structured response failed",
-                extra={
-                    "event": "council.member.llm_error",
-                    "member_id": member.member_id,
-                    "attempt": attempt,
-                },
-                exc_info=True,
+    retry_result = _call_with_retries(
+        lambda: (
+            llm_client.client.generate(prompt=prompt)
+            and generate_structured_output(
+                prompt,
+                response_model=MemberResponseModel,
+                model=member_model,
+                temperature=generation_params["temperature"],
+                max_tokens=generation_params["max_tokens"],
+                agent_state=agent_state,
             )
+        )
+        if track_mock_usage
+        else generate_structured_output(
+            prompt,
+            response_model=MemberResponseModel,
+            model=member_model,
+            temperature=generation_params["temperature"],
+            max_tokens=generation_params["max_tokens"],
+            agent_state=agent_state,
+        ),
+        log_message="Council member structured response failed",
+        log_extra={"event": "council.member.llm_error", "member_id": member.member_id},
+    )
+
+    structured = retry_result.value
+    errors = list(retry_result.errors)
+    retry_metrics = {
+        "retry_count": retry_result.retry_count,
+        "failed_after_retries": retry_result.failed_after_retries,
+    }
 
     fallback_text = ""
     if structured is None:
@@ -673,7 +768,7 @@ def _ask_council_member(
             reasoning=None,
             confidence=None,
             citations=[],
-            metadata={"errors": errors, "fallback_used": True},
+            metadata={"errors": errors, "fallback_used": True, **retry_metrics},
         )
 
     return MemberAnswer(
@@ -682,7 +777,7 @@ def _ask_council_member(
         reasoning=structured.reasoning,
         confidence=structured.confidence,
         citations=structured.citations,
-        metadata={"errors": errors, "fallback_used": False},
+        metadata={"errors": errors, "fallback_used": False, **retry_metrics},
     )
 
 
@@ -946,38 +1041,28 @@ def _judge_council_answers(
 
     track_mock_usage = is_mock_mode_enabled()
     prompt = _build_judge_prompt(question, answers, extra_context=extra_context, rag_docs=rag_docs)
-    errors: list[str] = []
-    structured: CouncilVoteModel | None = None
-    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
-        try:
-            if track_mock_usage:
-                llm_client.client.generate(prompt=prompt)
-                structured = generate_structured_output(
-                    prompt,
-                    response_model=CouncilVoteModel,
-                    model=context.judge_model,
-                    temperature=0.1,
-                )
-            else:
-                structured = generate_structured_output(
-                    prompt,
-                    response_model=CouncilVoteModel,
-                    model=context.judge_model,
-                    temperature=0.1,
-                )
-            if structured is not None:
-                break
-        except Exception as exc:  # pragma: no cover - defensive
-            errors.append(str(exc))
-            logger.warning(
-                "Council judge evaluation failed",
-                extra={
-                    "event": "council.judge.llm_error",
-                    "question_id": question.question_id,
-                    "attempt": attempt,
-                },
-                exc_info=True,
+    retry_result = _call_with_retries(
+        lambda: (
+            llm_client.client.generate(prompt=prompt)
+            and generate_structured_output(
+                prompt,
+                response_model=CouncilVoteModel,
+                model=context.judge_model,
+                temperature=0.1,
             )
+        )
+        if track_mock_usage
+        else generate_structured_output(
+            prompt,
+            response_model=CouncilVoteModel,
+            model=context.judge_model,
+            temperature=0.1,
+        ),
+        log_message="Council judge evaluation failed",
+        log_extra={"event": "council.judge.llm_error", "question_id": question.question_id},
+    )
+    errors = retry_result.errors
+    structured = retry_result.value
 
     if structured is None and errors:
         logger.error(
@@ -986,11 +1071,18 @@ def _judge_council_answers(
                 "event": "council.judge.failure",
                 "question_id": question.question_id,
                 "errors": errors,
+                "retry_count": retry_result.retry_count,
+                "failed_after_retries": retry_result.failed_after_retries,
             },
         )
 
     if structured is not None:
         structured = _normalize_vote_metrics(structured, answers)
+        structured.metrics = {
+            **structured.metrics,
+            "retry_count": retry_result.retry_count,
+            "failed_after_retries": retry_result.failed_after_retries,
+        }
 
     return structured
 
@@ -1049,7 +1141,7 @@ def _ask_peer_vote(
     extra_context: Mapping[str, Any] | None = None,
     rag_docs: Sequence[str] | None = None,
     agent_state: Any | None = None,
-) -> CouncilPeerVoteModel | None:
+) -> PeerVoteResult | None:
     prompt = _build_peer_vote_prompt(
         question, answers, voter=member, extra_context=extra_context, rag_docs=rag_docs
     )
@@ -1058,44 +1150,33 @@ def _ask_peer_vote(
     if not member_model:
         member_model = _resolve_default_model()
     track_mock_usage = is_mock_mode_enabled()
-    errors: list[str] = []
     generation_params = _resolve_member_generation_params(member)
-
-    structured: CouncilPeerVoteModel | None = None
-    for attempt in range(1, LLM_MAX_ATTEMPTS + 1):
-        try:
-            if track_mock_usage:
-                llm_client.client.generate(prompt=prompt)
-                structured = generate_structured_output(
-                    prompt,
-                    response_model=CouncilPeerVoteModel,
-                    model=member_model,
-                    temperature=generation_params["temperature"],
-                    max_tokens=generation_params["max_tokens"],
-                    agent_state=agent_state,
-                )
-            else:
-                structured = generate_structured_output(
-                    prompt,
-                    response_model=CouncilPeerVoteModel,
-                    model=member_model,
-                    temperature=generation_params["temperature"],
-                    max_tokens=generation_params["max_tokens"],
-                    agent_state=agent_state,
-                )
-            if structured is not None:
-                break
-        except Exception as exc:  # pragma: no cover - defensive
-            errors.append(str(exc))
-            logger.warning(
-                "Council peer vote failed",
-                extra={
-                    "event": "council.peer_vote.llm_error",
-                    "member_id": member.member_id,
-                    "attempt": attempt,
-                },
-                exc_info=True,
+    retry_result = _call_with_retries(
+        lambda: (
+            llm_client.client.generate(prompt=prompt)
+            and generate_structured_output(
+                prompt,
+                response_model=CouncilPeerVoteModel,
+                model=member_model,
+                temperature=generation_params["temperature"],
+                max_tokens=generation_params["max_tokens"],
+                agent_state=agent_state,
             )
+        )
+        if track_mock_usage
+        else generate_structured_output(
+            prompt,
+            response_model=CouncilPeerVoteModel,
+            model=member_model,
+            temperature=generation_params["temperature"],
+            max_tokens=generation_params["max_tokens"],
+            agent_state=agent_state,
+        ),
+        log_message="Council peer vote failed",
+        log_extra={"event": "council.peer_vote.llm_error", "member_id": member.member_id},
+    )
+    errors = retry_result.errors
+    structured = retry_result.value
 
     if structured is None and errors:
         logger.error(
@@ -1104,9 +1185,17 @@ def _ask_peer_vote(
                 "event": "council.peer_vote.failure",
                 "member_id": member.member_id,
                 "errors": errors,
+                "retry_count": retry_result.retry_count,
+                "failed_after_retries": retry_result.failed_after_retries,
             },
         )
-    return structured
+    if structured is None:
+        return None
+    return PeerVoteResult(
+        vote=structured,
+        retry_count=retry_result.retry_count,
+        failed_after_retries=retry_result.failed_after_retries,
+    )
 
 
 def _select_winner_id(
@@ -1154,7 +1243,7 @@ def _build_vote_from_scores(
 
 def _aggregate_peer_votes(
     answers: Sequence[MemberAnswer],
-    peer_votes: Sequence[tuple[CouncilMemberConfig, CouncilPeerVoteModel]],
+    peer_votes: Sequence[tuple[CouncilMemberConfig, PeerVoteResult]],
 ) -> CouncilVoteModel | None:
     if not peer_votes:
         return None
@@ -1162,10 +1251,15 @@ def _aggregate_peer_votes(
     totals: dict[str, float] = {}
     per_voter: dict[str, dict[str, float]] = {}
     weights: dict[str, float] = {}
+    retry_counts: dict[str, int] = {}
+    failed_after_retries: dict[str, bool] = {}
 
-    for voter, vote in peer_votes:
+    for voter, peer_vote_result in peer_votes:
+        vote = peer_vote_result.vote
         weight = float(voter.decision_weight or 1.0)
         weights[voter.member_id] = weight
+        retry_counts[voter.member_id] = peer_vote_result.retry_count
+        failed_after_retries[voter.member_id] = peer_vote_result.failed_after_retries
         vote_scores: dict[str, float] = {}
         for member_id, raw_score in vote.votes.items():
             score = _coerce_score(raw_score)
@@ -1193,6 +1287,8 @@ def _aggregate_peer_votes(
             "voter_count": len(per_voter),
             "votes": per_voter,
             "weights": weights,
+            "retry_count": retry_counts,
+            "failed_after_retries": failed_after_retries,
         }
     }
     summary = "Peer vote aggregation complete."
@@ -1333,6 +1429,8 @@ class CouncilOrchestrator:
         if not context.config.members:
             raise ValueError("Council configuration must include at least one member")
 
+        active_members = [member for member in context.config.members if member.is_active]
+
         run_metrics = CouncilRunMetrics()
         run_metrics.record_run()
         total_start = time.perf_counter()
@@ -1349,10 +1447,14 @@ class CouncilOrchestrator:
             "du_budget_exhausted": False,
             "du_budget_per_member": {},
         }
-        active_members = [member for member in context.config.members if member.is_active]
-        metrics["member_count"] = len(active_members)
         if not active_members:
-            metrics.update({"member_count": 0, "error": "no_active_members"})
+            metrics.update(
+                {
+                    "member_count": 0,
+                    "error": "no_active_members",
+                    "no_active_members": True,
+                }
+            )
             logger.warning(
                 "No active council members available",
                 extra={
@@ -1367,9 +1469,18 @@ class CouncilOrchestrator:
                 resolution="No active council members available",
                 winning_member_ids=[],
                 summary=None,
-                metadata={"metrics": metrics},
+                metadata={"no_active_members": True, "metrics": metrics},
             )
-        member_states = self._allocate_du_budgets(context.config, active_members, metrics)
+
+        if len(active_members) != len(context.config.members):
+            context = CouncilContext(
+                config=context.config.model_copy(update={"members": active_members}),
+                judge_model=context.judge_model,
+                member_model=context.member_model,
+                allow_remote_models=context.allow_remote_models,
+            )
+
+        member_states = self._allocate_du_budgets(context.config, metrics)
 
         member_fanout_start = time.perf_counter()
         answers = await self._gather_member_answers(
@@ -1618,7 +1729,7 @@ class CouncilOrchestrator:
         extra_context: Mapping[str, Any] | None,
         rag_docs: Sequence[str],
         metrics: dict[str, Any],
-    ) -> list[tuple[CouncilMemberConfig, CouncilPeerVoteModel]]:
+    ) -> list[tuple[CouncilMemberConfig, PeerVoteResult]]:
         semaphore = asyncio.Semaphore(
             max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
         )
@@ -1626,7 +1737,7 @@ class CouncilOrchestrator:
 
         async def _call_member(
             member: CouncilMemberConfig,
-        ) -> tuple[CouncilMemberConfig, CouncilPeerVoteModel] | None:
+        ) -> tuple[CouncilMemberConfig, PeerVoteResult] | None:
             state = member_states.get(member.member_id)
             try:
                 async with semaphore:
@@ -1660,8 +1771,8 @@ class CouncilOrchestrator:
             return_exceptions=True,
         )
 
-        votes: list[tuple[CouncilMemberConfig, CouncilPeerVoteModel]] = []
-        for member, result in zip(members, results):
+        votes: list[tuple[CouncilMemberConfig, PeerVoteResult]] = []
+        for member, result in zip(context.config.members, results):
             if isinstance(result, Exception):
                 if "budget" in str(result).lower():
                     metrics["du_budget_exhausted"] = True
@@ -1718,6 +1829,38 @@ class CouncilOrchestrator:
             outcome_metrics["fitness_snapshot"] = fitness_snapshot
             agreement_summary = _derive_agreement_summary(answers, vote, fitness_snapshot)
             outcome_metrics.update(agreement_summary)
+
+        answer_retry_count = 0
+        answer_failed_after_retries = False
+        for answer in answers:
+            answer_metadata = answer.metadata if isinstance(answer.metadata, Mapping) else {}
+            if not isinstance(answer_metadata, Mapping):
+                continue
+            retry_count_value = answer_metadata.get("retry_count")
+            if isinstance(retry_count_value, int):
+                answer_retry_count += retry_count_value
+            elif isinstance(retry_count_value, float):
+                answer_retry_count += int(retry_count_value)
+            answer_failed_after_retries = answer_failed_after_retries or bool(
+                answer_metadata.get("failed_after_retries")
+            )
+
+        vote_retry_count = 0
+        vote_failed_after_retries = False
+        if vote is not None:
+            retry_count_value = vote.metrics.get("retry_count") if vote.metrics else None
+            if isinstance(retry_count_value, int):
+                vote_retry_count = retry_count_value
+            elif isinstance(retry_count_value, float):
+                vote_retry_count = int(retry_count_value)
+            vote_failed_after_retries = bool(
+                vote.metrics.get("failed_after_retries") if vote.metrics else False
+            )
+
+        outcome_metrics["retry_count"] = answer_retry_count + vote_retry_count
+        outcome_metrics["failed_after_retries"] = (
+            answer_failed_after_retries or vote_failed_after_retries
+        )
 
         metadata["metrics"] = outcome_metrics
 
