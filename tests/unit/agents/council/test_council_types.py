@@ -108,6 +108,73 @@ def test_load_fails_without_active_members(
         )
 
 
+def test_load_fails_with_duplicate_member_ids(
+    council_config_adapter: TypeAdapter[CouncilConfig],
+) -> None:
+    with pytest.raises(ValidationError):
+        council_config_adapter.validate_python(
+            {
+                "enabled": True,
+                "members": [
+                    {
+                        "member_id": "facilitator",
+                        "display_name": "Facilitator",
+                        "role": "Moderator",
+                        "persona": "Guides the discussion",
+                        "model": "mistral:latest",
+                        "temperature": 0.2,
+                        "max_tokens": 256,
+                        "is_active": True,
+                    },
+                    {
+                        "member_id": "facilitator",
+                        "display_name": "Innovator",
+                        "role": "Innovator",
+                        "persona": "Contributes new ideas",
+                        "model": "mistral:latest",
+                        "temperature": 0.4,
+                        "max_tokens": 256,
+                        "is_active": True,
+                    },
+                ],
+            }
+        )
+
+
+def test_load_passes_with_distinct_member_ids(
+    council_config_adapter: TypeAdapter[CouncilConfig],
+) -> None:
+    config = council_config_adapter.validate_python(
+        {
+            "enabled": True,
+            "members": [
+                {
+                    "member_id": "facilitator",
+                    "display_name": "Facilitator",
+                    "role": "Moderator",
+                    "persona": "Guides the discussion",
+                    "model": "mistral:latest",
+                    "temperature": 0.2,
+                    "max_tokens": 256,
+                    "is_active": True,
+                },
+                {
+                    "member_id": "innovator",
+                    "display_name": "Innovator",
+                    "role": "Innovator",
+                    "persona": "Contributes new ideas",
+                    "model": "mistral:latest",
+                    "temperature": 0.4,
+                    "max_tokens": 256,
+                    "is_active": True,
+                },
+            ],
+        }
+    )
+
+    assert [member.member_id for member in config.members] == ["facilitator", "innovator"]
+
+
 def test_load_accepts_legacy_voting_mode(
     council_config_adapter: TypeAdapter[CouncilConfig],
 ) -> None:
