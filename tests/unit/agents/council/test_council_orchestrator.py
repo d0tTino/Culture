@@ -19,7 +19,7 @@ from src.agents.council import (
     MemberAnswer,
 )
 from src.agents.council.fitness_store import council_fitness_store
-from src.agents.council.stats_store import CouncilStatsStore
+from src.agents.council.stats_store import CouncilStatsStore, council_stats_store
 from src.infra import config, llm_client
 from src.shared import llm_mocks
 
@@ -82,6 +82,14 @@ def patch_llm(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def reset_fitness_store() -> None:
     council_fitness_store.reset()
+
+
+@pytest.fixture(autouse=True)
+def reset_stats_store() -> None:
+    council_stats_store.conn.execute("DELETE FROM council_member_stats")
+    council_stats_store.conn.execute("DELETE FROM council_pairwise_agreements")
+    council_stats_store.conn.execute("DELETE FROM council_outcomes")
+    council_stats_store.conn.commit()
 
 
 @pytest.fixture(autouse=True)
@@ -252,9 +260,83 @@ def test_peer_vote_forwards_generation_params(monkeypatch: pytest.MonkeyPatch) -
     result = council_orchestrator._ask_peer_vote(member, question, answers)
 
     assert result is not None
-    assert result.winner_id == "facilitator"
+    assert result.vote.winner_id == "facilitator"
     assert captured["temperature"] == pytest.approx(member.temperature)
     assert captured["max_tokens"] == member.max_tokens
+
+
+def test_council_retry_success_updates_outcome_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    question = _build_question()
+    call_state = {"member_attempts": 0}
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        response_model = kwargs.get("response_model")
+        if response_model is council_orchestrator.MemberResponseModel:
+            call_state["member_attempts"] += 1
+            if call_state["member_attempts"] == 1:
+                raise TimeoutError("temporary timeout")
+            return council_orchestrator.MemberResponseModel(
+                answer="Recovered member answer",
+                reasoning="Recovered after retry",
+                confidence=0.7,
+                citations=[],
+            )
+        if response_model is council_orchestrator.CouncilVoteModel:
+            return council_orchestrator.CouncilVoteModel(
+                winning_member_id="facilitator",
+                votes={"facilitator": 1.0},
+                scores={},
+                metrics={},
+                summary="Judge summary",
+                reasoning="Judge reasoning",
+                resolution="Recovered member answer",
+            )
+        raise AssertionError("Unexpected response model")
+
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metrics["retry_count"] == 1
+    assert outcome.metrics["failed_after_retries"] is False
+
+
+def test_council_retry_exhaustion_updates_outcome_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    question = _build_question()
+
+    def fake_generate_structured_output(*args: object, **kwargs: object):
+        response_model = kwargs.get("response_model")
+        if response_model is council_orchestrator.MemberResponseModel:
+            raise TimeoutError("persistent timeout")
+        if response_model is council_orchestrator.CouncilVoteModel:
+            return council_orchestrator.CouncilVoteModel(
+                winning_member_id="facilitator",
+                votes={"facilitator": 1.0},
+                scores={},
+                metrics={},
+                summary="Judge summary",
+                reasoning="Judge reasoning",
+                resolution="Fallback resolution",
+            )
+        raise AssertionError("Unexpected response model")
+
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
+    monkeypatch.setattr(council_orchestrator, "generate_text", lambda *args, **kwargs: "fallback")
+
+    outcome = orchestrator.deliberate(config, question)
+
+    assert outcome.metrics["retry_count"] == len(config.members)
+    assert outcome.metrics["failed_after_retries"] is True
 
 
 def test_council_orchestrator_can_bypass_env_guard(
