@@ -143,6 +143,7 @@ DEFAULT_CONFIG: dict[str, object] = {
     "MEMORY_RETRIEVER_TOP_K": 5,
     "MEMORY_RETRIEVER_TOKEN_LIMIT": 1000,
     "USE_COUNCIL_MODE": False,
+    "USE_COUNCIL_FOR_DECISIONS": False,
     "COUNCIL_CONFIG_PATH": "config/council.yml",
     "COUNCIL_MAX_CONCURRENT_CALLS": 3,
     "DU_BUDGET_PER_QUESTION": 5.0,
@@ -308,6 +309,7 @@ BOOL_CONFIG_KEYS = [
     "MEMORY_PRUNING_L2_MUS_ENABLED",
     "SNAPSHOT_COMPRESS",
     "USE_COUNCIL_MODE",
+    "USE_COUNCIL_FOR_DECISIONS",
 ]
 
 # Keys that must be defined for a complete runtime configuration.

@@ -144,6 +144,7 @@ class ConfigSettings(BaseSettings):
     MEMORY_RETRIEVER_TOP_K: int = 5
     MEMORY_RETRIEVER_TOKEN_LIMIT: int = 1000
     USE_COUNCIL_MODE: bool = False
+    USE_COUNCIL_FOR_DECISIONS: bool = False
     COUNCIL_CONFIG_PATH: str = "config/council.yml"
     COUNCIL_MAX_CONCURRENT_CALLS: int = 3
     DU_BUDGET_PER_QUESTION: float = 5.0

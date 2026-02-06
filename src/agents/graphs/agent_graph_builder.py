@@ -64,6 +64,8 @@ def route_action_intent(state: AgentTurnState) -> str:
 
 def build_graph() -> Any:
     use_council_mode = bool(config.get_config("USE_COUNCIL_MODE"))
+    use_council_for_decisions = bool(config.get_config("USE_COUNCIL_FOR_DECISIONS"))
+    enable_council_decision_node = use_council_mode and use_council_for_decisions
 
     graph_builder = StateGraph(AgentTurnState)
     graph_builder.add_node("analyze_perception_sentiment", analyze_perception_sentiment_node)
@@ -72,7 +74,7 @@ def build_graph() -> Any:
     graph_builder.add_node("retrieve_and_summarize_memories", retrieve_and_summarize_memories_node)
     graph_builder.add_node("generate_thought_and_message", generate_thought_and_message_node)
 
-    if use_council_mode:
+    if enable_council_decision_node:
         graph_builder.add_node("council_decision", council_decision_node)
 
     graph_builder.add_node("handle_propose_idea", handle_propose_idea_node)
@@ -98,7 +100,7 @@ def build_graph() -> Any:
     graph_builder.add_edge("retrieve_and_summarize_memories", "generate_thought_and_message")
 
     branch_source = "generate_thought_and_message"
-    if use_council_mode:
+    if enable_council_decision_node:
         graph_builder.add_edge("generate_thought_and_message", "council_decision")
         branch_source = "council_decision"
 

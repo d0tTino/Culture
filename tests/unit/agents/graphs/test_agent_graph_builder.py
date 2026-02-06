@@ -53,27 +53,27 @@ def _patch_graph_nodes(monkeypatch: pytest.MonkeyPatch, *, include_council: bool
 
 
 @pytest.mark.asyncio
-async def test_graph_skips_council_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("config_values", "expect_council"),
+    [
+        ({"USE_COUNCIL_MODE": False, "USE_COUNCIL_FOR_DECISIONS": True}, False),
+        ({"USE_COUNCIL_MODE": True, "USE_COUNCIL_FOR_DECISIONS": False}, False),
+        ({"USE_COUNCIL_MODE": True, "USE_COUNCIL_FOR_DECISIONS": True}, True),
+    ],
+)
+async def test_graph_council_routing_requires_master_and_scoped_flags(
+    monkeypatch: pytest.MonkeyPatch,
+    config_values: dict[str, bool],
+    expect_council: bool,
+) -> None:
     calls: list[str] = []
-    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": False})
-    _patch_graph_nodes(monkeypatch, include_council=False, calls=calls)
+    monkeypatch.setattr(config, "_CONFIG", config_values)
+    _patch_graph_nodes(monkeypatch, include_council=expect_council, calls=calls)
 
     executor = agent_graph_builder.build_graph()
     await executor.ainvoke({})
 
-    assert "council_decision_node" not in calls
+    assert ("council_decision_node" in calls) is expect_council
     assert "generate_thought_and_message_node" in calls
-
-
-@pytest.mark.asyncio
-async def test_graph_routes_to_council_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[str] = []
-    monkeypatch.setattr(config, "_CONFIG", {"USE_COUNCIL_MODE": True})
-    _patch_graph_nodes(monkeypatch, include_council=True, calls=calls)
-
-    executor = agent_graph_builder.build_graph()
-    await executor.ainvoke({})
-
-    assert "council_decision_node" in calls
-    # Ensure decision handlers still run after council
+    # Ensure decision handlers still run after council/no-council routing
     assert any(call.startswith("handle_") for call in calls)
