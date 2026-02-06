@@ -108,9 +108,7 @@ class CouncilRunMetrics:
         self._runs_total = getattr(prom_metrics, "COUNCIL_RUNS_TOTAL", None)
         self._member_wins_total = getattr(prom_metrics, "COUNCIL_MEMBER_WINS_TOTAL", None)
         self._member_score = getattr(prom_metrics, "COUNCIL_MEMBER_SCORE", None)
-        self._pairwise_agreement = getattr(
-            prom_metrics, "COUNCIL_PAIRWISE_AGREEMENT", None
-        )
+        self._pairwise_agreement = getattr(prom_metrics, "COUNCIL_PAIRWISE_AGREEMENT", None)
         self._collusion_warnings_total = getattr(
             prom_metrics, "COUNCIL_COLLUSION_WARNINGS_TOTAL", None
         )
@@ -201,15 +199,18 @@ class CouncilRunMetrics:
             self.record_collusion_warnings(warnings)
 
     def record_du_usage(
-        self, member_states: Mapping[str, SimpleNamespace], budget: float | None
+        self, member_states: Mapping[str, SimpleNamespace], budgets: Mapping[str, float] | None
     ) -> None:
-        if budget is None:
-            return
-        try:
-            budget_value = float(budget)
-        except (TypeError, ValueError):
+        if not budgets:
             return
         for member_id, state in member_states.items():
+            budget = budgets.get(member_id)
+            if budget is None:
+                continue
+            try:
+                budget_value = float(budget)
+            except (TypeError, ValueError):
+                continue
             remaining = getattr(state, "du", None)
             if remaining is None:
                 continue
@@ -760,7 +761,9 @@ def _extract_category_scores(raw: Mapping[str, Any]) -> dict[str, float]:
     return scores
 
 
-def _extract_metrics_member_scores(metrics: Mapping[str, Any] | None) -> dict[str, dict[str, float]]:
+def _extract_metrics_member_scores(
+    metrics: Mapping[str, Any] | None,
+) -> dict[str, dict[str, float]]:
     if not isinstance(metrics, Mapping):
         return {}
     raw_member_scores = metrics.get("member_scores")
@@ -820,7 +823,8 @@ def _normalize_vote_metrics(
 
     if not totals and breakdown:
         totals = {
-            member_id: sum(scores.values()) / len(scores) for member_id, scores in breakdown.items()
+            member_id: sum(scores.values()) / len(scores)
+            for member_id, scores in breakdown.items()
         }
 
     member_ids = {answer.member_id for answer in answers}
@@ -905,8 +909,7 @@ def _derive_agreement_summary(
             else:
                 agreement_score = (
                     1.0
-                    if _normalize_answer_text(left.answer)
-                    == _normalize_answer_text(right.answer)
+                    if _normalize_answer_text(left.answer) == _normalize_answer_text(right.answer)
                     else 0.0
                 )
             agreement_scores.append(agreement_score)
@@ -922,9 +925,7 @@ def _derive_agreement_summary(
         if isinstance(warnings, Sequence) and not isinstance(warnings, (str, bytes)):
             collusion_warnings = [warning for warning in warnings if isinstance(warning, str)]
 
-    agreement_score = (
-        sum(agreement_scores) / len(agreement_scores) if agreement_scores else 0.0
-    )
+    agreement_score = sum(agreement_scores) / len(agreement_scores) if agreement_scores else 0.0
     return {
         "agreement_score": agreement_score,
         "pairwise_ema": pairwise_ema,
@@ -1324,9 +1325,7 @@ class CouncilOrchestrator:
     ) -> CouncilOutcome:
         council_enabled = bool(get_config("USE_COUNCIL_MODE"))
         if not allow_disabled_mode and not council_enabled:
-            raise RuntimeError(
-                "Council mode is disabled; set USE_COUNCIL_MODE=true to enable it."
-            )
+            raise RuntimeError("Council mode is disabled; set USE_COUNCIL_MODE=true to enable it.")
 
         if not context.config.enabled:
             raise RuntimeError("Council mode is disabled in the council configuration.")
@@ -1348,7 +1347,7 @@ class CouncilOrchestrator:
         )
         metrics: dict[str, Any] = {
             "du_budget_exhausted": False,
-            "du_budget_per_member": self._resolve_du_budget(context.config),
+            "du_budget_per_member": self._resolve_du_budgets(context.config),
         }
         if not context.config.members:
             metrics.update({"member_count": 0, "error": "no_active_members"})
@@ -1442,9 +1441,7 @@ class CouncilOrchestrator:
 
         base_metrics = dict(metrics or {})
         base_metrics.setdefault("du_budget_exhausted", False)
-        base_metrics.setdefault(
-            "du_budget_per_member", self._resolve_du_budget(context.config)
-        )
+        base_metrics.setdefault("du_budget_per_member", self._resolve_du_budgets(context.config))
         outcome = self._build_outcome(
             question, answers, vote, base_metrics, run_metrics=run_metrics
         )
@@ -1457,10 +1454,19 @@ class CouncilOrchestrator:
             return float(config.du_budget_per_question)
         return float(self.du_budget_per_question)
 
+    def _resolve_du_budgets(self, config: CouncilConfig) -> dict[str, float]:
+        default_budget = self._resolve_du_budget(config)
+        return {
+            member.member_id: (
+                float(member.du_budget) if member.du_budget is not None else default_budget
+            )
+            for member in config.members
+        }
+
     def _allocate_du_budgets(
         self, config: CouncilConfig, metrics: dict[str, Any]
     ) -> dict[str, SimpleNamespace]:
-        budget = self._resolve_du_budget(config)
+        budgets = self._resolve_du_budgets(config)
         member_states: dict[str, SimpleNamespace] = {}
         try:
             resource_manager = get_resource_manager()
@@ -1469,7 +1475,9 @@ class CouncilOrchestrator:
             resource_manager = None
 
         for member in config.members:
-            state = SimpleNamespace(agent_id=member.member_id, du=budget, ip=0.0)
+            budget = budgets.get(member.member_id, 0.0)
+            ip_budget = float(member.ip_budget) if member.ip_budget is not None else 0.0
+            state = SimpleNamespace(agent_id=member.member_id, du=budget, ip=ip_budget)
             member_states[member.member_id] = state
             if resource_manager is None:
                 continue
@@ -1478,7 +1486,7 @@ class CouncilOrchestrator:
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("Failed to allocate DU budget for %s: %s", member.member_id, exc)
 
-        metrics["du_budget_per_member"] = budget
+        metrics["du_budget_per_member"] = budgets
         return member_states
 
     async def _gather_member_answers(
@@ -1491,9 +1499,7 @@ class CouncilOrchestrator:
         rag_docs: Sequence[str],
         metrics: dict[str, Any],
     ) -> list[MemberAnswer]:
-        max_concurrent = max(
-            1, context.config.max_concurrent_calls or self.max_concurrent_calls
-        )
+        max_concurrent = max(1, context.config.max_concurrent_calls or self.max_concurrent_calls)
         semaphore = asyncio.Semaphore(max_concurrent)
         failures: list[str] = []
         answers: list[MemberAnswer] = []
@@ -1538,9 +1544,7 @@ class CouncilOrchestrator:
             except RuntimeError as exc:
                 if "budget" in str(exc).lower():
                     metrics["du_budget_exhausted"] = True
-                    logger.warning(
-                        "DU budget exhausted for member %s: %s", member.member_id, exc
-                    )
+                    logger.warning("DU budget exhausted for member %s: %s", member.member_id, exc)
                 else:
                     logger.exception("Council member call failed: %s", exc)
                 return member.member_id, None
@@ -1572,9 +1576,7 @@ class CouncilOrchestrator:
             state = member_states.get(member.member_id)
             if not _has_available_budget(member, state):
                 metrics["du_budget_exhausted"] = True
-                logger.warning(
-                    "DU budget exhausted before scheduling member %s", member.member_id
-                )
+                logger.warning("DU budget exhausted before scheduling member %s", member.member_id)
                 break
             tasks.append(asyncio.create_task(_call_member(member)))
             if len(tasks) >= max_concurrent:
@@ -1591,9 +1593,7 @@ class CouncilOrchestrator:
 
         if metrics.get("du_budget_exhausted"):
             if answers:
-                metrics.setdefault(
-                    "completed_members", [answer.member_id for answer in answers]
-                )
+                metrics.setdefault("completed_members", [answer.member_id for answer in answers])
             metrics.setdefault("partial", True)
         return answers
 
@@ -1613,9 +1613,9 @@ class CouncilOrchestrator:
         )
         failures: list[str] = []
 
-        async def _call_member(member: CouncilMemberConfig) -> tuple[
-            CouncilMemberConfig, CouncilPeerVoteModel
-        ] | None:
+        async def _call_member(
+            member: CouncilMemberConfig,
+        ) -> tuple[CouncilMemberConfig, CouncilPeerVoteModel] | None:
             state = member_states.get(member.member_id)
             try:
                 async with semaphore:
@@ -1692,14 +1692,10 @@ class CouncilOrchestrator:
             metadata.update({"scores": vote.scores or votes, "judge_reasoning": vote.reasoning})
             summary = vote.summary
             answer_lookup = {answer.member_id: answer.answer for answer in answers}
-            resolution = vote.resolution or answer_lookup.get(
-                vote.winning_member_id, resolution
-            )
+            resolution = vote.resolution or answer_lookup.get(vote.winning_member_id, resolution)
             winner_answer = answer_lookup.get(vote.winning_member_id)
             fitness_start = time.perf_counter()
-            fitness_snapshot = self.fitness_store.update_from_vote(
-                question, answers, vote
-            )
+            fitness_snapshot = self.fitness_store.update_from_vote(question, answers, vote)
             if run_metrics is not None:
                 run_metrics.record_latency(
                     "fitness_update", (time.perf_counter() - fitness_start) * 1000
@@ -1767,7 +1763,9 @@ class CouncilOrchestrator:
                 exc_info=True,
             )
 
-    def serialize_metrics(self, *, question_id: str | None = None) -> dict[str, list[dict[str, float]]]:
+    def serialize_metrics(
+        self, *, question_id: str | None = None
+    ) -> dict[str, list[dict[str, float]]]:
         """Return a snapshot of aggregated council metrics."""
 
         return council_stats_store.serialize_metrics(question_id=question_id)

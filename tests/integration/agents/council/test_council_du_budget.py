@@ -76,7 +76,9 @@ async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.Monk
     fake_resource_manager = FakeResourceManager(fake_ledger)
 
     monkeypatch.setattr(resource_manager_module, "_resource_manager", fake_resource_manager)
-    monkeypatch.setattr(resource_manager_module, "get_resource_manager", lambda: fake_resource_manager)
+    monkeypatch.setattr(
+        resource_manager_module, "get_resource_manager", lambda: fake_resource_manager
+    )
     monkeypatch.setattr(
         "src.agents.council.orchestrator.get_resource_manager", lambda: fake_resource_manager
     )
@@ -130,7 +132,9 @@ async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.Monk
         enabled=True,
         du_budget_per_question=2.0,
     )
-    question = CouncilQuestion(question_id="q1", prompt="What is DU?", context="", task_context=None)
+    question = CouncilQuestion(
+        question_id="q1", prompt="What is DU?", context="", task_context=None
+    )
 
     context = orchestrator._resolve_context(config)
     outcome = await orchestrator.adeliberate(context, question)
@@ -140,7 +144,9 @@ async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.Monk
 
     for member_id in ("member-a", "member-b"):
         initial_budget = fake_resource_manager.initial_budgets[member_id]
-        member_charges = [amt for aid, amt in fake_resource_manager.charge_calls if aid == member_id]
+        member_charges = [
+            amt for aid, amt in fake_resource_manager.charge_calls if aid == member_id
+        ]
         remaining_budget = initial_budget - sum(member_charges)
 
         assert initial_budget == pytest.approx(2.0)
@@ -155,3 +161,94 @@ async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.Monk
     recorded_du_spend = [entry for entry in fake_ledger.log_entries if entry[2] == "llm_gas"]
     assert len(recorded_du_spend) == len(fake_resource_manager.charge_calls)
     assert all(delta_du == -1.0 for _, delta_du, _ in recorded_du_spend)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_council_orchestrator_honors_per_member_du_budget_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(infra_config, "_CONFIG", {"USE_COUNCIL_MODE": True})
+
+    fake_ledger = FakeLedger()
+    fake_resource_manager = FakeResourceManager(fake_ledger)
+
+    monkeypatch.setattr(resource_manager_module, "_resource_manager", fake_resource_manager)
+    monkeypatch.setattr(
+        resource_manager_module, "get_resource_manager", lambda: fake_resource_manager
+    )
+    monkeypatch.setattr(
+        "src.agents.council.orchestrator.get_resource_manager", lambda: fake_resource_manager
+    )
+
+    monkeypatch.setattr(llm_client, "ledger", fake_ledger)
+    monkeypatch.setattr(infra_metrics, "ledger", fake_ledger)
+
+    llm_client.enable_mock_mode(
+        True,
+        {
+            "MemberResponseModel": {
+                "answer": "stubbed",
+                "reasoning": "",
+                "confidence": 1.0,
+                "citations": [],
+            }
+        },
+    )
+
+    orchestrator = CouncilOrchestrator()
+    config = CouncilConfig(
+        members=[
+            CouncilMemberConfig(
+                member_id="member-a",
+                display_name="Member A",
+                role="Analyzer",
+                description="",
+                system_prompt="",
+                decision_weight=1.0,
+                persona="Curious analyst persona",
+                model="mistral:latest",
+                temperature=0.1,
+                max_tokens=32,
+                du_budget=3.0,
+                is_active=True,
+            ),
+            CouncilMemberConfig(
+                member_id="member-b",
+                display_name="Member B",
+                role="Generalist",
+                description="",
+                system_prompt="",
+                decision_weight=1.0,
+                persona="Helpful generalist persona",
+                model="mistral:latest",
+                temperature=0.1,
+                max_tokens=32,
+                is_active=True,
+            ),
+        ],
+        voting_mode="judge_llm",
+        enabled=True,
+        du_budget_per_question=2.0,
+    )
+    question = CouncilQuestion(
+        question_id="q1", prompt="What is DU?", context="", task_context=None
+    )
+
+    context = orchestrator._resolve_context(config)
+    outcome = await orchestrator.adeliberate(context, question)
+
+    assert outcome.answers
+    metrics = outcome.metadata.get("metrics", {}) if outcome.metadata else {}
+    assert metrics.get("du_budget_per_member") == {
+        "member-a": pytest.approx(3.0),
+        "member-b": pytest.approx(2.0),
+    }
+    assert fake_resource_manager.initial_budgets == {
+        "member-a": pytest.approx(3.0),
+        "member-b": pytest.approx(2.0),
+    }
+    assert fake_resource_manager.set_calls == [
+        ("member-a", pytest.approx(3.0)),
+        ("member-b", pytest.approx(2.0)),
+    ]

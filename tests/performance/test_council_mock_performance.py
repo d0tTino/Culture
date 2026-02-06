@@ -66,9 +66,7 @@ def test_council_run_meets_latency_and_budget(member_count: int) -> None:
 
     with (
         patch.object(council_orchestrator, "_ask_council_member", side_effect=_fake_member_call),
-        patch.object(
-            council_orchestrator, "_judge_council_answers", side_effect=_fake_judge
-        ),
+        patch.object(council_orchestrator, "_judge_council_answers", side_effect=_fake_judge),
     ):
         start = time.perf_counter()
         outcome = orchestrator.deliberate(
@@ -84,6 +82,8 @@ def test_council_run_meets_latency_and_budget(member_count: int) -> None:
     assert throughput_per_minute >= 25
 
     metrics = outcome.metadata.get("metrics", {}) if outcome.metadata else {}
-    assert metrics.get("du_budget_per_member") <= 2.0
+    per_member_budget = metrics.get("du_budget_per_member", {})
+    assert per_member_budget
+    assert all(value <= 2.0 for value in per_member_budget.values())
     assert not metrics.get("du_budget_exhausted")
     assert outcome.winner_id in {member.member_id for member in members}
