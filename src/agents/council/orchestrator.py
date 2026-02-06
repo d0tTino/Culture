@@ -31,7 +31,7 @@ from src.infra.llm_client import (
     generate_text,
     is_mock_mode_enabled,
 )
-from src.sim.resource_manager import get_resource_manager
+from src.sim.resource_manager import ResourceManager, get_resource_manager
 
 logger = logging.getLogger(__name__)
 LLM_MAX_ATTEMPTS = 2
@@ -1446,6 +1446,7 @@ class CouncilOrchestrator:
         metrics: dict[str, Any] = {
             "du_budget_exhausted": False,
             "du_budget_per_member": {},
+            "member_count": len(active_members),
         }
         if not active_members:
             metrics.update(
@@ -1558,7 +1559,7 @@ class CouncilOrchestrator:
 
         base_metrics = dict(metrics or {})
         base_metrics.setdefault("du_budget_exhausted", False)
-        base_metrics.setdefault("du_budget_per_member", self._resolve_du_budgets(context.config, active_members))
+        base_metrics.setdefault("du_budget_per_member", metrics.get("du_budget_per_member", {}))
         outcome = self._build_outcome(
             question, answers, vote, base_metrics, run_metrics=run_metrics
         )
@@ -1566,35 +1567,101 @@ class CouncilOrchestrator:
         await self._record_outcome_metrics(outcome)
         return outcome
 
+    def _resolve_owner_id(self, config: CouncilConfig, question: CouncilQuestion) -> str:
+        metadata = question.metadata if isinstance(question.metadata, Mapping) else None
+        candidate_keys = ("owner_id", "owner", "council_owner", "council_owner_id")
+
+        for key in candidate_keys:
+            value = metadata.get(key) if metadata else None
+            if value is not None and str(value).strip():
+                return str(value).strip()
+
+        if question.user_id and str(question.user_id).strip():
+            return str(question.user_id).strip()
+
+        config_metadata = config.metadata if isinstance(config.metadata, Mapping) else None
+        for key in candidate_keys:
+            value = config_metadata.get(key) if config_metadata else None
+            if value is not None and str(value).strip():
+                return str(value).strip()
+
+        configured_owner = get_config("COUNCIL_OWNER_ID")
+        if configured_owner is not None and str(configured_owner).strip():
+            return str(configured_owner).strip()
+
+        return "council"
+
+    def _reserve_owner_budget(
+        self,
+        *,
+        resource_manager: ResourceManager | None,
+        owner_id: str,
+        budget: float,
+        metrics: dict[str, Any],
+    ) -> float:
+        reserve_budget = max(float(budget), 0.0)
+        metrics["du_owner_id"] = owner_id
+        metrics["du_owner_reserved"] = reserve_budget
+
+        if reserve_budget <= 0:
+            metrics["du_owner_remaining"] = 0.0
+            return 0.0
+
+        if resource_manager is None:
+            metrics["du_owner_remaining"] = 0.0
+            return reserve_budget
+
+        remaining_after_reserve = resource_manager.reserve_du_budget(
+            owner_id, reserve_budget, reason="council_du_reserve"
+        )
+        metrics["du_owner_remaining"] = float(remaining_after_reserve)
+        return reserve_budget
+
     def _resolve_du_budget(self, config: CouncilConfig) -> float:
         if config.du_budget_per_question is not None:
             return float(config.du_budget_per_question)
         return float(self.du_budget_per_question)
 
     def _resolve_du_budgets(
-        self, config: CouncilConfig, members: Sequence[CouncilMemberConfig]
+        self, config: CouncilConfig, members: Sequence[CouncilMemberConfig], owner_reserved: float
     ) -> dict[str, float]:
-        default_budget = self._resolve_du_budget(config)
-        return {
-            member.member_id: (
-                float(member.du_budget) if member.du_budget is not None else default_budget
-            )
-            for member in members
-        }
+        if not members:
+            return {}
+
+        reserved_total = max(float(owner_reserved), 0.0)
+        even_share = reserved_total / len(members) if members else 0.0
+        budgets: dict[str, float] = {}
+        for member in members:
+            budget = even_share
+            if member.du_budget is not None:
+                budget = min(budget, float(member.du_budget))
+            budgets[member.member_id] = max(float(budget), 0.0)
+        return budgets
 
     def _allocate_du_budgets(
         self,
         config: CouncilConfig,
+        question: CouncilQuestion,
         members: Sequence[CouncilMemberConfig],
         metrics: dict[str, Any],
     ) -> dict[str, SimpleNamespace]:
-        budgets = self._resolve_du_budgets(config, members)
+        owner_id = self._resolve_owner_id(config, question)
+        owner_budget = self._resolve_du_budget(config)
         member_states: dict[str, SimpleNamespace] = {}
         try:
             resource_manager = get_resource_manager()
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug("Resource manager unavailable for council DU budgeting: %s", exc)
             resource_manager = None
+
+        reserved_total = self._reserve_owner_budget(
+            resource_manager=resource_manager,
+            owner_id=owner_id,
+            budget=owner_budget,
+            metrics=metrics,
+        )
+
+        budgets = self._resolve_du_budgets(config, members, reserved_total)
 
         for member in members:
             budget = budgets.get(member.member_id, 0.0)

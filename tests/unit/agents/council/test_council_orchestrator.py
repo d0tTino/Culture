@@ -178,6 +178,25 @@ def _build_question(metadata: Mapping[str, Any] | None = None) -> CouncilQuestio
     )
 
 
+
+
+def test_council_orchestrator_resolves_du_owner_from_question_user_id() -> None:
+    orchestrator = CouncilOrchestrator()
+    config = _build_council_config(voting_mode="judge_llm")
+    question = CouncilQuestion(
+        question_id="q-owner",
+        prompt="Who pays for this run?",
+        user_id="requesting-user",
+        context="Owner resolution test",
+    )
+
+    outcome = orchestrator.deliberate(config, question)
+
+    metrics = outcome.metadata.get("metrics", {})
+    assert metrics.get("du_owner_id") == "requesting-user"
+    assert metrics.get("du_owner_reserved") == pytest.approx(5.0)
+
+
 def test_council_member_forwards_generation_params(monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_council_config()
     member = config.members[0]
@@ -410,10 +429,13 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
     metrics = outcome.metadata.get("metrics", {})
     assert metrics.get("du_budget_exhausted") is False
     assert metrics.get("du_budget_per_member") == {
-        "facilitator": pytest.approx(5.0),
-        "innovator": pytest.approx(5.0),
-        "analyst": pytest.approx(5.0),
+        "facilitator": pytest.approx(5.0 / 3.0),
+        "innovator": pytest.approx(5.0 / 3.0),
+        "analyst": pytest.approx(5.0 / 3.0),
     }
+    assert metrics.get("du_owner_id") == "council"
+    assert metrics.get("du_owner_reserved") == pytest.approx(5.0)
+    assert metrics.get("du_owner_remaining") == pytest.approx(0.0)
     assert "member_scores" in metrics
     assert outcome.metrics["member_scores"]["facilitator"]["total"] == pytest.approx(0.8375)
     assert outcome.summary == "Deterministic council summary"

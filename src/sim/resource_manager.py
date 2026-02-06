@@ -33,6 +33,11 @@ class ResourceManager:
         self._du_budgets[agent_id] = remaining
         record_du_budget(agent_id, remaining)
 
+    def has_du_budget(self, agent_id: str) -> bool:
+        """Return whether an explicit DU budget exists for ``agent_id``."""
+
+        return agent_id in self._du_budgets
+
     def ensure_du_budget(self, agent_id: str, amount: float) -> None:
         """Verify that the agent has at least ``amount`` DU available."""
         remaining = self._du_budgets.get(agent_id, 0.0)
@@ -66,6 +71,27 @@ class ResourceManager:
 
     def get_du_budget(self, agent_id: str) -> float:
         return float(self._du_budgets.get(agent_id, 0.0))
+
+    def reserve_du_budget(self, agent_id: str, amount: float, *, reason: str = "du_reserve") -> float:
+        """Reserve DU for ``agent_id`` and record the debit in the ledger."""
+
+        reserve_amount = float(max(amount, 0.0))
+        if reserve_amount <= 0:
+            return self.get_du_budget(agent_id)
+
+        if (not self.has_du_budget(agent_id)) or self.get_du_budget(agent_id) < reserve_amount:
+            self.set_du_budget(agent_id, reserve_amount)
+
+        self.charge_du(agent_id, reserve_amount)
+        remaining = self.get_du_budget(agent_id)
+
+        try:
+            from src.infra.ledger import ledger
+
+            ledger.log_change(agent_id, 0.0, -reserve_amount, reason)
+        except Exception:  # pragma: no cover - optional logging
+            pass
+        return remaining
 
 
 _resource_manager: ResourceManager | None = None
