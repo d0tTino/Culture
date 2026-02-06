@@ -85,6 +85,12 @@ class CouncilMemberConfig(BaseModel):
     system_prompt: str = ""
     description: str = ""
     decision_weight: float = Field(default=1.0, ge=0.0)
+    du_budget: float | None = Field(
+        default=None, ge=0.0, validation_alias=AliasChoices("du_budget", "duBudget")
+    )
+    ip_budget: float | None = Field(
+        default=None, ge=0.0, validation_alias=AliasChoices("ip_budget", "ipBudget")
+    )
     metadata: Mapping[str, Any] | None = None
 
     @model_validator(mode="before")
@@ -183,7 +189,9 @@ class CouncilConfig(BaseModel):
 
         if duplicate_display_names:
             duplicates = ", ".join(sorted(duplicate_display_names))
-            raise ValueError(f"Council member display names should be unique; duplicates: {duplicates}")
+            raise ValueError(
+                f"Council member display names should be unique; duplicates: {duplicates}"
+            )
 
         return value
 
@@ -202,9 +210,7 @@ class CouncilQuestion(BaseModel):
         validation_alias=AliasChoices("question_id", "questionId", "id", "name")
     )
     prompt: str = Field(validation_alias=AliasChoices("prompt", "question"))
-    user_id: str | None = Field(
-        default=None, validation_alias=AliasChoices("user_id", "userId")
-    )
+    user_id: str | None = Field(default=None, validation_alias=AliasChoices("user_id", "userId"))
     extra_context: dict[str, Any] | None = Field(
         default=None, validation_alias=AliasChoices("extra_context", "extraContext", "context")
     )

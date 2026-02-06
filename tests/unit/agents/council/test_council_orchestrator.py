@@ -186,7 +186,9 @@ def test_council_member_forwards_generation_params(monkeypatch: pytest.MonkeyPat
             citations=[],
         )
 
-    monkeypatch.setattr(council_orchestrator, "generate_structured_output", fake_generate_structured_output)
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
 
     answer = council_orchestrator._ask_council_member(member, question)
 
@@ -211,7 +213,9 @@ def test_council_member_fallback_forwards_generation_params(
         captured["max_tokens"] = int(kwargs.get("max_tokens"))
         return "fallback answer"
 
-    monkeypatch.setattr(council_orchestrator, "generate_structured_output", fake_generate_structured_output)
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
     monkeypatch.setattr(council_orchestrator, "generate_text", fake_generate_text)
 
     answer = council_orchestrator._ask_council_member(member, question)
@@ -241,7 +245,9 @@ def test_peer_vote_forwards_generation_params(monkeypatch: pytest.MonkeyPatch) -
             reasoning="Peer vote reasoning",
         )
 
-    monkeypatch.setattr(council_orchestrator, "generate_structured_output", fake_generate_structured_output)
+    monkeypatch.setattr(
+        council_orchestrator, "generate_structured_output", fake_generate_structured_output
+    )
 
     result = council_orchestrator._ask_peer_vote(member, question, answers)
 
@@ -267,9 +273,7 @@ def test_council_orchestrator_can_bypass_env_guard(
     with pytest.raises(RuntimeError):
         orchestrator.deliberate(council_config, question)
 
-    outcome = orchestrator.deliberate(
-        council_config, question, allow_disabled_mode=True
-    )
+    outcome = orchestrator.deliberate(council_config, question, allow_disabled_mode=True)
 
     assert outcome.winning_member_ids
 
@@ -281,9 +285,7 @@ def test_run_council_raises_clear_error_inside_event_loop() -> None:
         with pytest.raises(RuntimeError) as excinfo:
             council_orchestrator.run_council(question)
 
-        assert (
-            "cannot run inside an active event loop" in str(excinfo.value)
-        )
+        assert "cannot run inside an active event loop" in str(excinfo.value)
         assert "await CouncilOrchestrator.adeliberate(...)" in str(excinfo.value)
 
     asyncio.run(invoke_inside_loop())
@@ -325,7 +327,11 @@ def test_council_orchestrator_invokes_all_members_and_aggregates(
     assert outcome.metadata is not None
     metrics = outcome.metadata.get("metrics", {})
     assert metrics.get("du_budget_exhausted") is False
-    assert metrics.get("du_budget_per_member") == pytest.approx(5.0)
+    assert metrics.get("du_budget_per_member") == {
+        "facilitator": pytest.approx(5.0),
+        "innovator": pytest.approx(5.0),
+        "analyst": pytest.approx(5.0),
+    }
     assert "member_scores" in metrics
     assert outcome.metrics["member_scores"]["facilitator"]["total"] == pytest.approx(0.8375)
     assert outcome.summary == "Deterministic council summary"
