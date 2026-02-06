@@ -50,6 +50,15 @@ class FakeResourceManager:
         self.set_calls.append((agent_id, float(budget)))
         self.ledger.record_du_budget(agent_id, budget)
 
+    def has_du_budget(self, agent_id: str) -> bool:
+        return agent_id in self.du_budgets
+
+    def reserve_du_budget(self, agent_id: str, amount: float, *, reason: str = "du_reserve") -> float:
+        reserve = float(amount)
+        self.charge_du(agent_id, reserve)
+        self.ledger.log_change(agent_id, 0.0, -reserve, reason)
+        return self.get_du_budget(agent_id)
+
     def ensure_du_budget(self, agent_id: str, amount: float) -> None:
         self.ensure_calls.append((agent_id, float(amount)))
         remaining = self.du_budgets.get(agent_id, 0.0)
@@ -133,7 +142,7 @@ async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.Monk
         du_budget_per_question=2.0,
     )
     question = CouncilQuestion(
-        question_id="q1", prompt="What is DU?", context="", task_context=None
+        question_id="q1", prompt="What is DU?", user_id="question-owner", context="", task_context=None
     )
 
     context = orchestrator._resolve_context(config)
@@ -154,9 +163,15 @@ async def test_council_orchestrator_charges_du_and_logs(monkeypatch: pytest.Monk
         assert fake_ledger.du_budgets[member_id] == pytest.approx(remaining_budget)
         assert member_charges, "Expected DU charges for each council member"
 
-    assert len(fake_resource_manager.set_calls) == 2
-    assert all(amount == 2.0 for _, amount in fake_resource_manager.set_calls)
+    assert len(fake_resource_manager.set_calls) == 3
+    assert fake_resource_manager.set_calls[0] == ("question-owner", pytest.approx(2.0))
+    assert fake_resource_manager.set_calls[1:] == [
+        ("member-a", pytest.approx(1.0)),
+        ("member-b", pytest.approx(1.0)),
+    ]
     assert len(fake_resource_manager.ensure_calls) == 2 * len(fake_resource_manager.charge_calls)
+    assert outcome.metadata["metrics"]["du_owner_id"] == "question-owner"
+    assert outcome.metadata["metrics"]["du_owner_reserved"] == pytest.approx(2.0)
 
     recorded_du_spend = [entry for entry in fake_ledger.log_entries if entry[2] == "llm_gas"]
     assert len(recorded_du_spend) == len(fake_resource_manager.charge_calls)
@@ -232,7 +247,7 @@ async def test_council_orchestrator_honors_per_member_du_budget_overrides(
         du_budget_per_question=2.0,
     )
     question = CouncilQuestion(
-        question_id="q1", prompt="What is DU?", context="", task_context=None
+        question_id="q1", prompt="What is DU?", user_id="question-owner", context="", task_context=None
     )
 
     context = orchestrator._resolve_context(config)
@@ -241,14 +256,16 @@ async def test_council_orchestrator_honors_per_member_du_budget_overrides(
     assert outcome.answers
     metrics = outcome.metadata.get("metrics", {}) if outcome.metadata else {}
     assert metrics.get("du_budget_per_member") == {
-        "member-a": pytest.approx(3.0),
-        "member-b": pytest.approx(2.0),
+        "member-a": pytest.approx(1.0),
+        "member-b": pytest.approx(1.0),
     }
     assert fake_resource_manager.initial_budgets == {
-        "member-a": pytest.approx(3.0),
-        "member-b": pytest.approx(2.0),
+        "question-owner": pytest.approx(2.0),
+        "member-a": pytest.approx(1.0),
+        "member-b": pytest.approx(1.0),
     }
     assert fake_resource_manager.set_calls == [
-        ("member-a", pytest.approx(3.0)),
-        ("member-b", pytest.approx(2.0)),
+        ("question-owner", pytest.approx(2.0)),
+        ("member-a", pytest.approx(1.0)),
+        ("member-b", pytest.approx(1.0)),
     ]
