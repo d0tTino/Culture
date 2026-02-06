@@ -160,4 +160,42 @@ To revert, unset or remove `COUNCIL_CONFIG_PATH` so it falls back to `config/cou
 8. **Phase 8 – Production readiness:** Validate configuration hygiene, operational runbooks, and failure containment.  
    **Readiness:** Fallback configs work, CLI runbooks are documented, and end-to-end runs are stable under fault injection.
 
+## Phase 8 Merge Readiness Checklist
+
+Use this checklist as the release-gating artifact for Council Mode merges.
+
+### Pass/Fail checks
+
+| Check | Pass criteria | Fail criteria |
+| --- | --- | --- |
+| No active members behavior | `run_council`/CLI exits with a clear validation error when roster has zero active members and does not emit a partial outcome. | Empty roster silently proceeds, hangs, or emits an apparently successful outcome. |
+| LLM failure degrade path | Member/judge call failures produce a bounded degraded result (fallback answer + warning metadata), and process exits cleanly without crashing the simulation. | Unhandled exception aborts the run or returns an unstructured traceback instead of a controlled outcome. |
+| DU exhaustion handling | When DU budget is exhausted, orchestration short-circuits deterministically and records budget-exceeded telemetry. | DU overrun continues past configured limits or budget stop is non-deterministic. |
+| Scoped feature-flag behavior | `USE_COUNCIL_MODE` and config-level `enabled` switch affect only council execution path; non-council flows remain unchanged. | Flag side-effects impact unrelated paths, or council executes while explicitly disabled. |
+| CLI usability | `python -m scripts.council_cli --help` documents required/optional args, and common invocations return readable outcome fields (winner, rationale, dissent/evidence). | Missing/ambiguous CLI help, confusing guardrail messages, or unreadable output shape. |
+
+### Release-gating command hook
+
+Run the council-focused gating subset:
+
+```bash
+make council-gate-tests
+```
+
+The target runs unit + integration tests that cover council configuration, orchestration, graph integration, CLI behavior, metrics, and DU budget enforcement.
+
+### Performance measurement procedure and thresholds
+
+1. Run the council mock performance suite on a clean branch:
+   ```bash
+   python -m pytest -m "performance" tests/performance/test_council_mock_performance.py -v
+   ```
+2. Capture p95 end-to-end latency, member fan-out latency, throughput, and DU spend metrics from test output plus council metrics store.
+3. Compare to thresholds (single GPU, default 3-member roster):
+   - p95 end-to-end latency: **<= 1.5s**
+   - member fan-out latency: **<= 0.75s**
+   - throughput: **>= 25 questions/minute**
+   - DU usage: **<= 6 DU** total members and **<= 1 DU** judge reserve
+4. Fail readiness if any threshold regresses, or if metrics are missing/non-attributable to `question_id`.
+
 > **Stakeholder Review:** Please review this document with the designated research and product stakeholders before implementation to validate the milestones and success criteria.
