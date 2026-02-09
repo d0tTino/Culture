@@ -162,14 +162,14 @@ async def test_forward_external_events(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     kernel = EventKernel()
-    received: list[str] = []
+    received: list[tuple[str, dict[str, object] | None]] = []
 
-    async def handler(text: str) -> None:
-        received.append(text)
+    async def handler(text: str, metadata: dict[str, object] | None) -> None:
+        received.append((text, metadata))
 
     task = asyncio.create_task(kernel.forward_external_events(handler))
     await queue.put(SimulationEvent(type="broadcast", data={"content": "hi"}))
     await queue.put(None)
     await task
 
-    assert received == ["hi"]
+    assert received == [("hi", {"content": "hi"})]

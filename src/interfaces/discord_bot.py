@@ -9,6 +9,7 @@ IP/DU cost for the currently active agent.
 import asyncio
 import json
 import logging
+import re
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterator
@@ -148,8 +149,47 @@ def embed_from_payload(payload: dict[str, Any]) -> Any:
 
 
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
+_MENTION_TARGET_RE = re.compile(r"^@(?P<agent>[\w.-]+)\s*:\s*(?P<content>.+)$", re.DOTALL)
+_DM_TARGET_RE = re.compile(r"^/dm\s+(?P<agent>[\w.-]+)\s+(?P<content>.+)$", re.DOTALL)
 
 
+
+
+def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str]:
+    """Parse optional routing directives from plain Discord messages."""
+    cleaned = content.strip()
+    if not cleaned:
+        return None, False, ""
+
+    if cleaned.startswith("/broadcast"):
+        payload = cleaned[len("/broadcast") :].strip()
+        return None, True, payload
+
+    mention_match = _MENTION_TARGET_RE.match(cleaned)
+    if mention_match:
+        return mention_match.group("agent"), False, mention_match.group("content").strip()
+
+    dm_match = _DM_TARGET_RE.match(cleaned)
+    if dm_match:
+        return dm_match.group("agent"), False, dm_match.group("content").strip()
+
+    return None, False, cleaned
+
+
+def _default_agent_for_channel(self: "SimulationDiscordBot", channel_id: int | None) -> str | None:
+    """Resolve a deterministic fallback agent for an unmapped incoming message."""
+    if channel_id is not None:
+        mapped = self.channel_to_agent.get(channel_id)
+        if mapped:
+            return mapped
+
+    if self.last_agent_id:
+        return self.last_agent_id
+
+    if self.channel_map:
+        return sorted(self.channel_map)[0]
+
+    return None
 def _truncate_for_code_block(content: str, max_length: int = MAX_EMBED_DESCRIPTION_LENGTH) -> str:
     """Wrap ``content`` in a code block, truncating safely to ``max_length`` characters."""
 
@@ -621,17 +661,26 @@ class SimulationDiscordBot:
                     if user_id and channel_id:
                         self.user_channels[str(user_id)] = channel_id
                         self.last_user_id = str(user_id)
-                    recipient = self.channel_to_agent.get(channel_id)
-                    agent_id = None
-                    if user_id:
-                        agent_id = self.user_agents.get(str(user_id))
-                        if agent_id is None and recipient:
-                            agent_id = recipient
-                            self.user_agents[str(user_id)] = agent_id
-                    span.set_attribute("discord.agent.id", agent_id or "")
-                    if not agent_id:
-                        await send_channel_message(channel, content="Unknown agent mapping")
+                    explicit_recipient, explicit_broadcast, parsed_content = (
+                        _parse_human_message_routing(content)
+                    )
+                    if not parsed_content:
                         return
+                    recipient = explicit_recipient or self.channel_to_agent.get(channel_id)
+                    sender = None
+                    if user_id:
+                        sender = self.user_agents.get(str(user_id))
+                    agent_id = recipient or sender or _default_agent_for_channel(self, channel_id)
+                    span.set_attribute("discord.agent.id", agent_id or "")
+                    if agent_id is None:
+                        await send_channel_message(
+                            channel,
+                            content="No agents available to route this message",
+                        )
+                        return
+                    if user_id and sender is None:
+                        self.user_agents[str(user_id)] = agent_id
+                    is_broadcast = explicit_broadcast or recipient is None
                     ip_cost = float(
                         config.get_config("IP_COST_BROADCAST_MESSAGE")
                         or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
@@ -648,11 +697,16 @@ class SimulationDiscordBot:
                         return
                     self.last_agent_id = agent_id
                     self.last_channel_id = channel_id
-                    evt_type = "broadcast"
-                    data = {"author": agent_id, "content": content}
-                    if recipient:
+                    data = {
+                        "author": str(user_id) if user_id is not None else "human",
+                        "content": parsed_content,
+                        "sender_id": str(user_id) if user_id is not None else "human",
+                        "target_agent_id": agent_id,
+                        "broadcast": is_broadcast,
+                    }
+                    if recipient is not None:
                         data["recipient_id"] = recipient
-                    await self.event_queue.put(SimulationEvent(type=evt_type, data=data))
+                    await self.event_queue.put(SimulationEvent(type="broadcast", data=data))
 
     async def _select_client(self: Self, agent_id: str | None) -> Any:
         """Return the Discord client for the given agent."""

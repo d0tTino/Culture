@@ -339,7 +339,9 @@ class Simulation:
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
-    async def _handle_human_command(self: Self, text: str) -> None:
+    async def _handle_human_command(
+        self: Self, text: str, metadata: dict[str, Any] | None = None
+    ) -> None:
         """Handle a human-issued command or prompt."""
         now = time.monotonic()
         if text.startswith("/kb ") and self.knowledge_board:
@@ -368,18 +370,35 @@ class Simulation:
         if not self.agents:
             return
 
-        broadcast = False
+        routing = metadata or {}
+        sender_id = str(routing.get("sender_id", "human"))
+        raw_recipient = routing.get("recipient_id")
+        recipient_id = str(raw_recipient) if isinstance(raw_recipient, str) else None
+        broadcast = bool(routing.get("broadcast", False))
         if text.startswith("/broadcast "):
             broadcast = True
             text = text[len("/broadcast ") :].strip()
 
-        agent_id = None
-        if self.discord_bot and self.discord_bot.last_agent_id:
-            agent_id = self.discord_bot.last_agent_id
-        target = next((a for a in self.agents if a.agent_id == agent_id), None)
+        raw_target = routing.get("target_agent_id")
+        target_agent_id = str(raw_target) if isinstance(raw_target, str) else None
+        raw_budget = routing.get("budget_agent_id")
+        target = next((a for a in self.agents if a.agent_id == target_agent_id), None)
+        if target is None and recipient_id:
+            target = next((a for a in self.agents if a.agent_id == recipient_id), None)
+        if target is None and self.discord_bot and self.discord_bot.last_agent_id:
+            last_id = self.discord_bot.last_agent_id
+            target = next((a for a in self.agents if a.agent_id == last_id), None)
         if target is None:
             target = self.agents[self.current_agent_index]
-        state = target.state
+        configured_budget_id = config.get_config("HUMAN_COMMAND_BUDGET_AGENT_ID")
+        if isinstance(raw_budget, str) and raw_budget:
+            budget_agent_id = raw_budget
+        elif isinstance(configured_budget_id, str) and configured_budget_id:
+            budget_agent_id = configured_budget_id
+        else:
+            budget_agent_id = target.agent_id
+        budget_agent = next((a for a in self.agents if a.agent_id == budget_agent_id), None)
+        state = budget_agent.state if budget_agent is not None else None
         if broadcast:
             ip_cost = float(
                 config.get_config("IP_COST_BROADCAST_MESSAGE")
@@ -396,41 +415,42 @@ class Simulation:
             du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
 
         try:
-            get_resource_manager().ensure_du_budget(target.agent_id, du_cost)
+            get_resource_manager().ensure_du_budget(budget_agent_id, du_cost)
         except Exception as exc:  # pragma: no cover - defensive
             logger.info(
                 "Rejecting human %s for %s: %s",
                 "broadcast" if broadcast else "command",
-                target.agent_id,
+                budget_agent_id,
                 exc,
             )
             if self.discord_bot:
                 await self.discord_bot.send_simulation_update(
                     str(exc),
-                    agent_id=target.agent_id,
+                    agent_id=budget_agent_id,
                     target_channel_id=self.discord_bot.last_channel_id,
                 )
             return
 
-        if state.ip < ip_cost or state.du < du_cost:
+        if state is not None and (state.ip < ip_cost or state.du < du_cost):
             logger.info(
                 "Rejecting human %s for %s: insufficient resources",
                 "broadcast" if broadcast else "command",
-                target.agent_id,
+                budget_agent_id,
             )
             if self.discord_bot:
                 await self.discord_bot.send_simulation_update(
                     "Insufficient IP/DU",
-                    agent_id=target.agent_id,
+                    agent_id=budget_agent_id,
                     target_channel_id=self.discord_bot.last_channel_id,
                 )
             return
 
-        state.ip -= ip_cost
-        state.du -= du_cost
+        if state is not None:
+            state.ip -= ip_cost
+            state.du -= du_cost
         try:
             await ledger.spend(
-                target.agent_id,
+                budget_agent_id,
                 ip=ip_cost,
                 du=du_cost,
                 reason="human_broadcast" if broadcast else "human_dm",
@@ -444,7 +464,7 @@ class Simulation:
                 msgs.append(
                     {
                         "step": self.current_step,
-                        "sender_id": "human",
+                        "sender_id": sender_id,
                         "recipient_id": ag.agent_id,
                         "content": text,
                         "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
@@ -455,7 +475,7 @@ class Simulation:
             msgs.append(
                 {
                     "step": self.current_step,
-                    "sender_id": "human",
+                    "sender_id": sender_id,
                     "recipient_id": target.agent_id,
                     "content": text,
                     "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
@@ -471,9 +491,11 @@ class Simulation:
                 "type": "human_command",
                 "step": self.current_step,
                 "tick": self.current_step + 1,
-                "sender_id": "human",
+                "sender_id": sender_id,
                 "target_agent_id": target.agent_id,
+                "budget_agent_id": budget_agent_id,
                 "broadcast": broadcast,
+                "recipient_id": recipient_id,
                 "text": text,
                 "ip_cost": ip_cost,
                 "du_cost": du_cost,
@@ -1745,7 +1767,7 @@ class Simulation:
                     )
                     for recipient in recipients
                 ]
-            target_id = event.get("target_agent_id")
+            budget_id = event.get("budget_agent_id") or event.get("target_agent_id")
             try:
                 ip_cost = float(event.get("ip_cost", 0.0))
             except (TypeError, ValueError):
@@ -1754,9 +1776,9 @@ class Simulation:
                 du_cost = float(event.get("du_cost", 0.0))
             except (TypeError, ValueError):
                 du_cost = 0.0
-            if isinstance(target_id, str):
+            if isinstance(budget_id, str):
                 for agent in self.agents:
-                    if agent.agent_id == target_id:
+                    if agent.agent_id == budget_id:
                         agent.state.ip -= ip_cost
                         agent.state.du -= du_cost
                         break
