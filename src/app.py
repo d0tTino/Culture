@@ -50,11 +50,28 @@ async def stop_simulation(ctx: SimulationContext | None = None) -> None:
     await context.get_event_queue().put(SimulationEvent(type="control", data={"command": "stop"}))
 
 
-async def spawn_agent_command(agent_id: str, ctx: SimulationContext | None = None) -> None:
+async def spawn_agent_command(
+    agent_id: str,
+    ctx: SimulationContext | None = None,
+    *,
+    role: str | dict[str, object] | None = None,
+    persona: str | None = None,
+    backstory: str | None = None,
+    traits: dict[str, float] | None = None,
+) -> None:
     """Request spawning of a new agent via the event queue."""
     context = ctx or DEFAULT_CONTEXT
+    payload: dict[str, object] = {"command": "spawn", "agent_id": agent_id}
+    if role is not None:
+        payload["role"] = role
+    if persona is not None:
+        payload["persona"] = persona
+    if backstory is not None:
+        payload["backstory"] = backstory
+    if traits is not None:
+        payload["traits"] = traits
     await context.get_event_queue().put(
-        SimulationEvent(type="control", data={"command": "spawn", "agent_id": agent_id})
+        SimulationEvent(type="control", data=payload)
     )
 
 
@@ -431,7 +448,7 @@ def main() -> None:
 
     if args.checkpoint and Path(args.checkpoint).exists():
         logging.info("Loading simulation from checkpoint %s", args.checkpoint)
-        sim, meta = load_checkpoint(args.checkpoint)
+        sim, _meta = load_checkpoint(args.checkpoint)
         sim.steps_to_run = args.steps
     else:
         sim_kwargs = {

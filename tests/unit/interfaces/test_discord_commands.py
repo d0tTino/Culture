@@ -281,3 +281,38 @@ async def test_slash_nudge_enqueues_event(
     event = await queue.get()
     assert event.type == "nudge" and event.data == {"prompt": "hi there"}
     interaction.response.send_message.assert_awaited_once_with("nudge sent", ephemeral=True)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slash_spawn_forwards_optional_profile_fields(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bot = SimpleNamespace(
+        context=discord_module.DEFAULT_CONTEXT,
+        send_simulation_update=AsyncMock(),
+        create_spawn_embed=MagicMock(return_value={}),
+        channel_to_agent={},
+    )
+    monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
+    spawn_mock = AsyncMock()
+    monkeypatch.setattr(discord_module, "spawn_agent_command", spawn_mock)
+
+    interaction = DummyInteraction()
+    await discord_module.slash_spawn(
+        interaction,
+        "agent",
+        role="Analyzer",
+        persona="critical thinker",
+        backstory="former reviewer",
+        traits_json='{"openness": 0.4}',
+        empathy=0.7,
+    )
+
+    spawn_mock.assert_awaited_once()
+    args = spawn_mock.await_args
+    assert args.args[:2] == ("agent", bot.context)
+    assert args.kwargs["role"] == "Analyzer"
+    assert args.kwargs["persona"] == "critical thinker"
+    assert args.kwargs["backstory"] == "former reviewer"
+    assert args.kwargs["traits"] == {"openness": 0.4, "empathy": 0.7}

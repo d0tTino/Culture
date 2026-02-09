@@ -176,6 +176,73 @@ def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str]:
     return None, False, cleaned
 
 
+
+
+def _parse_json_object_argument(raw: str | None, field_name: str) -> dict[str, Any] | None:
+    """Parse a JSON object argument from a slash-command string option."""
+    if raw is None:
+        return None
+    cleaned = raw.strip()
+    if not cleaned:
+        return None
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid {field_name} JSON: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{field_name} must be a JSON object")
+    return cast(dict[str, Any], parsed)
+
+
+def _spawn_kwargs_from_inputs(
+    *,
+    role: str | None = None,
+    role_json: str | None = None,
+    persona: str | None = None,
+    backstory: str | None = None,
+    traits_json: str | None = None,
+    openness: float | None = None,
+    analytical_focus: float | None = None,
+    empathy: float | None = None,
+    assertiveness: float | None = None,
+    emotional_sensitivity: float | None = None,
+    resilience: float | None = None,
+    trust_baseline: float | None = None,
+    adaptability: float | None = None,
+) -> dict[str, Any]:
+    """Build spawn payload kwargs from slash-command optional inputs."""
+    role_payload = _parse_json_object_argument(role_json, "role") if role_json is not None else None
+    if role_payload is None and role is not None and role.strip():
+        role_payload = role.strip()
+
+    traits_payload = _parse_json_object_argument(traits_json, "traits") if traits_json is not None else None
+    explicit_traits = {
+        "openness": openness,
+        "analytical_focus": analytical_focus,
+        "empathy": empathy,
+        "assertiveness": assertiveness,
+        "emotional_sensitivity": emotional_sensitivity,
+        "resilience": resilience,
+        "trust_baseline": trust_baseline,
+        "adaptability": adaptability,
+    }
+    explicit_clean = {k: float(v) for k, v in explicit_traits.items() if v is not None}
+    if explicit_clean:
+        merged = dict(traits_payload or {})
+        merged.update(explicit_clean)
+        traits_payload = merged
+
+    kwargs: dict[str, Any] = {}
+    if role_payload is not None:
+        kwargs["role"] = role_payload
+    if persona is not None and persona.strip():
+        kwargs["persona"] = persona.strip()
+    if backstory is not None and backstory.strip():
+        kwargs["backstory"] = backstory.strip()
+    if traits_payload is not None:
+        kwargs["traits"] = traits_payload
+    return kwargs
+
 def _default_agent_for_channel(self: "SimulationDiscordBot", channel_id: int | None) -> str | None:
     """Resolve a deterministic fallback agent for an unmapped incoming message."""
     if channel_id is not None:
@@ -522,9 +589,40 @@ class SimulationDiscordBot:
                             )
 
                 @tree.command(name="spawn")
-                @app_commands.describe(agent_id="ID of the agent to spawn")
+                @app_commands.describe(
+                    agent_id="ID of the agent to spawn",
+                    role="Role name",
+                    role_json="Role profile JSON object",
+                    persona="Persona text",
+                    backstory="Backstory text",
+                    traits_json="Trait overrides JSON object",
+                    openness="Trait override",
+                    analytical_focus="Trait override",
+                    empathy="Trait override",
+                    assertiveness="Trait override",
+                    emotional_sensitivity="Trait override",
+                    resilience="Trait override",
+                    trust_baseline="Trait override",
+                    adaptability="Trait override",
+                )
                 @moderation_rate_limit("spawn")
-                async def _tree_spawn(interaction: "discord.Interaction", agent_id: str) -> None:
+                async def _tree_spawn(
+                    interaction: "discord.Interaction",
+                    agent_id: str,
+                    role: str | None = None,
+                    role_json: str | None = None,
+                    persona: str | None = None,
+                    backstory: str | None = None,
+                    traits_json: str | None = None,
+                    openness: float | None = None,
+                    analytical_focus: float | None = None,
+                    empathy: float | None = None,
+                    assertiveness: float | None = None,
+                    emotional_sensitivity: float | None = None,
+                    resilience: float | None = None,
+                    trust_baseline: float | None = None,
+                    adaptability: float | None = None,
+                ) -> None:
                     with command_span("spawn", interaction, agent_id=agent_id) as span:
                         if not await _has_control_command_permission(
                             getattr(interaction, "user", None),
@@ -534,7 +632,22 @@ class SimulationDiscordBot:
                             await interaction.response.send_message("unauthorized", ephemeral=True)
                             return
                         try:
-                            await spawn_agent_command(agent_id, self.context)
+                            spawn_kwargs = _spawn_kwargs_from_inputs(
+                                role=role,
+                                role_json=role_json,
+                                persona=persona,
+                                backstory=backstory,
+                                traits_json=traits_json,
+                                openness=openness,
+                                analytical_focus=analytical_focus,
+                                empathy=empathy,
+                                assertiveness=assertiveness,
+                                emotional_sensitivity=emotional_sensitivity,
+                                resilience=resilience,
+                                trust_baseline=trust_baseline,
+                                adaptability=adaptability,
+                            )
+                            await spawn_agent_command(agent_id, self.context, **spawn_kwargs)
                         except Exception as exc:
                             embed = self.create_spawn_embed(agent_id, False, str(exc))
                             await self.send_simulation_update(embed=embed)
@@ -1575,8 +1688,31 @@ async def slash_stop(interaction: Any) -> None:
 
 
 @bot.tree.command(name="spawn")
+@app_commands.describe(
+    role="Role name",
+    role_json="Role profile JSON object",
+    persona="Persona text",
+    backstory="Backstory text",
+    traits_json="Trait overrides JSON object",
+)
 @moderation_rate_limit("spawn")
-async def slash_spawn(interaction: Any, agent_id: str) -> None:
+async def slash_spawn(
+    interaction: Any,
+    agent_id: str,
+    role: str | None = None,
+    role_json: str | None = None,
+    persona: str | None = None,
+    backstory: str | None = None,
+    traits_json: str | None = None,
+    openness: float | None = None,
+    analytical_focus: float | None = None,
+    empathy: float | None = None,
+    assertiveness: float | None = None,
+    emotional_sensitivity: float | None = None,
+    resilience: float | None = None,
+    trust_baseline: float | None = None,
+    adaptability: float | None = None,
+) -> None:
     """Spawn a new agent in the simulation."""
     with command_span("spawn", interaction, agent_id=agent_id) as span:
         bot_instance = get_active_bot()
@@ -1589,7 +1725,22 @@ async def slash_spawn(interaction: Any, agent_id: str) -> None:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         try:
-            await spawn_agent_command(agent_id, ctx)
+            spawn_kwargs = _spawn_kwargs_from_inputs(
+                role=role,
+                role_json=role_json,
+                persona=persona,
+                backstory=backstory,
+                traits_json=traits_json,
+                openness=openness,
+                analytical_focus=analytical_focus,
+                empathy=empathy,
+                assertiveness=assertiveness,
+                emotional_sensitivity=emotional_sensitivity,
+                resilience=resilience,
+                trust_baseline=trust_baseline,
+                adaptability=adaptability,
+            )
+            await spawn_agent_command(agent_id, ctx, **spawn_kwargs)
         except Exception as exc:
             if bot_instance is not None:
                 embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
