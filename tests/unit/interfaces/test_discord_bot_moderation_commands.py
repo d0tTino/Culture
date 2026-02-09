@@ -162,6 +162,7 @@ async def test_command_tree_registers_moderation_commands(discord_module: object
     for name in {"reset_memory", "penalty", "mute", "unmute"}:
         assert name in tree.commands
         assert hasattr(tree.commands[name], "__wrapped__")
+    assert "event" in tree.commands
 
 
 @pytest.mark.unit
@@ -254,3 +255,28 @@ async def test_mute_command_respects_rate_limiting(
     assert moderation_module._ACTION_COUNTS["user-mute-rate:mute"] == 1
     assert queue_put.await_count == 0
     penalty_logger.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_event_command_requires_control_permission(discord_module: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    context = discord_module.DEFAULT_CONTEXT
+    bot = discord_module.SimulationDiscordBot("token", 123, context=context)
+    tree = next(iter(bot.command_trees.values()))
+    event_cmd = tree.commands["event"]
+
+    unauthorized = DummyInteraction(admin=False, user_id="user-event-unauth")
+    monkeypatch.setattr(discord_module, "_has_control_command_permission", AsyncMock(return_value=False))
+    await event_cmd(unauthorized, "volcano")
+    unauthorized.response.send_message.assert_awaited_once_with("unauthorized", ephemeral=True)
+    assert bot.event_queue.empty()
+
+    authorized = DummyInteraction(admin=False, user_id="user-event-auth")
+    monkeypatch.setattr(discord_module, "_has_control_command_permission", AsyncMock(return_value=True))
+    await event_cmd(authorized, "solar flare")
+    event = await bot.event_queue.get()
+    assert event.type == "control"
+    assert event.data["command"] == "inject_event"
+    assert event.data["text"] == "solar flare"
+    assert event.data["scope"] == "global"
+    authorized.response.send_message.assert_awaited_once_with("event injected", ephemeral=True)

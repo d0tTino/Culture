@@ -228,6 +228,45 @@ async def test_message_relay_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None
     ledger_module.ledger.spend.assert_awaited_once()
 
 
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slash_event_enqueues_control_event(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    queue: asyncio.Queue = asyncio.Queue()
+    ctx = SimpleNamespace(get_event_queue=lambda: queue)
+    bot = SimpleNamespace(context=ctx)
+    monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
+    monkeypatch.setattr(discord_module, "_has_control_command_permission", AsyncMock(return_value=True))
+    interaction = DummyInteraction()
+    interaction.user = SimpleNamespace(id="u-1", guild_permissions=SimpleNamespace(administrator=False))
+    await discord_module.slash_event(interaction, "meteor shower")
+    event = await queue.get()
+    assert event.type == "control"
+    assert event.data["command"] == "inject_event"
+    assert event.data["text"] == "meteor shower"
+    assert event.data["scope"] == "global"
+    assert event.data["author"] == str(interaction.user)
+    interaction.response.send_message.assert_awaited_once_with("event injected", ephemeral=True)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slash_event_requires_authorization(
+    discord_module: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    queue: asyncio.Queue = asyncio.Queue()
+    ctx = SimpleNamespace(get_event_queue=lambda: queue)
+    bot = SimpleNamespace(context=ctx)
+    monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
+    monkeypatch.setattr(discord_module, "_has_control_command_permission", AsyncMock(return_value=False))
+    interaction = DummyInteraction()
+    await discord_module.slash_event(interaction, "storm")
+    assert queue.empty()
+    interaction.response.send_message.assert_awaited_once_with("unauthorized", ephemeral=True)
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_slash_nudge_enqueues_event(

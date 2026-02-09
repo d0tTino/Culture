@@ -578,6 +578,44 @@ class Simulation:
                         )
                     )
                     _ = task
+        elif action == "inject_event":
+            text = str(cmd.get("text", "")).strip()
+            if not text:
+                return
+            author = str(cmd.get("author", "human"))
+            scope = str(cmd.get("scope", "global"))
+            event_payload = {
+                "type": "world_event",
+                "author": author,
+                "step": self.current_step,
+                "timestamp": time.time(),
+                "scope": scope,
+                "text": text,
+            }
+            msg: SimulationMessage = {
+                "step": self.current_step,
+                "sender_id": author,
+                "recipient_id": None,
+                "content": f"[World Event] {text}",
+                "action_intent": None,
+                "sentiment_score": None,
+            }
+            async with self._msg_lock:
+                self.pending_messages_for_next_round.append(msg)
+                self.messages_to_perceive_this_round.append(msg)
+            await self.event_kernel.emit_environment_event(event_payload)
+            if self.knowledge_board:
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        BoardEntry(
+                            content_full=text,
+                            entry_type="world_event",
+                            tags=["event", scope],
+                        ),
+                        author,
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
 
     async def mute_agent(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
         from .resources import mute_agent as _mute_agent
