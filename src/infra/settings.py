@@ -151,6 +151,7 @@ class ConfigSettings(BaseSettings):
     GENE_MUTATION_RATE: float = 0.1
     WORLD_TICKS_PER_DAY: int = 24
     WORLD_SEASON_LENGTH_DAYS: int = 0
+    WORLD_TIME_BROADCAST_CADENCE_TICKS: int = 24
     ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
         "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
         "Innovator": {"base": 1.0, "bonus_factor": 0.5},
