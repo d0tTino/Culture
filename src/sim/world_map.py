@@ -52,6 +52,13 @@ class WorldMap:
             self.agent_positions[agent_id] = (x, y)
             self.agent_resources.setdefault(agent_id, {})
 
+    async def remove_agent(self, agent_id: str) -> None:
+        """Remove ``agent_id`` from map position and inventory state."""
+
+        async with self.lock:
+            self.agent_positions.pop(agent_id, None)
+            self.agent_resources.pop(agent_id, None)
+
     async def add_resource(self, x: int, y: int, resource: ResourceToken, amount: int = 1) -> None:
         """Add ``amount`` of ``resource`` to the specified cell."""
 

@@ -34,6 +34,17 @@ def test_build_structure() -> None:
     assert m.agent_resources["A"].get("wood", 0) == 0
 
 
+def test_remove_agent_cleans_world_map_state() -> None:
+    m = WorldMap()
+    asyncio.run(m.add_agent("A", x=2, y=3))
+    m.agent_resources["A"] = {"wood": 2}
+
+    asyncio.run(m.remove_agent("A"))
+
+    assert "A" not in m.agent_positions
+    assert "A" not in m.agent_resources
+
+
 class DummyNeo4j:
     Driver = object
     GraphDatabase = object
