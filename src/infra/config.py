@@ -153,6 +153,8 @@ DEFAULT_CONFIG: dict[str, object] = {
         "Analyzer": {"base": 1.0},
     },
     "GENE_MUTATION_RATE": 0.1,
+    "WORLD_TICKS_PER_DAY": 24,
+    "WORLD_SEASON_LENGTH_DAYS": 0,
 }
 
 # Cache for council roster configuration
@@ -203,12 +205,11 @@ def _build_default_council_config() -> dict[str, Any]:
                 "is_active": True,
             },
         ],
-        "max_concurrent_calls": int(
-            getattr(settings, "COUNCIL_MAX_CONCURRENT_CALLS", 3)
-        ),
+        "max_concurrent_calls": int(getattr(settings, "COUNCIL_MAX_CONCURRENT_CALLS", 3)),
         "du_budget_per_question": float(getattr(settings, "DU_BUDGET_PER_QUESTION", 0.0)),
         "voting_mode": "judge_llm",
     }
+
 
 # Define keys that should be floats and ints for type conversion
 FLOAT_CONFIG_KEYS = [
@@ -301,6 +302,8 @@ INT_CONFIG_KEYS = [
     "MEMORY_RETRIEVER_TOKEN_LIMIT",
     "LLM_BATCH_SIZE",
     "COUNCIL_MAX_CONCURRENT_CALLS",
+    "WORLD_TICKS_PER_DAY",
+    "WORLD_SEASON_LENGTH_DAYS",
 ]
 BOOL_CONFIG_KEYS = [
     "MEMORY_PRUNING_ENABLED",
