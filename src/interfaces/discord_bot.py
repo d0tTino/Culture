@@ -601,6 +601,30 @@ class SimulationDiscordBot:
                         )
                         await interaction.response.send_message("killed", ephemeral=True)
 
+                @tree.command(name="event")
+                @app_commands.describe(text="World event text to inject for all agents")
+                async def _tree_event(interaction: "discord.Interaction", text: str) -> None:
+                    with command_span("event", interaction) as span:
+                        span.set_attribute("discord.message.length", len(text))
+                        if not await _has_control_command_permission(
+                            getattr(interaction, "user", None),
+                            "inject_event",
+                        ):
+                            await interaction.response.send_message("unauthorized", ephemeral=True)
+                            return
+                        await self.event_queue.put(
+                            SimulationEvent(
+                                type="control",
+                                data={
+                                    "command": "inject_event",
+                                    "text": text,
+                                    "scope": "global",
+                                    "author": str(getattr(interaction, "user", "human")),
+                                },
+                            )
+                        )
+                        await interaction.response.send_message("event injected", ephemeral=True)
+
                 @tree.command(name="nudge")
                 @app_commands.describe(prompt="Prompt to nudge the simulation")
                 @moderation_rate_limit("nudge")
@@ -1649,6 +1673,33 @@ async def slash_kb(interaction: Any, text: str) -> None:
             )
         )
         await send_interaction_response(interaction, "KB entry created", ephemeral=True)
+
+
+@bot.tree.command(name="event")
+async def slash_event(interaction: Any, text: str) -> None:
+    """Inject a world event that all agents will perceive next cycle."""
+    with command_span("event", interaction) as span:
+        span.set_attribute("discord.message.length", len(text))
+        if not await _has_control_command_permission(
+            getattr(interaction, "user", None),
+            "inject_event",
+        ):
+            await send_interaction_response(interaction, "unauthorized", ephemeral=True)
+            return
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        await ctx.get_event_queue().put(
+            SimulationEvent(
+                type="control",
+                data={
+                    "command": "inject_event",
+                    "text": text,
+                    "scope": "global",
+                    "author": str(getattr(interaction, "user", "human")),
+                },
+            )
+        )
+        await send_interaction_response(interaction, "event injected", ephemeral=True)
 
 
 @bot.tree.command(name="propose")
