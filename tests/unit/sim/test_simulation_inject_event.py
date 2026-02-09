@@ -149,3 +149,71 @@ async def test_graph_backend_kb_write_commands_use_lock(monkeypatch: pytest.Monk
 
     await sim.stop_event_listener()
     sim.close()
+
+
+@pytest.mark.unit
+def test_apply_event_replaces_memory_backend_kb_state() -> None:
+    from src.sim.simulation import Simulation
+
+    sim = Simulation([DummyAgent("A")])
+    event = {
+        "type": "agent_action",
+        "agent_id": "A",
+        "knowledge_board": {
+            "entries": [
+                {
+                    "entry_id": "e1",
+                    "step": 1,
+                    "agent_id": "A",
+                    "entry_type": "note",
+                    "tags": [],
+                    "reference_metadata": None,
+                    "content_full": "hello",
+                    "content_display": "Step 1 (Agent: A): hello",
+                    "content_summary": "hello",
+                }
+            ]
+        },
+    }
+
+    sim.apply_event(event)
+
+    assert sim.knowledge_board.to_dict()["entries"] == event["knowledge_board"]["entries"]
+    assert sim.knowledge_board.get_state() == ["Step 1 (Agent: A): hello"]
+
+
+@pytest.mark.unit
+def test_apply_event_replaces_graph_backend_kb_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.infra import config
+    from src.sim.graph_knowledge_board import GraphKnowledgeBoard
+    from src.sim.simulation import Simulation
+    from tests.integration.knowledge_board.test_graph_backend import DummyDriver
+
+    monkeypatch.setattr(config, "KNOWLEDGE_BOARD_BACKEND", "graph")
+    monkeypatch.setattr("src.sim.simulation.GraphKnowledgeBoard", lambda: GraphKnowledgeBoard(driver=DummyDriver()))
+
+    sim = Simulation([DummyAgent("A")])
+    event = {
+        "type": "agent_action",
+        "agent_id": "A",
+        "knowledge_board": {
+            "entries": [
+                {
+                    "entry_id": "g1",
+                    "step": 2,
+                    "agent_id": "A",
+                    "entry_type": "note",
+                    "tags": [],
+                    "reference_metadata": None,
+                    "content_full": "graph hello",
+                    "content_display": "Step 2 (Agent: A): graph hello",
+                    "content_summary": "graph hello",
+                }
+            ]
+        },
+    }
+
+    sim.apply_event(event)
+
+    assert sim.knowledge_board.to_dict()["entries"] == event["knowledge_board"]["entries"]
+    assert sim.knowledge_board.get_state() == ["Step 2 (Agent: A): graph hello"]
