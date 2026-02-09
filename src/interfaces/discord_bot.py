@@ -148,6 +148,66 @@ def embed_from_payload(payload: dict[str, Any]) -> Any:
     return embed
 
 
+def build_help_text() -> str:
+    """Render stable help text for Discord slash commands."""
+    return "\n".join(
+        [
+            "## 👋 Culture Bot Help",
+            "### Public commands",
+            "- `/dm <agent_id> <message>` — send a direct message to one agent.",
+            "- `/broadcast <message>` — send a message to all agents.",
+            "- `/kb <text>` — add a note to the Knowledge Board.",
+            "- `/status`, `/stats` — view current state/metrics.",
+            "- `/propose`, `/propose_law`, `/vote` — governance interactions.",
+            "",
+            "### Moderator/Admin commands",
+            "- `/nudge <prompt>` — steer agent behavior *(moderator/admin)*.",
+            "- `/event <text>` — inject world events *(moderator/admin)*.",
+            "- `/start`, `/stop`, `/pause`, `/resume` — sim lifecycle *(moderator/admin)*.",
+            "- `/spawn`, `/kill_agent`, `/pause_all`, `/kill` — high-impact controls *(admin required for kill/pause_all/kill_agent)*.",
+            "- `/set_speed`, `/speed`, `/set_max_rate` — tuning controls *(admin required for set_max_rate)*.",
+            "",
+            "### Quick examples",
+            "- `/dm agent-2 What's your latest plan?`",
+            "- `/broadcast Team sync in 2 minutes.`",
+            "- `/kb Rule: cite data source before proposing policy.`",
+            "- `/nudge Consider long-term coalition outcomes.`",
+            "",
+            "### Permission + rate-limit notes",
+            "- Public commands are usable by all channel users unless noted.",
+            "- Admin-only commands require Discord administrator privileges.",
+            "- Slash commands are globally rate-limited per user (default: 5 commands / 60s).",
+            "- Some moderation actions also have cooldowns to reduce spam.",
+        ]
+    )
+
+
+def create_onboarding_embed(channel_id: int) -> Any:
+    """Create a lightweight onboarding embed for startup."""
+    embed = discord.Embed(
+        title="🧭 How to interact",
+        description="Use slash commands to talk to agents and moderate the simulation.",
+        color=discord.Color.blue(),
+    )
+    embed.add_field(
+        name="Start with these",
+        value="`/help`, `/dm`, `/broadcast`, `/kb`, `/status`",
+        inline=False,
+    )
+    embed.add_field(
+        name="Permissions",
+        value="Public commands are open. Moderation/admin commands are labeled in `/help`.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Rate limits",
+        value="Global command limit applies per user (default: 5 commands per 60s).",
+        inline=False,
+    )
+    embed.set_footer(text=f"Channel ID: {channel_id}")
+    return embed
+
+
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
 _MENTION_TARGET_RE = re.compile(r"^@(?P<agent>[\w.-]+)\s*:\s*(?P<content>.+)$", re.DOTALL)
 _DM_TARGET_RE = re.compile(r"^/dm\s+(?P<agent>[\w.-]+)\s+(?P<content>.+)$", re.DOTALL)
@@ -738,6 +798,13 @@ class SimulationDiscordBot:
                         )
                         await interaction.response.send_message("event injected", ephemeral=True)
 
+                @tree.command(name="help")
+                async def _tree_help(interaction: "discord.Interaction") -> None:
+                    with command_span("help", interaction) as span:
+                        help_text = build_help_text()
+                        span.set_attribute("discord.message.length", len(help_text))
+                        await interaction.response.send_message(help_text, ephemeral=True)
+
                 @tree.command(name="nudge")
                 @app_commands.describe(prompt="Prompt to nudge the simulation")
                 @moderation_rate_limit("nudge")
@@ -767,6 +834,7 @@ class SimulationDiscordBot:
                     )
                     embed.set_footer(text=f"Channel ID: {self.channel_id}")
                     await send_channel_message(channel, embed=embed)
+                    await send_channel_message(channel, embed=create_onboarding_embed(self.channel_id))
                 else:
                     logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
@@ -1804,6 +1872,15 @@ async def slash_speed(interaction: Any, value: float) -> None:
     with command_span("speed", interaction) as span:
         callback = cast(Callable[[Any, float], Awaitable[None]], slash_set_speed.callback)
         await callback(interaction, value)
+
+
+@bot.tree.command(name="help")
+async def slash_help(interaction: Any) -> None:
+    """Show command catalog, permission hints, and examples."""
+    with command_span("help", interaction) as span:
+        help_text = build_help_text()
+        span.set_attribute("discord.message.length", len(help_text))
+        await send_interaction_response(interaction, help_text, ephemeral=True)
 
 
 @bot.tree.command(name="kb")
