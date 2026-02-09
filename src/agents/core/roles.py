@@ -26,6 +26,57 @@ ROLE_DESCRIPTIONS = {
     ROLE_ANALYZER: "Critique proposals, identify potential flaws, assess feasibility, and ensure solutions are robust and well-considered.",  # Long role description; breaking would harm context
 }
 
+# Role-aware defaults for typed personality traits.
+ROLE_TRAIT_TEMPLATES: dict[str, dict[str, float]] = {
+    ROLE_FACILITATOR: {
+        "openness": 0.7,
+        "analytical_focus": 0.5,
+        "empathy": 0.9,
+        "assertiveness": 0.5,
+        "emotional_sensitivity": 0.7,
+        "resilience": 0.6,
+        "trust_baseline": 0.75,
+        "adaptability": 0.8,
+    },
+    ROLE_INNOVATOR: {
+        "openness": 0.95,
+        "analytical_focus": 0.55,
+        "empathy": 0.6,
+        "assertiveness": 0.7,
+        "emotional_sensitivity": 0.5,
+        "resilience": 0.65,
+        "trust_baseline": 0.55,
+        "adaptability": 0.85,
+    },
+    ROLE_ANALYZER: {
+        "openness": 0.6,
+        "analytical_focus": 0.95,
+        "empathy": 0.45,
+        "assertiveness": 0.55,
+        "emotional_sensitivity": 0.4,
+        "resilience": 0.75,
+        "trust_baseline": 0.5,
+        "adaptability": 0.55,
+    },
+}
+
+DEFAULT_TRAIT_TEMPLATE: dict[str, float] = {
+    "openness": 0.6,
+    "analytical_focus": 0.6,
+    "empathy": 0.6,
+    "assertiveness": 0.5,
+    "emotional_sensitivity": 0.5,
+    "resilience": 0.6,
+    "trust_baseline": 0.55,
+    "adaptability": 0.6,
+}
+
+
+def get_role_trait_template(role_name: str) -> dict[str, float]:
+    """Return a copy of the default personality trait template for ``role_name``."""
+    template = ROLE_TRAIT_TEMPLATES.get(role_name, DEFAULT_TRAIT_TEMPLATE)
+    return dict(template)
+
 
 def _compute_embedding(text: str, dim: int = 8) -> list[float]:
     """Return a deterministic embedding vector for ``text``."""

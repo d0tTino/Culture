@@ -18,6 +18,7 @@ class RoleThoughtGenerator(dspy.Signature):
 
     role_name = dspy.InputField(desc="The assigned role of the agent.")
     context = dspy.InputField(desc="The current situational context or recent interactions.")
+    traits_summary = dspy.InputField(desc="Concise summary of personality traits shaping tone and reasoning.")
     thought = dspy.OutputField(desc="The agent's generated thought, prefixed by their role.")
 
 
@@ -39,7 +40,12 @@ class FailsafeRoleThoughtGenerator:
     Failsafe version of the RoleThoughtGenerator. Always returns a safe default thought.
     """
 
-    def __call__(self: "FailsafeRoleThoughtGenerator", role_name: str, context: str) -> object:
+    def __call__(
+        self: "FailsafeRoleThoughtGenerator",
+        role_name: str,
+        context: str,
+        traits_summary: str | None = None,
+    ) -> object:
         return type(
             "FailsafeResult",
             (),
@@ -89,7 +95,9 @@ def get_role_thought_generator() -> object:
         return FailsafeRoleThoughtGenerator()
 
 
-def generate_role_prefixed_thought(agent_role: str, current_situation: str) -> str:
+def generate_role_prefixed_thought(
+    agent_role: str, current_situation: str, traits_summary: str = "balanced traits"
+) -> str:
     """
     Generate a role-prefixed thought using the robust loader.
     Returns a string thought process (for compatibility with agent graph).
@@ -99,7 +107,11 @@ def generate_role_prefixed_thought(agent_role: str, current_situation: str) -> s
         f"RoleThoughtGenerator inputs: agent_role='{agent_role}' (type: {type(agent_role)}), current_situation='{current_situation[:200]}...' (type: {type(current_situation)})"
     )
     if callable(generator):
-        dspy_result = generator(role_name=agent_role, context=current_situation)
+        dspy_result = generator(
+            role_name=agent_role,
+            context=current_situation,
+            traits_summary=traits_summary,
+        )
         return str(
             getattr(
                 _RolePrefixedThoughtResult(dspy_result),

@@ -7,13 +7,13 @@ import asyncio
 import copy
 import logging
 import uuid
-from collections.abc import Awaitable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from math import sqrt
 
 # LangGraph imports
 # from langgraph.graph import StateGraph, END # No longer needed here
 # Import node functions and router from basic_agent_graph
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from pydantic import BaseModel
 from typing_extensions import Self
@@ -130,8 +130,8 @@ class Agent:
         initial_state: dict[str, Any] | None = None,
         name: str | None = None,
         memory_service: MemoryService | None = None,
-        vector_store_manager: Optional[MemoryStore] = None,
-        async_dspy_manager: Optional[AsyncDSPyManager] = None,
+        vector_store_manager: MemoryStore | None = None,
+        async_dspy_manager: AsyncDSPyManager | None = None,
     ):
         """
         Initializes a new agent with a unique ID and default state.
@@ -376,6 +376,15 @@ class Agent:
             updated_state (AgentState): The new state for the agent.
         """
         self._state = updated_state
+        # Controlled periodic reflection drift: tiny adaptation over time.
+        if self._state.step_counter and self._state.step_counter % 5 == 0:
+            self._state.apply_trait_drift(
+                {
+                    "adaptability": 0.004 * (1.0 - self._state.traits.adaptability),
+                    "resilience": 0.003 * (0.5 - abs(self._state.mood_level)),
+                },
+                max_step=0.01,
+            )
         logger.debug(f"Agent {self.agent_id} state updated")
 
     def add_memory(self: Self, step: int, memory_type: str, content: str) -> None:
@@ -824,6 +833,7 @@ class Agent:
             cast(Callable[..., object], generate_role_prefixed_thought),
             agent_role=role_prompt,
             current_situation=current_situation,
+            traits_summary=self._state.trait_summary,
         )
         result = await self.async_dspy_manager.get_result(
             future,
@@ -838,6 +848,7 @@ class Agent:
         current_situation: str,
         agent_goal: str,
         available_actions: str,
+        traits_summary: str | None = None,
     ) -> object:  # DSPy async output is dynamic
         """
         Asynchronously select an action intent using a DSPy program.
@@ -856,9 +867,10 @@ class Agent:
             current_situation=current_situation,
             agent_goal=agent_goal,
             available_actions=available_actions,
+            traits_summary=traits_summary or self._state.trait_summary,
         )
         default_value = action_intent_selector.get_failsafe_output(
-            role_prompt, current_situation, agent_goal, available_actions
+            role_prompt, current_situation, agent_goal, available_actions, traits_summary
         )
         result = await self.async_dspy_manager.get_result(
             future,

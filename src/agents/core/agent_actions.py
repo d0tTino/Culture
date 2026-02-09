@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from src.infra.config import get_config
 
-from .roles import create_role_profile
+from .roles import create_role_profile, get_role_trait_template
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints
     from .agent_state import AgentState
@@ -26,6 +26,7 @@ def update_relationship(
     effective = (
         sentiment_score * state._targeted_message_multiplier if is_targeted else sentiment_score
     )
+    effective *= 0.75 + (0.5 * state.traits.trust_baseline)
     if effective > 0:
         lr = state._positive_relationship_learning_rate
     elif effective < 0:
@@ -40,6 +41,16 @@ def update_relationship(
         state.relationship_history.setdefault(other_agent_id, []).append(
             (state.step_counter, new_score)
         )
+
+    # Small trait drift from social outcomes.
+    state.apply_trait_drift(
+        {
+            "trust_baseline": 0.01 * effective,
+            "empathy": 0.006 * effective,
+            "assertiveness": -0.004 * effective if effective < 0 else 0.002 * effective,
+        },
+        max_step=0.01,
+    )
 
 
 def can_change_role(state: AgentState, new_role: str, current_step: int) -> bool:
@@ -104,6 +115,27 @@ def change_role(state: AgentState, new_role: str, current_step: int) -> bool:
         logger.debug("Ledger logging failed", exc_info=True)
     state.current_role = create_role_profile(new_role)
     state.role_embedding = list(state.current_role.embedding)
+    template = state.traits.__class__(**get_role_trait_template(new_role))
+    state.apply_trait_drift(
+        {
+            "openness": (template.openness - state.traits.openness) * 0.25,
+            "analytical_focus": (
+                template.analytical_focus - state.traits.analytical_focus
+            )
+            * 0.25,
+            "empathy": (template.empathy - state.traits.empathy) * 0.25,
+            "assertiveness": (template.assertiveness - state.traits.assertiveness) * 0.25,
+            "emotional_sensitivity": (
+                template.emotional_sensitivity - state.traits.emotional_sensitivity
+            )
+            * 0.25,
+            "resilience": (template.resilience - state.traits.resilience) * 0.25,
+            "trust_baseline": (template.trust_baseline - state.traits.trust_baseline)
+            * 0.25,
+            "adaptability": (template.adaptability - state.traits.adaptability) * 0.25,
+        },
+        max_step=0.03,
+    )
     state.reputation_score = state.current_role.reputation
     state.steps_in_current_role = 0
     state.role_history.append((current_step, new_role))

@@ -29,11 +29,11 @@ from src.agents.core.roles import (
     RoleProfile,
     create_role_profile,
     ensure_profile,
+    get_role_trait_template,
 )
 from .embedding_utils import compute_embedding
 from src.infra.config import get_config  # Import get_config function
 from src.langgraph import RetrieverNode
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.infra.llm_client import LLMClient, LLMClientConfig
@@ -92,6 +92,37 @@ def _coerce_policy_bool(value: Any, default: bool = True) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return default
+
+
+
+
+class PersonalityTraits(BaseModel):
+    """Stable-but-adaptable personality dimensions used in social/emotional decisions."""
+
+    openness: float = Field(default=0.6, ge=0.0, le=1.0)
+    analytical_focus: float = Field(default=0.6, ge=0.0, le=1.0)
+    empathy: float = Field(default=0.6, ge=0.0, le=1.0)
+    assertiveness: float = Field(default=0.5, ge=0.0, le=1.0)
+    emotional_sensitivity: float = Field(default=0.5, ge=0.0, le=1.0)
+    resilience: float = Field(default=0.6, ge=0.0, le=1.0)
+    trust_baseline: float = Field(default=0.55, ge=0.0, le=1.0)
+    adaptability: float = Field(default=0.6, ge=0.0, le=1.0)
+
+    def summarize(self) -> str:
+        return (
+            "openness={:.2f}, analytical_focus={:.2f}, empathy={:.2f}, "
+            "assertiveness={:.2f}, sensitivity={:.2f}, resilience={:.2f}, "
+            "trust_baseline={:.2f}, adaptability={:.2f}"
+        ).format(
+            self.openness,
+            self.analytical_focus,
+            self.empathy,
+            self.assertiveness,
+            self.emotional_sensitivity,
+            self.resilience,
+            self.trust_baseline,
+            self.adaptability,
+        )
 
 
 class AgentActionIntent(str, Enum):
@@ -192,6 +223,18 @@ class AgentStateData(BaseModel):
 
     def __init__(self, **data: Any) -> None:
         """Initialize and conditionally call ``model_post_init`` for Pydantic v1."""
+        if "traits" not in data:
+            role_value = data.get("current_role")
+            if role_value is None:
+                role_name = _get_default_role()
+            elif isinstance(role_value, RoleProfile):
+                role_name = role_value.name
+            elif isinstance(role_value, dict):
+                role_name = str(role_value.get("name", _get_default_role()))
+            else:
+                role_name = str(role_value)
+            data["traits"] = PersonalityTraits(**get_role_trait_template(role_name))
+
         super().__init__(**data)
         if hasattr(self, "model_post_init"):
             self.model_post_init(None)
@@ -219,6 +262,7 @@ class AgentStateData(BaseModel):
     collective_ip: float = 0.0
     collective_du: float = 0.0
     current_role: RoleProfile = Field(default_factory=_get_default_role_profile)
+    traits: PersonalityTraits = Field(default_factory=PersonalityTraits)
     steps_in_current_role: int = 0
     reputation: dict[str, float] = Field(default_factory=dict)
     role_reputation: dict[str, float] = Field(default_factory=dict)
@@ -414,7 +458,31 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         avg_rep = sum(self.reputation.values()) / len(self.reputation) if self.reputation else 0.0
         role_rep = self.reputation_score
         emb_str = " ".join(f"{v:.2f}" for v in self.role_embedding)
-        return f"Embedding: {emb_str}; reputation: {avg_rep:.2f}; role_rep: {role_rep:.2f}"
+        return (
+            f"Embedding: {emb_str}; reputation: {avg_rep:.2f}; role_rep: {role_rep:.2f}; "
+            f"traits: {self.traits.summarize()}"
+        )
+
+
+    @property
+    def trait_summary(self) -> str:
+        return self.traits.summarize()
+
+    def apply_trait_drift(self, signals: dict[str, float] | None = None, max_step: float = 0.03) -> None:
+        """Apply bounded, small trait updates from interaction/reflection signals."""
+        updates = signals or {}
+        if not updates:
+            return
+
+        def _clamp01(value: float) -> float:
+            return max(0.0, min(1.0, value))
+
+        for key, influence in updates.items():
+            if not hasattr(self.traits, key):
+                continue
+            current = float(getattr(self.traits, key))
+            delta = max(-max_step, min(max_step, float(influence)))
+            setattr(self.traits, key, _clamp01(current + delta))
 
     # ------------------------------------------------------------------
     # Compatibility properties
@@ -531,6 +599,18 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             llm_client_config = model.llm_client_config
             llm_client = model.llm_client
             mock_llm_client = model.mock_llm_client
+
+
+        if isinstance(model, dict):
+            if not model.get("traits"):
+                role_name = getattr(model.get("current_role"), "name", None) or str(
+                    model.get("current_role") or _get_default_role()
+                )
+                model["traits"] = PersonalityTraits(**get_role_trait_template(role_name))
+        else:
+            if getattr(model, "traits", None) is None:
+                role_name = getattr(model.current_role, "name", _get_default_role())
+                model.traits = PersonalityTraits(**get_role_trait_template(role_name))
 
         if not llm_client:
             if mock_llm_client:
