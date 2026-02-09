@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable
 from typing import Any
 
@@ -29,7 +30,9 @@ class MockSession:
             entries = list(reversed(self.driver.entries))[:limit]
             return DummyResult([{"e": e} for e in entries])
         if "OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(e)" in query:
-            return DummyResult([{"endorsements": self.driver.endorsements.get(params["entry_id"], 0)}])
+            return DummyResult(
+                [{"endorsements": self.driver.endorsements.get(params["entry_id"], 0)}]
+            )
         if "RETURN p.entry_id AS proposal_id, count(v) AS support_count" in query:
             return DummyResult(
                 [
@@ -130,3 +133,9 @@ def test_query_helpers_and_prompt_relationship_summary() -> None:
     )
     assert prompt_entries == ["[Step 1, agent-1]: proposal (endorsements: 3)"]
     assert any("MERGE (a)-[v:VOTED" in query for query, _ in driver.calls)
+
+
+def test_graph_board_exposes_async_lock_for_simulation_interface() -> None:
+    board = GraphKnowledgeBoard(driver=MockDriver())
+
+    assert isinstance(board.lock, asyncio.Lock)
