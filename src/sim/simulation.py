@@ -1732,9 +1732,9 @@ class Simulation:
                     break
             kb = event.get("knowledge_board")
             if isinstance(kb, dict):
-                from .knowledge_board import LoggingList
-
-                self.knowledge_board.entries = LoggingList(kb.get("entries", []))
+                entries = kb.get("entries", [])
+                if isinstance(entries, list):
+                    self.knowledge_board.replace_entries(entries)
             wm = event.get("world_map")
             if isinstance(wm, dict):
                 self.world_map.width = int(wm.get("width", self.world_map.width))

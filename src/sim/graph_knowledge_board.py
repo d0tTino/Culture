@@ -91,6 +91,30 @@ class GraphKnowledgeBoard:
     def to_dict(self: Self) -> dict[str, Any]:
         return {"entries": self.get_full_entries()}
 
+    def replace_entries(self: Self, entries: list[dict[str, Any]]) -> None:
+        """Replace graph-backed KB entries from a serialized snapshot."""
+        self.clear_board()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            props = dict(entry)
+            agent_id = str(props.get("agent_id", "unknown"))
+            entry_type = str(props.get("entry_type", "note"))
+            self._run(
+                """
+                MERGE (a:Agent {agent_id: $agent_id})
+                CREATE (e:KBEntry)
+                SET e = $props
+                SET e.entry_type = $entry_type
+                MERGE (a)-[:AUTHORED]->(e)
+                """,
+                agent_id=agent_id,
+                props=props,
+                entry_type=entry_type,
+            )
+            self._create_reference_links(str(props.get("entry_id", "")), props.get("reference_metadata"))
+        metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
+
     def get_recent_entries_for_prompt(
         self: Self,
         max_entries: int = 5,

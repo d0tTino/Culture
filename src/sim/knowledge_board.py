@@ -216,6 +216,11 @@ class KnowledgeBoard:
         """Serialize the knowledge board to a dictionary."""
         return {"entries": self.get_full_entries(), "vector": self.vector.to_dict()}
 
+    def replace_entries(self: Self, entries: list[dict[str, Any]]) -> None:
+        """Replace the board contents with precomputed entries."""
+        self.entries = LoggingList(list(entries))
+        metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+
     def get_recent_entries_for_prompt(self: Self, max_entries: int = 5) -> list[str]:
         """
         Returns a list of formatted strings for the most recent entries,
