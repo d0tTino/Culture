@@ -64,3 +64,25 @@ async def test_active_agent_count_gauge_updates() -> None:
     assert ACTIVE_AGENT_COUNT._value.get() == 0
 
     sim.close()
+
+
+@pytest.mark.asyncio
+async def test_retire_and_kill_remove_agent_from_world_map_state() -> None:
+    sys.modules.setdefault("neo4j", DummyNeo4j())
+    from src.sim.simulation import Simulation
+
+    agent_a = DummyAgent("A")
+    agent_b = DummyAgent("B")
+    sim = Simulation([agent_a, agent_b])
+
+    await sim.retire_agent(agent_a)
+    assert agent_a in sim.agents
+    assert "A" not in sim.world_map.agent_positions
+    assert "A" not in sim.world_map.agent_resources
+
+    await sim.handle_control_command({"command": "kill_agent", "agent_id": "B"})
+    assert all(agent.agent_id != "B" for agent in sim.agents)
+    assert "B" not in sim.world_map.agent_positions
+    assert "B" not in sim.world_map.agent_resources
+
+    sim.close()

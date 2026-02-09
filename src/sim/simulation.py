@@ -544,12 +544,7 @@ class Simulation:
             if agent_id:
                 agent = next((a for a in self.agents if a.agent_id == str(agent_id)), None)
                 if agent is not None:
-                    await self.retire_agent(agent)
-                    try:
-                        self.agents.remove(agent)
-                    except ValueError:  # pragma: no cover - defensive
-                        pass
-                    self._update_collective_metrics()
+                    await self.retire_agent(agent, remove_from_simulation=True)
         elif action == "set_speed":
             try:
                 self.speed = float(cmd.get("value", 1))
@@ -689,8 +684,10 @@ class Simulation:
         self._update_collective_metrics()
         ACTIVE_AGENT_COUNT.set(len(self.agents))
 
-    async def retire_agent(self: Self, agent: "Agent") -> None:
-        """Retire an agent and compute inheritance."""
+    async def retire_agent(
+        self: Self, agent: "Agent", *, remove_from_simulation: bool = False
+    ) -> None:
+        """Retire an agent, compute inheritance, and optionally remove from simulation."""
         state = agent.state
         state.is_alive = False
         state.inheritance = state.ip + state.du
@@ -709,6 +706,13 @@ class Simulation:
                     self.vector.to_dict(),
                 )
         agent.update_state(state)
+        await self.world_map.remove_agent(agent.agent_id)
+        if remove_from_simulation:
+            try:
+                self.agents.remove(agent)
+            except ValueError:  # pragma: no cover - defensive
+                pass
+        self._update_collective_metrics()
 
     def get_other_agents_public_state(self: Self, current_agent_id: str) -> list[dict[str, Any]]:
         """
