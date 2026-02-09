@@ -124,6 +124,13 @@ class Simulation:
         ACTIVE_AGENT_COUNT.set(len(self.agents))
         self.current_step: int = 0
         self.current_agent_index: int = 0
+        self.world_hour: int = 0
+        self.world_day: int = 0
+        self.world_season: int | None = 0
+        self.world_ticks_per_day: int = max(1, int(config.get_config("WORLD_TICKS_PER_DAY") or 24))
+        season_len = int(config.get_config("WORLD_SEASON_LENGTH_DAYS") or 0)
+        self.world_season_length_days: int | None = season_len if season_len > 0 else None
+        self._last_time_update_step = 0
         self.last_completed_agent_index: int | None = None
         self.steps_to_run: int = 0  # Number of steps to run, set externally
         self.total_turns_executed = 0
@@ -641,8 +648,7 @@ class Simulation:
                 async with self.knowledge_board.lock:
                     self.knowledge_board.add_entry(
                         BoardEntry(
-                            content_full=
-                            f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                            content_full=f"Agent {parent.agent_id} spawned child {agent.agent_id}",
                             entry_type="spawn_event",
                             tags=["population", "spawn"],
                             reference_metadata={"child_id": agent.agent_id},
@@ -712,6 +718,44 @@ class Simulation:
                     )
         return other_agents_info
 
+    def _format_world_time(self: Self) -> str:
+        """Return human-readable world time for prompts/events."""
+        time_str = f"Day {self.world_day}, {self.world_hour:02d}:00"
+        if self.world_season is not None:
+            time_str += f" (Season {self.world_season})"
+        return time_str
+
+    async def _advance_world_time(self: Self) -> None:
+        """Advance world clock by one tick and broadcast periodic updates."""
+        self.world_hour += 1
+        if self.world_hour >= self.world_ticks_per_day:
+            self.world_hour = 0
+            self.world_day += 1
+            if self.world_season_length_days and self.world_day > 0:
+                self.world_season = self.world_day // self.world_season_length_days
+
+        cadence = self.world_ticks_per_day
+        if (
+            self.current_step > 0
+            and self.current_step % cadence == 0
+            and self.current_step != self._last_time_update_step
+        ):
+            self._last_time_update_step = self.current_step
+            payload = {
+                "type": "world_time",
+                "step": self.current_step,
+                "world_hour": self.world_hour,
+                "world_day": self.world_day,
+                "world_season": self.world_season,
+                "world_time": self._format_world_time(),
+            }
+            event = log_event(payload)
+            if event is None:
+                event = {**payload}
+                event["trace_hash"] = compute_trace_hash(payload)
+            await emit_event(SimulationEvent(type="world_time", data=event))
+            await self.send_discord_update(message=f"🕒 {payload['world_time']}")
+
     async def send_discord_update(
         self: Self,
         message: str | None = None,
@@ -742,6 +786,7 @@ class Simulation:
 
         # Increment step and select agent
         self.current_step += 1
+        await self._advance_world_time()
         agent = self.agents[agent_index]
         agent_id = agent.agent_id
         if agent_id in self.muted_agents:
@@ -799,6 +844,12 @@ class Simulation:
             perception_data["knowledge_board_content"] = (
                 self.knowledge_board.get_recent_entries_for_prompt()
             )
+        perception_data["world_time"] = {
+            "world_hour": self.world_hour,
+            "world_day": self.world_day,
+            "world_season": self.world_season,
+            "formatted": self._format_world_time(),
+        }
         with trace_agent_action("agent_activation", agent_id=agent_id, step=self.current_step):
             agent_output = await agent.run_turn(
                 simulation_step=self.current_step,
@@ -980,6 +1031,9 @@ class Simulation:
                 ],
                 "seed": self.seed,
                 "rng_state": capture_rng_state(),
+                "world_hour": self.world_hour,
+                "world_day": self.world_day,
+                "world_season": self.world_season,
                 "trace_hash": self._last_trace_hash,
             }
             snapshot_no_vector = {
@@ -1732,6 +1786,9 @@ class Simulation:
 
             restore_rng_state(snapshot["rng_state"])
         sim.current_step = int(snapshot.get("step", 0))
+        sim.world_hour = int(snapshot.get("world_hour", 0))
+        sim.world_day = int(snapshot.get("world_day", 0))
+        sim.world_season = snapshot.get("world_season", 0)
         sim.collective_ip = float(snapshot.get("collective_ip", 0.0))
         sim.collective_du = float(snapshot.get("collective_du", 0.0))
         sim._last_trace_hash = snapshot.get("trace_hash", "")
@@ -1780,7 +1837,6 @@ class Simulation:
         end_step: int | None = None,
         seed: int | None = None,
         events_path: str | Path | None = None,
-
     ) -> Self:
         """Load a snapshot and replay events from the event log."""
         snap = load_snapshot(snapshot_path)
@@ -1794,7 +1850,6 @@ class Simulation:
         for event in event_log.stream_events(
             after_step=after_step, end_step=end_step, path=events_path
         ):
-
             step = int(event.get("step", 0))
             if start_step is not None and step < start_step:
                 continue

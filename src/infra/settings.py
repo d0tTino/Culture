@@ -149,6 +149,8 @@ class ConfigSettings(BaseSettings):
     COUNCIL_MAX_CONCURRENT_CALLS: int = 3
     DU_BUDGET_PER_QUESTION: float = 5.0
     GENE_MUTATION_RATE: float = 0.1
+    WORLD_TICKS_PER_DAY: int = 24
+    WORLD_SEASON_LENGTH_DAYS: int = 0
     ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
         "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
         "Innovator": {"base": 1.0, "bonus_factor": 0.5},
