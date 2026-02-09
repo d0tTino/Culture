@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import heapq
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from opentelemetry import trace
 from typing_extensions import Self
@@ -257,7 +257,7 @@ class EventKernel:
             await emit_event(SimulationEvent(type=event["type"], data=event_with_hash))
 
     async def forward_external_events(
-        self: Self, handler: Callable[[str], Awaitable[None]]
+        self: Self, handler: Callable[[str, dict[str, Any] | None], Awaitable[None]]
     ) -> None:
         """Forward broadcast events from the shared queue to ``handler``.
 
@@ -280,7 +280,7 @@ class EventKernel:
                 if evt.type == "broadcast" and evt.data:
                     content = evt.data.get("content")
                     if isinstance(content, str):
-                        await handler(content)
+                        await handler(content, dict(evt.data))
         except asyncio.CancelledError:
             pass
         finally:

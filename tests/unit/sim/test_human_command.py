@@ -102,3 +102,65 @@ async def test_human_command_rejected_without_resources(
     async with sim._msg_lock:
         assert sim.pending_messages_for_next_round == []
     sim.close()
+
+
+@pytest.mark.asyncio
+async def test_human_command_uses_structured_routing_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sys.modules.setdefault("neo4j", DummyNeo4j())
+    from src.infra.ledger import Ledger
+    from src.sim.simulation import Simulation
+
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr("src.infra.ledger.ledger", ledger)
+    monkeypatch.setattr("src.sim.simulation.ledger", ledger)
+
+    alpha = DummyAgent("alpha")
+    beta = DummyAgent("beta")
+    sim = Simulation([alpha, beta])
+
+    await sim._handle_human_command(
+        "hello beta",
+        {
+            "sender_id": "human-42",
+            "recipient_id": "beta",
+            "target_agent_id": "beta",
+            "broadcast": False,
+            "budget_agent_id": "alpha",
+        },
+    )
+
+    assert alpha.state.ip == pytest.approx(1.0)
+    assert beta.state.ip == pytest.approx(2.0)
+    async with sim._msg_lock:
+        msg = sim.pending_messages_for_next_round[-1]
+    assert msg["sender_id"] == "human-42"
+    assert msg["recipient_id"] == "beta"
+    sim.close()
+
+
+@pytest.mark.asyncio
+async def test_human_command_broadcast_falls_back_to_current_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sys.modules.setdefault("neo4j", DummyNeo4j())
+    from src.infra.ledger import Ledger
+    from src.sim.simulation import Simulation
+
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr("src.infra.ledger.ledger", ledger)
+    monkeypatch.setattr("src.sim.simulation.ledger", ledger)
+
+    alpha = DummyAgent("alpha")
+    beta = DummyAgent("beta")
+    sim = Simulation([alpha, beta])
+    sim.current_agent_index = 1
+
+    await sim._handle_human_command("hello all", {"sender_id": "human-x", "broadcast": True})
+
+    assert beta.state.ip == pytest.approx(1.0)
+    async with sim._msg_lock:
+        recipients = [msg["recipient_id"] for msg in sim.pending_messages_for_next_round]
+    assert recipients == ["alpha", "beta"]
+    sim.close()
