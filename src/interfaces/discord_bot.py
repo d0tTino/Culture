@@ -572,249 +572,7 @@ class SimulationDiscordBot:
                 tree = None
             if tree is not None:
                 self.command_trees[_token] = tree
-
-                register_moderation_commands(
-                    tree,
-                    resolve_context=lambda self=self: (self.context, self.event_queue),
-                )
-
-                @tree.command(name="start")
-                @moderation_rate_limit("start")
-                async def _tree_start(interaction: "discord.Interaction") -> None:
-                    with command_span("start", interaction) as span:
-                        chan = getattr(interaction, "channel", None)
-                        chan_id = getattr(chan, "id", None)
-                        agent_id = self.channel_to_agent.get(chan_id)
-                        if not await _has_control_command_permission(
-                            getattr(interaction, "user", None),
-                            "start",
-                            agent_id=agent_id,
-                        ):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        try:
-                            await start_simulation(self.context)
-                        except Exception as exc:
-                            embed = self.create_start_embed(False, str(exc), agent_id)
-                            await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction,
-                                "",
-                                embed=embed_from_payload(embed),
-                                ephemeral=True,
-                            )
-                        else:
-                            embed = self.create_start_embed(True, agent_id=agent_id)
-                            await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction,
-                                "",
-                                embed=embed_from_payload(embed),
-                                ephemeral=True,
-                            )
-
-                @tree.command(name="stop")
-                @moderation_rate_limit("stop")
-                async def _tree_stop(interaction: "discord.Interaction") -> None:
-                    with command_span("stop", interaction) as span:
-                        chan = getattr(interaction, "channel", None)
-                        chan_id = getattr(chan, "id", None)
-                        agent_id = self.channel_to_agent.get(chan_id)
-                        if not await _has_control_command_permission(
-                            getattr(interaction, "user", None),
-                            "stop",
-                            agent_id=agent_id,
-                        ):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        try:
-                            await stop_simulation(self.context)
-                        except Exception as exc:
-                            embed = self.create_stop_embed(False, str(exc), agent_id)
-                            await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction,
-                                "",
-                                embed=embed_from_payload(embed),
-                                ephemeral=True,
-                            )
-                        else:
-                            embed = self.create_stop_embed(True, agent_id=agent_id)
-                            await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction,
-                                "",
-                                embed=embed_from_payload(embed),
-                                ephemeral=True,
-                            )
-
-                @tree.command(name="spawn")
-                @app_commands.describe(
-                    agent_id="ID of the agent to spawn",
-                    role="Role name",
-                    role_json="Role profile JSON object",
-                    persona="Persona text",
-                    backstory="Backstory text",
-                    traits_json="Trait overrides JSON object",
-                    openness="Trait override",
-                    analytical_focus="Trait override",
-                    empathy="Trait override",
-                    assertiveness="Trait override",
-                    emotional_sensitivity="Trait override",
-                    resilience="Trait override",
-                    trust_baseline="Trait override",
-                    adaptability="Trait override",
-                )
-                @moderation_rate_limit("spawn")
-                async def _tree_spawn(
-                    interaction: "discord.Interaction",
-                    agent_id: str,
-                    role: str | None = None,
-                    role_json: str | None = None,
-                    persona: str | None = None,
-                    backstory: str | None = None,
-                    traits_json: str | None = None,
-                    openness: float | None = None,
-                    analytical_focus: float | None = None,
-                    empathy: float | None = None,
-                    assertiveness: float | None = None,
-                    emotional_sensitivity: float | None = None,
-                    resilience: float | None = None,
-                    trust_baseline: float | None = None,
-                    adaptability: float | None = None,
-                ) -> None:
-                    with command_span("spawn", interaction, agent_id=agent_id) as span:
-                        if not await _has_control_command_permission(
-                            getattr(interaction, "user", None),
-                            "spawn",
-                            agent_id=agent_id,
-                        ):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        try:
-                            spawn_kwargs = _spawn_kwargs_from_inputs(
-                                role=role,
-                                role_json=role_json,
-                                persona=persona,
-                                backstory=backstory,
-                                traits_json=traits_json,
-                                openness=openness,
-                                analytical_focus=analytical_focus,
-                                empathy=empathy,
-                                assertiveness=assertiveness,
-                                emotional_sensitivity=emotional_sensitivity,
-                                resilience=resilience,
-                                trust_baseline=trust_baseline,
-                                adaptability=adaptability,
-                            )
-                            await spawn_agent_command(agent_id, self.context, **spawn_kwargs)
-                        except Exception as exc:
-                            embed = self.create_spawn_embed(agent_id, False, str(exc))
-                            await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction,
-                                "",
-                                embed=embed_from_payload(embed),
-                                ephemeral=True,
-                            )
-                        else:
-                            embed = self.create_spawn_embed(agent_id, True)
-                            await self.send_simulation_update(embed=embed)
-                            await send_interaction_response(
-                                interaction,
-                                "",
-                                embed=embed_from_payload(embed),
-                                ephemeral=True,
-                            )
-
-                @tree.command(name="pause")
-                async def _tree_pause(interaction: "discord.Interaction") -> None:
-                    with command_span("pause", interaction) as span:
-                        await self.event_queue.put(
-                            SimulationEvent(type="control", data={"command": "pause"})
-                        )
-                        await interaction.response.send_message("pause", ephemeral=True)
-
-                @tree.command(name="resume")
-                async def _tree_resume(interaction: "discord.Interaction") -> None:
-                    with command_span("resume", interaction) as span:
-                        await self.event_queue.put(
-                            SimulationEvent(type="control", data={"command": "resume"})
-                        )
-                        await interaction.response.send_message("resume", ephemeral=True)
-
-                @tree.command(name="pause_all")
-                async def _tree_pause_all(interaction: "discord.Interaction") -> None:
-                    with command_span("pause_all", interaction) as span:
-                        if not has_admin_permission(getattr(interaction, "user", None)):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        await self.event_queue.put(
-                            SimulationEvent(type="control", data={"command": "pause_all"})
-                        )
-                        await interaction.response.send_message("pause all", ephemeral=True)
-
-                @tree.command(name="kill_agent")
-                @app_commands.describe(agent_id="ID of the agent to kill")
-                async def _tree_kill_agent(
-                    interaction: "discord.Interaction", agent_id: str
-                ) -> None:
-                    with command_span("kill_agent", interaction, agent_id=agent_id) as span:
-                        if not has_admin_permission(getattr(interaction, "user", None)):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        await self.event_queue.put(
-                            SimulationEvent(
-                                type="control",
-                                data={
-                                    "command": "kill_agent",
-                                    "agent_id": agent_id,
-                                },
-                            )
-                        )
-                        await interaction.response.send_message("killed", ephemeral=True)
-
-                @tree.command(name="event")
-                @app_commands.describe(text="World event text to inject for all agents")
-                async def _tree_event(interaction: "discord.Interaction", text: str) -> None:
-                    with command_span("event", interaction) as span:
-                        span.set_attribute("discord.message.length", len(text))
-                        if not await _has_control_command_permission(
-                            getattr(interaction, "user", None),
-                            "inject_event",
-                        ):
-                            await interaction.response.send_message("unauthorized", ephemeral=True)
-                            return
-                        await self.event_queue.put(
-                            SimulationEvent(
-                                type="control",
-                                data={
-                                    "command": "inject_event",
-                                    "text": text,
-                                    "scope": "global",
-                                    "author": str(getattr(interaction, "user", "human")),
-                                },
-                            )
-                        )
-                        await interaction.response.send_message("event injected", ephemeral=True)
-
-                @tree.command(name="help")
-                async def _tree_help(interaction: "discord.Interaction") -> None:
-                    with command_span("help", interaction) as span:
-                        help_text = build_help_text()
-                        span.set_attribute("discord.message.length", len(help_text))
-                        await interaction.response.send_message(help_text, ephemeral=True)
-
-                @tree.command(name="nudge")
-                @app_commands.describe(prompt="Prompt to nudge the simulation")
-                @moderation_rate_limit("nudge")
-                async def _tree_nudge(interaction: "discord.Interaction", prompt: str) -> None:
-                    with command_span("nudge", interaction) as span:
-                        span.set_attribute("discord.message.length", len(prompt))
-                        await self.event_queue.put(
-                            SimulationEvent(type="nudge", data={"prompt": prompt})
-                        )
-                        await interaction.response.send_message("nudge sent", ephemeral=True)
+                register_slash_commands(tree)
 
             @client.event
             async def on_ready(
@@ -1378,6 +1136,15 @@ def get_active_bot(ctx: SimulationContext = DEFAULT_CONTEXT) -> "SimulationDisco
     return cast("SimulationDiscordBot | None", ctx.sim_state.get("discord_bot"))
 
 
+def _global_context_resolver() -> tuple[Any, Any]:
+    """Resolve context and event queue for slash command registration."""
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
+        return bot_instance.context, bot_instance.event_queue
+    ctx = DEFAULT_CONTEXT
+    return ctx, ctx.get_event_queue()
+
+
 # --- Command rate limiting -------------------------------------------------
 
 _COMMAND_HISTORY: dict[str, deque[float]] = {}
@@ -1549,7 +1316,6 @@ async def stats(ctx: Any) -> None:
         await send_channel_message(ctx, content=stats_text)
 
 
-@bot.tree.command(name="status")
 async def slash_status(interaction: Any) -> None:
     """Return IP/DU balance for the mapped agent."""
     with command_span("status", interaction) as span:
@@ -1572,7 +1338,6 @@ async def slash_status(interaction: Any) -> None:
             await send_interaction_response(interaction, "Unknown channel", ephemeral=True)
 
 
-@bot.tree.command(name="stats")
 async def slash_stats(interaction: Any) -> None:
     """Return runtime metrics if the agent has resources."""
     with command_span("stats", interaction) as span:
@@ -1592,7 +1357,6 @@ async def slash_stats(interaction: Any) -> None:
         await send_interaction_response(interaction, stats_text, ephemeral=True)
 
 
-@bot.tree.command(name="pause")
 async def slash_pause(interaction: Any) -> None:
     """Pause the simulation via a control command."""
     with command_span("pause", interaction) as span:
@@ -1602,7 +1366,6 @@ async def slash_pause(interaction: Any) -> None:
         await send_interaction_response(interaction, "pause", ephemeral=True)
 
 
-@bot.tree.command(name="resume")
 async def slash_resume(interaction: Any) -> None:
     """Resume the simulation via a control command."""
     with command_span("resume", interaction) as span:
@@ -1614,7 +1377,6 @@ async def slash_resume(interaction: Any) -> None:
         await send_interaction_response(interaction, "resume", ephemeral=True)
 
 
-@bot.tree.command(name="pause_all")
 async def slash_pause_all(interaction: Any) -> None:
     """Pause all activity in the simulation. Administrator only."""
     with command_span("pause_all", interaction) as span:
@@ -1629,8 +1391,6 @@ async def slash_pause_all(interaction: Any) -> None:
         await send_interaction_response(interaction, "pause all", ephemeral=True)
 
 
-@bot.tree.command(name="kill_agent")
-@app_commands.describe(agent_id="ID of the agent to kill")
 async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
     """Remove an agent from the simulation. Administrator only."""
     with command_span("kill_agent", interaction, agent_id=agent_id) as span:
@@ -1645,8 +1405,6 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
         await send_interaction_response(interaction, "killed", ephemeral=True)
 
 
-@bot.tree.command(name="nudge")
-@app_commands.describe(prompt="Prompt to nudge the simulation")
 async def slash_nudge(interaction: Any, prompt: str) -> None:
     """Send a custom prompt to the simulation."""
     with command_span("nudge", interaction) as span:
@@ -1657,8 +1415,6 @@ async def slash_nudge(interaction: Any, prompt: str) -> None:
         await send_interaction_response(interaction, "nudge sent", ephemeral=True)
 
 
-@bot.tree.command(name="start")
-@moderation_rate_limit("start")
 async def slash_start(interaction: Any) -> None:
     """Start the simulation via a control command."""
     with command_span("start", interaction) as span:
@@ -1706,8 +1462,6 @@ async def slash_start(interaction: Any) -> None:
                 await send_interaction_response(interaction, "start", ephemeral=True)
 
 
-@bot.tree.command(name="stop")
-@moderation_rate_limit("stop")
 async def slash_stop(interaction: Any) -> None:
     """Stop the simulation via a control command."""
     with command_span("stop", interaction) as span:
@@ -1754,16 +1508,6 @@ async def slash_stop(interaction: Any) -> None:
             else:
                 await send_interaction_response(interaction, "stop", ephemeral=True)
 
-
-@bot.tree.command(name="spawn")
-@app_commands.describe(
-    role="Role name",
-    role_json="Role profile JSON object",
-    persona="Persona text",
-    backstory="Backstory text",
-    traits_json="Trait overrides JSON object",
-)
-@moderation_rate_limit("spawn")
 async def slash_spawn(
     interaction: Any,
     agent_id: str,
@@ -1831,7 +1575,6 @@ async def slash_spawn(
                 await send_interaction_response(interaction, f"spawn {agent_id}", ephemeral=True)
 
 
-@bot.tree.command(name="kill")
 async def slash_kill(interaction: Any) -> None:
     """Shutdown the bot. Administrator only."""
     with command_span("kill", interaction) as span:
@@ -1842,7 +1585,6 @@ async def slash_kill(interaction: Any) -> None:
         await bot.close()
 
 
-@bot.tree.command(name="set_max_rate")
 async def slash_set_max_rate(interaction: Any, value: int) -> None:
     """Adjust the per-user command rate limit."""
     with command_span("set_max_rate", interaction) as span:
@@ -1853,7 +1595,6 @@ async def slash_set_max_rate(interaction: Any, value: int) -> None:
         await send_interaction_response(interaction, f"max rate set to {value}", ephemeral=True)
 
 
-@bot.tree.command(name="set_speed")
 async def slash_set_speed(interaction: Any, value: float) -> None:
     """Adjust the simulation speed via a control command."""
     with command_span("set_speed", interaction) as span:
@@ -1866,15 +1607,12 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
         await send_interaction_response(interaction, f"speed {value}", ephemeral=True)
 
 
-@bot.tree.command(name="speed")
 async def slash_speed(interaction: Any, value: float) -> None:
     """Alias for ``set_speed``."""
     with command_span("speed", interaction) as span:
-        callback = cast(Callable[[Any, float], Awaitable[None]], slash_set_speed.callback)
-        await callback(interaction, value)
+        await slash_set_speed(interaction, value)
 
 
-@bot.tree.command(name="help")
 async def slash_help(interaction: Any) -> None:
     """Show command catalog, permission hints, and examples."""
     with command_span("help", interaction) as span:
@@ -1883,7 +1621,6 @@ async def slash_help(interaction: Any) -> None:
         await send_interaction_response(interaction, help_text, ephemeral=True)
 
 
-@bot.tree.command(name="kb")
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
     with command_span("kb", interaction) as span:
@@ -1903,7 +1640,6 @@ async def slash_kb(interaction: Any, text: str) -> None:
         await send_interaction_response(interaction, "KB entry created", ephemeral=True)
 
 
-@bot.tree.command(name="event")
 async def slash_event(interaction: Any, text: str) -> None:
     """Inject a world event that all agents will perceive next cycle."""
     with command_span("event", interaction) as span:
@@ -1930,7 +1666,6 @@ async def slash_event(interaction: Any, text: str) -> None:
         await send_interaction_response(interaction, "event injected", ephemeral=True)
 
 
-@bot.tree.command(name="propose")
 async def slash_propose(interaction: Any, text: str) -> None:
     """Propose a law via the dashboard API."""
     with command_span("propose", interaction) as span:
@@ -1964,7 +1699,6 @@ async def slash_propose(interaction: Any, text: str) -> None:
         )
 
 
-@bot.tree.command(name="propose_law")
 async def slash_propose_law(interaction: Any, text: str, weights: str | None = None) -> None:
     """Propose a law via the dashboard API."""
     with command_span("propose_law", interaction) as span:
@@ -2001,7 +1735,6 @@ async def slash_propose_law(interaction: Any, text: str, weights: str | None = N
         )
 
 
-@bot.tree.command(name="vote")
 async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
     """Cast a manual vote on a proposal via the governance service."""
     with command_span("vote", interaction) as span:
@@ -2033,7 +1766,6 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
         )
 
 
-@bot.tree.command(name="misbehavior_log")
 async def slash_misbehavior_log(interaction: Any, limit: int = 20) -> None:
     """Return last ``limit`` misbehavior events."""
     events = await asyncio.to_thread(event_log.fetch_events, event_type="misbehavior")
@@ -2047,3 +1779,79 @@ async def slash_misbehavior_log(interaction: Any, limit: int = 20) -> None:
         lines.append(f"{step}: {agent} - {reason} ({path})")
     msg = "\n".join(lines) if lines else "no misbehavior"
     await send_interaction_response(interaction, msg, ephemeral=True)
+
+
+def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
+    """Register Discord slash commands on the given command tree."""
+    commands: dict[str, Callable[..., Any]] = {}
+
+    if tree is not bot.tree:
+        register_moderation_commands(tree, resolve_context=_global_context_resolver)
+
+    def _register(
+        name: str,
+        callback: Callable[..., Awaitable[None]],
+        *,
+        descriptions: dict[str, str] | None = None,
+        moderation_action: str | None = None,
+    ) -> Callable[..., Awaitable[None]]:
+        handler = callback
+        if moderation_action is not None:
+            handler = cast(
+                Callable[..., Awaitable[None]],
+                moderation_rate_limit(moderation_action)(handler),
+            )
+        if descriptions:
+            handler = cast(Callable[..., Awaitable[None]], app_commands.describe(**descriptions)(handler))
+        if not hasattr(callback, "callback"):
+            setattr(callback, "callback", callback)
+        registered = tree.command(name=name)(handler)
+        commands[name] = registered
+        return registered
+
+    _register("status", slash_status)
+    _register("stats", slash_stats)
+    _register("pause", slash_pause)
+    _register("resume", slash_resume)
+    _register("pause_all", slash_pause_all)
+    _register("kill_agent", slash_kill_agent, descriptions={"agent_id": "ID of the agent to kill"})
+    _register("nudge", slash_nudge, descriptions={"prompt": "Prompt to nudge the simulation"}, moderation_action="nudge")
+    _register("start", slash_start, moderation_action="start")
+    _register("stop", slash_stop, moderation_action="stop")
+    _register(
+        "spawn",
+        slash_spawn,
+        descriptions={
+            "agent_id": "ID of the agent to spawn",
+            "role": "Role name",
+            "role_json": "Role profile JSON object",
+            "persona": "Persona text",
+            "backstory": "Backstory text",
+            "traits_json": "Trait overrides JSON object",
+            "openness": "Trait override",
+            "analytical_focus": "Trait override",
+            "empathy": "Trait override",
+            "assertiveness": "Trait override",
+            "emotional_sensitivity": "Trait override",
+            "resilience": "Trait override",
+            "trust_baseline": "Trait override",
+            "adaptability": "Trait override",
+        },
+        moderation_action="spawn",
+    )
+    _register("kill", slash_kill)
+    _register("set_max_rate", slash_set_max_rate)
+    _register("set_speed", slash_set_speed)
+    _register("speed", slash_speed)
+    _register("help", slash_help)
+    _register("kb", slash_kb)
+    _register("event", slash_event)
+    _register("propose", slash_propose)
+    _register("propose_law", slash_propose_law)
+    _register("vote", slash_vote)
+    _register("misbehavior_log", slash_misbehavior_log)
+
+    return commands
+
+
+register_slash_commands(bot.tree)
