@@ -20,7 +20,7 @@ class DummySession:
         self.store = store
 
     def run(self, query: str, **params: Any) -> Iterable[Any]:
-        if query.startswith("CREATE"):
+        if "SET e = $props" in query or query.startswith("CREATE"):
             self.store.append(params.get("props", params))
             return []
         if "count" in query:

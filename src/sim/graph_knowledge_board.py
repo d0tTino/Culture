@@ -89,7 +89,12 @@ class GraphKnowledgeBoard:
     def to_dict(self: Self) -> dict[str, Any]:
         return {"entries": self.get_full_entries()}
 
-    def get_recent_entries_for_prompt(self: Self, max_entries: int = 5) -> list[str]:
+    def get_recent_entries_for_prompt(
+        self: Self,
+        max_entries: int = 5,
+        *,
+        include_relationship_summaries: bool = False,
+    ) -> list[str]:
         records = self._run(
             "MATCH (e:KBEntry) RETURN e ORDER BY e.step DESC LIMIT $limit",
             limit=max_entries,
@@ -106,7 +111,13 @@ class GraphKnowledgeBoard:
             max_content_len = 150
             if len(content_summary) > max_content_len:
                 content_summary = content_summary[:max_content_len] + "..."
-            formatted_entries.append(f"[Step {step}, {agent_id}]: {content_summary}")
+            relationship_summary = ""
+            if include_relationship_summaries:
+                endorsement_count = self._get_endorsement_count(entry.get("entry_id", ""))
+                relationship_summary = f" (endorsements: {endorsement_count})"
+            formatted_entries.append(
+                f"[Step {step}, {agent_id}]: {content_summary}{relationship_summary}"
+            )
         return formatted_entries
 
     def add_entry(
@@ -116,8 +127,20 @@ class GraphKnowledgeBoard:
         step: int,
         vector: dict[str, int] | None = None,
     ) -> bool:
-        _, props = prepare_entry_payload(entry, agent_id, step)
-        self._run("CREATE (e:KBEntry $props)", props=props)
+        entry_id, props = prepare_entry_payload(entry, agent_id, step)
+        self._run(
+            """
+            MERGE (a:Agent {agent_id: $agent_id})
+            CREATE (e:KBEntry)
+            SET e = $props
+            SET e.entry_type = $entry_type
+            MERGE (a)-[:AUTHORED]->(e)
+            """,
+            agent_id=agent_id,
+            props=props,
+            entry_type=props["entry_type"],
+        )
+        self._create_reference_links(entry_id, props.get("reference_metadata"))
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
         logger.info(
             "GraphKnowledgeBoard: Added entry %s by %s at step %s",
@@ -126,6 +149,110 @@ class GraphKnowledgeBoard:
             step,
         )
         return True
+
+    def record_vote(
+        self: Self,
+        *,
+        voter_agent_id: str,
+        proposal_id: str,
+        approve: bool,
+    ) -> None:
+        self._run(
+            """
+            MERGE (a:Agent {agent_id: $voter_agent_id})
+            MATCH (p:KBEntry {entry_id: $proposal_id})
+            MERGE (a)-[v:VOTED {proposal_id: $proposal_id}]->(p)
+            SET v.approve = $approve
+            """,
+            voter_agent_id=voter_agent_id,
+            proposal_id=proposal_id,
+            approve=approve,
+        )
+
+    def get_proposal_support_counts(self: Self, proposal_ids: list[str] | None = None) -> dict[str, int]:
+        records = self._run(
+            """
+            MATCH (p:KBEntry)
+            WHERE p.entry_type = 'proposal'
+            AND ($proposal_ids IS NULL OR p.entry_id IN $proposal_ids)
+            OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(p)
+            RETURN p.entry_id AS proposal_id, count(v) AS support_count
+            """,
+            proposal_ids=proposal_ids,
+        )
+        return {record["proposal_id"]: int(record["support_count"]) for record in records}
+
+    def get_endorsed_ideas(
+        self: Self,
+        *,
+        min_endorsements: int = 1,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        records = self._run(
+            """
+            MATCH (i:KBEntry {entry_type: 'idea'})
+            OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(i)
+            WITH i, count(v) AS endorsements
+            WHERE endorsements >= $min_endorsements
+            RETURN i AS entry, endorsements
+            ORDER BY endorsements DESC, i.step DESC
+            LIMIT $limit
+            """,
+            min_endorsements=min_endorsements,
+            limit=limit,
+        )
+        return [
+            {
+                **dict(record["entry"]),
+                "endorsement_count": int(record["endorsements"]),
+            }
+            for record in records
+        ]
+
+    def get_agent_contribution_graph(self: Self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        records = self._run(
+            """
+            MATCH (a:Agent)-[:AUTHORED]->(e:KBEntry)
+            WHERE $agent_id IS NULL OR a.agent_id = $agent_id
+            RETURN a.agent_id AS agent_id, e.entry_id AS entry_id, e.entry_type AS entry_type, e.step AS step
+            ORDER BY e.step ASC
+            """,
+            agent_id=agent_id,
+        )
+        return [dict(record) for record in records]
+
+    def _create_reference_links(self: Self, entry_id: str, reference_metadata: Any) -> None:
+        if not isinstance(reference_metadata, dict):
+            return
+        references = reference_metadata.get("references")
+        if not isinstance(references, list):
+            return
+        normalized_references = [str(reference_id) for reference_id in references if reference_id]
+        if not normalized_references:
+            return
+        self._run(
+            """
+            MATCH (source:KBEntry {entry_id: $entry_id})
+            UNWIND $references AS target_id
+            MATCH (target:KBEntry {entry_id: target_id})
+            MERGE (source)-[:REFERENCES]->(target)
+            """,
+            entry_id=entry_id,
+            references=normalized_references,
+        )
+
+    def _get_endorsement_count(self: Self, entry_id: str) -> int:
+        if not entry_id:
+            return 0
+        records = self._run(
+            """
+            MATCH (e:KBEntry {entry_id: $entry_id})
+            OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(e)
+            RETURN count(v) AS endorsements
+            """,
+            entry_id=entry_id,
+        )
+        return int(records[0]["endorsements"]) if records else 0
 
     def add_law_proposal(
         self: Self,
@@ -146,7 +273,7 @@ class GraphKnowledgeBoard:
         )
 
     def clear_board(self: Self) -> None:
-        self._run("MATCH (e:KBEntry) DETACH DELETE e")
+        self._run("MATCH (n) WHERE n:KBEntry OR n:Agent DETACH DELETE n")
         metrics.KNOWLEDGE_BOARD_SIZE.set(0)
 
     def close(self: Self) -> None:
