@@ -18,7 +18,8 @@ from pydantic import ValidationError
 from typing_extensions import Self
 
 from src.agents.core.agent_controller import AgentController
-from src.agents.core.agent_state import AgentActionIntent
+from src.agents.core.agent_state import AgentActionIntent, PersonalityTraits
+from src.agents.core.roles import ensure_profile, get_role_trait_template
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
@@ -535,7 +536,50 @@ class Simulation:
                 try:
                     from src.agents.core.base_agent import Agent
 
-                    new_agent = Agent(agent_id=str(agent_id), name=str(agent_id))
+                    role_value = cmd.get("role")
+                    role_profile = ensure_profile(role_value) if role_value is not None else None
+
+                    trait_overrides: dict[str, float] | None = None
+                    traits_payload = cmd.get("traits")
+                    if traits_payload is not None:
+                        if not isinstance(traits_payload, dict):
+                            raise ValueError("spawn traits must be an object")
+                        valid_traits = set(getattr(PersonalityTraits, "model_fields", {}).keys())
+                        if not valid_traits:
+                            valid_traits = set(getattr(PersonalityTraits, "__fields__", {}).keys())
+                        trait_overrides = {}
+                        for trait_name, raw_value in traits_payload.items():
+                            if str(trait_name) not in valid_traits:
+                                raise ValueError(f"Unknown trait: {trait_name}")
+                            try:
+                                trait_overrides[str(trait_name)] = float(raw_value)
+                            except (TypeError, ValueError) as exc:
+                                raise ValueError(
+                                    f"Invalid trait value for {trait_name}: {raw_value!r}"
+                                ) from exc
+
+                    initial_state: dict[str, Any] = {}
+                    if role_profile is not None:
+                        initial_state["current_role"] = role_profile
+
+                    if trait_overrides is not None:
+                        role_name_for_traits = (
+                            role_profile.name if role_profile is not None else "Innovator"
+                        )
+                        merged_traits = get_role_trait_template(role_name_for_traits)
+                        merged_traits.update(trait_overrides)
+                        initial_state["traits"] = PersonalityTraits(**merged_traits)
+
+                    if "persona" in cmd and cmd.get("persona") is not None:
+                        initial_state["persona"] = str(cmd.get("persona"))
+                    if "backstory" in cmd and cmd.get("backstory") is not None:
+                        initial_state["backstory"] = str(cmd.get("backstory"))
+
+                    new_agent = Agent(
+                        agent_id=str(agent_id),
+                        name=str(agent_id),
+                        initial_state=initial_state or None,
+                    )
                     await self.spawn_agent(new_agent)
                 except Exception:
                     logger.error("Failed to spawn agent %s", agent_id, exc_info=True)

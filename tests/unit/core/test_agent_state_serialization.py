@@ -9,7 +9,12 @@ except IndentationError:
 
 @pytest.mark.unit
 def test_agent_state_serialization_roundtrip() -> None:
-    state = AgentState(agent_id="agent1", name="TestAgent")
+    state = AgentState(
+        agent_id="agent1",
+        name="TestAgent",
+        persona="Calm collaborator",
+        backstory="Grew up solving logistics puzzles",
+    )
     controller = AgentController(state)
     controller.update_mood(0.4)
     controller.update_relationship("agent2", sentiment_score=0.2)
@@ -20,3 +25,6 @@ def test_agent_state_serialization_roundtrip() -> None:
     assert serialized == restored.to_dict()
     assert restored.agent_id == "agent1"
     assert restored.name == "TestAgent"
+    assert restored.persona == "Calm collaborator"
+    assert restored.backstory == "Grew up solving logistics puzzles"
+    assert restored.traits.openness == pytest.approx(state.traits.openness)
