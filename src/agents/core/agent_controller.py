@@ -8,7 +8,7 @@ from typing import Any, cast
 from typing_extensions import Self
 
 from src.agents.core.agent_state import AgentState
-from src.agents.core.mood_utils import get_descriptive_mood
+from src.agents.core.mood_utils import get_descriptive_mood, modulate_emotional_impact
 from src.agents.dspy_programs.intent_selector import IntentSelectorProgram
 
 from .agent_actions import (
@@ -49,7 +49,12 @@ class AgentController:
         current_numeric = state.mood_level
         decayed = current_numeric * (1.0 - state._mood_decay_rate)
         sentiment_float = float(sentiment_score) if sentiment_score is not None else 0.0
-        change = sentiment_float * state._mood_update_rate
+        trait_adjusted_sentiment = modulate_emotional_impact(
+            sentiment_float,
+            state.traits.emotional_sensitivity,
+            state.traits.resilience,
+        )
+        change = trait_adjusted_sentiment * state._mood_update_rate
         new_level = max(-1.0, min(1.0, decayed + change))
         state.mood_level = new_level
         state.mood_history.append((state.step_counter, new_level))
@@ -59,7 +64,7 @@ class AgentController:
             state.agent_id,
             current_numeric,
             decayed,
-            sentiment_float,
+            trait_adjusted_sentiment,
             change,
             new_level,
             mood_desc,

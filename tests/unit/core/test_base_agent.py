@@ -40,3 +40,26 @@ async def test_async_generate_l1_summary_failsafe(monkeypatch: MonkeyPatch) -> N
         assert "Failsafe" in result
     else:
         assert False, "Result is not a string as expected for failsafe output"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_async_select_action_intent_includes_trait_summary(monkeypatch: MonkeyPatch) -> None:
+    agent = Agent(agent_id="a3")
+    captured: dict[str, object] = {}
+
+    async def fake_submit(_callable: object, **kwargs: object) -> str:
+        captured.update(kwargs)
+        return "future"
+
+    monkeypatch.setattr(agent.async_dspy_manager, "submit", fake_submit)
+    monkeypatch.setattr(
+        agent.async_dspy_manager,
+        "get_result",
+        AsyncMock(return_value=type("R", (), {"chosen_action_intent": "idle"})()),
+    )
+
+    await agent.async_select_action_intent("role", "context", "goal", ["idle"])
+
+    assert "traits_summary" in captured
+    assert isinstance(captured["traits_summary"], str)

@@ -58,3 +58,12 @@ def get_descriptive_mood(mood_value: float) -> str:
         return MoodType.FRUSTRATED.value
 
     return MoodType.NEUTRAL.value  # Catches values between -0.2 and 0.2 inclusive
+
+
+def modulate_emotional_impact(
+    sentiment_score: float, emotional_sensitivity: float, resilience: float
+) -> float:
+    """Scale sentiment impact by sensitivity and resilience in a bounded way."""
+    sensitivity_scale = 0.7 + (0.8 * max(0.0, min(1.0, emotional_sensitivity)))
+    resilience_scale = 1.15 - (0.6 * max(0.0, min(1.0, resilience)))
+    return sentiment_score * sensitivity_scale * resilience_scale

@@ -21,7 +21,7 @@ def test_failsafe_role_thought_generator_returns_expected() -> None:
 @pytest.mark.unit
 @pytest.mark.dspy
 def test_generate_role_prefixed_thought_uses_generator(monkeypatch: MonkeyPatch) -> None:
-    def dummy(role_name: str, context: str) -> object:
+    def dummy(role_name: str, context: str, traits_summary: str) -> object:
         return type(
             "Dummy",
             (),
@@ -33,7 +33,7 @@ def test_generate_role_prefixed_thought_uses_generator(monkeypatch: MonkeyPatch)
         lambda: dummy,
     )
 
-    result = generate_role_prefixed_thought("Builder", "blueprint")
+    result = generate_role_prefixed_thought("Builder", "blueprint", "openness=0.5")
     assert result == "As a Builder, thinking about blueprint"
 
 
@@ -45,5 +45,5 @@ def test_generate_role_prefixed_thought_noncallable(monkeypatch: MonkeyPatch) ->
         lambda: object(),
     )
 
-    result = generate_role_prefixed_thought("Artist", "painting")
+    result = generate_role_prefixed_thought("Artist", "painting", "empathy=0.8")
     assert result == "Failsafe: Unable to generate thought (generator not callable)."

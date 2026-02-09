@@ -50,6 +50,9 @@ class ActionIntentSelection(dspy.Signature):
     available_actions = dspy.InputField(
         desc="A list of valid action intents the agent can choose from."
     )
+    traits_summary = dspy.InputField(
+        desc="Concise summary of personality traits that should influence action preference."
+    )
 
     chosen_action_intent = dspy.OutputField(
         desc="The single, most appropriate action intent selected from the available_actions list."
@@ -180,6 +183,7 @@ def test_module() -> bool:
             "agent_role": "Facilitator",
             "current_situation": "The discussion has stalled with multiple competing ideas.",
             "agent_goal": "Help the group reach consensus and make progress.",
+            "traits_summary": "openness=0.70, analytical_focus=0.40, empathy=0.80",
             "available_actions": [
                 "propose_idea",
                 "ask_clarification",
