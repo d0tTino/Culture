@@ -1,5 +1,6 @@
+import asyncio
 import sys
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -100,6 +101,51 @@ async def test_inject_event_is_visible_to_all_agents_next_cycle() -> None:
     assert len(perceived) == 1
     assert perceived[0]["recipient_id"] is None
     assert "market crash" in perceived[0]["content"]
+
+    await sim.stop_event_listener()
+    sim.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_graph_backend_kb_write_commands_use_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.infra import config
+    from src.sim.graph_knowledge_board import GraphKnowledgeBoard
+    from src.sim.simulation import Simulation
+
+    class DummyGraphBoard(GraphKnowledgeBoard):
+        def __init__(self) -> None:
+            self.lock = asyncio.Lock()
+            self.add_entry = MagicMock()
+
+    monkeypatch.setattr(config, "KNOWLEDGE_BOARD_BACKEND", "graph")
+    monkeypatch.setattr("src.sim.simulation.GraphKnowledgeBoard", DummyGraphBoard)
+
+    sim = Simulation([DummyAgent("A")])
+    sim.event_kernel.emit_environment_event = AsyncMock()
+
+    await sim._handle_human_command("/kb graph path")
+    await sim.handle_control_command(
+        {
+            "command": "post_kb",
+            "text": "moderator entry",
+            "author": "mod",
+        }
+    )
+    await sim.handle_control_command(
+        {
+            "command": "inject_event",
+            "text": "storm warning",
+            "scope": "global",
+            "author": "gm",
+        }
+    )
+
+    assert sim.knowledge_board.add_entry.call_count == 3
+    call_args = sim.knowledge_board.add_entry.call_args_list
+    assert call_args[0].args[1] == "human"
+    assert call_args[1].args[1] == "mod"
+    assert call_args[2].args[1] == "gm"
 
     await sim.stop_event_listener()
     sim.close()

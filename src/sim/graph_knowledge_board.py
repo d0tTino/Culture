@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -47,6 +48,7 @@ class GraphKnowledgeBoard:
                 uri or config.GRAPH_DB_URI,
                 auth=(user or config.GRAPH_DB_USER, password or config.GRAPH_DB_PASSWORD),
             )
+        self.lock = asyncio.Lock()
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
 
     # Enable use as a context manager
@@ -169,7 +171,9 @@ class GraphKnowledgeBoard:
             approve=approve,
         )
 
-    def get_proposal_support_counts(self: Self, proposal_ids: list[str] | None = None) -> dict[str, int]:
+    def get_proposal_support_counts(
+        self: Self, proposal_ids: list[str] | None = None
+    ) -> dict[str, int]:
         records = self._run(
             """
             MATCH (p:KBEntry)
@@ -209,7 +213,9 @@ class GraphKnowledgeBoard:
             for record in records
         ]
 
-    def get_agent_contribution_graph(self: Self, agent_id: str | None = None) -> list[dict[str, Any]]:
+    def get_agent_contribution_graph(
+        self: Self, agent_id: str | None = None
+    ) -> list[dict[str, Any]]:
         records = self._run(
             """
             MATCH (a:Agent)-[:AUTHORED]->(e:KBEntry)
