@@ -126,10 +126,11 @@ class Simulation:
         self.current_agent_index: int = 0
         self.world_hour: int = 0
         self.world_day: int = 0
-        self.world_season: int | None = 0
+        self.world_season: int | None = None
         self.world_ticks_per_day: int = max(1, int(config.get_config("WORLD_TICKS_PER_DAY") or 24))
         season_len = int(config.get_config("WORLD_SEASON_LENGTH_DAYS") or 0)
         self.world_season_length_days: int | None = season_len if season_len > 0 else None
+        self.world_season = 0 if self.world_season_length_days else None
         self._last_time_update_step = 0
         self.last_completed_agent_index: int | None = None
         self.steps_to_run: int = 0  # Number of steps to run, set externally
@@ -734,7 +735,7 @@ class Simulation:
             if self.world_season_length_days and self.world_day > 0:
                 self.world_season = self.world_day // self.world_season_length_days
 
-        cadence = self.world_ticks_per_day
+        cadence = max(1, int(config.get_config("WORLD_TIME_BROADCAST_CADENCE_TICKS") or self.world_ticks_per_day))
         if (
             self.current_step > 0
             and self.current_step % cadence == 0
@@ -1788,7 +1789,8 @@ class Simulation:
         sim.current_step = int(snapshot.get("step", 0))
         sim.world_hour = int(snapshot.get("world_hour", 0))
         sim.world_day = int(snapshot.get("world_day", 0))
-        sim.world_season = snapshot.get("world_season", 0)
+        world_season = snapshot.get("world_season", 0 if sim.world_season_length_days else None)
+        sim.world_season = int(world_season) if world_season is not None else None
         sim.collective_ip = float(snapshot.get("collective_ip", 0.0))
         sim.collective_du = float(snapshot.get("collective_du", 0.0))
         sim._last_trace_hash = snapshot.get("trace_hash", "")

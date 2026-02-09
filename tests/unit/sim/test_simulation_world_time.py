@@ -38,6 +38,7 @@ class DummyAgent:
 async def test_world_time_rollover_hour_to_day(monkeypatch):
     monkeypatch.setenv("WORLD_TICKS_PER_DAY", "2")
     monkeypatch.setenv("WORLD_SEASON_LENGTH_DAYS", "0")
+    monkeypatch.setenv("WORLD_TIME_BROADCAST_CADENCE_TICKS", "2")
 
     monkeypatch.setattr("src.sim.simulation.evaluate_policy", AsyncMock(return_value=True))
     monkeypatch.setattr(
@@ -61,6 +62,7 @@ async def test_world_time_rollover_hour_to_day(monkeypatch):
     await sim._advance_world_time()
     assert sim.world_hour == 0
     assert sim.world_day == 1
+    assert sim.world_season is None
     sim.close()
 
 
@@ -69,6 +71,7 @@ async def test_world_time_rollover_hour_to_day(monkeypatch):
 async def test_world_time_rollover_day_to_season(monkeypatch):
     monkeypatch.setenv("WORLD_TICKS_PER_DAY", "2")
     monkeypatch.setenv("WORLD_SEASON_LENGTH_DAYS", "2")
+    monkeypatch.setenv("WORLD_TIME_BROADCAST_CADENCE_TICKS", "2")
 
     monkeypatch.setattr("src.sim.simulation.evaluate_policy", AsyncMock(return_value=True))
     monkeypatch.setattr(
@@ -100,6 +103,7 @@ async def test_world_time_rollover_day_to_season(monkeypatch):
 async def test_run_turn_includes_world_time_perception(monkeypatch):
     monkeypatch.setenv("WORLD_TICKS_PER_DAY", "24")
     monkeypatch.setenv("WORLD_SEASON_LENGTH_DAYS", "0")
+    monkeypatch.setenv("WORLD_TIME_BROADCAST_CADENCE_TICKS", "24")
 
     monkeypatch.setattr("src.sim.simulation.evaluate_policy", AsyncMock(return_value=True))
     monkeypatch.setattr(
