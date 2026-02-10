@@ -184,6 +184,38 @@ else:
         class LLMClientInitError(RuntimeError):
             pass
 
+# Must-not-change contract for persistence compatibility.
+#
+# Fields listed below are persisted and must remain backward compatible across
+# releases unless an ADR-approved migration plan is implemented.
+AGENT_STATE_PERSISTENCE_MUST_NOT_CHANGE: dict[str, tuple[str, ...]] = {
+    "identity_fields": (
+        "agent_id",
+        "name",
+    ),
+    "economic_fields": (
+        "ip",
+        "du",
+    ),
+    "role_and_mood_history_fields": (
+        "current_role",
+        "role_history",
+        "mood_level",
+        "mood_history",
+    ),
+    "memory_and_goal_fields": (
+        "short_term_memory",
+        "goals",
+        "projects",
+        "current_project_id",
+    ),
+    "step_fields": (
+        "step_counter",
+        "last_message_step",
+        "last_action_step",
+    ),
+}
+
 
 class AgentStateData(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra=Extra.allow)

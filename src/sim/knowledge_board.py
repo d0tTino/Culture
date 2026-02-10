@@ -24,6 +24,32 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+# Must-not-change contract for knowledge board entry compatibility.
+#
+# Team changes that affect entry payload shape must be versioned and gated by
+# an approved ADR before changing these fields or their meaning.
+KNOWLEDGE_BOARD_ENTRY_SCHEMA_MUST_NOT_CHANGE: dict[str, tuple[str, ...]] = {
+    "required_fields": (
+        "entry_id",
+        "step",
+        "agent_id",
+        "entry_type",
+        "content_full",
+        "content_display",
+        "content_summary",
+    ),
+    "field_semantics": (
+        "content_full stores normalized full text (length-capped)",
+        "content_display is UI-safe display text",
+        "content_summary is prompt-safe summary text",
+    ),
+    "metadata_fields": (
+        "tags",
+        "reference_metadata",
+    ),
+}
+
+
 @dataclass(slots=True)
 class BoardEntry:
     """Typed payload describing a knowledge board entry."""

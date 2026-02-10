@@ -65,6 +65,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Must-not-change contract for safe parallel development.
+#
+# Any high-impact change touching the event/step lifecycle must preserve these
+# guarantees unless an ADR explicitly approves a versioned migration path.
+EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE: dict[str, tuple[str, ...]] = {
+    "run_step_order": (
+        "start_event_listener must run before kernel dispatch",
+        "event_kernel.step is the step execution boundary",
+        "evaluation hooks execute after events are produced for a step",
+    ),
+    "bootstrap_semantics": (
+        "when kernel queue is empty, exactly one immediate agent event is seeded",
+        "seeded event uses current_agent_index and increments that agent vector clock",
+    ),
+    "metrics_event_semantics": (
+        "evaluation metrics are emitted as SimulationEvent(type='evaluation')",
+        "evaluation metrics include the current simulation step",
+    ),
+}
+
+
 class Simulation:
     """
     Manages the simulation environment, agents, and time steps.
