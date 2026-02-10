@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -112,14 +112,13 @@ async def test_graph_backend_kb_write_commands_use_lock(monkeypatch: pytest.Monk
     from src.infra import config
     from src.sim.graph_knowledge_board import GraphKnowledgeBoard
     from src.sim.simulation import Simulation
-
-    class DummyGraphBoard(GraphKnowledgeBoard):
-        def __init__(self) -> None:
-            self.lock = asyncio.Lock()
-            self.add_entry = MagicMock()
+    from tests.integration.knowledge_board.test_graph_backend import DummyDriver
 
     monkeypatch.setattr(config, "KNOWLEDGE_BOARD_BACKEND", "graph")
-    monkeypatch.setattr("src.sim.simulation.GraphKnowledgeBoard", DummyGraphBoard)
+    monkeypatch.setattr(
+        "src.sim.simulation.GraphKnowledgeBoard",
+        lambda: GraphKnowledgeBoard(driver=DummyDriver()),
+    )
 
     sim = Simulation([DummyAgent("A")])
     sim.event_kernel.emit_environment_event = AsyncMock()
@@ -141,11 +140,19 @@ async def test_graph_backend_kb_write_commands_use_lock(monkeypatch: pytest.Monk
         }
     )
 
-    assert sim.knowledge_board.add_entry.call_count == 3
-    call_args = sim.knowledge_board.add_entry.call_args_list
-    assert call_args[0].args[1] == "human"
-    assert call_args[1].args[1] == "mod"
-    assert call_args[2].args[1] == "gm"
+    entries = sim.knowledge_board.get_full_entries()
+    assert [entry["agent_id"] for entry in entries] == ["human", "mod", "gm"]
+    assert [entry["entry_type"] for entry in entries] == [
+        "human_message",
+        "human_message",
+        "world_event",
+    ]
+    assert [entry["content_full"] for entry in entries] == [
+        "graph path",
+        "moderator entry",
+        "storm warning",
+    ]
+    assert isinstance(sim.knowledge_board.lock, asyncio.Lock)
 
     await sim.stop_event_listener()
     sim.close()
