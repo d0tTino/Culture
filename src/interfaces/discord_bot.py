@@ -644,16 +644,28 @@ class SimulationDiscordBot:
                     if user_id and sender is None:
                         self.user_agents[str(user_id)] = agent_id
                     is_broadcast = explicit_broadcast or recipient is None
-                    ip_cost = float(
-                        config.get_config("IP_COST_BROADCAST_MESSAGE")
-                        or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                        or 0.0
-                    )
-                    du_cost = float(
-                        config.get_config("DU_COST_BROADCAST_ACTION")
-                        or config.get_config("DU_COST_PER_ACTION")
-                        or 0.0
-                    )
+                    if is_broadcast:
+                        ip_cost = float(
+                            config.get_config("IP_COST_BROADCAST_MESSAGE")
+                            or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                            or 0.0
+                        )
+                        du_cost = float(
+                            config.get_config("DU_COST_BROADCAST_ACTION")
+                            or config.get_config("DU_COST_PER_ACTION")
+                            or 0.0
+                        )
+                    else:
+                        ip_cost = float(
+                            config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                            or config.get_config("IP_COST_BROADCAST_MESSAGE")
+                            or 0.0
+                        )
+                        du_cost = float(
+                            config.get_config("DU_COST_PER_ACTION")
+                            or config.get_config("DU_COST_BROADCAST_ACTION")
+                            or 0.0
+                        )
                     ip_bal, du_bal = await ledger.get_balance_async(agent_id)
                     if ip_bal < ip_cost or du_bal < du_cost:
                         await send_channel_message(channel, content="Insufficient IP/DU")
