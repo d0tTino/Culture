@@ -153,3 +153,74 @@ async def test_on_message_parses_explicit_dm_target(discord_module, monkeypatch)
     assert evt.data["target_agent_id"] == "agent-z"
     assert evt.data["broadcast"] is False
     assert evt.data["content"] == "hi there"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content", "expected_broadcast"),
+    [
+        ("@agent-z: hi mention", False),
+        ("/dm agent-z hi slash", False),
+        ("plain message", True),
+    ],
+)
+async def test_on_message_precheck_costs_align_with_routing(
+    discord_module,
+    monkeypatch,
+    content,
+    expected_broadcast,
+):
+    monkeypatch.setattr(discord_module, "allow_message", lambda _: True)
+
+    async def _eval(raw: str):
+        return True, raw
+
+    def _config_lookup(key: str):
+        values = {
+            "IP_COST_BROADCAST_MESSAGE": 6.0,
+            "IP_COST_SEND_DIRECT_MESSAGE": 2.0,
+            "DU_COST_BROADCAST_ACTION": 7.0,
+            "DU_COST_PER_ACTION": 3.0,
+        }
+        return values.get(key)
+
+    balance_checks: list[str] = []
+
+    async def _bal(agent_id: str):
+        balance_checks.append(agent_id)
+        return (4.0, 4.0)
+
+    sent_messages: list[str] = []
+
+    async def _send_channel_message(channel, *, content=None, embed=None):
+        if content:
+            sent_messages.append(content)
+
+    monkeypatch.setattr(discord_module, "evaluate_with_opa", _eval)
+    monkeypatch.setattr(discord_module.config, "get_config", _config_lookup)
+    monkeypatch.setattr(discord_module.ledger, "get_balance_async", _bal)
+    monkeypatch.setattr(discord_module, "send_channel_message", _send_channel_message)
+
+    from src.sim.context import SimulationContext
+
+    bot = discord_module.SimulationDiscordBot(
+        "token", 123, context=SimulationContext(), channel_map={"agent-z": 999}
+    )
+    bot.event_queue = asyncio.Queue()
+
+    message = SimpleNamespace(
+        content=content,
+        author=SimpleNamespace(id="human-1"),
+        channel=SimpleNamespace(id=123),
+    )
+    await bot.client.on_message(message)
+
+    assert balance_checks == ["agent-z"]
+    if expected_broadcast:
+        assert sent_messages == ["Insufficient IP/DU"]
+        assert bot.event_queue.empty()
+    else:
+        assert sent_messages == []
+        evt = await bot.event_queue.get()
+        assert evt.data["broadcast"] is False
