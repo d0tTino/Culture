@@ -97,10 +97,18 @@ async def test_human_messages_counter_increments(discord_module, monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_on_message_routes_to_default_agent_when_user_unmapped(discord_module, monkeypatch):
+async def test_on_message_routes_plain_text_to_single_default_agent(discord_module, monkeypatch):
     monkeypatch.setattr(discord_module, "allow_message", lambda _: True)
-    monkeypatch.setattr(discord_module, "evaluate_with_opa", lambda content: asyncio.sleep(0, result=(True, content)))
-    monkeypatch.setattr(discord_module.ledger, "get_balance_async", lambda _: asyncio.sleep(0, result=(10.0, 10.0)))
+    monkeypatch.setattr(
+        discord_module,
+        "evaluate_with_opa",
+        lambda content: asyncio.sleep(0, result=(True, content)),
+    )
+    monkeypatch.setattr(
+        discord_module.ledger,
+        "get_balance_async",
+        lambda _: asyncio.sleep(0, result=(10.0, 10.0)),
+    )
 
     from src.sim.context import SimulationContext
 
@@ -119,7 +127,7 @@ async def test_on_message_routes_to_default_agent_when_user_unmapped(discord_mod
 
     assert evt.type == "broadcast"
     assert evt.data["target_agent_id"] == "agent-a"
-    assert evt.data["broadcast"] is True
+    assert evt.data["broadcast"] is False
 
 
 @pytest.mark.unit
@@ -162,7 +170,7 @@ async def test_on_message_parses_explicit_dm_target(discord_module, monkeypatch)
     [
         ("@agent-z: hi mention", False),
         ("/dm agent-z hi slash", False),
-        ("plain message", True),
+        ("/broadcast hi all", True),
     ],
 )
 async def test_on_message_precheck_costs_align_with_routing(
@@ -224,3 +232,70 @@ async def test_on_message_precheck_costs_align_with_routing(
         assert sent_messages == []
         evt = await bot.event_queue.get()
         assert evt.data["broadcast"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_on_message_parses_explicit_broadcast_prefix(discord_module, monkeypatch):
+    monkeypatch.setattr(discord_module, "allow_message", lambda _: True)
+
+    async def _eval(content: str):
+        return True, content
+
+    async def _bal(agent_id: str):
+        return (10.0, 10.0)
+
+    monkeypatch.setattr(discord_module, "evaluate_with_opa", _eval)
+    monkeypatch.setattr(discord_module.ledger, "get_balance_async", _bal)
+
+    from src.sim.context import SimulationContext
+
+    bot = discord_module.SimulationDiscordBot(
+        "token", 123, context=SimulationContext(), channel_map={"agent-z": 999}
+    )
+    bot.event_queue = asyncio.Queue()
+
+    message = SimpleNamespace(
+        content="/broadcast hello all",
+        author=SimpleNamespace(id="human-1"),
+        channel=SimpleNamespace(id=123, send=lambda *_: asyncio.sleep(0)),
+    )
+    await bot.client.on_message(message)
+    evt = await bot.event_queue.get()
+
+    assert evt.data["target_agent_id"] is not None
+    assert evt.data["broadcast"] is True
+    assert evt.data["content"] == "hello all"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_on_message_parses_explicit_mention_target(discord_module, monkeypatch):
+    monkeypatch.setattr(discord_module, "allow_message", lambda _: True)
+
+    async def _eval(content: str):
+        return True, content
+
+    async def _bal(agent_id: str):
+        return (10.0, 10.0)
+
+    monkeypatch.setattr(discord_module, "evaluate_with_opa", _eval)
+    monkeypatch.setattr(discord_module.ledger, "get_balance_async", _bal)
+
+    from src.sim.context import SimulationContext
+
+    bot = discord_module.SimulationDiscordBot("token", 123, context=SimulationContext())
+    bot.event_queue = asyncio.Queue()
+
+    message = SimpleNamespace(
+        content="@agent-z: hi there",
+        author=SimpleNamespace(id="human-1"),
+        channel=SimpleNamespace(id=123, send=lambda *_: asyncio.sleep(0)),
+    )
+    await bot.client.on_message(message)
+    evt = await bot.event_queue.get()
+
+    assert evt.data["recipient_id"] == "agent-z"
+    assert evt.data["target_agent_id"] == "agent-z"
+    assert evt.data["broadcast"] is False
+    assert evt.data["content"] == "hi there"

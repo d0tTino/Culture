@@ -42,3 +42,24 @@ async def test_check_command_rate_limit_resets_after_window(
     assert await discord_bot.check_command_rate_limit(user)
 
     discord_bot.reset_command_counts(user.id)
+
+
+@pytest.mark.unit
+def test_default_human_message_broadcast_reads_config_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        discord_bot.config.CONFIG_OVERRIDES,
+        "DISCORD_DEFAULT_BROADCAST",
+        "true",
+    )
+    assert discord_bot._default_human_message_broadcast() is True
+
+    monkeypatch.setitem(
+        discord_bot.config.CONFIG_OVERRIDES,
+        "DISCORD_DEFAULT_BROADCAST",
+        "false",
+    )
+    assert discord_bot._default_human_message_broadcast() is False
+
+    discord_bot.config.CONFIG_OVERRIDES.pop("DISCORD_DEFAULT_BROADCAST", None)
