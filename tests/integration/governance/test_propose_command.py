@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from src.interfaces import discord_bot as bot
@@ -12,108 +13,121 @@ class DummyInteraction:
         self.channel = SimpleNamespace(id=123)
 
 
-class DummyClient:
-    called: dict | None = None
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        pass
-
-    async def post(self, url: str, json: dict[str, object]) -> object:
-        DummyClient.called = {"url": url, "json": json}
-
-        class Resp:
-            def json(self_inner):
-                return {"approved": True}
-
-        return Resp()
-
-
-@pytest.mark.asyncio
-@pytest.mark.integration
-async def test_slash_propose_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: DummyClient())
-    monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
+@pytest.fixture
+def active_discord_bot(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(
         bot.DEFAULT_CONTEXT.sim_state,
         "discord_bot",
         SimpleNamespace(channel_to_agent={123: "a1"}, context=bot.DEFAULT_CONTEXT),
     )
+
+
+@pytest.fixture
+def funded_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_slash_propose_uses_configured_api_base(
+    monkeypatch: pytest.MonkeyPatch, active_discord_bot: None, funded_agent: None
+) -> None:
+    class DummyClient:
+        called: dict[str, object] | None = None
+
+        async def __aenter__(self) -> "DummyClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, json: dict[str, object]) -> httpx.Response:
+            DummyClient.called = {"url": url, "json": json}
+            request = httpx.Request("POST", url)
+            return httpx.Response(200, json={"approved": True}, request=request)
+
+    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: DummyClient())
+    monkeypatch.setattr(bot.config, "get", lambda key, default=None: "http://config-host:8765")
 
     await bot.slash_propose.callback(DummyInteraction(), text="hello")
 
-    assert DummyClient.called["url"].endswith("/api/governance/propose")
-    assert DummyClient.called["json"] == {"proposer_id": "a1", "text": "hello"}
-    DummyClient.called = {}
+    assert DummyClient.called == {
+        "url": "http://config-host:8765/api/governance/propose",
+        "json": {"proposer_id": "a1", "text": "hello"},
+    }
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_slash_propose_law_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    class LawClient:
-        called: dict | None = None
+async def test_slash_propose_law_fallback_uses_simulation_context(
+    monkeypatch: pytest.MonkeyPatch, active_discord_bot: None, funded_agent: None
+) -> None:
+    sim = SimpleNamespace(propose_law=AsyncMock(return_value=True))
+    monkeypatch.setitem(bot.DEFAULT_CONTEXT.sim_state, "simulation", sim)
 
-        async def __aenter__(self) -> "LawClient":
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb) -> None:
-            pass
-
-        async def post(self, url: str, json: dict[str, object]) -> object:
-            LawClient.called = {"url": url, "json": json}
-
-            class Resp:
-                def json(self_inner) -> dict[str, object]:
-                    return {"approved": True}
-
-            return Resp()
-
-    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: LawClient())
-    monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
-    monkeypatch.setitem(
-        bot.DEFAULT_CONTEXT.sim_state,
-        "discord_bot",
-        SimpleNamespace(channel_to_agent={123: "a1"}, context=bot.DEFAULT_CONTEXT),
+    await bot.slash_propose_law.callback(
+        DummyInteraction(), text="hello", weights='{"a2": 2, "a3": 1}'
     )
 
-    await bot.slash_propose_law.callback(DummyInteraction(), text="hello")
-
-    assert LawClient.called["url"].endswith("/api/propose_law")
-    assert LawClient.called["json"] == {"proposer_id": "a1", "text": "hello"}
+    sim.propose_law.assert_awaited_once_with("a1", "hello", {"a2": 2, "a3": 1})
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_slash_vote_uses_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    class VoteClient:
-        called: dict | None = None
+async def test_slash_vote_fallback_uses_governance_service(
+    monkeypatch: pytest.MonkeyPatch, active_discord_bot: None, funded_agent: None
+) -> None:
+    voter = SimpleNamespace(agent_id="a1")
+    sim = SimpleNamespace(agents=[voter])
+    monkeypatch.setitem(bot.DEFAULT_CONTEXT.sim_state, "simulation", sim)
 
-        async def __aenter__(self) -> "VoteClient":
-            return self
+    vote_weighted = AsyncMock(return_value=True)
+    from src.governance.service import governance
 
-        async def __aexit__(self, exc_type, exc, tb) -> None:
-            pass
-
-        async def post(self, url: str, json: dict[str, object]) -> object:
-            VoteClient.called = {"url": url, "json": json}
-
-            class Resp:
-                def json(self_inner) -> dict[str, object]:
-                    return {"vote": True}
-
-            return Resp()
-
-    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: VoteClient())
-    monkeypatch.setattr(bot.ledger, "get_balance_async", AsyncMock(return_value=(1.0, 1.0)))
-    monkeypatch.setitem(
-        bot.DEFAULT_CONTEXT.sim_state,
-        "discord_bot",
-        SimpleNamespace(channel_to_agent={123: "a1"}, context=bot.DEFAULT_CONTEXT),
-    )
+    monkeypatch.setattr(governance, "vote_weighted", vote_weighted)
 
     await bot.slash_vote.callback(DummyInteraction(), text="hello", approve=True)
 
-    assert VoteClient.called["url"].endswith("/api/vote")
-    assert VoteClient.called["json"] == {"agent_id": "a1", "text": "hello", "approve": True}
+    vote_weighted.assert_awaited_once_with(voter, "hello", 1, True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_slash_propose_law_invalid_payload_message(
+    monkeypatch: pytest.MonkeyPatch, active_discord_bot: None, funded_agent: None
+) -> None:
+    interaction = DummyInteraction()
+
+    await bot.slash_propose_law.callback(interaction, text="hello", weights="{not-json")
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Invalid request payload. Please verify command arguments and try again.",
+        ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_slash_vote_network_error_message(
+    monkeypatch: pytest.MonkeyPatch, active_discord_bot: None, funded_agent: None
+) -> None:
+    class FailingClient:
+        async def __aenter__(self) -> "FailingClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def post(self, url: str, json: dict[str, object]) -> object:
+            raise httpx.ConnectError("down")
+
+    interaction = DummyInteraction()
+    monkeypatch.setattr(bot.httpx, "AsyncClient", lambda *a, **k: FailingClient())
+    monkeypatch.setitem(bot.DEFAULT_CONTEXT.sim_state, "simulation", None)
+
+    await bot.slash_vote.callback(interaction, text="hello", approve=True)
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Governance service is unavailable right now. Please try again shortly.",
+        ephemeral=True,
+    )
