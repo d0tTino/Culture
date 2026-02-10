@@ -114,6 +114,7 @@ class ConfigSettings(BaseSettings):
     DISCORD_BOT_TOKEN: str = ""
     DISCORD_CHANNEL_ID: int | None = None
     DISCORD_TOKENS_DB_URL: str = ""
+    DASHBOARD_API_BASE_URL: str = "http://localhost:8000"
     DISCORD_ALLOW_OPA_CONTROL_COMMANDS: bool = False
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""

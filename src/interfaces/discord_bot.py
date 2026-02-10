@@ -65,6 +65,50 @@ if dashboard_message_queue is None or not hasattr(dashboard_message_queue, "put_
 message_sse_queue = dashboard_message_queue
 
 
+_DEFAULT_DASHBOARD_API_BASE_URL = "http://localhost:8000"
+
+
+def _dashboard_api_base_url() -> str:
+    configured = str(
+        config.get("DASHBOARD_API_BASE_URL", _DEFAULT_DASHBOARD_API_BASE_URL)
+    ).strip()
+    return configured.rstrip("/") or _DEFAULT_DASHBOARD_API_BASE_URL
+
+
+def _classify_api_error(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        if exc.response.status_code in (400, 422):
+            return "invalid_payload"
+    if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError)):
+        return "network_unavailable"
+    return "network_unavailable"
+
+
+def _governance_message_from_outcome(
+    *, approved: bool | None = None, vote_cast: bool | None = None, error_kind: str | None = None
+) -> str:
+    if error_kind == "invalid_payload":
+        return "Invalid request payload. Please verify command arguments and try again."
+    if error_kind == "network_unavailable":
+        return "Governance service is unavailable right now. Please try again shortly."
+    if vote_cast is not None:
+        return "Vote cast" if vote_cast else "Vote rejected by policy or vote."
+    if approved:
+        return "Approved"
+    return "Rejected by vote"
+
+
+def _governance_simulation_from_interaction(interaction: Any) -> Any | None:
+    bot_instance = get_active_bot()
+    if bot_instance is not None:
+        return bot_instance.context.sim_state.get("simulation")
+    return DEFAULT_CONTEXT.sim_state.get("simulation")
+
+
+def _governance_agent_for_sim(sim: Any, agent_id: str) -> Any | None:
+    return next((agent for agent in getattr(sim, "agents", []) if agent.agent_id == agent_id), None)
+
+
 @contextmanager
 def command_span(name: str, interaction: Any, *, agent_id: str | None = None) -> Iterator[Any]:
     start = time.perf_counter()
@@ -1697,18 +1741,32 @@ async def slash_propose(interaction: Any, text: str) -> None:
             await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
             return
         payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
+        approved = False
+        error_kind: str | None = None
+        sim = _governance_simulation_from_interaction(interaction)
+        if sim is not None and hasattr(sim, "propose_law"):
+            try:
+                approved = bool(await sim.propose_law(agent_id, text))
+            except Exception:
+                error_kind = "network_unavailable"
+        else:
+            endpoint = f"{_dashboard_api_base_url()}/api/governance/propose"
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(endpoint, json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    approved = bool(data.get("approved", False))
+            except Exception as exc:
+                error_kind = _classify_api_error(exc)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "http://localhost:8000/api/governance/propose", json=payload
-                )
-                data = json.loads(resp.text)
-                approved = data.get("approved", False)
-        except Exception:
-            approved = False
-        await send_interaction_response(
-            interaction, "Approved" if approved else "Rejected", ephemeral=True
-        )
+            await send_interaction_response(
+                interaction,
+                _governance_message_from_outcome(approved=approved, error_kind=error_kind),
+                ephemeral=True,
+            )
+        except Exception:  # pragma: no cover - defensive
+            await send_interaction_response(interaction, "Rejected by vote", ephemeral=True)
 
 
 async def slash_propose_law(interaction: Any, text: str, weights: str | None = None) -> None:
@@ -1734,16 +1792,36 @@ async def slash_propose_law(interaction: Any, text: str, weights: str | None = N
             try:
                 payload["vote_weights"] = json.loads(weights)
             except Exception:
-                payload["vote_weights"] = None
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post("http://localhost:8000/api/propose_law", json=payload)
-                data = json.loads(resp.text)
-                approved = data.get("approved", False)
-        except Exception:
-            approved = False
+                await send_interaction_response(
+                    interaction,
+                    _governance_message_from_outcome(error_kind="invalid_payload"),
+                    ephemeral=True,
+                )
+                return
+
+        approved = False
+        error_kind: str | None = None
+        sim = _governance_simulation_from_interaction(interaction)
+        if sim is not None and hasattr(sim, "propose_law"):
+            try:
+                vote_weights = cast(dict[str, int] | None, payload.get("vote_weights"))
+                approved = bool(await sim.propose_law(agent_id, text, vote_weights))
+            except Exception:
+                error_kind = "network_unavailable"
+        else:
+            endpoint = f"{_dashboard_api_base_url()}/api/propose_law"
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(endpoint, json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    approved = bool(data.get("approved", False))
+            except Exception as exc:
+                error_kind = _classify_api_error(exc)
         await send_interaction_response(
-            interaction, "Approved" if approved else "Rejected", ephemeral=True
+            interaction,
+            _governance_message_from_outcome(approved=approved, error_kind=error_kind),
+            ephemeral=True,
         )
 
 
@@ -1766,15 +1844,34 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
             await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
             return
         payload = {"agent_id": agent_id, "text": text, "approve": approve}
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post("http://localhost:8000/api/vote", json=payload)
-                data = json.loads(resp.text)
-                cast = data.get("vote", False)
-        except Exception:
-            cast = False
+        vote_cast = False
+        error_kind: str | None = None
+        sim = _governance_simulation_from_interaction(interaction)
+        if sim is not None:
+            agent = _governance_agent_for_sim(sim, agent_id)
+            if agent is not None:
+                try:
+                    from src.governance.service import governance
+
+                    vote_cast = bool(await governance.vote_weighted(agent, text, 1, approve))
+                except Exception:
+                    error_kind = "network_unavailable"
+            else:
+                error_kind = "invalid_payload"
+        else:
+            endpoint = f"{_dashboard_api_base_url()}/api/vote"
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(endpoint, json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    vote_cast = bool(data.get("vote", False))
+            except Exception as exc:
+                error_kind = _classify_api_error(exc)
         await send_interaction_response(
-            interaction, "Vote cast" if cast else "Vote rejected", ephemeral=True
+            interaction,
+            _governance_message_from_outcome(vote_cast=vote_cast, error_kind=error_kind),
+            ephemeral=True,
         )
 
 
