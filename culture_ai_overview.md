@@ -52,6 +52,38 @@ launching `scripts/start_vllm.sh` and switching from Ollama.
 - Advanced memory pruning/consolidation
 - Basic interfaces for simulation observation
 
+### Phase Performance Targets, Owners, and Release Gates
+
+To prevent qualitative "phase complete" calls without quantitative evidence, each
+phase now has explicit performance targets and a hard release gate tied to a
+module owner and reproducible harness.
+
+| Metric | Phase 1 Target | Phase 2 Target | Phase 3 Target | Phase 4+ Target | Owner Module | Test Harness |
+| --- | --- | --- | --- | --- | --- | --- |
+| p95 agent-turn latency | <= 800 ms | <= 600 ms | <= 450 ms | <= 300 ms | `src/sim/simulation.py` turn loop instrumentation + `src/infra/metrics.py` percentile export | `scripts/benchmark_agent_turn_latency.py` |
+| Max memory growth/day (steady-state run) | <= 1.5 GB/day | <= 1.0 GB/day | <= 750 MB/day | <= 500 MB/day | `src/infra/metrics.py` process and allocator counters | `scripts/analyze_memory_usage.py --window 24h` |
+| Max snapshot restore time | <= 8.0 s | <= 5.0 s | <= 3.0 s | <= 2.0 s | `src/sim/simulation.py` restore timing spans + snapshot metrics hooks in `src/infra/metrics.py` | `scripts/benchmark_snapshot_restore.py` |
+| Stable run duration without restart | >= 6 h | >= 12 h | >= 24 h | >= 72 h | `src/sim/simulation.py` heartbeat/failure counters + uptime metrics in `src/infra/metrics.py` | `scripts/soak_simulation.py` |
+| Max concurrent agents at acceptable step time (p95 <= target) | >= 8 agents | >= 16 agents | >= 32 agents | >= 64 agents | simulation scheduler in `src/sim/simulation.py`; concurrency saturation gauges in `src/infra/metrics.py` | `scripts/benchmark_concurrent_agents.py` |
+
+#### Release Gate Policy (Required for Phase Exit)
+
+For every phase, the following gates must pass before phase completion can be
+declared:
+
+1. **Metric completeness gate:** all five metrics are emitted by
+   `src/infra/metrics.py` and include run metadata (`phase`, `scenario`,
+   `agent_count`, `model_backend`).
+2. **Harness reproducibility gate:** benchmark scripts under `scripts/` run from
+   CI and produce machine-readable artifacts (JSON/CSV) committed to the build
+   outputs.
+3. **Threshold gate:** each phase's target values above is met on three
+   consecutive benchmark runs.
+4. **Regression gate:** no metric regresses by more than 10% versus the prior
+   phase baseline without an approved exception in release notes.
+5. **Sign-off gate:** simulation owner (`src/sim/simulation.py`) and
+   observability owner (`src/infra/metrics.py`) both approve benchmark results.
+
 > See `/docs` for detailed design documents (e.g., memory pruning, testing strategy).
 
 ---
