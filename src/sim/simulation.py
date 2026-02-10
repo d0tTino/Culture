@@ -533,6 +533,26 @@ class Simulation:
         elif action == "spawn":
             agent_id = cmd.get("agent_id")
             if agent_id:
+                normalized_agent_id = str(agent_id)
+                if any(agent.agent_id == normalized_agent_id for agent in self.agents):
+                    warning_message = (
+                        "Rejected spawn request for duplicate agent_id "
+                        f"'{normalized_agent_id}'."
+                    )
+                    logger.warning(warning_message)
+                    await emit_event(
+                        SimulationEvent(
+                            type="spawn_rejected",
+                            data={
+                                "reason": "duplicate_agent_id",
+                                "agent_id": normalized_agent_id,
+                                "step": self.current_step,
+                            },
+                        )
+                    )
+                    if self.discord_bot:
+                        await self.discord_bot.send_simulation_update(content=warning_message)
+                    return
                 try:
                     from src.agents.core.base_agent import Agent
 
@@ -576,8 +596,8 @@ class Simulation:
                         initial_state["backstory"] = str(cmd.get("backstory"))
 
                     new_agent = Agent(
-                        agent_id=str(agent_id),
-                        name=str(agent_id),
+                        agent_id=normalized_agent_id,
+                        name=normalized_agent_id,
                         initial_state=initial_state or None,
                     )
                     await self.spawn_agent(new_agent)
