@@ -361,6 +361,17 @@ def _default_agent_for_channel(self: "SimulationDiscordBot", channel_id: int | N
         return sorted(self.channel_map)[0]
 
     return None
+
+
+def _default_human_message_broadcast() -> bool:
+    """Return True when plain human messages should fan out to all agents."""
+    overrides = getattr(config, "CONFIG_OVERRIDES", {})
+    value = overrides.get("DISCORD_DEFAULT_BROADCAST")
+    if value is None:
+        value = config.get_config("DISCORD_DEFAULT_BROADCAST")
+    return _coerce_to_bool(value)
+
+
 def _truncate_for_code_block(content: str, max_length: int = MAX_EMBED_DESCRIPTION_LENGTH) -> str:
     """Wrap ``content`` in a code block, truncating safely to ``max_length`` characters."""
 
@@ -687,7 +698,9 @@ class SimulationDiscordBot:
                         return
                     if user_id and sender is None:
                         self.user_agents[str(user_id)] = agent_id
-                    is_broadcast = explicit_broadcast or recipient is None
+                    is_broadcast = explicit_broadcast or (
+                        recipient is None and _default_human_message_broadcast()
+                    )
                     if is_broadcast:
                         ip_cost = float(
                             config.get_config("IP_COST_BROADCAST_MESSAGE")
