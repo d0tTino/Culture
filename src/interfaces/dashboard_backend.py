@@ -5,9 +5,9 @@ import asyncio
 # Skip self argument annotation warnings in stub classes
 import json
 import logging
-from collections.abc import AsyncGenerator, Awaitable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from opentelemetry import trace
 from pydantic import BaseModel
@@ -946,7 +946,27 @@ async def websocket_events(websocket: WebSocket) -> None:
 async def handle_control_command(
     cmd: dict[str, Any], ctx: SimulationContext = DEFAULT_CONTEXT
 ) -> dict[str, Any]:
-    """Process a control command and update simulation state."""
+    """Process a control command via the interaction service when available."""
+    simulation = ctx.sim_state.get("simulation")
+    service = getattr(simulation, "interaction_service", None)
+    if service is not None:
+        from src.interfaces.interaction_commands import InteractionContext
+
+        result = await service.execute_from_payload(
+            cmd,
+            context=InteractionContext(
+                sender_id="dashboard",
+                source="dashboard",
+                permissions={"admin", "moderator"},
+            ),
+        )
+        return {
+            "status": result.status,
+            "message": result.user_message,
+            "reason_code": result.reason_code,
+            "data": result.data,
+        }
+
     action = cmd.get("command")
     if action == "pause":
         ctx.sim_state["paused"] = True

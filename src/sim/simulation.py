@@ -39,6 +39,13 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
 )
+from src.interfaces.interaction_commands import (
+    BroadcastCommand,
+    DirectMessageCommand,
+    InteractionContext,
+    InteractionService,
+    KnowledgeBoardCommand,
+)
 from src.interfaces.metrics import ACTIVE_AGENT_COUNT
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
@@ -318,6 +325,7 @@ class Simulation:
         self._event_task = None
         self._event_loop = None
         self._event_loop_thread = None
+        self.interaction_service = InteractionService(self)
 
         # Automatically start listening for external events when an event loop
         # is already running. This allows tests to enqueue events before calling
@@ -365,223 +373,62 @@ class Simulation:
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle a human-issued command or prompt."""
-        text = text or ""
-        now = time.monotonic()
-        routing = metadata or {}
-        if text.startswith("/kb ") and self.knowledge_board:
-            if now - self._last_kb_time < self._kb_cooldown:
-                return
-            self._last_kb_time = now
-            entry = text[4:].strip()
-            if entry:
-                async with self.knowledge_board.lock:
-                    self.knowledge_board.add_entry(
-                        BoardEntry(
-                            content_full=entry,
-                            entry_type="human_message",
-                            tags=["human", "knowledge_board"],
-                        ),
-                        "human",
-                        self.current_step,
-                        self.vector.to_dict(),
-                    )
-            return
-
-        if not text.strip():
-            if self.discord_bot:
-                await self.discord_bot.send_simulation_update(
-                    "Message cannot be empty.",
-                    agent_id=str(routing.get("sender_id", "human")),
-                    target_channel_id=self.discord_bot.last_channel_id,
-                )
-            return
-
-        sender_id = str(routing.get("sender_id", "human"))
+        payload = metadata or {}
+        sender_id = str(payload.get("sender_id", "human"))
         raw_channel_id = (
-            routing.get("channel_id")
-            or routing.get("source_channel_id")
-            or routing.get("target_channel_id")
+            payload.get("channel_id")
+            or payload.get("source_channel_id")
+            or payload.get("target_channel_id")
         )
         channel_id = str(raw_channel_id) if raw_channel_id is not None else None
-        relay_scope_key = sender_id if channel_id is None else f"{sender_id}:{channel_id}"
-
-        last_relay_time = self._last_relay_times.get(relay_scope_key, 0.0)
-        if now - last_relay_time < self._relay_cooldown:
-            retry_after = max(0.0, self._relay_cooldown - (now - last_relay_time))
-            await emit_event(
-                SimulationEvent(
-                    type="human_command_rate_limited",
-                    data={
-                        "sender_id": sender_id,
-                        "scope": relay_scope_key,
-                        "retry_after_seconds": retry_after,
-                        "step": self.current_step,
-                    },
-                )
-            )
-            if self.discord_bot:
-                await self.discord_bot.send_simulation_update(
-                    (
-                        "Rate limited: please wait "
-                        f"{retry_after:.1f}s before sending another message."
-                    ),
-                    agent_id=sender_id,
-                    target_channel_id=(
-                        int(channel_id)
-                        if channel_id is not None and channel_id.isdigit()
-                        else self.discord_bot.last_channel_id
-                    ),
-                )
-            return
-        self._last_relay_times[relay_scope_key] = now
-
-        if not self.agents:
-            return
-
-        raw_recipient = routing.get("recipient_id")
-        recipient_id = str(raw_recipient) if isinstance(raw_recipient, str) else None
-        broadcast = bool(routing.get("broadcast", False))
-        if text.startswith("/broadcast "):
-            broadcast = True
-            text = text[len("/broadcast ") :].strip()
-            if not text:
-                if self.discord_bot:
-                    await self.discord_bot.send_simulation_update(
-                        "Broadcast message cannot be empty.",
-                        agent_id=sender_id,
-                        target_channel_id=self.discord_bot.last_channel_id,
-                    )
-                return
-
-        raw_target = routing.get("target_agent_id")
-        target_agent_id = str(raw_target) if isinstance(raw_target, str) else None
-        raw_budget = routing.get("budget_agent_id")
-        target = next((a for a in self.agents if a.agent_id == target_agent_id), None)
-        if target is None and recipient_id:
-            target = next((a for a in self.agents if a.agent_id == recipient_id), None)
-        if target is None and self.discord_bot and self.discord_bot.last_agent_id:
-            last_id = self.discord_bot.last_agent_id
-            target = next((a for a in self.agents if a.agent_id == last_id), None)
-        if target is None:
-            target = self.agents[self.current_agent_index]
-        configured_budget_id = config.get_config("HUMAN_COMMAND_BUDGET_AGENT_ID")
-        if isinstance(raw_budget, str) and raw_budget:
-            budget_agent_id = raw_budget
-        elif isinstance(configured_budget_id, str) and configured_budget_id:
-            budget_agent_id = configured_budget_id
-        else:
-            budget_agent_id = target.agent_id
-        budget_agent = next((a for a in self.agents if a.agent_id == budget_agent_id), None)
-        state = budget_agent.state if budget_agent is not None else None
-        if broadcast:
-            ip_cost = float(
-                config.get_config("IP_COST_BROADCAST_MESSAGE")
-                or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                or 0.0
-            )
-            du_cost = float(
-                config.get_config("DU_COST_BROADCAST_ACTION")
-                or config.get_config("DU_COST_PER_ACTION")
-                or 0.0
-            )
-        else:
-            ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
-            du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
-
-        try:
-            get_resource_manager().ensure_du_budget(budget_agent_id, du_cost)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.info(
-                "Rejecting human %s for %s: %s",
-                "broadcast" if broadcast else "command",
-                budget_agent_id,
-                exc,
-            )
-            if self.discord_bot:
-                await self.discord_bot.send_simulation_update(
-                    str(exc),
-                    agent_id=budget_agent_id,
-                    target_channel_id=self.discord_bot.last_channel_id,
-                )
-            return
-
-        if state is not None and (state.ip < ip_cost or state.du < du_cost):
-            logger.info(
-                "Rejecting human %s for %s: insufficient resources",
-                "broadcast" if broadcast else "command",
-                budget_agent_id,
-            )
-            if self.discord_bot:
-                await self.discord_bot.send_simulation_update(
-                    "Insufficient IP/DU",
-                    agent_id=budget_agent_id,
-                    target_channel_id=self.discord_bot.last_channel_id,
-                )
-            return
-
-        if state is not None:
-            state.ip -= ip_cost
-            state.du -= du_cost
-        try:
-            await ledger.spend(
-                budget_agent_id,
-                ip=ip_cost,
-                du=du_cost,
-                reason="human_broadcast" if broadcast else "human_dm",
-            )
-        except Exception:  # pragma: no cover - optional
-            logger.debug("Ledger spend failed", exc_info=True)
-
-        msgs = []
-        if broadcast:
-            for ag in self.agents:
-                msgs.append(
-                    {
-                        "step": self.current_step,
-                        "sender_id": sender_id,
-                        "recipient_id": ag.agent_id,
-                        "content": text,
-                        "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
-                        "sentiment_score": None,
-                    }
-                )
-        else:
-            msgs.append(
-                {
-                    "step": self.current_step,
-                    "sender_id": sender_id,
-                    "recipient_id": target.agent_id,
-                    "content": text,
-                    "action_intent": AgentActionIntent.SEND_DIRECT_MESSAGE.value,
-                    "sentiment_score": None,
-                }
-            )
-        async with self._msg_lock:
-            self.pending_messages_for_next_round.extend(msgs)
-            self.messages_to_perceive_this_round.extend(msgs)
-
-        log_event(
-            {
-                "type": "human_command",
-                "step": self.current_step,
-                "tick": self.current_step + 1,
-                "sender_id": sender_id,
-                "target_agent_id": target.agent_id,
-                "budget_agent_id": budget_agent_id,
-                "broadcast": broadcast,
-                "recipient_id": recipient_id,
-                "text": text,
-                "ip_cost": ip_cost,
-                "du_cost": du_cost,
-                "messages": [dict(msg) for msg in msgs],
-            }
+        permissions = payload.get("permissions")
+        permission_set = set(permissions) if isinstance(permissions, list | set | tuple) else set()
+        context = InteractionContext(
+            sender_id=sender_id,
+            channel_id=channel_id,
+            source=str(payload.get("source", "simulation")),
+            permissions=permission_set,
+            metadata={k: v for k, v in payload.items() if k not in {"permissions"}},
         )
 
-        if self.discord_bot and self.discord_bot.last_channel_id is not None:
-            chan = self.discord_bot.last_channel_id
-            aid = target.agent_id
-            self.discord_bot.channel_map[aid] = chan
-            self.discord_bot.channel_to_agent[chan] = aid
+        cleaned_text = (text or "").strip()
+        if cleaned_text.startswith("/kb "):
+            command = KnowledgeBoardCommand(content=cleaned_text[4:])
+        else:
+            is_broadcast = bool(payload.get("broadcast", False))
+            command_text = cleaned_text
+            if cleaned_text == "/broadcast":
+                is_broadcast = True
+                command_text = ""
+            elif cleaned_text.startswith("/broadcast "):
+                is_broadcast = True
+                command_text = cleaned_text[len("/broadcast ") :]
+            command_cls = BroadcastCommand if is_broadcast else DirectMessageCommand
+            command = command_cls(
+                content=command_text,
+                recipient_id=str(payload.get("recipient_id"))
+                if isinstance(payload.get("recipient_id"), str)
+                else None,
+                target_agent_id=str(payload.get("target_agent_id"))
+                if isinstance(payload.get("target_agent_id"), str)
+                else None,
+                budget_agent_id=str(payload.get("budget_agent_id"))
+                if isinstance(payload.get("budget_agent_id"), str)
+                else None,
+            )
+
+        result = await self.interaction_service.execute(command, context=context)
+        if result.status != "ok" and self.discord_bot:
+            target_channel_id = (
+                int(channel_id)
+                if channel_id is not None and channel_id.isdigit()
+                else self.discord_bot.last_channel_id
+            )
+            await self.discord_bot.send_simulation_update(
+                result.user_message,
+                agent_id=sender_id,
+                target_channel_id=target_channel_id,
+            )
 
     async def handle_control_command(self: Self, cmd: dict[str, Any]) -> None:
         """Process a control command sent via the event queue."""

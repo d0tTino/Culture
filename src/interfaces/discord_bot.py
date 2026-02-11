@@ -27,6 +27,11 @@ from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
+from src.interfaces.interaction_commands import (
+    BroadcastCommand,
+    DirectMessageCommand,
+    InteractionContext,
+)
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
 
@@ -714,44 +719,70 @@ class SimulationDiscordBot:
                     is_broadcast = explicit_broadcast or (
                         recipient is None and _default_human_message_broadcast()
                     )
-                    if is_broadcast:
-                        ip_cost = float(
-                            config.get_config("IP_COST_BROADCAST_MESSAGE")
-                            or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                            or 0.0
-                        )
-                        du_cost = float(
-                            config.get_config("DU_COST_BROADCAST_ACTION")
-                            or config.get_config("DU_COST_PER_ACTION")
-                            or 0.0
-                        )
-                    else:
-                        ip_cost = float(
-                            config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                            or config.get_config("IP_COST_BROADCAST_MESSAGE")
-                            or 0.0
-                        )
-                        du_cost = float(
-                            config.get_config("DU_COST_PER_ACTION")
-                            or config.get_config("DU_COST_BROADCAST_ACTION")
-                            or 0.0
-                        )
-                    ip_bal, du_bal = await ledger.get_balance_async(agent_id)
-                    if ip_bal < ip_cost or du_bal < du_cost:
-                        await send_channel_message(channel, content="Insufficient IP/DU")
-                        return
                     self.last_agent_id = agent_id
                     self.last_channel_id = channel_id
-                    data = {
-                        "author": str(user_id) if user_id is not None else "human",
-                        "content": parsed_content,
-                        "sender_id": str(user_id) if user_id is not None else "human",
-                        "target_agent_id": agent_id,
-                        "broadcast": is_broadcast,
-                    }
-                    if recipient is not None:
-                        data["recipient_id"] = recipient
-                    await self.event_queue.put(SimulationEvent(type="broadcast", data=data))
+                    simulation = self.context.sim_state.get("simulation")
+                    service = getattr(simulation, "interaction_service", None)
+                    if service is None:
+                        if is_broadcast:
+                            ip_cost = float(
+                                config.get_config("IP_COST_BROADCAST_MESSAGE")
+                                or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                                or 0.0
+                            )
+                            du_cost = float(
+                                config.get_config("DU_COST_BROADCAST_ACTION")
+                                or config.get_config("DU_COST_PER_ACTION")
+                                or 0.0
+                            )
+                        else:
+                            ip_cost = float(
+                                config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                                or config.get_config("IP_COST_BROADCAST_MESSAGE")
+                                or 0.0
+                            )
+                            du_cost = float(
+                                config.get_config("DU_COST_PER_ACTION")
+                                or config.get_config("DU_COST_BROADCAST_ACTION")
+                                or 0.0
+                            )
+                        ip_bal, du_bal = await ledger.get_balance_async(agent_id)
+                        if ip_bal < ip_cost or du_bal < du_cost:
+                            await send_channel_message(channel, content="Insufficient IP/DU")
+                            return
+                        data = {
+                            "author": str(user_id) if user_id is not None else "human",
+                            "content": parsed_content,
+                            "sender_id": str(user_id) if user_id is not None else "human",
+                            "target_agent_id": agent_id,
+                            "broadcast": is_broadcast,
+                        }
+                        if recipient is not None:
+                            data["recipient_id"] = recipient
+                        await self.event_queue.put(SimulationEvent(type="broadcast", data=data))
+                        return
+                    if is_broadcast:
+                        command = BroadcastCommand(
+                            content=parsed_content,
+                            target_agent_id=agent_id,
+                            recipient_id=recipient,
+                        )
+                    else:
+                        command = DirectMessageCommand(
+                            content=parsed_content,
+                            target_agent_id=agent_id,
+                            recipient_id=recipient,
+                        )
+                    result = await service.execute(
+                        command,
+                        context=InteractionContext(
+                            sender_id=str(user_id) if user_id is not None else "human",
+                            channel_id=str(channel_id) if channel_id is not None else None,
+                            source="discord",
+                        ),
+                    )
+                    if result.status != "ok":
+                        await send_channel_message(channel, content=result.user_message)
 
     async def _select_client(self: Self, agent_id: str | None) -> Any:
         """Return the Discord client for the given agent."""
