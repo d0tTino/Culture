@@ -24,6 +24,7 @@ from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.governance import evaluate_policy
+from src.governance.rules_engine import governance_rules_engine
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.ledger import ledger
@@ -952,6 +953,7 @@ class Simulation:
         message_content = agent_output.get("message_content")
         message_recipient_id = agent_output.get("message_recipient_id")
         action_intent_str = agent_output.get("action_intent", "idle")
+        requested_action_intent = action_intent_str
         map_action = agent_output.get("map_action")
 
         explain_why_payload = (
@@ -971,11 +973,46 @@ class Simulation:
             explain_why_payload["rag_summary"] = None
 
         allowed = await evaluate_policy(action_intent_str)
-        if not allowed:
+        rule_evaluation = governance_rules_engine.evaluate_action(action_intent_str)
+        if not allowed or not rule_evaluation.allowed:
             action_intent_str = AgentActionIntent.IDLE.value
             message_content = None
             message_recipient_id = None
             map_action = None
+
+        if rule_evaluation.penalties:
+            for penalty in rule_evaluation.penalties:
+                current_agent_state.ip = max(0.0, float(current_agent_state.ip) - float(penalty.get("ip", 0.0)))
+                current_agent_state.du = max(0.0, float(current_agent_state.du) - float(penalty.get("du", 0.0)))
+
+        if self.knowledge_board:
+            governance_decision = "rejected" if not allowed or not rule_evaluation.allowed else rule_evaluation.decision
+            rule_ids = rule_evaluation.violated_rules
+            async with self.knowledge_board.lock:
+                self.knowledge_board.add_entry(
+                    BoardEntry(
+                        content_full=(
+                            f"Governance enforcement {governance_decision} for action "
+                            f"'{requested_action_intent}' by {agent_id}"
+                        ),
+                        entry_type="governance_decision",
+                        tags=["governance", governance_decision],
+                        reference_metadata={
+                            "decision": governance_decision,
+                            "rule_ids": rule_ids,
+                            "provenance": {
+                                "agent_id": agent_id,
+                                "step": self.current_step,
+                                "policy_allowed": allowed,
+                                "rule_reason": rule_evaluation.reason,
+                                "penalties": rule_evaluation.penalties,
+                            },
+                        },
+                    ),
+                    agent_id,
+                    self.current_step,
+                    self.vector.to_dict(),
+                )
 
         if message_content:
             msg_data = cast(
@@ -1084,6 +1121,12 @@ class Simulation:
                     "turn_index": self.current_step,
                     "world_time": self._world_time_snapshot(),
                     "action_intent": action_intent_str,
+                    "governance_enforcement": {
+                        "decision": "rejected" if not allowed or not rule_evaluation.allowed else rule_evaluation.decision,
+                        "reason": rule_evaluation.reason,
+                        "violated_rules": rule_evaluation.violated_rules,
+                        "penalties": rule_evaluation.penalties,
+                    },
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
                     "knowledge_board": kb_state,
@@ -2061,6 +2104,10 @@ class Simulation:
 
         return _get_project_details(self)
 
+    def get_governance_read_model(self: Self) -> dict[str, Any]:
+        """Return active rules with enforcement statistics for governance audits."""
+        return {"rules": governance_rules_engine.active_rules_read_model()}
+
     async def propose_law(
         self: Self, proposer_id: str, text: str, vote_weights: dict[str, int] | None = None
     ) -> bool:
@@ -2087,13 +2134,21 @@ class Simulation:
             vote_weights,
         )
         approved = bool(result.get("approved"))
-        if approved and self.knowledge_board:
+        rule_materialization = result.get("rule_materialization", {})
+        if self.knowledge_board:
+            decision = str(rule_materialization.get("decision", "accepted" if approved else "rejected"))
+            rule_ids = rule_materialization.get("rule_ids", [])
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
                     BoardEntry(
-                        content_full=f"Law approved: {text}",
+                        content_full=f"Law {'approved' if approved else 'rejected'}: {text}",
                         entry_type="proposal_result",
-                        tags=["governance", "result"],
+                        tags=["governance", "result", decision],
+                        reference_metadata={
+                            "decision": decision,
+                            "rule_ids": rule_ids,
+                            "provenance": rule_materialization.get("provenance", {}),
+                        },
                     ),
                     proposer_id,
                     self.current_step,

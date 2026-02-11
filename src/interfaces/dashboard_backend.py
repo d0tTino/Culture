@@ -13,6 +13,7 @@ from opentelemetry import trace
 from pydantic import BaseModel
 
 from src.governance.law_board import law_board
+from src.governance.rules_engine import governance_rules_engine
 from src.governance.service import governance
 from src.infra import event_log
 from src.infra import metrics as infra_metrics
@@ -226,6 +227,10 @@ class VotesResponse(BaseModel):
 
 class ProposalsResponse(BaseModel):
     proposals: list[ProposalRecord]
+
+
+class GovernanceReadModelResponse(BaseModel):
+    rules: list[dict[str, Any]]
 
 
 class VoteRequest(BaseModel):
@@ -659,6 +664,17 @@ async def api_recent_proposals(limit: int = 5) -> Response:
     """Return the most recent law proposals."""
     proposals = governance.get_proposals(limit)
     return JSONResponse({"proposals": proposals})
+
+
+@app.get("/gov", response_model=GovernanceReadModelResponse)
+@app.get("/api/gov", response_model=GovernanceReadModelResponse)
+async def api_get_gov() -> Response:
+    """Return active governance rules and enforcement stats."""
+    sim = SIM_STATE.get("simulation")
+    if sim is not None and hasattr(sim, "get_governance_read_model"):
+        model = cast(dict[str, Any], sim.get_governance_read_model())
+        return JSONResponse(model)
+    return JSONResponse({"rules": governance_rules_engine.active_rules_read_model()})
 
 
 @app.get("/api/laws", response_model=LawsResponse)
@@ -1132,6 +1148,7 @@ __all__ = [
     "api_agent_stats",
     "api_auctions",
     "api_flagged_messages",
+    "api_get_gov",
     "api_get_laws",
     "api_get_proposals",
     "api_get_votes",
