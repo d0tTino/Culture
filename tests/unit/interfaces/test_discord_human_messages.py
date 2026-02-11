@@ -299,3 +299,84 @@ async def test_on_message_parses_explicit_mention_target(discord_module, monkeyp
     assert evt.data["target_agent_id"] == "agent-z"
     assert evt.data["broadcast"] is False
     assert evt.data["content"] == "hi there"
+
+
+@pytest.mark.unit
+def test_parse_human_message_routing_rejects_broadcast_without_payload(discord_module):
+    recipient, is_broadcast, parsed_content, validation_error = discord_module._parse_human_message_routing(
+        "/broadcast"
+    )
+
+    assert recipient is None
+    assert is_broadcast is True
+    assert parsed_content == ""
+    assert validation_error is not None
+
+
+@pytest.mark.unit
+def test_parse_human_message_routing_rejects_broadcast_whitespace_payload(discord_module):
+    recipient, is_broadcast, parsed_content, validation_error = discord_module._parse_human_message_routing(
+        "/broadcast   "
+    )
+
+    assert recipient is None
+    assert is_broadcast is True
+    assert parsed_content == ""
+    assert validation_error is not None
+
+
+@pytest.mark.unit
+def test_parse_human_message_routing_accepts_broadcast_payload(discord_module):
+    recipient, is_broadcast, parsed_content, validation_error = discord_module._parse_human_message_routing(
+        "/broadcast hello"
+    )
+
+    assert recipient is None
+    assert is_broadcast is True
+    assert parsed_content == "hello"
+    assert validation_error is None
+
+
+@pytest.mark.unit
+def test_parse_human_message_routing_treats_broadcasting_as_plain_text(discord_module):
+    recipient, is_broadcast, parsed_content, validation_error = discord_module._parse_human_message_routing(
+        "/broadcasting foo"
+    )
+
+    assert recipient is None
+    assert is_broadcast is False
+    assert parsed_content == "/broadcasting foo"
+    assert validation_error is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_on_message_replies_with_validation_error_for_empty_broadcast(discord_module, monkeypatch):
+    monkeypatch.setattr(discord_module, "allow_message", lambda _: True)
+
+    async def _eval(content: str):
+        return True, content
+
+    sent_messages: list[str] = []
+
+    async def _send_channel_message(channel, *, content=None, embed=None):
+        if content:
+            sent_messages.append(content)
+
+    monkeypatch.setattr(discord_module, "evaluate_with_opa", _eval)
+    monkeypatch.setattr(discord_module, "send_channel_message", _send_channel_message)
+
+    from src.sim.context import SimulationContext
+
+    bot = discord_module.SimulationDiscordBot("token", 123, context=SimulationContext())
+    bot.event_queue = asyncio.Queue()
+
+    message = SimpleNamespace(
+        content="/broadcast   ",
+        author=SimpleNamespace(id="human-1"),
+        channel=SimpleNamespace(id=123),
+    )
+    await bot.client.on_message(message)
+
+    assert sent_messages == ["Broadcast message cannot be empty. Use /broadcast <message>."]
+    assert bot.event_queue.empty()

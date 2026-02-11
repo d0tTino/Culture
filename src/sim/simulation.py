@@ -365,6 +365,7 @@ class Simulation:
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Handle a human-issued command or prompt."""
+        text = text or ""
         now = time.monotonic()
         routing = metadata or {}
         if text.startswith("/kb ") and self.knowledge_board:
@@ -384,6 +385,15 @@ class Simulation:
                         self.current_step,
                         self.vector.to_dict(),
                     )
+            return
+
+        if not text.strip():
+            if self.discord_bot:
+                await self.discord_bot.send_simulation_update(
+                    "Message cannot be empty.",
+                    agent_id=str(routing.get("sender_id", "human")),
+                    target_channel_id=self.discord_bot.last_channel_id,
+                )
             return
 
         sender_id = str(routing.get("sender_id", "human"))
@@ -434,6 +444,14 @@ class Simulation:
         if text.startswith("/broadcast "):
             broadcast = True
             text = text[len("/broadcast ") :].strip()
+            if not text:
+                if self.discord_bot:
+                    await self.discord_bot.send_simulation_update(
+                        "Broadcast message cannot be empty.",
+                        agent_id=sender_id,
+                        target_channel_id=self.discord_bot.last_channel_id,
+                    )
+                return
 
         raw_target = routing.get("target_agent_id")
         target_agent_id = str(raw_target) if isinstance(raw_target, str) else None
