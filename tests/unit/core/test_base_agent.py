@@ -63,3 +63,5 @@ async def test_async_select_action_intent_includes_trait_summary(monkeypatch: Mo
 
     assert "traits_summary" in captured
     assert isinstance(captured["traits_summary"], str)
+    assert "trait_policy_biases" in captured
+    assert isinstance(captured["trait_policy_biases"], dict)

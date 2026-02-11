@@ -53,6 +53,12 @@ class ActionIntentSelection(dspy.Signature):
     traits_summary = dspy.InputField(
         desc="Concise summary of personality traits that should influence action preference."
     )
+    trait_policy_biases = dspy.InputField(
+        desc=(
+            "Deterministic action-to-bias map computed from TraitPolicy. "
+            "Use these bias scores for decision-critical action preference adjustments."
+        )
+    )
 
     chosen_action_intent = dspy.OutputField(
         desc="The single, most appropriate action intent selected from the available_actions list."
@@ -184,6 +190,12 @@ def test_module() -> bool:
             "current_situation": "The discussion has stalled with multiple competing ideas.",
             "agent_goal": "Help the group reach consensus and make progress.",
             "traits_summary": "openness=0.70, analytical_focus=0.40, empathy=0.80",
+            "trait_policy_biases": {
+                "propose_idea": 0.12,
+                "ask_clarification": 0.06,
+                "continue_collaboration": 0.08,
+                "idle": -0.10,
+            },
             "available_actions": [
                 "propose_idea",
                 "ask_clarification",

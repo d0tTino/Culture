@@ -8,7 +8,7 @@ from typing import Any, cast
 from typing_extensions import Self
 
 from src.agents.core.agent_state import AgentState
-from src.agents.core.mood_utils import get_descriptive_mood, modulate_emotional_impact
+from src.agents.core.mood_utils import get_descriptive_mood
 from src.agents.dspy_programs.intent_selector import IntentSelectorProgram
 
 from .agent_actions import (
@@ -21,6 +21,7 @@ from .agent_actions import (
     update_relationship as update_relationship_action,
 )
 from .embedding_utils import compute_embedding
+from .trait_policy import mood_update_multiplier
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,11 @@ class AgentController:
         current_numeric = state.mood_level
         decayed = current_numeric * (1.0 - state._mood_decay_rate)
         sentiment_float = float(sentiment_score) if sentiment_score is not None else 0.0
-        trait_adjusted_sentiment = modulate_emotional_impact(
-            sentiment_float,
-            state.traits.emotional_sensitivity,
-            state.traits.resilience,
+        mood_multiplier = mood_update_multiplier(
+            state.traits,
+            state.trait_policy_coefficients,
         )
+        trait_adjusted_sentiment = sentiment_float * mood_multiplier
         change = trait_adjusted_sentiment * state._mood_update_rate
         new_level = max(-1.0, min(1.0, decayed + change))
         state.mood_level = new_level

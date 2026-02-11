@@ -7,7 +7,7 @@ import asyncio
 import copy
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from math import sqrt
 
 # LangGraph imports
@@ -37,6 +37,11 @@ from src.sim.resource_manager import get_resource_manager
 
 from .embedding_utils import compute_embedding
 from .roles import ensure_profile
+from .trait_policy import (
+    action_intent_biasing,
+    merge_trait_policy_coefficients,
+    trait_drift_from_experience,
+)
 
 if TYPE_CHECKING:
     from src.interfaces.dashboard_backend import (
@@ -349,6 +354,10 @@ class Agent:
         self.action_intent_selector_program = get_optimized_action_selector()
         self.role_thought_generator_program = get_role_thought_generator()
         self.relationship_updater_program = get_relationship_updater()
+        trait_policy_overrides = get_config("TRAIT_POLICY_COEFFICIENTS")
+        self._trait_policy_coefficients = merge_trait_policy_coefficients(
+            trait_policy_overrides if isinstance(trait_policy_overrides, dict) else None
+        )
 
         logger.info(
             f"Agent {self.agent_id} __init__: self.action_intent_selector_program is {type(self.action_intent_selector_program)}"
@@ -378,10 +387,17 @@ class Agent:
         self._state = updated_state
         # Controlled periodic reflection drift: tiny adaptation over time.
         if self._state.step_counter and self._state.step_counter % 5 == 0:
+            reflection_drift = trait_drift_from_experience(
+                {
+                    "adaptability": self._state.traits.adaptability,
+                    "mood_level": self._state.mood_level,
+                },
+                self._trait_policy_coefficients,
+            )
             self._state.apply_trait_drift(
                 {
-                    "adaptability": 0.004 * (1.0 - self._state.traits.adaptability),
-                    "resilience": 0.003 * (0.5 - abs(self._state.mood_level)),
+                    "adaptability": reflection_drift["adaptability"],
+                    "resilience": reflection_drift["resilience"],
                 },
                 max_step=0.01,
             )
@@ -849,7 +865,7 @@ class Agent:
         agent_role: str | None,
         current_situation: str,
         agent_goal: str,
-        available_actions: str,
+        available_actions: Sequence[str],
         traits_summary: str | None = None,
     ) -> object:  # DSPy async output is dynamic
         """
@@ -863,16 +879,22 @@ class Agent:
         selector = action_intent_selector.get_optimized_action_selector()
         selector_callable = cast(Callable[..., object], selector)
         role_prompt = agent_role or self._state.role_prompt
+        actions_list = [str(action) for action in available_actions]
         future = await self.async_dspy_manager.submit(
             selector_callable,
             agent_role=role_prompt,
             current_situation=current_situation,
             agent_goal=agent_goal,
-            available_actions=available_actions,
+            available_actions=actions_list,
             traits_summary=traits_summary or self._state.trait_summary,
+            trait_policy_biases=action_intent_biasing(
+                self._state.traits,
+                actions_list,
+                self._trait_policy_coefficients,
+            ),
         )
         default_value = action_intent_selector.get_failsafe_output(
-            role_prompt, current_situation, agent_goal, available_actions, traits_summary
+            role_prompt, current_situation, agent_goal, actions_list, traits_summary
         )
         result = await self.async_dspy_manager.get_result(
             future,
