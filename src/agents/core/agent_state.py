@@ -383,6 +383,16 @@ class AgentStateData(BaseModel):
     def max_relationship_score(self) -> float:
         return self._max_relationship_score
 
+    @property
+    def trait_policy_coefficients(self) -> dict[str, float]:
+        value = get_config("TRAIT_POLICY_COEFFICIENTS")
+        if not isinstance(value, dict):
+            return {}
+        try:
+            return {str(key): float(val) for key, val in value.items()}
+        except (TypeError, ValueError):
+            return {}
+
     @field_validator("mood_level", mode="before")
     @classmethod
     def check_mood_level_type_before(cls, v: Any) -> Any:
