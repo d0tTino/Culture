@@ -12,6 +12,7 @@ from src.infra.ledger import ledger
 from src.utils.policy import evaluate_with_opa
 
 from .law_board import law_board
+from .rules_engine import governance_rules_engine
 
 
 def quadratic_vote_weight(ip_balance: float, staked_ip: float = 0.0) -> float:
@@ -140,6 +141,13 @@ class GovernanceService:
             "no_weight": no_weight,
             "ip_spent": ip_spent,
         }
+        rule_materialization = governance_rules_engine.materialize_from_proposal(
+            text,
+            proposer_id=proposer.agent_id,
+            approved=approved,
+            proposal_record=outcome,
+        )
+        outcome["rule_materialization"] = rule_materialization
         try:
             ledger.record_law_proposal(
                 proposer.agent_id,

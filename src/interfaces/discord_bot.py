@@ -1941,6 +1941,44 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
         )
 
 
+async def slash_gov(interaction: Any) -> None:
+    """Show active governance rules and enforcement stats."""
+    with command_span("gov", interaction):
+        sim = _governance_simulation_from_interaction(interaction)
+        rules: list[dict[str, Any]] = []
+        if sim is not None and hasattr(sim, "get_governance_read_model"):
+            try:
+                model = cast(dict[str, Any], sim.get_governance_read_model())
+                rules = cast(list[dict[str, Any]], model.get("rules", []))
+            except Exception:
+                rules = []
+        if not rules:
+            endpoint = f"{_dashboard_api_base_url()}/api/gov"
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(endpoint)
+                    resp.raise_for_status()
+                    payload = cast(dict[str, Any], resp.json())
+                    rules = cast(list[dict[str, Any]], payload.get("rules", []))
+            except Exception:
+                await send_interaction_response(interaction, "No active governance rules.", ephemeral=True)
+                return
+
+        if not rules:
+            await send_interaction_response(interaction, "No active governance rules.", ephemeral=True)
+            return
+
+        lines = []
+        for rule in rules[:8]:
+            stats = cast(dict[str, Any], rule.get("enforcement_stats", {}))
+            lines.append(
+                f"{rule.get('rule_id')}: {rule.get('action_intent')} ({rule.get('decision_mode')}) "
+                f"effective={rule.get('effective_date')} rejected={stats.get('rejected', 0)} "
+                f"overridden={stats.get('overridden', 0)}"
+            )
+        await send_interaction_response(interaction, "\n".join(lines), ephemeral=True)
+
+
 async def slash_misbehavior_log(interaction: Any, limit: int = 20) -> None:
     """Return last ``limit`` misbehavior events."""
     events = await asyncio.to_thread(event_log.fetch_events, event_type="misbehavior")
@@ -2024,6 +2062,7 @@ def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
     _register("propose", slash_propose)
     _register("propose_law", slash_propose_law)
     _register("vote", slash_vote)
+    _register("gov", slash_gov)
     _register("misbehavior_log", slash_misbehavior_log)
 
     return commands
