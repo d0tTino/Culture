@@ -89,7 +89,21 @@ class GraphKnowledgeBoard:
         return [dict(record["e"]) for record in records]
 
     def to_dict(self: Self) -> dict[str, Any]:
+        return self.to_snapshot()
+
+    def to_snapshot(self: Self) -> dict[str, Any]:
+        """Serialize backend state required to restore this board."""
+
         return {"entries": self.get_full_entries()}
+
+    def from_snapshot(self: Self, snapshot: dict[str, Any]) -> None:
+        """Restore board state from a serialized snapshot."""
+
+        entries = snapshot.get("entries", [])
+        if isinstance(entries, list):
+            self.replace_entries([entry for entry in entries if isinstance(entry, dict)])
+        else:
+            self.replace_entries([])
 
     def replace_entries(self: Self, entries: list[dict[str, Any]]) -> None:
         """Replace graph-backed KB entries from a serialized snapshot."""
