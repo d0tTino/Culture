@@ -794,14 +794,23 @@ class SimulationDiscordBot:
             if not self.is_ready:
                 logger.warning("Discord bot not ready yet, message not sent")
                 return False
-            if not allow_message(content):
-                logger.debug("Message blocked by policy")
-                return False
-            if content is not None and agent_id is None:
+            if content:
+                if not allow_message(content):
+                    span.set_attribute("discord.message.blocked", True)
+                    span.set_attribute("discord.message.block_reason", "allow_message")
+                    if agent_id is not None:
+                        metrics.DISCORD_AGENT_OUTPUTS_BLOCKED_TOTAL.inc()
+                    logger.debug("Message blocked by policy")
+                    return False
                 allowed, content = await evaluate_with_opa(content)
                 if not allowed:
+                    span.set_attribute("discord.message.blocked", True)
+                    span.set_attribute("discord.message.block_reason", "opa")
+                    if agent_id is not None:
+                        metrics.DISCORD_AGENT_OUTPUTS_BLOCKED_TOTAL.inc()
                     logger.debug("Message blocked by OPA policy")
                     return False
+            # NOTE: embed-only updates preserve current behavior (no embed text moderation yet).
             try:
                 client = await self._select_client(agent_id)
                 chan_id = target_channel_id
