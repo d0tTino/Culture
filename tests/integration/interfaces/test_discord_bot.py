@@ -99,6 +99,27 @@ async def test_multi_token_start_and_send() -> None:
     assert sent_by_token == ["tok2"]
 
 
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_agent_update_blocked_content_not_sent(monkeypatch: pytest.MonkeyPatch) -> None:
+    with (
+        patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient),
+        patch(
+            "src.interfaces.discord_bot.evaluate_with_opa",
+            AsyncMock(return_value=(False, "blocked")),
+        ),
+    ):
+        bot = await SimulationDiscordBot.create("token", 123, context=SimulationContext())
+        bot.is_ready = True
+        bot.client.get_channel = MagicMock()
+
+        before = metrics.get_discord_agent_outputs_blocked_total()
+        result = await bot.send_simulation_update(content="blocked payload", agent_id="agent-a")
+
+        assert result is False
+        assert metrics.get_discord_agent_outputs_blocked_total() == before + 1
+        bot.client.get_channel.assert_not_called()
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_multi_token_message_forwarding() -> None:

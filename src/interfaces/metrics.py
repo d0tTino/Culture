@@ -79,6 +79,10 @@ HUMAN_MESSAGES_TOTAL = Counter(
     "human_messages_total",
     "Total number of human messages received",
 )
+DISCORD_AGENT_OUTPUTS_BLOCKED_TOTAL = Counter(
+    "discord_agent_outputs_blocked_total",
+    "Total number of agent outbound Discord messages blocked by moderation or policy",
+)
 
 # Simulation state metrics
 COALITION_COUNT = Gauge("coalition_count", "Number of active coalitions")
@@ -237,6 +241,11 @@ def get_human_messages() -> int:
     return int(HUMAN_MESSAGES_TOTAL._value.get())
 
 
+def get_discord_agent_outputs_blocked_total() -> int:
+    """Return the total blocked outbound agent messages to Discord."""
+    return int(DISCORD_AGENT_OUTPUTS_BLOCKED_TOTAL._value.get())
+
+
 def get_coalition_count() -> int:
     """Return the current number of coalitions."""
     return int(COALITION_COUNT._value.get())
@@ -262,6 +271,7 @@ __all__ = [
     "COUNCIL_LATENCY_P95_MS",
     "COUNCIL_RUNS_TOTAL",
     "COUNCIL_WIN_RATE",
+    "DISCORD_AGENT_OUTPUTS_BLOCKED_TOTAL",
     "GAS_PRICE_PER_CALL",
     "GAS_PRICE_PER_TOKEN",
     "HUMAN_MESSAGES_TOTAL",
@@ -283,6 +293,7 @@ __all__ = [
     "Gauge",
     "get_average_sentiment",
     "get_coalition_count",
+    "get_discord_agent_outputs_blocked_total",
     "get_du_per_1k_tokens",
     "get_gas_price_per_call",
     "get_gas_price_per_token",
