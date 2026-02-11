@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TypedDict
 
+from typing_extensions import NotRequired
+
 # Basic JSON-compatible types used throughout the codebase
 JSONValue = str | int | float | bool | None | dict[str, "JSONValue"] | list["JSONValue"]
 
@@ -69,6 +71,8 @@ class SimulationMessage(TypedDict):
     """Message exchanged between agents in the simulation."""
 
     step: int
+    turn_index: NotRequired[int]
+    world_time: NotRequired[JSONDict]
     sender_id: str
     recipient_id: str | None
     content: str

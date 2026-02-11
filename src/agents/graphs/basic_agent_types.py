@@ -99,6 +99,8 @@ class AgentTurnState(TypedDict):
     simulation_step: int
     previous_thought: str | None
     environment_perception: dict[str, object]
+    world_time: NotRequired[dict[str, object]]
+    turn_index: NotRequired[int]
     perceived_messages: list[dict[str, object]]
     memory_history_list: list[dict[str, Any]]
     memory_context: NotRequired[list[str]]

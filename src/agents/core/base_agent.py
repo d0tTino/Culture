@@ -560,6 +560,8 @@ class Agent:
             "simulation_step": simulation_step,
             "previous_thought": self._state.last_thought,
             "environment_perception": environment_perception,
+            "world_time": copy.deepcopy(environment_perception.get("world_time", {})),
+            "turn_index": int(environment_perception.get("turn_index", simulation_step)),
             "perceived_messages": copy.deepcopy(
                 environment_perception.get("perceived_messages", [])
             ),
