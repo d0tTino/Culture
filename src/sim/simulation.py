@@ -52,6 +52,7 @@ from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
+from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
 from src.sim.version_vector import VersionVector
@@ -208,7 +209,7 @@ class Simulation:
             logger.warning("Simulation initialized without a scenario description.")
 
         # --- NEW: Initialize Knowledge Board ---
-        self.knowledge_board: GraphKnowledgeBoard | KnowledgeBoard
+        self.knowledge_board: KnowledgeBoardProtocol
         if config.KNOWLEDGE_BOARD_BACKEND == "graph":
             self.knowledge_board = GraphKnowledgeBoard()
             logger.info("Simulation initialized with Graph Knowledge Board.")
@@ -1073,7 +1074,7 @@ class Simulation:
             start = time.perf_counter()
             try:
                 kb_state = {
-                    k: v for k, v in self.knowledge_board.to_dict().items() if k != "vector"
+                    k: v for k, v in self.knowledge_board.to_snapshot().items() if k != "vector"
                 }
                 wm_state = {k: v for k, v in self.world_map.to_dict().items() if k != "vector"}
                 payload = {
@@ -1105,7 +1106,7 @@ class Simulation:
                 "step": self.current_step,
                 "collective_ip": self.collective_ip,
                 "collective_du": self.collective_du,
-                "knowledge_board": self.knowledge_board.to_dict(),
+                "knowledge_board": self.knowledge_board.to_snapshot(),
                 "world_map": self.world_map.to_dict(),
                 "agents": [
                     {
@@ -1923,20 +1924,8 @@ class Simulation:
                     break
 
         kb = snapshot.get("knowledge_board", {})
-        for entry in kb.get("entries", []):
-            sim.knowledge_board.add_entry(
-                BoardEntry(
-                    content_full=entry.get("content_full", ""),
-                    entry_type=entry.get("entry_type", "note"),
-                    content_summary=entry.get("content_summary"),
-                    tags=entry.get("tags"),
-                    reference_metadata=entry.get("reference_metadata"),
-                ),
-                entry.get("agent_id", "unknown"),
-                int(entry.get("step", 0)),
-            )
-        if isinstance(kb.get("vector"), dict):
-            sim.knowledge_board.vector.clock.update(kb["vector"])
+        if isinstance(kb, dict):
+            sim.knowledge_board.from_snapshot(kb)
 
         wm = snapshot.get("world_map", {})
         if wm:
