@@ -128,3 +128,37 @@ async def test_run_turn_includes_world_time_perception(monkeypatch):
     assert world_time["world_day"] == sim.world_day
     assert "formatted" in world_time
     sim.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_action_event_contains_turn_index_and_world_time(monkeypatch):
+    monkeypatch.setenv("WORLD_TICK_TURN_QUANTUM", "2")
+
+    monkeypatch.setattr("src.sim.simulation.evaluate_policy", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        "src.sim.simulation.log_event", lambda data: {**data, "trace_hash": "hash"}
+    )
+    emit_event = AsyncMock()
+    monkeypatch.setattr("src.sim.simulation.emit_event", emit_event)
+    rm = SimpleNamespace(
+        cap_tick=lambda **kwargs: None, set_du_budget=lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr("src.sim.simulation.get_resource_manager", lambda: rm)
+
+    agent = DummyAgent()
+    sim = Simulation(
+        [agent], memory_service=SimpleNamespace(vector_store=None, semantic_manager=None)
+    )
+
+    await sim._run_agent_turn(0)
+
+    agent_action_events = [
+        call.args[0].data for call in emit_event.await_args_list if call.args[0].type == "agent_action"
+    ]
+    assert agent_action_events
+    payload = agent_action_events[-1]
+    assert payload["turn_index"] == sim.current_step
+    assert payload["world_time"]["world_tick"] == sim.world_tick_index
+    assert payload["world_time"]["world_day"] == sim.world_day
+    sim.close()

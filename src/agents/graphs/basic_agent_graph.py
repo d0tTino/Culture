@@ -446,10 +446,12 @@ def route_action_intent(state: AgentTurnState) -> str:
 def _maybe_consolidate_memories(state: AgentTurnState) -> dict[str, Any]:
     manager = state.get("memory_service")
     step = int(state.get("simulation_step", 0))
+    world_time = cast(dict[str, Any], state.get("world_time") or {})
+    world_tick = int(world_time.get("world_tick", step))
     interval = int(
         config.get_config_value_with_override("SEMANTIC_MEMORY_CONSOLIDATION_INTERVAL_STEPS", 24)
     )
-    if manager and interval > 0 and step % interval == 0:
+    if manager and interval > 0 and world_tick > 0 and world_tick % interval == 0:
         try:
             cast(MemoryService, manager).consolidate_daily_memories(
                 state["agent_id"],

@@ -117,6 +117,8 @@ class AgentTurnState(TypedDict):
     simulation_step: int  # The current step number from the simulation
     previous_thought: str | None  # The thought from the *last* turn
     environment_perception: dict[str, object]  # Perception data from the environment
+    world_time: NotRequired[dict[str, object]]
+    turn_index: NotRequired[int]
     perceived_messages: list[SimulationMessage]  # Messages perceived from last step
     memory_history_list: list[dict[str, Any]]  # Field for memory history list
     turn_sentiment_score: float  # Field for aggregated sentiment score.

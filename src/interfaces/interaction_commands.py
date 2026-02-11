@@ -308,12 +308,16 @@ class InteractionService:
         except Exception:  # pragma: no cover - optional
             logger.debug("Ledger spend failed", exc_info=True)
 
+        world_time = self.simulation._world_time_snapshot()
+        turn_index = self.simulation.current_step
         msgs: list[dict[str, Any]] = []
         if broadcast:
             for agent in self.simulation.agents:
                 msgs.append(
                     {
                         "step": self.simulation.current_step,
+                        "turn_index": turn_index,
+                        "world_time": world_time,
                         "sender_id": context.sender_id,
                         "recipient_id": agent.agent_id,
                         "content": text,
@@ -325,6 +329,8 @@ class InteractionService:
             msgs.append(
                 {
                     "step": self.simulation.current_step,
+                    "turn_index": turn_index,
+                    "world_time": world_time,
                     "sender_id": context.sender_id,
                     "recipient_id": target.agent_id,
                     "content": text,
@@ -341,7 +347,9 @@ class InteractionService:
             {
                 "type": "human_command",
                 "step": self.simulation.current_step,
-                "tick": self.simulation.current_step + 1,
+                "turn_index": turn_index,
+                "world_time": world_time,
+                "tick": world_time.get("world_tick", 0),
                 "sender_id": context.sender_id,
                 "target_agent_id": target.agent_id,
                 "budget_agent_id": budget_agent_id,
