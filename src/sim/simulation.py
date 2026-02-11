@@ -181,7 +181,7 @@ class Simulation:
         # Lock for concurrent access to message queues
         self._msg_lock = asyncio.Lock()
         self._last_kb_time = 0.0
-        self._last_relay_time = 0.0
+        self._last_relay_times: dict[str, float] = {}
         self._kb_cooldown = float(config.get_config("DISCORD_KB_RATE_LIMIT_SECONDS") or 1.0)
         self._relay_cooldown = float(
             config.get_config("DISCORD_MESSAGE_RATE_LIMIT_SECONDS") or 1.0
@@ -366,6 +366,7 @@ class Simulation:
     ) -> None:
         """Handle a human-issued command or prompt."""
         now = time.monotonic()
+        routing = metadata or {}
         if text.startswith("/kb ") and self.knowledge_board:
             if now - self._last_kb_time < self._kb_cooldown:
                 return
@@ -385,15 +386,48 @@ class Simulation:
                     )
             return
 
-        if now - self._last_relay_time < self._relay_cooldown:
+        sender_id = str(routing.get("sender_id", "human"))
+        raw_channel_id = (
+            routing.get("channel_id")
+            or routing.get("source_channel_id")
+            or routing.get("target_channel_id")
+        )
+        channel_id = str(raw_channel_id) if raw_channel_id is not None else None
+        relay_scope_key = sender_id if channel_id is None else f"{sender_id}:{channel_id}"
+
+        last_relay_time = self._last_relay_times.get(relay_scope_key, 0.0)
+        if now - last_relay_time < self._relay_cooldown:
+            retry_after = max(0.0, self._relay_cooldown - (now - last_relay_time))
+            await emit_event(
+                SimulationEvent(
+                    type="human_command_rate_limited",
+                    data={
+                        "sender_id": sender_id,
+                        "scope": relay_scope_key,
+                        "retry_after_seconds": retry_after,
+                        "step": self.current_step,
+                    },
+                )
+            )
+            if self.discord_bot:
+                await self.discord_bot.send_simulation_update(
+                    (
+                        "Rate limited: please wait "
+                        f"{retry_after:.1f}s before sending another message."
+                    ),
+                    agent_id=sender_id,
+                    target_channel_id=(
+                        int(channel_id)
+                        if channel_id is not None and channel_id.isdigit()
+                        else self.discord_bot.last_channel_id
+                    ),
+                )
             return
-        self._last_relay_time = now
+        self._last_relay_times[relay_scope_key] = now
 
         if not self.agents:
             return
 
-        routing = metadata or {}
-        sender_id = str(routing.get("sender_id", "human"))
         raw_recipient = routing.get("recipient_id")
         recipient_id = str(raw_recipient) if isinstance(raw_recipient, str) else None
         broadcast = bool(routing.get("broadcast", False))

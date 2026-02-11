@@ -97,7 +97,7 @@ async def test_handle_human_command_missing_config(
         monkeypatch.setitem(config._CONFIG, key, None)
 
     await sim._handle_human_command("hello")
-    sim._last_relay_time = 0.0
+    sim._last_relay_times.clear()
     await sim._handle_human_command("/broadcast hi")
 
     assert agent.state.ip == pytest.approx(2.0)
