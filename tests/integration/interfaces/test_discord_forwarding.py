@@ -73,9 +73,11 @@ async def test_event_bus_forwarding(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     handled: list[str] = []
     original = Simulation._handle_human_command
 
-    async def wrapped(self: Simulation, text: str) -> None:
+    async def wrapped(
+        self: Simulation, text: str, metadata: dict | None = None
+    ) -> None:
         handled.append(text)
-        await original(self, text)
+        await original(self, text, metadata)
 
     monkeypatch.setattr(Simulation, "_handle_human_command", wrapped)
 
@@ -98,3 +100,86 @@ async def test_event_bus_forwarding(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
         sim.close()
         bus.shutdown()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_human_command_rate_limit_scoped_by_sender(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sys.modules.setdefault("neo4j", DummyNeo4j())
+    import src.sim.simulation as simulation_module
+    from src.infra import ledger as ledger_module
+    from src.infra.ledger import Ledger
+
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr("src.infra.ledger.ledger", ledger)
+    monkeypatch.setattr("src.sim.simulation.ledger", ledger)
+    monkeypatch.setattr(
+        simulation_module,
+        "get_resource_manager",
+        lambda: type(
+            "ResourceManager",
+            (),
+            {
+                "ensure_du_budget": staticmethod(lambda *_a, **_k: None),
+                "set_du_budget": staticmethod(lambda *_a, **_k: None),
+                "cap_tick": staticmethod(lambda *_a, **_k: None),
+            },
+        )(),
+    )
+    spend_mock = AsyncMock()
+    monkeypatch.setattr(ledger_module.ledger, "spend", spend_mock)
+    emit_mock = AsyncMock()
+    monkeypatch.setattr(simulation_module, "emit_event", emit_mock)
+
+    sim = Simulation([DummyAgent("A")])
+
+    await sim._handle_human_command("hello from user 1", {"sender_id": "user-1"})
+    await sim._handle_human_command("hello from user 2", {"sender_id": "user-2"})
+
+    assert spend_mock.await_count == 2
+    assert emit_mock.await_count == 0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_human_command_rate_limit_sends_feedback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sys.modules.setdefault("neo4j", DummyNeo4j())
+    import src.sim.simulation as simulation_module
+    from src.infra import ledger as ledger_module
+    from src.infra.ledger import Ledger
+
+    ledger = Ledger(tmp_path / "ledger.sqlite")
+    monkeypatch.setattr("src.infra.ledger.ledger", ledger)
+    monkeypatch.setattr("src.sim.simulation.ledger", ledger)
+    monkeypatch.setattr(
+        simulation_module,
+        "get_resource_manager",
+        lambda: type(
+            "ResourceManager",
+            (),
+            {
+                "ensure_du_budget": staticmethod(lambda *_a, **_k: None),
+                "set_du_budget": staticmethod(lambda *_a, **_k: None),
+                "cap_tick": staticmethod(lambda *_a, **_k: None),
+            },
+        )(),
+    )
+    spend_mock = AsyncMock()
+    monkeypatch.setattr(ledger_module.ledger, "spend", spend_mock)
+    emit_mock = AsyncMock()
+    monkeypatch.setattr(simulation_module, "emit_event", emit_mock)
+
+    sim = Simulation([DummyAgent("A")])
+
+    await sim._handle_human_command("first", {"sender_id": "user-1"})
+    await sim._handle_human_command("second", {"sender_id": "user-1"})
+
+    assert spend_mock.await_count == 1
+    assert emit_mock.await_count == 1
+    throttled_event = emit_mock.await_args.args[0]
+    assert throttled_event.type == "human_command_rate_limited"
+    assert throttled_event.data["sender_id"] == "user-1"
