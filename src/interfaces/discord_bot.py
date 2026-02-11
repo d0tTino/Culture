@@ -259,25 +259,35 @@ _DM_TARGET_RE = re.compile(r"^/dm\s+(?P<agent>[\w.-]+)\s+(?P<content>.+)$", re.D
 
 
 
-def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str]:
+def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str, str | None]:
     """Parse optional routing directives from plain Discord messages."""
     cleaned = content.strip()
     if not cleaned:
-        return None, False, ""
+        return None, False, "", None
 
-    if cleaned.startswith("/broadcast"):
-        payload = cleaned[len("/broadcast") :].strip()
-        return None, True, payload
+    if cleaned == "/broadcast":
+        return None, True, "", "Broadcast message cannot be empty. Use /broadcast <message>."
+
+    if cleaned.startswith("/broadcast "):
+        payload = cleaned[len("/broadcast ") :].strip()
+        if not payload:
+            return (
+                None,
+                True,
+                "",
+                "Broadcast message cannot be empty. Use /broadcast <message>.",
+            )
+        return None, True, payload, None
 
     mention_match = _MENTION_TARGET_RE.match(cleaned)
     if mention_match:
-        return mention_match.group("agent"), False, mention_match.group("content").strip()
+        return mention_match.group("agent"), False, mention_match.group("content").strip(), None
 
     dm_match = _DM_TARGET_RE.match(cleaned)
     if dm_match:
-        return dm_match.group("agent"), False, dm_match.group("content").strip()
+        return dm_match.group("agent"), False, dm_match.group("content").strip(), None
 
-    return None, False, cleaned
+    return None, False, cleaned, None
 
 
 
@@ -679,9 +689,12 @@ class SimulationDiscordBot:
                     if user_id and channel_id:
                         self.user_channels[str(user_id)] = channel_id
                         self.last_user_id = str(user_id)
-                    explicit_recipient, explicit_broadcast, parsed_content = (
+                    explicit_recipient, explicit_broadcast, parsed_content, validation_error = (
                         _parse_human_message_routing(content)
                     )
+                    if validation_error:
+                        await send_channel_message(channel, content=validation_error)
+                        return
                     if not parsed_content:
                         return
                     recipient = explicit_recipient or self.channel_to_agent.get(channel_id)
