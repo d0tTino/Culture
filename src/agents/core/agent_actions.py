@@ -5,17 +5,14 @@ from typing import TYPE_CHECKING
 
 from src.infra.config import get_config
 
+from .personality_engine import PersonalityEngine
 from .roles import create_role_profile, get_role_trait_template
-from .trait_policy import (
-    merge_trait_policy_coefficients,
-    relationship_update_sensitivity,
-    trait_drift_from_experience,
-)
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints
     from .agent_state import AgentState
 
 logger = logging.getLogger(__name__)
+_ENGINE = PersonalityEngine()
 
 
 def update_relationship(
@@ -28,16 +25,8 @@ def update_relationship(
     """Update ``state`` relationship score with ``other_agent_id``."""
     current_score = state.relationships.get(other_agent_id, 0.0)
     sentiment_score = float(sentiment_score) if sentiment_score is not None else 0.0
-    trait_policy_overrides = get_config("TRAIT_POLICY_COEFFICIENTS")
-    coefficients = merge_trait_policy_coefficients(
-        trait_policy_overrides if isinstance(trait_policy_overrides, dict) else None
-    )
     targeted_multiplier = state._targeted_message_multiplier if is_targeted else 1.0
-    sensitivity = relationship_update_sensitivity(
-        state.traits,
-        is_targeted=is_targeted,
-        coefficients=coefficients,
-    )
+    sensitivity = _ENGINE.relationship_sensitivity(state, is_targeted=is_targeted)
     effective = sentiment_score * targeted_multiplier * sensitivity
     if effective > 0:
         lr = state._positive_relationship_learning_rate
@@ -54,18 +43,6 @@ def update_relationship(
             (state.step_counter, new_score)
         )
 
-    social_drift = trait_drift_from_experience(
-        {"social_outcome": effective},
-        coefficients,
-    )
-    state.apply_trait_drift(
-        {
-            "trust_baseline": social_drift["trust_baseline"],
-            "empathy": social_drift["empathy"],
-            "assertiveness": social_drift["assertiveness"],
-        },
-        max_step=0.01,
-    )
 
 
 def can_change_role(state: AgentState, new_role: str, current_step: int) -> bool:

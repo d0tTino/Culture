@@ -21,7 +21,7 @@ from .agent_actions import (
     update_relationship as update_relationship_action,
 )
 from .embedding_utils import compute_embedding
-from .trait_policy import mood_update_multiplier
+from .personality_engine import PersonalityEngine
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class AgentController:
     def __init__(self: Self, state: AgentState | None = None, lm: object | None = None) -> None:
         self.state = state
         self.intent_selector = IntentSelectorProgram(lm=lm)
+        self.personality_engine = PersonalityEngine()
 
     def select_intent(self: Self, state: object | None = None) -> str:
         """Return the chosen intent from the DSPy program."""
@@ -50,10 +51,7 @@ class AgentController:
         current_numeric = state.mood_level
         decayed = current_numeric * (1.0 - state._mood_decay_rate)
         sentiment_float = float(sentiment_score) if sentiment_score is not None else 0.0
-        mood_multiplier = mood_update_multiplier(
-            state.traits,
-            state.trait_policy_coefficients,
-        )
+        mood_multiplier = self.personality_engine.mood_multiplier(state)
         trait_adjusted_sentiment = sentiment_float * mood_multiplier
         change = trait_adjusted_sentiment * state._mood_update_rate
         new_level = max(-1.0, min(1.0, decayed + change))
