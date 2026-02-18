@@ -822,9 +822,7 @@ async def api_memory_snapshot(step: int) -> Response:
 
 
 @app.get("/api/agent_actions/explain_why")
-async def api_agent_action_explain_why(
-    after_step: int = 0, limit: int = 20
-) -> Response:
+async def api_agent_action_explain_why(after_step: int = 0, limit: int = 20) -> Response:
     """Expose explain-why payloads for recent agent actions."""
 
     def _load_events() -> list[dict[str, Any]]:
@@ -964,11 +962,11 @@ async def handle_control_command(
 ) -> dict[str, Any]:
     """Process a control command via the interaction service when available."""
     simulation = ctx.sim_state.get("simulation")
-    service = getattr(simulation, "interaction_service", None)
-    if service is not None:
+    bus = getattr(simulation, "command_bus", None)
+    if bus is not None:
         from src.interfaces.interaction_commands import InteractionContext
 
-        result = await service.execute_from_payload(
+        result = await bus.dispatch_payload(
             cmd,
             context=InteractionContext(
                 sender_id="dashboard",

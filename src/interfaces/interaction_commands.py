@@ -12,6 +12,7 @@ from src.infra import config
 from src.infra import ledger as infra_ledger
 from src.infra.event_log import log_event
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
+from src.interfaces.interaction_policy import check_cooldown, context_is_authorized
 from src.sim.knowledge_board import BoardEntry
 
 if TYPE_CHECKING:
@@ -76,7 +77,11 @@ class KnowledgeBoardCommand(BaseModel):
 
 
 InteractionCommand = (
-    BroadcastCommand | DirectMessageCommand | SpawnAgentCommand | ModerationCommand | KnowledgeBoardCommand
+    BroadcastCommand
+    | DirectMessageCommand
+    | SpawnAgentCommand
+    | ModerationCommand
+    | KnowledgeBoardCommand
 )
 
 
@@ -93,13 +98,24 @@ class InteractionService:
         context: InteractionContext | None = None,
     ) -> InteractionResult:
         ctx = context or InteractionContext()
+        await emit_event(
+            SimulationEvent(
+                type="human_command",
+                data={
+                    "command_type": command.command_type,
+                    "sender_id": ctx.sender_id,
+                    "source": ctx.source,
+                    "step": self.simulation.current_step,
+                },
+            )
+        )
 
         if isinstance(command, KnowledgeBoardCommand):
             return await self._dispatch_knowledge_board(command, context=ctx)
         if isinstance(command, (BroadcastCommand, DirectMessageCommand)):
             return await self._dispatch_message(command, context=ctx)
         if isinstance(command, SpawnAgentCommand):
-            if not self._is_authorized(ctx, required={"admin", "moderator"}):
+            if not context_is_authorized(ctx, required={"admin", "moderator"}):
                 return InteractionResult(
                     status="rejected",
                     user_message="You are not authorized to spawn agents.",
@@ -121,7 +137,7 @@ class InteractionService:
                 reason_code="spawn_submitted",
             )
         if isinstance(command, ModerationCommand):
-            if not self._is_authorized(ctx, required={"admin", "moderator"}):
+            if not context_is_authorized(ctx, required={"admin", "moderator"}):
                 return InteractionResult(
                     status="rejected",
                     user_message="You are not authorized to run moderation commands.",
@@ -138,6 +154,10 @@ class InteractionService:
                 payload["text"] = command.text
             if command.agent_id is not None:
                 payload["agent_id"] = command.agent_id
+            if command.action == "inject_event" and command.prompt is not None:
+                payload["scope"] = command.prompt
+            if command.action == "inject_event" and command.agent_id is not None:
+                payload["author"] = command.agent_id
             state = await self.simulation.handle_control_command(payload)
             return InteractionResult(
                 status="ok",
@@ -150,11 +170,6 @@ class InteractionService:
             user_message="Unknown command.",
             reason_code="unsupported_command",
         )
-
-    def _is_authorized(self, context: InteractionContext, required: set[str]) -> bool:
-        if not required:
-            return True
-        return bool(context.permissions & required)
 
     async def _dispatch_knowledge_board(
         self,
@@ -177,7 +192,13 @@ class InteractionService:
                 reason_code="kb_unavailable",
             )
         now = time.monotonic()
-        if now - self.simulation._last_kb_time < self.simulation._kb_cooldown:
+        retry_after = check_cooldown(
+            key="knowledge_board",
+            now=now,
+            cooldown=self.simulation._kb_cooldown,
+            state={"knowledge_board": self.simulation._last_kb_time},
+        )
+        if retry_after is not None:
             return InteractionResult(
                 status="rejected",
                 user_message="Knowledge Board is cooling down. Please try again shortly.",
@@ -218,10 +239,16 @@ class InteractionService:
 
         now = time.monotonic()
         channel_id = context.channel_id
-        relay_scope = context.sender_id if channel_id is None else f"{context.sender_id}:{channel_id}"
-        last_relay_time = self.simulation._last_relay_times.get(relay_scope, 0.0)
-        if now - last_relay_time < self.simulation._relay_cooldown:
-            retry_after = max(0.0, self.simulation._relay_cooldown - (now - last_relay_time))
+        relay_scope = (
+            context.sender_id if channel_id is None else f"{context.sender_id}:{channel_id}"
+        )
+        retry_after = check_cooldown(
+            key=relay_scope,
+            now=now,
+            cooldown=self.simulation._relay_cooldown,
+            state=self.simulation._last_relay_times,
+        )
+        if retry_after is not None:
             await emit_event(
                 SimulationEvent(
                     type="human_command_rate_limited",
@@ -236,14 +263,11 @@ class InteractionService:
             return InteractionResult(
                 status="rejected",
                 user_message=(
-                    "Rate limited: please wait "
-                    f"{retry_after:.1f}s before sending another message."
+                    f"Rate limited: please wait {retry_after:.1f}s before sending another message."
                 ),
                 reason_code="rate_limited",
                 data={"retry_after_seconds": retry_after},
             )
-        self.simulation._last_relay_times[relay_scope] = now
-
         if not self.simulation.agents:
             return InteractionResult(
                 status="rejected",
@@ -379,17 +403,31 @@ class InteractionService:
         target: Any | None = None
         if command.target_agent_id:
             target = next(
-                (agent for agent in self.simulation.agents if agent.agent_id == command.target_agent_id),
+                (
+                    agent
+                    for agent in self.simulation.agents
+                    if agent.agent_id == command.target_agent_id
+                ),
                 None,
             )
         if target is None and command.recipient_id:
             target = next(
-                (agent for agent in self.simulation.agents if agent.agent_id == command.recipient_id),
+                (
+                    agent
+                    for agent in self.simulation.agents
+                    if agent.agent_id == command.recipient_id
+                ),
                 None,
             )
-        if target is None and self.simulation.discord_bot and self.simulation.discord_bot.last_agent_id:
+        if (
+            target is None
+            and self.simulation.discord_bot
+            and self.simulation.discord_bot.last_agent_id
+        ):
             last_id = self.simulation.discord_bot.last_agent_id
-            target = next((agent for agent in self.simulation.agents if agent.agent_id == last_id), None)
+            target = next(
+                (agent for agent in self.simulation.agents if agent.agent_id == last_id), None
+            )
         if target is None:
             target = self.simulation.agents[self.simulation.current_agent_index]
         return target

@@ -11,7 +11,6 @@ import json
 import logging
 import re
 import time
-from collections import deque
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -22,15 +21,22 @@ import httpx
 from opentelemetry import trace
 from typing_extensions import Self
 
-from src.app import spawn_agent_command, start_simulation, stop_simulation
 from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
-from src.interfaces.interaction_commands import (
-    BroadcastCommand,
-    DirectMessageCommand,
-    InteractionContext,
+from src.interfaces.command_bus import (
+    ControlRequest,
+    HumanMessage,
+    InjectEventRequest,
+    SpawnAgentRequest,
+)
+from src.interfaces.interaction_commands import InteractionContext
+from src.interfaces.interaction_policy import (
+    check_command_rate_limit,
+    has_admin_permission,
+    has_control_command_permission,
+    set_max_rate,
 )
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
@@ -74,9 +80,7 @@ _DEFAULT_DASHBOARD_API_BASE_URL = "http://localhost:8000"
 
 
 def _dashboard_api_base_url() -> str:
-    configured = str(
-        config.get("DASHBOARD_API_BASE_URL", _DEFAULT_DASHBOARD_API_BASE_URL)
-    ).strip()
+    configured = str(config.get("DASHBOARD_API_BASE_URL", _DEFAULT_DASHBOARD_API_BASE_URL)).strip()
     return configured.rstrip("/") or _DEFAULT_DASHBOARD_API_BASE_URL
 
 
@@ -111,7 +115,9 @@ def _governance_simulation_from_interaction(interaction: Any) -> Any | None:
 
 
 def _governance_agent_for_sim(sim: Any, agent_id: str) -> Any | None:
-    return next((agent for agent in getattr(sim, "agents", []) if agent.agent_id == agent_id), None)
+    return next(
+        (agent for agent in getattr(sim, "agents", []) if agent.agent_id == agent_id), None
+    )
 
 
 @contextmanager
@@ -262,8 +268,6 @@ _MENTION_TARGET_RE = re.compile(r"^@(?P<agent>[\w.-]+)\s*:\s*(?P<content>.+)$", 
 _DM_TARGET_RE = re.compile(r"^/dm\s+(?P<agent>[\w.-]+)\s+(?P<content>.+)$", re.DOTALL)
 
 
-
-
 def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str, str | None]:
     """Parse optional routing directives from plain Discord messages."""
     cleaned = content.strip()
@@ -293,8 +297,6 @@ def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str, s
         return dm_match.group("agent"), False, dm_match.group("content").strip(), None
 
     return None, False, cleaned, None
-
-
 
 
 def _parse_json_object_argument(raw: str | None, field_name: str) -> dict[str, Any] | None:
@@ -330,11 +332,15 @@ def _spawn_kwargs_from_inputs(
     adaptability: float | None = None,
 ) -> dict[str, Any]:
     """Build spawn payload kwargs from slash-command optional inputs."""
-    role_payload = _parse_json_object_argument(role_json, "role") if role_json is not None else None
+    role_payload = (
+        _parse_json_object_argument(role_json, "role") if role_json is not None else None
+    )
     if role_payload is None and role is not None and role.strip():
         role_payload = role.strip()
 
-    traits_payload = _parse_json_object_argument(traits_json, "traits") if traits_json is not None else None
+    traits_payload = (
+        _parse_json_object_argument(traits_json, "traits") if traits_json is not None else None
+    )
     explicit_traits = {
         "openness": openness,
         "analytical_focus": analytical_focus,
@@ -362,6 +368,7 @@ def _spawn_kwargs_from_inputs(
         kwargs["traits"] = traits_payload
     return kwargs
 
+
 def _default_agent_for_channel(self: "SimulationDiscordBot", channel_id: int | None) -> str | None:
     """Resolve a deterministic fallback agent for an unmapped incoming message."""
     if channel_id is not None:
@@ -384,7 +391,9 @@ def _default_human_message_broadcast() -> bool:
     value = overrides.get("DISCORD_DEFAULT_BROADCAST")
     if value is None:
         value = config.get_config("DISCORD_DEFAULT_BROADCAST")
-    return _coerce_to_bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _truncate_for_code_block(content: str, max_length: int = MAX_EMBED_DESCRIPTION_LENGTH) -> str:
@@ -662,7 +671,9 @@ class SimulationDiscordBot:
                     )
                     embed.set_footer(text=f"Channel ID: {self.channel_id}")
                     await send_channel_message(channel, embed=embed)
-                    await send_channel_message(channel, embed=create_onboarding_embed(self.channel_id))
+                    await send_channel_message(
+                        channel, embed=create_onboarding_embed(self.channel_id)
+                    )
                 else:
                     logger.warning(f"Could not find Discord channel with ID: {self.channel_id}")
 
@@ -721,60 +732,19 @@ class SimulationDiscordBot:
                     )
                     self.last_agent_id = agent_id
                     self.last_channel_id = channel_id
-                    simulation = self.context.sim_state.get("simulation")
-                    service = getattr(simulation, "interaction_service", None)
-                    if service is None:
-                        if is_broadcast:
-                            ip_cost = float(
-                                config.get_config("IP_COST_BROADCAST_MESSAGE")
-                                or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                                or 0.0
-                            )
-                            du_cost = float(
-                                config.get_config("DU_COST_BROADCAST_ACTION")
-                                or config.get_config("DU_COST_PER_ACTION")
-                                or 0.0
-                            )
-                        else:
-                            ip_cost = float(
-                                config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
-                                or config.get_config("IP_COST_BROADCAST_MESSAGE")
-                                or 0.0
-                            )
-                            du_cost = float(
-                                config.get_config("DU_COST_PER_ACTION")
-                                or config.get_config("DU_COST_BROADCAST_ACTION")
-                                or 0.0
-                            )
-                        ip_bal, du_bal = await ledger.get_balance_async(agent_id)
-                        if ip_bal < ip_cost or du_bal < du_cost:
-                            await send_channel_message(channel, content="Insufficient IP/DU")
-                            return
-                        data = {
-                            "author": str(user_id) if user_id is not None else "human",
-                            "content": parsed_content,
-                            "sender_id": str(user_id) if user_id is not None else "human",
-                            "target_agent_id": agent_id,
-                            "broadcast": is_broadcast,
-                        }
-                        if recipient is not None:
-                            data["recipient_id"] = recipient
-                        await self.event_queue.put(SimulationEvent(type="broadcast", data=data))
+                    bus = get_command_bus(self.context)
+                    if bus is None:
                         return
-                    if is_broadcast:
-                        command = BroadcastCommand(
+                    result = await bus.dispatch(
+                        HumanMessage(
                             content=parsed_content,
-                            target_agent_id=agent_id,
+                            sender_id=str(user_id) if user_id is not None else "human",
+                            channel_id=str(channel_id) if channel_id is not None else None,
+                            source="discord",
+                            broadcast=is_broadcast,
                             recipient_id=recipient,
-                        )
-                    else:
-                        command = DirectMessageCommand(
-                            content=parsed_content,
                             target_agent_id=agent_id,
-                            recipient_id=recipient,
-                        )
-                    result = await service.execute(
-                        command,
+                        ),
                         context=InteractionContext(
                             sender_id=str(user_id) if user_id is not None else "human",
                             channel_id=str(channel_id) if channel_id is not None else None,
@@ -1258,6 +1228,11 @@ def get_active_bot(ctx: SimulationContext = DEFAULT_CONTEXT) -> "SimulationDisco
     return cast("SimulationDiscordBot | None", ctx.sim_state.get("discord_bot"))
 
 
+def get_command_bus(ctx: SimulationContext = DEFAULT_CONTEXT) -> Any | None:
+    simulation = ctx.sim_state.get("simulation")
+    return getattr(simulation, "command_bus", None)
+
+
 def _global_context_resolver() -> tuple[Any, Any]:
     """Resolve context and event queue for slash command registration."""
     bot_instance = get_active_bot()
@@ -1269,112 +1244,13 @@ def _global_context_resolver() -> tuple[Any, Any]:
 
 # --- Command rate limiting -------------------------------------------------
 
-_COMMAND_HISTORY: dict[str, deque[float]] = {}
-_COMMAND_LOCKS: dict[str, asyncio.Lock] = {}
-_MAX_RATE: int = 5
-_DEFAULT_RATE_LIMIT_WINDOW_SECONDS: float = 60.0
-
-
-def has_admin_permission(user: Any) -> bool:
-    """Return True if the Discord user has administrator permissions."""
-    perms = getattr(getattr(user, "guild_permissions", None), "administrator", False)
-    return bool(perms)
-
-
-_TRUE_BOOL_VALUES = {"1", "true", "yes", "on"}
-_FALSE_BOOL_VALUES = {"0", "false", "no", "off"}
-
-
-def _coerce_to_bool(value: object) -> bool:
-    """Normalize truthy and falsy values retrieved from configuration."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in _TRUE_BOOL_VALUES:
-            return True
-        if lowered in _FALSE_BOOL_VALUES:
-            return False
-    return bool(value)
-
-
-def _allow_control_via_opa() -> bool:
-    """Return True when control commands may defer authorization to OPA."""
-    overrides = getattr(config, "CONFIG_OVERRIDES", {})
-    value = overrides.get("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
-    if value is None:
-        value = config.get_config("DISCORD_ALLOW_OPA_CONTROL_COMMANDS")
-    return _coerce_to_bool(value)
-
-
-def _get_command_rate_limit_window() -> float:
-    """Return the configured rate limit window in seconds."""
-    overrides = getattr(config, "CONFIG_OVERRIDES", {})
-    value = overrides.get("DISCORD_COMMAND_RATE_LIMIT_SECONDS")
-    if value is None:
-        value = config.get_config("DISCORD_COMMAND_RATE_LIMIT_SECONDS")
-    try:
-        return max(0.0, float(value))
-    except (TypeError, ValueError):  # pragma: no cover - defensive
-        return _DEFAULT_RATE_LIMIT_WINDOW_SECONDS
-
 
 async def _has_control_command_permission(
     user: Any, command: str, *, agent_id: str | None = None
 ) -> bool:
     """Return True when the user may execute privileged control commands."""
 
-    if has_admin_permission(user):
-        return True
-    if not _allow_control_via_opa():
-        return False
-    payload = {
-        "command": command,
-        "user_id": str(getattr(user, "id", "")),
-    }
-    if agent_id is not None:
-        payload["agent_id"] = agent_id
-    allowed, _ = await evaluate_with_opa(json.dumps(payload))
-    return bool(allowed)
-
-
-async def check_command_rate_limit(user: Any) -> bool:
-    """Increment and check the rate limit for the given user."""
-    user_id = str(getattr(user, "id", ""))
-    if not user_id:
-        return True
-    lock = _COMMAND_LOCKS.setdefault(user_id, asyncio.Lock())
-    async with lock:
-        history = _COMMAND_HISTORY.setdefault(user_id, deque())
-        now = time.monotonic()
-        window_seconds = _get_command_rate_limit_window()
-        if window_seconds <= 0:
-            history.clear()
-        else:
-            cutoff = now - window_seconds
-            while history and history[0] <= cutoff:
-                history.popleft()
-        if len(history) >= _MAX_RATE:
-            logger.warning("Rate limit exceeded for user %s", user_id)
-            return False
-        history.append(now)
-    return True
-
-
-def reset_command_counts(user_id: str | None = None) -> None:
-    """Reset stored command counts for a user or all users."""
-    if user_id is not None:
-        history = _COMMAND_HISTORY.pop(user_id, None)
-        if history is not None:
-            history.clear()
-    else:
-        _COMMAND_HISTORY.clear()
-
-
-def set_max_rate(value: int) -> None:
-    """Set the maximum allowed commands per user."""
-    global _MAX_RATE
-    _MAX_RATE = max(1, int(value))
+    return await has_control_command_permission(user, command, agent_id=agent_id)
 
 
 async def _rate_limit_check(interaction: Any) -> bool:
@@ -1484,7 +1360,16 @@ async def slash_pause(interaction: Any) -> None:
     with command_span("pause", interaction) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(SimulationEvent(type="control", data={"command": "pause"}))
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                ControlRequest(action="pause"),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         await send_interaction_response(interaction, "pause", ephemeral=True)
 
 
@@ -1493,9 +1378,16 @@ async def slash_resume(interaction: Any) -> None:
     with command_span("resume", interaction) as span:
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(type="control", data={"command": "resume"})
-        )
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                ControlRequest(action="resume"),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         await send_interaction_response(interaction, "resume", ephemeral=True)
 
 
@@ -1507,9 +1399,16 @@ async def slash_pause_all(interaction: Any) -> None:
             return
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(type="control", data={"command": "pause_all"})
-        )
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                ControlRequest(action="pause_all"),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         await send_interaction_response(interaction, "pause all", ephemeral=True)
 
 
@@ -1521,9 +1420,16 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
             return
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(type="control", data={"command": "kill_agent", "agent_id": agent_id})
-        )
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                ControlRequest(action="kill_agent", agent_id=agent_id),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         await send_interaction_response(interaction, "killed", ephemeral=True)
 
 
@@ -1555,7 +1461,17 @@ async def slash_start(interaction: Any) -> None:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         try:
-            await start_simulation(ctx)
+            bus = get_command_bus(ctx)
+            if bus is None:
+                raise RuntimeError("command bus unavailable")
+            await bus.dispatch(
+                ControlRequest(action="start"),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         except Exception as exc:
             if bot_instance is not None:
                 embed = (
@@ -1602,7 +1518,17 @@ async def slash_stop(interaction: Any) -> None:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         try:
-            await stop_simulation(ctx)
+            bus = get_command_bus(ctx)
+            if bus is None:
+                raise RuntimeError("command bus unavailable")
+            await bus.dispatch(
+                ControlRequest(action="stop"),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         except Exception as exc:
             if bot_instance is not None:
                 embed = (
@@ -1629,6 +1555,7 @@ async def slash_stop(interaction: Any) -> None:
                 )
             else:
                 await send_interaction_response(interaction, "stop", ephemeral=True)
+
 
 async def slash_spawn(
     interaction: Any,
@@ -1674,7 +1601,17 @@ async def slash_spawn(
                 trust_baseline=trust_baseline,
                 adaptability=adaptability,
             )
-            await spawn_agent_command(agent_id, ctx, **spawn_kwargs)
+            bus = get_command_bus(ctx)
+            if bus is None:
+                raise RuntimeError("command bus unavailable")
+            await bus.dispatch(
+                SpawnAgentRequest(agent_id=agent_id, **spawn_kwargs),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         except Exception as exc:
             if bot_instance is not None:
                 embed = bot_instance.create_spawn_embed(agent_id, False, str(exc))
@@ -1723,9 +1660,16 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
         span.set_attribute("discord.speed", value)
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(type="control", data={"command": "set_speed", "value": value})
-        )
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                ControlRequest(action="set_speed", value=value),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "discord")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
+            )
         await send_interaction_response(interaction, f"speed {value}", ephemeral=True)
 
 
@@ -1749,16 +1693,15 @@ async def slash_kb(interaction: Any, text: str) -> None:
         span.set_attribute("discord.message.length", len(text))
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(
-                type="control",
-                data={
-                    "command": "post_kb",
-                    "text": text,
-                    "author": str(getattr(interaction, "user", "human")),
-                },
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                HumanMessage(
+                    content=f"/kb {text}",
+                    sender_id=str(getattr(interaction, "user", "human")),
+                    source="discord",
+                )
             )
-        )
         await send_interaction_response(interaction, "KB entry created", ephemeral=True)
 
 
@@ -1774,17 +1717,20 @@ async def slash_event(interaction: Any, text: str) -> None:
             return
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(
-            SimulationEvent(
-                type="control",
-                data={
-                    "command": "inject_event",
-                    "text": text,
-                    "scope": "global",
-                    "author": str(getattr(interaction, "user", "human")),
-                },
+        bus = get_command_bus(ctx)
+        if bus is not None:
+            await bus.dispatch(
+                InjectEventRequest(
+                    text=text,
+                    scope="global",
+                    author=str(getattr(interaction, "user", "human")),
+                ),
+                context=InteractionContext(
+                    sender_id=str(getattr(interaction, "user", "human")),
+                    source="discord",
+                    permissions={"admin", "moderator"},
+                ),
             )
-        )
         await send_interaction_response(interaction, "event injected", ephemeral=True)
 
 
@@ -1961,11 +1907,15 @@ async def slash_gov(interaction: Any) -> None:
                     payload = cast(dict[str, Any], resp.json())
                     rules = cast(list[dict[str, Any]], payload.get("rules", []))
             except Exception:
-                await send_interaction_response(interaction, "No active governance rules.", ephemeral=True)
+                await send_interaction_response(
+                    interaction, "No active governance rules.", ephemeral=True
+                )
                 return
 
         if not rules:
-            await send_interaction_response(interaction, "No active governance rules.", ephemeral=True)
+            await send_interaction_response(
+                interaction, "No active governance rules.", ephemeral=True
+            )
             return
 
         lines = []
@@ -2015,7 +1965,9 @@ def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
                 moderation_rate_limit(moderation_action)(handler),
             )
         if descriptions:
-            handler = cast(Callable[..., Awaitable[None]], app_commands.describe(**descriptions)(handler))
+            handler = cast(
+                Callable[..., Awaitable[None]], app_commands.describe(**descriptions)(handler)
+            )
         if not hasattr(callback, "callback"):
             setattr(callback, "callback", callback)
         registered = tree.command(name=name)(handler)
@@ -2028,7 +1980,12 @@ def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
     _register("resume", slash_resume)
     _register("pause_all", slash_pause_all)
     _register("kill_agent", slash_kill_agent, descriptions={"agent_id": "ID of the agent to kill"})
-    _register("nudge", slash_nudge, descriptions={"prompt": "Prompt to nudge the simulation"}, moderation_action="nudge")
+    _register(
+        "nudge",
+        slash_nudge,
+        descriptions={"prompt": "Prompt to nudge the simulation"},
+        moderation_action="nudge",
+    )
     _register("start", slash_start, moderation_action="start")
     _register("stop", slash_stop, moderation_action="stop")
     _register(

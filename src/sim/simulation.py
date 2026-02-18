@@ -37,6 +37,7 @@ from src.infra.snapshot import (
     save_snapshot,
     upload_snapshot,
 )
+from src.interfaces.command_bus import CommandBus, parse_bus_command
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
@@ -338,6 +339,7 @@ class Simulation:
         self._event_loop = None
         self._event_loop_thread = None
         self.interaction_service = InteractionService(self)
+        self.command_bus = CommandBus(self.interaction_service)
 
         # Automatically start listening for external events when an event loop
         # is already running. This allows tests to enqueue events before calling
@@ -442,9 +444,14 @@ class Simulation:
                 target_channel_id=target_channel_id,
             )
 
-    async def handle_control_command(self: Self, cmd: dict[str, Any]) -> None:
+    async def handle_control_command(self: Self, cmd: Mapping[str, Any]) -> dict[str, Any] | None:
         """Process a control command sent via the event queue."""
-        action = cmd.get("command")
+        try:
+            parsed = parse_bus_command(cmd)
+        except ValidationError:
+            logger.warning("Invalid control command payload: %s", cmd)
+            return None
+        action = getattr(parsed, "action", None) or str(cmd.get("command", ""))
         if action == "pause":
             self.paused = True
         elif action == "resume":
@@ -463,13 +470,12 @@ class Simulation:
             self.simulation_complete = True
             await self.stop_event_listener()
         elif action == "spawn":
-            agent_id = cmd.get("agent_id")
+            agent_id = getattr(parsed, "agent_id", None) or cmd.get("agent_id")
             if agent_id:
                 normalized_agent_id = str(agent_id)
                 if any(agent.agent_id == normalized_agent_id for agent in self.agents):
                     warning_message = (
-                        "Rejected spawn request for duplicate agent_id "
-                        f"'{normalized_agent_id}'."
+                        f"Rejected spawn request for duplicate agent_id '{normalized_agent_id}'."
                     )
                     logger.warning(warning_message)
                     await emit_event(
@@ -488,11 +494,19 @@ class Simulation:
                 try:
                     from src.agents.core.base_agent import Agent
 
-                    role_value = cmd.get("role")
+                    role_value = (
+                        getattr(parsed, "role", None)
+                        if hasattr(parsed, "role")
+                        else cmd.get("role")
+                    )
                     role_profile = ensure_profile(role_value) if role_value is not None else None
 
                     trait_overrides: dict[str, float] | None = None
-                    traits_payload = cmd.get("traits")
+                    traits_payload = (
+                        getattr(parsed, "traits", None)
+                        if hasattr(parsed, "traits")
+                        else cmd.get("traits")
+                    )
                     if traits_payload is not None:
                         if not isinstance(traits_payload, dict):
                             raise ValueError("spawn traits must be an object")
@@ -522,10 +536,20 @@ class Simulation:
                         merged_traits.update(trait_overrides)
                         initial_state["traits"] = PersonalityTraits(**merged_traits)
 
-                    if "persona" in cmd and cmd.get("persona") is not None:
-                        initial_state["persona"] = str(cmd.get("persona"))
-                    if "backstory" in cmd and cmd.get("backstory") is not None:
-                        initial_state["backstory"] = str(cmd.get("backstory"))
+                    persona = (
+                        getattr(parsed, "persona", None)
+                        if hasattr(parsed, "persona")
+                        else cmd.get("persona")
+                    )
+                    backstory = (
+                        getattr(parsed, "backstory", None)
+                        if hasattr(parsed, "backstory")
+                        else cmd.get("backstory")
+                    )
+                    if persona is not None:
+                        initial_state["persona"] = str(persona)
+                    if backstory is not None:
+                        initial_state["backstory"] = str(backstory)
 
                     new_agent = Agent(
                         agent_id=normalized_agent_id,
@@ -536,19 +560,19 @@ class Simulation:
                 except Exception:
                     logger.error("Failed to spawn agent %s", agent_id, exc_info=True)
         elif action == "kill_agent":
-            agent_id = cmd.get("agent_id")
+            agent_id = getattr(parsed, "agent_id", None) or cmd.get("agent_id")
             if agent_id:
                 agent = next((a for a in self.agents if a.agent_id == str(agent_id)), None)
                 if agent is not None:
                     await self.retire_agent(agent, remove_from_simulation=True)
         elif action == "set_speed":
             try:
-                self.speed = float(cmd.get("value", 1))
+                self.speed = float(getattr(parsed, "value", None) or cmd.get("value", 1))
             except (TypeError, ValueError):
                 pass
         elif action == "post_kb":
-            text = cmd.get("text")
-            author = cmd.get("author", "human")
+            text = getattr(parsed, "text", None) or cmd.get("text")
+            author = getattr(parsed, "author", None) or cmd.get("author", "human")
             if text and self.knowledge_board:
                 async with self.knowledge_board.lock:
                     self.knowledge_board.add_entry(
@@ -575,11 +599,11 @@ class Simulation:
                     )
                     _ = task
         elif action == "inject_event":
-            text = str(cmd.get("text", "")).strip()
+            text = str(getattr(parsed, "text", None) or cmd.get("text", "")).strip()
             if not text:
-                return
-            author = str(cmd.get("author", "human"))
-            scope = str(cmd.get("scope", "global"))
+                return None
+            author = str(getattr(parsed, "author", None) or cmd.get("author", "human"))
+            scope = str(getattr(parsed, "scope", None) or cmd.get("scope", "global"))
             event_payload = {
                 "type": "world_event",
                 "author": author,
@@ -612,6 +636,12 @@ class Simulation:
                         self.current_step,
                         self.vector.to_dict(),
                     )
+
+        return {
+            "paused": self.paused,
+            "speed": self.speed,
+            "simulation_complete": self.simulation_complete,
+        }
 
     async def mute_agent(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
         from .resources import mute_agent as _mute_agent
@@ -814,8 +844,7 @@ class Simulation:
         cadence = max(
             1,
             int(
-                config.get_config("WORLD_TIME_BROADCAST_CADENCE_TICKS")
-                or self.world_ticks_per_day
+                config.get_config("WORLD_TIME_BROADCAST_CADENCE_TICKS") or self.world_ticks_per_day
             ),
         )
         if (
@@ -987,11 +1016,19 @@ class Simulation:
 
         if rule_evaluation.penalties:
             for penalty in rule_evaluation.penalties:
-                current_agent_state.ip = max(0.0, float(current_agent_state.ip) - float(penalty.get("ip", 0.0)))
-                current_agent_state.du = max(0.0, float(current_agent_state.du) - float(penalty.get("du", 0.0)))
+                current_agent_state.ip = max(
+                    0.0, float(current_agent_state.ip) - float(penalty.get("ip", 0.0))
+                )
+                current_agent_state.du = max(
+                    0.0, float(current_agent_state.du) - float(penalty.get("du", 0.0))
+                )
 
         if self.knowledge_board:
-            governance_decision = "rejected" if not allowed or not rule_evaluation.allowed else rule_evaluation.decision
+            governance_decision = (
+                "rejected"
+                if not allowed or not rule_evaluation.allowed
+                else rule_evaluation.decision
+            )
             rule_ids = rule_evaluation.violated_rules
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
@@ -1127,7 +1164,9 @@ class Simulation:
                     "world_time": self._world_time_snapshot(),
                     "action_intent": action_intent_str,
                     "governance_enforcement": {
-                        "decision": "rejected" if not allowed or not rule_evaluation.allowed else rule_evaluation.decision,
+                        "decision": "rejected"
+                        if not allowed or not rule_evaluation.allowed
+                        else rule_evaluation.decision,
                         "reason": rule_evaluation.reason,
                         "violated_rules": rule_evaluation.violated_rules,
                         "penalties": rule_evaluation.penalties,
@@ -1404,10 +1443,25 @@ class Simulation:
         if not evt.data:
             return
         if evt.type == "control":
-            await self.handle_control_command(evt.data)
+            context = InteractionContext(
+                sender_id=str(evt.data.get("sender_id", evt.data.get("author", "external"))),
+                channel_id=str(evt.data.get("channel_id")) if evt.data.get("channel_id") else None,
+                source=str(evt.data.get("source", "event_bus")),
+                permissions=set(evt.data.get("permissions", []))
+                if isinstance(evt.data.get("permissions"), list)
+                else set(),
+                metadata={k: v for k, v in evt.data.items()},
+            )
+            await self.command_bus.dispatch(parse_bus_command(evt.data), context=context)
             return
         if evt.type == "moderation":
-            await self.handle_moderation_command(evt.data)
+            context = InteractionContext(
+                sender_id=str(evt.data.get("sender_id", evt.data.get("author", "external"))),
+                source=str(evt.data.get("source", "event_bus")),
+                permissions={"admin", "moderator"},
+                metadata={k: v for k, v in evt.data.items()},
+            )
+            await self.command_bus.dispatch(parse_bus_command(evt.data), context=context)
             return
         sender = str(evt.data.get("author", "external"))
         if sender in self.muted_agents:
@@ -1788,12 +1842,13 @@ class Simulation:
             phase="perception_snapshot",
             value=(time.perf_counter() - phase_start) * 1000,
         )
-        self._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="planning_batch_size", value=len(plans))
+        self._set_labeled_gauge(
+            STEP_PHASE_QUEUE_DEPTH, phase="planning_batch_size", value=len(plans)
+        )
 
         phase_start = time.perf_counter()
         planning_tasks = [
-            self.agents[int(plan["agent_index"])]
-            .run_turn(
+            self.agents[int(plan["agent_index"])].run_turn(
                 simulation_step=int(plan["simulation_step"]),
                 environment_perception=dict(cast(Mapping[str, Any], plan["snapshot"])),
                 memory_service=self.memory_service,
@@ -1827,7 +1882,9 @@ class Simulation:
             phase="deterministic_commit_apply",
             value=(time.perf_counter() - phase_start) * 1000,
         )
-        self._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="commit_batch_size", value=len(committed))
+        self._set_labeled_gauge(
+            STEP_PHASE_QUEUE_DEPTH, phase="commit_batch_size", value=len(committed)
+        )
         return committed
 
     async def async_run(self: Self, num_steps: int) -> None:
@@ -2241,7 +2298,9 @@ class Simulation:
         approved = bool(result.get("approved"))
         rule_materialization = result.get("rule_materialization", {})
         if self.knowledge_board:
-            decision = str(rule_materialization.get("decision", "accepted" if approved else "rejected"))
+            decision = str(
+                rule_materialization.get("decision", "accepted" if approved else "rejected")
+            )
             rule_ids = rule_materialization.get("rule_ids", [])
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
