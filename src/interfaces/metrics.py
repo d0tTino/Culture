@@ -91,6 +91,16 @@ PROPOSAL_THROUGHPUT = Gauge("proposal_throughput", "Proposals processed per minu
 ACTIVE_AGENT_COUNT = Gauge(
     "active_agent_count", "Number of active agents participating in the simulation"
 )
+STEP_PHASE_LATENCY_MS = Gauge(
+    "step_phase_latency_ms",
+    "Simulation step phase latency in milliseconds",
+    ["phase"],
+)
+STEP_PHASE_QUEUE_DEPTH = Gauge(
+    "step_phase_queue_depth",
+    "Simulation queue depth observed per step phase",
+    ["phase"],
+)
 
 # Council metrics
 COUNCIL_RUNS_TOTAL = Counter(

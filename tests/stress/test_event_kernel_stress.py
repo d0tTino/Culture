@@ -1,5 +1,5 @@
-from collections.abc import Awaitable
-from typing import Any, Callable, ClassVar
+from collections.abc import Awaitable, Callable
+from typing import Any, ClassVar
 
 import pytest
 
@@ -89,3 +89,31 @@ async def test_run_turns_concurrent_no_race() -> None:
 
     assert len(results) == agent_count
     assert sim.current_step == agent_count
+
+
+@pytest.mark.asyncio
+async def test_run_turns_concurrent_commit_order_deterministic() -> None:
+    from src.sim.simulation import Simulation
+
+    class _ConflictAgent(_DummyAgent):
+        async def run_turn(
+            self,
+            simulation_step: int,
+            environment_perception: dict[str, Any] | None = None,
+            memory_service: Any | None = None,
+            vector_store_manager: Any | None = None,
+            knowledge_board: Any | None = None,
+        ) -> dict[str, Any]:
+            return {
+                "step": simulation_step,
+                "resource": "shared_resource",
+                "target": "same_target",
+                "agent": self.agent_id,
+            }
+
+    agents = [_ConflictAgent("b"), _ConflictAgent("a"), _ConflictAgent("c")]
+    sim = Simulation(agents=agents)
+
+    results = await sim.run_turns_concurrent(agents)
+
+    assert [str(result.get("agent")) for result in results] == ["a", "b", "c"]
