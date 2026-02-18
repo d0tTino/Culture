@@ -36,12 +36,8 @@ from src.infra.llm_client import LLMClientInitError, get_ollama_client
 from src.sim.resource_manager import get_resource_manager
 
 from .embedding_utils import compute_embedding
+from .personality_engine import PersonalityEngine
 from .roles import ensure_profile
-from .trait_policy import (
-    action_intent_biasing,
-    merge_trait_policy_coefficients,
-    trait_drift_from_experience,
-)
 
 if TYPE_CHECKING:
     from src.interfaces.dashboard_backend import (
@@ -354,10 +350,7 @@ class Agent:
         self.action_intent_selector_program = get_optimized_action_selector()
         self.role_thought_generator_program = get_role_thought_generator()
         self.relationship_updater_program = get_relationship_updater()
-        trait_policy_overrides = get_config("TRAIT_POLICY_COEFFICIENTS")
-        self._trait_policy_coefficients = merge_trait_policy_coefficients(
-            trait_policy_overrides if isinstance(trait_policy_overrides, dict) else None
-        )
+        self.personality_engine = PersonalityEngine()
 
         logger.info(
             f"Agent {self.agent_id} __init__: self.action_intent_selector_program is {type(self.action_intent_selector_program)}"
@@ -385,22 +378,6 @@ class Agent:
             updated_state (AgentState): The new state for the agent.
         """
         self._state = updated_state
-        # Controlled periodic reflection drift: tiny adaptation over time.
-        if self._state.step_counter and self._state.step_counter % 5 == 0:
-            reflection_drift = trait_drift_from_experience(
-                {
-                    "adaptability": self._state.traits.adaptability,
-                    "mood_level": self._state.mood_level,
-                },
-                self._trait_policy_coefficients,
-            )
-            self._state.apply_trait_drift(
-                {
-                    "adaptability": reflection_drift["adaptability"],
-                    "resilience": reflection_drift["resilience"],
-                },
-                max_step=0.01,
-            )
         logger.debug(f"Agent {self.agent_id} state updated")
 
     def add_memory(self: Self, step: int, memory_type: str, content: str) -> None:
@@ -887,10 +864,9 @@ class Agent:
             agent_goal=agent_goal,
             available_actions=actions_list,
             traits_summary=traits_summary or self._state.trait_summary,
-            trait_policy_biases=action_intent_biasing(
-                self._state.traits,
+            trait_policy_biases=self.personality_engine.action_biases(
+                self._state,
                 actions_list,
-                self._trait_policy_coefficients,
             ),
         )
         default_value = action_intent_selector.get_failsafe_output(
