@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from itertools import pairwise
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 import numpy as np
@@ -47,7 +48,11 @@ from src.interfaces.interaction_commands import (
     InteractionService,
     KnowledgeBoardCommand,
 )
-from src.interfaces.metrics import ACTIVE_AGENT_COUNT
+from src.interfaces.metrics import (
+    ACTIVE_AGENT_COUNT,
+    STEP_PHASE_LATENCY_MS,
+    STEP_PHASE_QUEUE_DEPTH,
+)
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
 from src.sim.event_kernel import EventKernel
@@ -1661,6 +1666,15 @@ class Simulation:
                 )
             self.add_evaluation_hook(self._collect_metrics)
 
+    @staticmethod
+    def _set_labeled_gauge(gauge: Any, *, phase: str, value: float | int) -> None:
+        """Set a labeled gauge when labels are supported; fallback to plain set."""
+
+        if hasattr(gauge, "labels"):
+            gauge.labels(phase=phase).set(value)
+            return
+        gauge.set(value)
+
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the kernel."""
         if not self.agents:
@@ -1668,6 +1682,16 @@ class Simulation:
             return 0
 
         await self.start_event_listener()
+
+        # Queue depth before any step work begins.
+        queue_depth = len(getattr(self.event_kernel, "_queue", []))
+        self._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="queue_pre_step", value=queue_depth)
+
+        if max_turns > 1:
+            # Batch mode uses a deterministic 3-phase pipeline for parallel planning.
+            planned = await self._run_step_pipeline(max_turns=max_turns)
+            if planned:
+                return len(planned)
 
         if self.event_kernel.empty():
             self.vector.increment(self.agents[self.current_agent_index].get_id())
@@ -1707,6 +1731,104 @@ class Simulation:
                 await emit_event(SimulationEvent(type="evaluation", data=eval_event))
 
             return len(events)
+
+    def _build_step_perception_snapshot(self: Self, turn_index: int) -> Mapping[str, Any]:
+        """Build an immutable perception snapshot for a pipeline tick."""
+
+        snapshot: dict[str, Any] = {
+            "perceived_messages": copy.deepcopy(self.messages_to_perceive_this_round),
+            "knowledge_board_content": (
+                copy.deepcopy(self.knowledge_board.get_recent_entries_for_prompt())
+                if self.knowledge_board
+                else []
+            ),
+            "turn_index": turn_index,
+            "world_time": copy.deepcopy(self._world_time_snapshot()),
+        }
+        return MappingProxyType(snapshot)
+
+    @staticmethod
+    def _deterministic_commit_sort_key(plan: Mapping[str, Any]) -> tuple[str, str, str, int]:
+        """Sort key that stabilizes replay for same-resource/target commit conflicts."""
+
+        return (
+            str(plan.get("resource", "agent_turn")),
+            str(plan.get("target", "")),
+            str(plan.get("agent_id", "")),
+            int(plan.get("batch_index", 0)),
+        )
+
+    async def _run_step_pipeline(self: Self, max_turns: int) -> list[dict[str, Any]]:
+        """Run a phased step pipeline: perception, parallel planning, deterministic commit."""
+
+        if not self.agents:
+            return []
+
+        batch_size = min(max_turns, len(self.agents))
+        base_step = self.current_step + 1
+
+        phase_start = time.perf_counter()
+        plans: list[dict[str, Any]] = []
+        for idx in range(batch_size):
+            agent_index = (self.current_agent_index + idx) % len(self.agents)
+            agent = self.agents[agent_index]
+            plans.append(
+                {
+                    "batch_index": idx,
+                    "agent_index": agent_index,
+                    "agent_id": agent.agent_id,
+                    "simulation_step": base_step + idx,
+                    "resource": "agent_turn",
+                    "target": agent.agent_id,
+                    "snapshot": self._build_step_perception_snapshot(base_step + idx),
+                }
+            )
+        self._set_labeled_gauge(
+            STEP_PHASE_LATENCY_MS,
+            phase="perception_snapshot",
+            value=(time.perf_counter() - phase_start) * 1000,
+        )
+        self._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="planning_batch_size", value=len(plans))
+
+        phase_start = time.perf_counter()
+        planning_tasks = [
+            self.agents[int(plan["agent_index"])]
+            .run_turn(
+                simulation_step=int(plan["simulation_step"]),
+                environment_perception=dict(cast(Mapping[str, Any], plan["snapshot"])),
+                memory_service=self.memory_service,
+                vector_store_manager=self.vector_store_manager,
+                knowledge_board=self.knowledge_board,
+            )
+            for plan in plans
+        ]
+        planning_results = await asyncio.gather(*planning_tasks)
+        self._set_labeled_gauge(
+            STEP_PHASE_LATENCY_MS,
+            phase="concurrent_planning",
+            value=(time.perf_counter() - phase_start) * 1000,
+        )
+
+        phase_start = time.perf_counter()
+        for plan, output in zip(plans, planning_results, strict=False):
+            plan["output"] = output
+            if isinstance(output, Mapping):
+                plan["resource"] = str(output.get("resource", plan["resource"]))
+                plan["target"] = str(output.get("target", plan["target"]))
+        ordered = sorted(plans, key=self._deterministic_commit_sort_key)
+        committed: list[dict[str, Any]] = []
+        for plan in ordered:
+            committed.append(cast(dict[str, Any], plan.get("output", {})))
+            self.total_turns_executed += 1
+        self.current_step += len(committed)
+        self.current_agent_index = (self.current_agent_index + len(committed)) % len(self.agents)
+        self._set_labeled_gauge(
+            STEP_PHASE_LATENCY_MS,
+            phase="deterministic_commit_apply",
+            value=(time.perf_counter() - phase_start) * 1000,
+        )
+        self._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="commit_batch_size", value=len(committed))
+        return committed
 
     async def async_run(self: Self, num_steps: int) -> None:
         """
@@ -2022,25 +2144,8 @@ class Simulation:
             A list of dictionaries returned by each agent's ``run_turn``.
         """
 
-        start_step = self.current_step + 1
-        tasks = [
-            agent.run_turn(
-                simulation_step=start_step + idx,
-                environment_perception={},
-                memory_service=self.memory_service,
-                vector_store_manager=self.vector_store_manager,
-                knowledge_board=self.knowledge_board,
-            )
-            for idx, agent in enumerate(agents)
-        ]
-
-        results = await asyncio.gather(*tasks)
-
-        self.current_step += len(agents)
-        self.total_turns_executed += len(agents)
-        self.current_agent_index = (self.current_agent_index + len(agents)) % len(self.agents)
-
-        return list(results)
+        _ = agents
+        return await self._run_step_pipeline(max_turns=len(agents))
 
     def close(self: Self) -> None:
         """Release resources held by the simulation."""
