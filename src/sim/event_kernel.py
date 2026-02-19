@@ -10,7 +10,6 @@ from opentelemetry import trace
 from typing_extensions import Self
 
 from src.infra.event_log import log_event
-from src.infra.snapshot import compute_trace_hash
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
@@ -19,6 +18,7 @@ from src.interfaces.dashboard_backend import (
 )
 
 from .event_bus import get_event_bus
+from .persistence.trace_hash_service import TraceHashService
 from .version_vector import VersionVector
 
 tracer = trace.get_tracer(__name__)
@@ -201,7 +201,7 @@ class EventKernel:
             "agent_id": agent_id,
             "vector": vv.to_dict(),
         }
-        trace_hash = compute_trace_hash(event_data)
+        trace_hash = TraceHashService.compute(event_data)
         heapq.heappush(
             self._queue,
             Event(step, self._counter, tokens, agent_id, callback, vv, trace_hash),
@@ -241,7 +241,7 @@ class EventKernel:
         """Log and forward an environment event."""
         event_with_hash = log_event(event)
         if event_with_hash is None:
-            event_with_hash = {**event, "trace_hash": compute_trace_hash(event)}
+            event_with_hash = {**event, "trace_hash": TraceHashService.compute(event)}
         if event.get("type") == "map_action":
             await emit_map_action_event(
                 event.get("agent_id", ""),
