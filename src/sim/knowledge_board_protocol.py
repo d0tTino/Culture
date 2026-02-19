@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from src.sim.knowledge_board import BoardEntry
+from src.sim.knowledge_entry import KnowledgeEntry
 
 
 @runtime_checkable
@@ -13,7 +13,7 @@ class KnowledgeBoardProtocol(Protocol):
 
     def add_entry(
         self,
-        entry: str | BoardEntry,
+        entry: str | KnowledgeEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
@@ -66,3 +66,19 @@ def supports_graph_queries(board: object) -> bool:
 
     return isinstance(board, KnowledgeBoardGraphProtocol)
 
+
+@runtime_checkable
+class KnowledgeBoardReadModelProtocol(Protocol):
+    """Optional read-model extension used by UI and agent views."""
+
+    def get_active_proposals(self, limit: int = 20) -> list[dict[str, Any]]: ...
+
+    def get_consensus_status(self, proposal_id: str) -> dict[str, Any]: ...
+
+    def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]: ...
+
+
+def supports_read_models(board: object) -> bool:
+    """Return ``True`` when board supports governance read-model APIs."""
+
+    return isinstance(board, KnowledgeBoardReadModelProtocol)

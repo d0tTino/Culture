@@ -18,10 +18,11 @@ else:  # pragma: no cover - optional dependency
         from src.agents.memory.vector_store import ChromaVectorStoreManager
     except Exception:
         ChromaVectorStoreManager = None
+from src.governance.service import governance
 from src.infra import config
 from src.infra.event_log import log_event
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
-from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
+from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.simulation import Simulation
 
 logger = logging.getLogger(__name__)
@@ -186,27 +187,19 @@ def load_checkpoint(
         vector_store_manager=vector_store_manager,
         scenario=data.get("scenario", ""),
     )
-    kb_entries = data.get("knowledge_board", {}).get("entries", [])
+    kb_snapshot = data.get("knowledge_board", {})
     backend = os.getenv("KNOWLEDGE_BOARD_BACKEND", config.KNOWLEDGE_BOARD_BACKEND)
     if backend == "graph":
         board = GraphKnowledgeBoard()
-        for e in kb_entries:
-            board.add_entry(
-                BoardEntry(
-                    content_full=e.get("content_full", ""),
-                    entry_type=e.get("entry_type", "note"),
-                    content_summary=e.get("content_summary"),
-                    tags=e.get("tags"),
-                    reference_metadata=e.get("reference_metadata"),
-                ),
-                e.get("agent_id", "unknown"),
-                int(e.get("step", 0)),
-            )
+        board.from_snapshot(kb_snapshot)
         sim.knowledge_board = board
     else:
-        sim.knowledge_board = cast(
-            GraphKnowledgeBoard | KnowledgeBoard, KnowledgeBoard(entries=kb_entries)
-        )
+        memory_board = cast(GraphKnowledgeBoard | KnowledgeBoard, KnowledgeBoard())
+        memory_board.from_snapshot(kb_snapshot)
+        sim.knowledge_board = memory_board
+    governance.attach_knowledge_board(
+        sim.knowledge_board, step_provider=lambda: int(sim.current_step)
+    )
     sim.current_step = data.get("current_step", 0)
     sim.current_agent_index = data.get("current_agent_index", 0)
     sim.collective_ip = data.get("collective_ip", 0.0)
