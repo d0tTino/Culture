@@ -9,7 +9,11 @@ from typing_extensions import Self
 
 from src.agents.core.base_agent import Agent
 from src.infra.ledger import ledger
-from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol, supports_voting
+from src.sim.knowledge_board_protocol import (
+    EntryStore,
+    UnsupportedKnowledgeBoardCapabilityError,
+    as_proposal_voting_store,
+)
 from src.sim.knowledge_entry import KnowledgeEntry, KnowledgeEntryType
 from src.utils.policy import evaluate_with_opa
 
@@ -30,12 +34,12 @@ class GovernanceService:
     """Service coordinating law proposals and voting."""
 
     def __init__(self) -> None:
-        self._knowledge_board: KnowledgeBoardProtocol | None = None
+        self._knowledge_board: EntryStore | None = None
         self._step_provider: Callable[[], int] = lambda: 0
 
     def attach_knowledge_board(
         self,
-        board: KnowledgeBoardProtocol | None,
+        board: EntryStore | None,
         *,
         step_provider: Callable[[], int] | None = None,
     ) -> None:
@@ -103,12 +107,15 @@ class GovernanceService:
             },
         )
         self._write_governance_entry(agent_id=agent.agent_id, entry=vote_entry)
-        if proposal_entry_id and self._knowledge_board and supports_voting(self._knowledge_board):
-            self._knowledge_board.record_vote(
-                voter_agent_id=agent.agent_id,
-                proposal_id=proposal_entry_id,
-                approve=approve,
-            )
+        if proposal_entry_id and self._knowledge_board:
+            try:
+                as_proposal_voting_store(self._knowledge_board).record_vote(
+                    voter_agent_id=agent.agent_id,
+                    proposal_id=proposal_entry_id,
+                    approve=approve,
+                )
+            except UnsupportedKnowledgeBoardCapabilityError:
+                pass
         return approve
 
     async def stake_ip(self: Self, agent_id: str, amount: float) -> float:
@@ -234,12 +241,15 @@ class GovernanceService:
                         },
                     ),
                 )
-                if proposal_entry_id and supports_voting(self._knowledge_board):
-                    self._knowledge_board.record_vote(
-                        voter_agent_id=agent.agent_id,
-                        proposal_id=proposal_entry_id,
-                        approve=vote,
-                    )
+                if proposal_entry_id:
+                    try:
+                        as_proposal_voting_store(self._knowledge_board).record_vote(
+                            voter_agent_id=agent.agent_id,
+                            proposal_id=proposal_entry_id,
+                            approve=vote,
+                        )
+                    except UnsupportedKnowledgeBoardCapabilityError:
+                        pass
 
             if approved:
                 self._write_governance_entry(

@@ -55,7 +55,11 @@ from src.sim.environment import EnvironmentState, EnvironmentSystem
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
-from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol
+from src.sim.knowledge_board_protocol import (
+    KnowledgeBoardProtocol,
+    UnsupportedKnowledgeBoardCapabilityError,
+    as_semantic_query_store,
+)
 from src.sim.knowledge_entry import KnowledgeEntryType
 from src.sim.lifecycle_service import LifecycleService
 from src.sim.persistence.snapshot_service import SnapshotPersistenceService
@@ -617,7 +621,9 @@ class Simulation:
             }
         )
         if lifecycle_event is not None:
-            await emit_event(SimulationEvent(type="agent_lifecycle_transition", data=lifecycle_event))
+            await emit_event(
+                SimulationEvent(type="agent_lifecycle_transition", data=lifecycle_event)
+            )
 
         if self.knowledge_board:
             async with self.knowledge_board.lock:
@@ -954,7 +960,11 @@ class Simulation:
                             f"'{requested_action_intent}' by {agent_id}"
                         ),
                         entry_type=KnowledgeEntryType.GOVERNANCE_DECISION.value,
-                        tags=["governance", governance_outcome.outcome, governance_outcome.decision],
+                        tags=[
+                            "governance",
+                            governance_outcome.outcome,
+                            governance_outcome.decision,
+                        ],
                         reference_metadata={
                             "decision": governance_outcome.decision,
                             "outcome": governance_outcome.outcome,
@@ -1825,7 +1835,9 @@ class Simulation:
             restore_rng_state(rng_state)
         expected_hash = event.get("trace_hash")
         if expected_hash is not None:
-            actual_hash = TraceHashService.compute({k: v for k, v in event.items() if k != "trace_hash"})
+            actual_hash = TraceHashService.compute(
+                {k: v for k, v in event.items() if k != "trace_hash"}
+            )
             if actual_hash != expected_hash:
                 raise ValueError(
                     f"Trace hash mismatch for event at step {event.get('step')}:"
@@ -2267,20 +2279,25 @@ class Simulation:
             "sanctions": governance_rules_engine.sanctions(),
         }
         board = self.knowledge_board
-        if hasattr(board, "get_active_proposals"):
-            proposals = board.get_active_proposals(limit=20)
+        try:
+            semantic_queries = as_semantic_query_store(board)
+        except UnsupportedKnowledgeBoardCapabilityError:
+            semantic_queries = None
+
+        if semantic_queries is not None:
+            proposals = semantic_queries.get_active_proposals(limit=20)
             read_model["active_proposals"] = proposals
             read_model["consensus_status"] = [
-                board.get_consensus_status(str(p.get("entry_id", "")))
+                semantic_queries.get_consensus_status(str(p.get("entry_id", "")))
                 for p in proposals
                 if p.get("entry_id")
             ]
-        if hasattr(board, "get_agent_stance_history"):
             read_model["agent_stance_history"] = {
-                agent.agent_id: board.get_agent_stance_history(agent.agent_id)
+                agent.agent_id: semantic_queries.get_agent_stance_history(agent.agent_id)
                 for agent in self.agents
             }
         return read_model
+
     async def propose_law(
         self: Self, proposer_id: str, text: str, vote_weights: dict[str, int] | None = None
     ) -> bool:
