@@ -25,13 +25,7 @@ from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
-from src.interfaces.command_bus import (
-    ControlRequest,
-    HumanMessage,
-    InjectEventRequest,
-    SpawnAgentRequest,
-)
-from src.interfaces.interaction_commands import InteractionContext
+from src.interfaces.interaction_commands import InteractionEnvelope
 from src.interfaces.interaction_policy import (
     check_command_rate_limit,
     has_admin_permission,
@@ -705,15 +699,10 @@ class SimulationDiscordBot:
                     if user_id and channel_id:
                         self.user_channels[str(user_id)] = channel_id
                         self.last_user_id = str(user_id)
-                    explicit_recipient, explicit_broadcast, parsed_content, validation_error = (
-                        _parse_human_message_routing(content)
-                    )
-                    if validation_error:
-                        await send_channel_message(channel, content=validation_error)
-                        return
+                    parsed_content = content.strip()
                     if not parsed_content:
                         return
-                    recipient = explicit_recipient or self.channel_to_agent.get(channel_id)
+                    recipient = self.channel_to_agent.get(channel_id)
                     sender = None
                     if user_id:
                         sender = self.user_agents.get(str(user_id))
@@ -727,29 +716,23 @@ class SimulationDiscordBot:
                         return
                     if user_id and sender is None:
                         self.user_agents[str(user_id)] = agent_id
-                    is_broadcast = explicit_broadcast or (
-                        recipient is None and _default_human_message_broadcast()
-                    )
                     self.last_agent_id = agent_id
                     self.last_channel_id = channel_id
                     bus = get_command_bus(self.context)
                     if bus is None:
                         return
                     result = await bus.dispatch(
-                        HumanMessage(
+                        InteractionEnvelope(
+                            intent="human_message",
                             content=parsed_content,
-                            sender_id=str(user_id) if user_id is not None else "human",
-                            channel_id=str(channel_id) if channel_id is not None else None,
-                            source="discord",
-                            broadcast=is_broadcast,
-                            recipient_id=recipient,
-                            target_agent_id=agent_id,
-                        ),
-                        context=InteractionContext(
-                            sender_id=str(user_id) if user_id is not None else "human",
-                            channel_id=str(channel_id) if channel_id is not None else None,
-                            source="discord",
-                        ),
+                            routing={
+                                "sender_id": str(user_id) if user_id is not None else "human",
+                                "channel_id": str(channel_id) if channel_id is not None else None,
+                                "source": "discord",
+                                "recipient_id": recipient,
+                                "target_agent_id": agent_id,
+                            },
+                        )
                     )
                     if result.status != "ok":
                         await send_channel_message(channel, content=result.user_message)
@@ -1363,12 +1346,15 @@ async def slash_pause(interaction: Any) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                ControlRequest(action="pause"),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="pause",
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         await send_interaction_response(interaction, "pause", ephemeral=True)
 
@@ -1381,12 +1367,12 @@ async def slash_resume(interaction: Any) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                ControlRequest(action="resume"),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="resume",
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         await send_interaction_response(interaction, "resume", ephemeral=True)
 
@@ -1402,12 +1388,12 @@ async def slash_pause_all(interaction: Any) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                ControlRequest(action="pause_all"),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="pause_all",
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         await send_interaction_response(interaction, "pause all", ephemeral=True)
 
@@ -1423,12 +1409,13 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                ControlRequest(action="kill_agent", agent_id=agent_id),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="kill_agent",
+                    agent_id=agent_id,
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         await send_interaction_response(interaction, "killed", ephemeral=True)
 
@@ -1465,12 +1452,12 @@ async def slash_start(interaction: Any) -> None:
             if bus is None:
                 raise RuntimeError("command bus unavailable")
             await bus.dispatch(
-                ControlRequest(action="start"),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="start",
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         except Exception as exc:
             if bot_instance is not None:
@@ -1522,12 +1509,12 @@ async def slash_stop(interaction: Any) -> None:
             if bus is None:
                 raise RuntimeError("command bus unavailable")
             await bus.dispatch(
-                ControlRequest(action="stop"),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="stop",
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         except Exception as exc:
             if bot_instance is not None:
@@ -1605,12 +1592,16 @@ async def slash_spawn(
             if bus is None:
                 raise RuntimeError("command bus unavailable")
             await bus.dispatch(
-                SpawnAgentRequest(agent_id=agent_id, **spawn_kwargs),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="spawn",
+                    agent_id=agent_id,
+                    role=spawn_kwargs.get("role"),
+                    persona=spawn_kwargs.get("persona"),
+                    backstory=spawn_kwargs.get("backstory"),
+                    traits=spawn_kwargs.get("traits"),
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         except Exception as exc:
             if bot_instance is not None:
@@ -1663,12 +1654,13 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                ControlRequest(action="set_speed", value=value),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "discord")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                InteractionEnvelope(
+                    intent="control",
+                    action="set_speed",
+                    value=value,
+                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         await send_interaction_response(interaction, f"speed {value}", ephemeral=True)
 
@@ -1696,10 +1688,10 @@ async def slash_kb(interaction: Any, text: str) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                HumanMessage(
-                    content=f"/kb {text}",
-                    sender_id=str(getattr(interaction, "user", "human")),
-                    source="discord",
+                InteractionEnvelope(
+                    intent="knowledge_board",
+                    content=text,
+                    routing={"sender_id": str(getattr(interaction, "user", "human")), "source": "discord"},
                 )
             )
         await send_interaction_response(interaction, "KB entry created", ephemeral=True)
@@ -1720,16 +1712,15 @@ async def slash_event(interaction: Any, text: str) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InjectEventRequest(
+                InteractionEnvelope(
+                    intent="inject_event",
+                    action="inject_event",
                     text=text,
-                    scope="global",
-                    author=str(getattr(interaction, "user", "human")),
-                ),
-                context=InteractionContext(
-                    sender_id=str(getattr(interaction, "user", "human")),
-                    source="discord",
-                    permissions={"admin", "moderator"},
-                ),
+                    prompt="global",
+                    agent_id=str(getattr(interaction, "user", "human")),
+                    routing={"sender_id": str(getattr(interaction, "user", "human")), "source": "discord"},
+                    auth={"permissions": {"admin", "moderator"}},
+                )
             )
         await send_interaction_response(interaction, "event injected", ephemeral=True)
 
