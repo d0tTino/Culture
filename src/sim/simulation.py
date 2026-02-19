@@ -67,6 +67,7 @@ from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol
+from src.sim.knowledge_entry import KnowledgeEntryType
 from src.sim.lifecycle_service import LifecycleService
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
@@ -1151,16 +1152,20 @@ class Simulation:
             explain_why_payload["rag_summary"] = None
 
         # act
-        allowed = await evaluate_policy(action_intent_str)
-        rule_evaluation = governance_rules_engine.evaluate_action(action_intent_str)
-        if not allowed or not rule_evaluation.allowed:
+        policy_allowed = await evaluate_policy(action_intent_str)
+        governance_outcome = governance_rules_engine.pre_action_check(
+            action_intent_str,
+            policy_allowed=policy_allowed,
+        )
+
+        if not governance_outcome.allowed:
             action_intent_str = AgentActionIntent.IDLE.value
             message_content = None
             message_recipient_id = None
             map_action = None
 
-        if rule_evaluation.penalties:
-            for penalty in rule_evaluation.penalties:
+        if governance_outcome.penalties:
+            for penalty in governance_outcome.penalties:
                 current_agent_state.ip = max(
                     0.0, float(current_agent_state.ip) - float(penalty.get("ip", 0.0))
                 )
@@ -1168,31 +1173,33 @@ class Simulation:
                     0.0, float(current_agent_state.du) - float(penalty.get("du", 0.0))
                 )
 
+        governance_audit = governance_rules_engine.post_action_enforcement(
+            governance_outcome,
+            agent_id=agent_id,
+            step=self.current_step,
+        )
+
         if self.knowledge_board:
-            governance_decision = (
-                "rejected"
-                if not allowed or not rule_evaluation.allowed
-                else rule_evaluation.decision
-            )
-            rule_ids = rule_evaluation.violated_rules
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
                     BoardEntry(
                         content_full=(
-                            f"Governance enforcement {governance_decision} for action "
+                            f"Governance enforcement {governance_outcome.outcome} for action "
                             f"'{requested_action_intent}' by {agent_id}"
                         ),
-                        entry_type="governance_decision",
-                        tags=["governance", governance_decision],
+                        entry_type=KnowledgeEntryType.GOVERNANCE_DECISION.value,
+                        tags=["governance", governance_outcome.outcome, governance_outcome.decision],
                         reference_metadata={
-                            "decision": governance_decision,
-                            "rule_ids": rule_ids,
+                            "decision": governance_outcome.decision,
+                            "outcome": governance_outcome.outcome,
+                            "rule_ids": governance_outcome.rule_ids,
                             "provenance": {
                                 "agent_id": agent_id,
                                 "step": self.current_step,
-                                "policy_allowed": allowed,
-                                "rule_reason": rule_evaluation.reason,
-                                "penalties": rule_evaluation.penalties,
+                                "policy_allowed": policy_allowed,
+                                "rule_reason": governance_outcome.reason,
+                                "penalties": governance_outcome.penalties,
+                                "audit": governance_audit,
                             },
                         },
                     ),
@@ -1200,7 +1207,6 @@ class Simulation:
                     self.current_step,
                     self.vector.to_dict(),
                 )
-
         if message_content:
             msg_data = cast(
                 SimulationMessage,
@@ -1278,7 +1284,7 @@ class Simulation:
             message_recipient_id=message_recipient_id,
             mood_before=mood_before,
             mood_after=float(current_agent_state.mood_level),
-            rule_allowed=bool(allowed and rule_evaluation.allowed),
+            rule_allowed=bool(governance_outcome.allowed),
         )
         self.personality_engine.update_traits(current_agent_state, experience_signals)
         self.agents[agent_index].update_state(current_agent_state)
@@ -1326,12 +1332,11 @@ class Simulation:
                     "world_time": self._world_time_snapshot(),
                     "action_intent": action_intent_str,
                     "governance_enforcement": {
-                        "decision": "rejected"
-                        if not allowed or not rule_evaluation.allowed
-                        else rule_evaluation.decision,
-                        "reason": rule_evaluation.reason,
-                        "violated_rules": rule_evaluation.violated_rules,
-                        "penalties": rule_evaluation.penalties,
+                        "decision": governance_outcome.decision,
+                        "outcome": governance_outcome.outcome,
+                        "reason": governance_outcome.reason,
+                        "violated_rules": governance_outcome.rule_ids,
+                        "penalties": governance_outcome.penalties,
                     },
                     "ip": current_agent_state.ip,
                     "du": current_agent_state.du,
@@ -2520,9 +2525,31 @@ class Simulation:
 
         return _get_project_details(self)
 
+    def current_rules(self: Self) -> list[dict[str, Any]]:
+        """Read API for agents/UI: current executable governance rules."""
+        return governance_rules_engine.current_rules()
+
+    def pending_votes(self: Self) -> list[dict[str, Any]]:
+        """Read API for agents/UI: pending governance votes."""
+        return governance_rules_engine.pending_votes()
+
+    def active_offices(self: Self) -> list[dict[str, Any]]:
+        """Read API for agents/UI: active governance offices."""
+        return governance_rules_engine.active_offices()
+
+    def sanctions(self: Self) -> list[dict[str, Any]]:
+        """Read API for agents/UI: sanctions and enforcement records."""
+        return governance_rules_engine.sanctions()
+
     def get_governance_read_model(self: Self) -> dict[str, Any]:
-        """Return governance read models for rules, proposals, consensus, and stances."""
-        read_model: dict[str, Any] = {"rules": governance_rules_engine.active_rules_read_model()}
+        """Return governance read models for rules, voting, offices, sanctions, and stances."""
+        read_model: dict[str, Any] = {
+            "rules": governance_rules_engine.current_rules(),
+            "current_rules": governance_rules_engine.current_rules(),
+            "pending_votes": governance_rules_engine.pending_votes(),
+            "active_offices": governance_rules_engine.active_offices(),
+            "sanctions": governance_rules_engine.sanctions(),
+        }
         board = self.knowledge_board
         if hasattr(board, "get_active_proposals"):
             proposals = board.get_active_proposals(limit=20)
@@ -2538,7 +2565,6 @@ class Simulation:
                 for agent in self.agents
             }
         return read_model
-
     async def propose_law(
         self: Self, proposer_id: str, text: str, vote_weights: dict[str, int] | None = None
     ) -> bool:
