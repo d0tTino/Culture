@@ -141,6 +141,13 @@ class AgentActionIntent(str, Enum):
     BUILD = "build"
 
 
+class AgentLifecycleState(str, Enum):
+    ACTIVE = "active"
+    RETIRED = "retired"
+    DECEASED = "deceased"
+    ARCHIVED = "archived"
+
+
 DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
     AgentActionIntent.IDLE,
     AgentActionIntent.CONTINUE_COLLABORATION,
@@ -286,6 +293,12 @@ class AgentStateData(BaseModel):
     actions_taken_count: int = 0
     age: int = 0
     is_alive: bool = True
+    lifecycle_state: AgentLifecycleState = AgentLifecycleState.ACTIVE
+    lifecycle_history: list[dict[str, Any]] = Field(default_factory=list)
+    legacy_artifacts: dict[str, Any] = Field(default_factory=dict)
+    memory_archival_policy: dict[str, Any] = Field(default_factory=dict)
+    predecessor_id: Optional[str] = None
+    successor_id: Optional[str] = None
     inheritance: float = 0.0
     genes: dict[str, float] = Field(default_factory=_generate_default_genes)
     parent_id: Optional[str] = None

@@ -19,7 +19,11 @@ from pydantic import ValidationError
 from typing_extensions import Self
 
 from src.agents.core.agent_controller import AgentController
-from src.agents.core.agent_state import AgentActionIntent, PersonalityTraits
+from src.agents.core.agent_state import (
+    AgentActionIntent,
+    AgentLifecycleState,
+    PersonalityTraits,
+)
 from src.agents.core.personality_engine import ExperienceSignal, PersonalityEngine
 from src.agents.core.roles import ensure_profile, get_role_trait_template
 from src.agents.memory.memory_service import MemoryService
@@ -63,6 +67,7 @@ from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol
+from src.sim.lifecycle_service import LifecycleService
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
 from src.sim.version_vector import VersionVector
@@ -197,6 +202,7 @@ class Simulation:
         self.total_turns_executed = 0
         self.resource_manager = get_resource_manager()
         self.personality_engine = PersonalityEngine()
+        self.lifecycle_service = LifecycleService()
         self.simulation_complete = False
         self.event_kernel = EventKernel()
         self.vector = VersionVector()
@@ -579,7 +585,19 @@ class Simulation:
                         name=normalized_agent_id,
                         initial_state=initial_state or None,
                     )
-                    await self.spawn_agent(new_agent)
+                    predecessor_id = cmd.get("predecessor_id")
+                    predecessor = None
+                    if isinstance(predecessor_id, str):
+                        predecessor = next(
+                            (a for a in self.agents if a.agent_id == predecessor_id),
+                            None,
+                        )
+                    await self.spawn_agent(
+                        new_agent,
+                        predecessor=predecessor,
+                        inherit_role=bool(cmd.get("inherit_role", True)),
+                        inherit_context=bool(cmd.get("inherit_context", False)),
+                    )
                 except Exception:
                     logger.error("Failed to spawn agent %s", agent_id, exc_info=True)
         elif action == "kill_agent":
@@ -587,7 +605,12 @@ class Simulation:
             if agent_id:
                 agent = next((a for a in self.agents if a.agent_id == str(agent_id)), None)
                 if agent is not None:
-                    await self.retire_agent(agent, remove_from_simulation=True)
+                    await self.retire_agent(
+                        agent,
+                        remove_from_simulation=True,
+                        lifecycle_state=AgentLifecycleState.DECEASED,
+                        reason="kill_agent_command",
+                    )
         elif action == "set_speed":
             try:
                 self.speed = float(getattr(parsed, "value", None) or cmd.get("value", 1))
@@ -729,6 +752,9 @@ class Simulation:
         *,
         inheritance: float = 0.0,
         parent: "Agent | None" = None,
+        predecessor: "Agent | None" = None,
+        inherit_role: bool = True,
+        inherit_context: bool = False,
         mutation_rate: float | None = None,
     ) -> None:
         """Add a new agent to the simulation, inheriting genes with mutation."""
@@ -766,33 +792,88 @@ class Simulation:
             if hasattr(agent.state, "mutate_genes"):
                 agent.state.mutate_genes(mutation_rate)
 
+        if predecessor is not None:
+            succession = self.lifecycle_service.register_successor(
+                predecessor=predecessor,
+                successor=agent,
+                inherit_role=inherit_role,
+                inherit_context=inherit_context,
+            )
+            if self.knowledge_board:
+                async with self.knowledge_board.lock:
+                    self.knowledge_board.add_entry(
+                        BoardEntry(
+                            content_full=(
+                                f"Agent {agent.agent_id} designated successor of "
+                                f"{predecessor.agent_id}"
+                            ),
+                            entry_type="spawn_event",
+                            tags=["population", "succession"],
+                            reference_metadata=succession,
+                        ),
+                        predecessor.agent_id,
+                        self.current_step,
+                        self.vector.to_dict(),
+                    )
+
         self.agents.append(agent)
         await self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
         self._update_collective_metrics()
         ACTIVE_AGENT_COUNT.set(len(self.agents))
 
     async def retire_agent(
-        self: Self, agent: "Agent", *, remove_from_simulation: bool = False
+        self: Self,
+        agent: "Agent",
+        *,
+        remove_from_simulation: bool = False,
+        lifecycle_state: AgentLifecycleState = AgentLifecycleState.RETIRED,
+        reason: str = "",
     ) -> None:
         """Retire an agent, compute inheritance, and optionally remove from simulation."""
-        state = agent.state
-        state.is_alive = False
-        state.inheritance = state.ip + state.du
-        state.ip = 0.0
-        state.du = 0.0
+        transition = self.lifecycle_service.transition(
+            agent=agent,
+            to_state=lifecycle_state,
+            step=self.current_step,
+            reason=reason,
+            projects=self.projects,
+        )
+        lifecycle_event = log_event(
+            {
+                "type": "agent_lifecycle_transition",
+                "step": self.current_step,
+                "agent_id": agent.agent_id,
+                "from_state": transition.from_state.value,
+                "to_state": transition.to_state.value,
+                "reason": reason,
+                "legacy_artifacts": transition.artifacts,
+                "memory_archival_policy": transition.archival_policy,
+            }
+        )
+        if lifecycle_event is not None:
+            await emit_event(SimulationEvent(type="agent_lifecycle_transition", data=lifecycle_event))
+
         if self.knowledge_board:
             async with self.knowledge_board.lock:
                 self.knowledge_board.add_entry(
                     BoardEntry(
-                        content_full=f"Agent {agent.agent_id} retired",
+                        content_full=(
+                            f"Agent {agent.agent_id} transitioned lifecycle "
+                            f"{transition.from_state.value} -> {transition.to_state.value}"
+                        ),
                         entry_type="retirement",
-                        tags=["population", "retirement"],
+                        tags=["population", "retirement", transition.to_state.value],
+                        reference_metadata={
+                            "from_state": transition.from_state.value,
+                            "to_state": transition.to_state.value,
+                            "reason": reason,
+                            "legacy_artifacts": transition.artifacts,
+                        },
                     ),
                     agent.agent_id,
                     self.current_step,
                     self.vector.to_dict(),
                 )
-        agent.update_state(state)
+        agent.update_state(agent.state)
         await self.world_map.remove_agent(agent.agent_id)
         if remove_from_simulation:
             try:
@@ -1282,6 +1363,16 @@ class Simulation:
                         "ip": ag.state.ip,
                         "du": ag.state.du,
                         "mood": ag.state.mood_level,
+                        "lifecycle_state": getattr(
+                            ag.state, "lifecycle_state", AgentLifecycleState.ACTIVE
+                        ).value,
+                        "lifecycle_history": list(getattr(ag.state, "lifecycle_history", [])),
+                        "legacy_artifacts": dict(getattr(ag.state, "legacy_artifacts", {})),
+                        "memory_archival_policy": dict(
+                            getattr(ag.state, "memory_archival_policy", {})
+                        ),
+                        "predecessor_id": getattr(ag.state, "predecessor_id", None),
+                        "successor_id": getattr(ag.state, "successor_id", None),
                     }
                     for ag in self.agents
                 ],
@@ -2204,6 +2295,31 @@ class Simulation:
                         f" event {expected_hash} != file {snapshot.get('trace_hash')}"
                     )
                 self._last_trace_hash = snapshot.get("trace_hash", "")
+        elif event.get("type") == "agent_lifecycle_transition":
+            aid = event.get("agent_id")
+            if not isinstance(aid, str):
+                return
+            for agent in self.agents:
+                if agent.agent_id != aid:
+                    continue
+                to_state_raw = str(event.get("to_state", AgentLifecycleState.ACTIVE.value))
+                to_state = AgentLifecycleState(to_state_raw)
+                history = list(getattr(agent.state, "lifecycle_history", []) or [])
+                history.append(
+                    {
+                        "step": int(event.get("step", self.current_step)),
+                        "from": str(event.get("from_state", "active")),
+                        "to": to_state.value,
+                        "reason": str(event.get("reason", "")),
+                    }
+                )
+                agent.state.lifecycle_state = to_state
+                agent.state.lifecycle_history = history
+                agent.state.legacy_artifacts = dict(event.get("legacy_artifacts") or {})
+                agent.state.memory_archival_policy = dict(
+                    event.get("memory_archival_policy") or {}
+                )
+                break
 
     @classmethod
     def from_snapshot(cls: type[Self], snapshot: dict[str, Any], seed: int | None = None) -> Self:
@@ -2271,6 +2387,16 @@ class Simulation:
                     ag.state.ip = float(a_data.get("ip", 0.0))
                     ag.state.du = float(a_data.get("du", 0.0))
                     ag.state.mood_level = float(a_data.get("mood", 0.0))
+                    ag.state.lifecycle_state = AgentLifecycleState(
+                        str(a_data.get("lifecycle_state", AgentLifecycleState.ACTIVE.value))
+                    )
+                    ag.state.lifecycle_history = list(a_data.get("lifecycle_history", []))
+                    ag.state.legacy_artifacts = dict(a_data.get("legacy_artifacts", {}))
+                    ag.state.memory_archival_policy = dict(
+                        a_data.get("memory_archival_policy", {})
+                    )
+                    ag.state.predecessor_id = a_data.get("predecessor_id")
+                    ag.state.successor_id = a_data.get("successor_id")
                     break
 
         kb = snapshot.get("knowledge_board", {})

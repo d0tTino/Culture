@@ -222,5 +222,30 @@ def test_apply_event_replaces_graph_backend_kb_state(monkeypatch: pytest.MonkeyP
 
     sim.apply_event(event)
 
-    assert sim.knowledge_board.to_dict()["entries"] == event["knowledge_board"]["entries"]
+    restored = sim.knowledge_board.to_dict()["entries"]
+    assert len(restored) == 1
+    assert restored[0]["content_full"] == "graph hello"
+    assert restored[0]["agent_id"] == "A"
     assert sim.knowledge_board.get_state() == ["Step 2 (Agent: A): graph hello"]
+
+
+@pytest.mark.unit
+def test_apply_event_lifecycle_transition_updates_agent_state() -> None:
+    from src.sim.simulation import Simulation
+
+    sim = Simulation([DummyAgent("A")])
+    event = {
+        "type": "agent_lifecycle_transition",
+        "step": 4,
+        "agent_id": "A",
+        "from_state": "active",
+        "to_state": "retired",
+        "reason": "test",
+        "legacy_artifacts": {"kb_summary": "summary"},
+        "memory_archival_policy": {"retain_summaries": True},
+    }
+
+    sim.apply_event(event)
+
+    assert str(sim.agents[0].state.lifecycle_state) == "AgentLifecycleState.RETIRED"
+    assert sim.agents[0].state.legacy_artifacts["kb_summary"] == "summary"
