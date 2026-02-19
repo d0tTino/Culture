@@ -62,6 +62,10 @@ from src.sim.knowledge_board_protocol import (
 )
 from src.sim.knowledge_entry import KnowledgeEntryType
 from src.sim.lifecycle_service import LifecycleService
+from src.sim.persistence.snapshot_migrations import (
+    CURRENT_SNAPSHOT_SCHEMA_VERSION,
+    migrate_snapshot,
+)
 from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 from src.sim.persistence.trace_hash_service import TraceHashService
 from src.sim.quests import generate_quest
@@ -1133,6 +1137,7 @@ class Simulation:
             from src.infra.checkpoint import capture_rng_state
 
             snapshot = {
+                "snapshot_schema_version": CURRENT_SNAPSHOT_SCHEMA_VERSION,
                 "step": self.current_step,
                 "collective_ip": self.collective_ip,
                 "collective_du": self.collective_du,
@@ -2059,6 +2064,8 @@ class Simulation:
         """Create a ``Simulation`` instance from a snapshot dictionary."""
         from src.agents.core.base_agent import Agent  # avoid circular import at module level
 
+        snapshot = migrate_snapshot(snapshot)
+
         agents_data = snapshot.get("agents", [])
         agents = [Agent(agent_id=a.get("agent_id", str(i))) for i, a in enumerate(agents_data)]
         sim_seed = seed if seed is not None else snapshot.get("seed")
@@ -2068,42 +2075,16 @@ class Simulation:
 
             restore_rng_state(snapshot["rng_state"])
         sim.current_step = int(snapshot.get("step", 0))
-        env_snapshot = snapshot.get("environment_state", {})
-        if isinstance(env_snapshot, dict) and env_snapshot:
-            sim.world_hour = int(env_snapshot.get("world_hour", snapshot.get("world_hour", 0)))
-            sim.world_day = int(env_snapshot.get("world_day", snapshot.get("world_day", 0)))
-            sim.world_tick_index = int(
-                env_snapshot.get("world_tick", snapshot.get("world_tick", -1))
-            )
-            world_season_value = env_snapshot.get(
-                "world_season",
-                snapshot.get("world_season", 0 if sim.world_season_length_days else None),
-            )
-            sim.world_season = int(world_season_value) if world_season_value is not None else None
-            sim.environment_state.weather = str(
-                env_snapshot.get("weather", sim.environment_state.weather)
-            )
-            sim.environment_state.season_effects = dict(
-                env_snapshot.get("season_effects", sim.environment_state.season_effects)
-            )
-            sim.environment_state.active_global_modifiers = list(
-                env_snapshot.get(
-                    "active_global_modifiers", sim.environment_state.active_global_modifiers
-                )
-            )
-            sim.environment_state.council_window_active = bool(
-                env_snapshot.get(
-                    "council_window_active", sim.environment_state.council_window_active
-                )
-            )
-        else:
-            sim.world_hour = int(snapshot.get("world_hour", 0))
-            sim.world_day = int(snapshot.get("world_day", 0))
-            sim.world_tick_index = int(snapshot.get("world_tick", -1))
-            world_season = snapshot.get(
-                "world_season", 0 if sim.world_season_length_days else None
-            )
-            sim.world_season = int(world_season) if world_season is not None else None
+        env_snapshot = snapshot["environment_state"]
+        sim.world_hour = int(env_snapshot["world_hour"])
+        sim.world_day = int(env_snapshot["world_day"])
+        sim.world_tick_index = int(env_snapshot["world_tick"])
+        world_season_value = env_snapshot.get("world_season")
+        sim.world_season = int(world_season_value) if world_season_value is not None else None
+        sim.environment_state.weather = str(env_snapshot["weather"])
+        sim.environment_state.season_effects = dict(env_snapshot["season_effects"])
+        sim.environment_state.active_global_modifiers = list(env_snapshot["active_global_modifiers"])
+        sim.environment_state.council_window_active = bool(env_snapshot["council_window_active"])
         snapshot_turn_quantum = int(snapshot.get("turns_per_world_tick", sim.turns_per_world_tick))
         sim.turns_per_world_tick = max(1, snapshot_turn_quantum)
         sim.environment_system.turns_per_world_tick = sim.turns_per_world_tick

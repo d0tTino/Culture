@@ -1,0 +1,42 @@
+{
+  "snapshot_schema_version": 3,
+  "step": 8,
+  "collective_ip": 7.0,
+  "collective_du": 2.0,
+  "agents": [
+    {
+      "agent_id": "agent-2",
+      "ip": 2.1,
+      "du": 0.8,
+      "mood": 0.2,
+      "lifecycle_state": "active",
+      "lifecycle_history": [],
+      "legacy_artifacts": {},
+      "memory_archival_policy": {},
+      "predecessor_id": null,
+      "successor_id": null
+    }
+  ],
+  "seed": 23,
+  "turns_per_world_tick": 3,
+  "environment_state": {
+    "world_tick": 2,
+    "world_hour": 6,
+    "world_day": 3,
+    "world_season": 0,
+    "weather": "clear",
+    "season_effects": {},
+    "active_global_modifiers": [],
+    "council_window_active": false
+  },
+  "knowledge_board": {
+    "entries": []
+  },
+  "world_map": {
+    "width": 12,
+    "height": 8,
+    "agents": {
+      "agent-2": [1, 1]
+    }
+  }
+}

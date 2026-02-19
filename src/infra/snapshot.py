@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
+from src.sim.persistence.snapshot_migrations import CURRENT_SNAPSHOT_SCHEMA_VERSION
 from src.sim.persistence.trace_hash_service import TraceHashService
 from src.utils.paths import ensure_dir
 
@@ -39,6 +40,17 @@ def compute_trace_hash(data: dict[str, Any]) -> str:
     """Backward-compatible trace hash helper; use sim persistence services for new code."""
 
     return TraceHashService.compute(data)
+
+
+def _validate_snapshot_schema_version(data: dict[str, Any]) -> None:
+    version = data.get("snapshot_schema_version")
+    if not isinstance(version, int):
+        raise ValueError("Snapshot schema version is missing or invalid")
+    if version < 1 or version > CURRENT_SNAPSHOT_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported snapshot schema version {version}; "
+            f"supported range is [1, {CURRENT_SNAPSHOT_SCHEMA_VERSION}]"
+        )
 
 
 def _get_s3_client() -> boto3.client:
@@ -97,6 +109,7 @@ def save_snapshot(
         Folder where snapshots will be stored.
     """
     compress = SNAPSHOT_COMPRESS if compress is None else compress
+    _validate_snapshot_schema_version(data)
 
     path = ensure_dir(directory)
 
@@ -175,6 +188,8 @@ def load_snapshot(
     else:
         with file_path.open("r", encoding="utf-8") as f:
             data = cast(dict[str, Any], json.load(f))
+
+    _validate_snapshot_schema_version(data)
 
     expected = data.get("trace_hash")
     if expected is not None:
