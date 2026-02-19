@@ -6,8 +6,6 @@ import asyncio
 import json
 import logging
 import uuid
-from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Any, Generic, SupportsIndex, TypeVar
 
 from typing_extensions import Self
@@ -16,6 +14,11 @@ from src.infra import config
 from src.interfaces import metrics
 from src.shared.telemetry import trace_agent_action
 
+from .knowledge_entry import (
+    KnowledgeEntry,
+    KnowledgeEntryType,
+    migrate_legacy_entry_dict,
+)
 from .version_vector import VersionVector
 
 # Configure logger
@@ -46,50 +49,26 @@ KNOWLEDGE_BOARD_ENTRY_SCHEMA_MUST_NOT_CHANGE: dict[str, tuple[str, ...]] = {
     "metadata_fields": (
         "tags",
         "reference_metadata",
+        "parent_entry_id",
+        "target_agent_id",
+        "project_id",
+        "governance_rule_id",
     ),
 }
 
 
-@dataclass(slots=True)
-class BoardEntry:
-    """Typed payload describing a knowledge board entry."""
-
-    content_full: str
-    entry_type: str
-    content_display: str | None = None
-    content_summary: str | None = None
-    tags: Iterable[str] | None = None
-    reference_metadata: dict[str, Any] | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.content_full, str):
-            raise TypeError("content_full must be a string")
-        if not self.entry_type:
-            raise ValueError("entry_type must be provided")
-
-    def normalized_tags(self) -> list[str]:
-        """Return tags as a list preserving order without duplicates."""
-
-        if self.tags is None:
-            return []
-        seen: set[str] = set()
-        result: list[str] = []
-        for tag in self.tags:
-            if not isinstance(tag, str):
-                continue
-            if tag not in seen:
-                seen.add(tag)
-                result.append(tag)
-        return result
+BoardEntry = KnowledgeEntry
 
 
-_DEFAULT_ENTRY_TYPE = "note"
+_DEFAULT_ENTRY_TYPE = KnowledgeEntryType.NOTE
 
 __all__ = ["BoardEntry", "KnowledgeBoard", "prepare_entry_payload"]
 
 
 def prepare_entry_payload(
-    entry: str | BoardEntry, agent_id: str, step: int
+    entry: str | BoardEntry,
+    agent_id: str,
+    step: int,
 ) -> tuple[str, dict[str, Any]]:
     if isinstance(entry, BoardEntry):
         payload = entry
@@ -104,19 +83,15 @@ def prepare_entry_payload(
         else content_full
     )
     explicit_display = (
-        payload.content_display[:max_length]
-        if isinstance(payload.content_display, str)
-        else None
+        payload.content_display[:max_length] if isinstance(payload.content_display, str) else None
     )
-    display_content = explicit_display or (
-        f"Step {step} (Agent: {agent_id}): {content_full}"
-    )
+    display_content = explicit_display or (f"Step {step} (Agent: {agent_id}): {content_full}")
     tags = payload.normalized_tags()
     reference_metadata = (
-        dict(payload.reference_metadata)
-        if isinstance(payload.reference_metadata, dict)
-        else None
+        dict(payload.reference_metadata) if isinstance(payload.reference_metadata, dict) else None
     )
+
+    entry_type = getattr(payload.entry_type, "value", str(payload.entry_type))
 
     if (
         payload.entry_type == _DEFAULT_ENTRY_TYPE
@@ -130,11 +105,15 @@ def prepare_entry_payload(
         seed_payload: dict[str, Any] = {
             "agent_id": agent_id,
             "step": step,
-            "entry_type": payload.entry_type,
+            "entry_type": entry_type,
             "content_full": content_full,
             "content_summary": content_summary,
             "tags": tags,
             "reference_metadata": reference_metadata,
+            "parent_entry_id": payload.parent_entry_id,
+            "target_agent_id": payload.target_agent_id,
+            "project_id": payload.project_id,
+            "governance_rule_id": payload.governance_rule_id,
         }
         if explicit_display is not None:
             seed_payload["content_display"] = explicit_display
@@ -145,9 +124,13 @@ def prepare_entry_payload(
         "entry_id": entry_id,
         "step": step,
         "agent_id": agent_id,
-        "entry_type": payload.entry_type,
+        "entry_type": entry_type,
         "tags": tags,
         "reference_metadata": reference_metadata,
+        "parent_entry_id": payload.parent_entry_id,
+        "target_agent_id": payload.target_agent_id,
+        "project_id": payload.project_id,
+        "governance_rule_id": payload.governance_rule_id,
         "content_full": content_full,
         "content_display": display_content,
         "content_summary": content_summary,
@@ -206,7 +189,6 @@ class KnowledgeBoard:
         )
         metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
-
     def get_state(self: Self, max_entries: int = 10) -> list[str]:
         """
         Returns the current state of the knowledge board, limited to the most recent entries.
@@ -252,7 +234,9 @@ class KnowledgeBoard:
 
         entries = snapshot.get("entries", [])
         if isinstance(entries, list):
-            self.replace_entries([entry for entry in entries if isinstance(entry, dict)])
+            self.replace_entries(
+                [migrate_legacy_entry_dict(entry) for entry in entries if isinstance(entry, dict)]
+            )
         else:
             self.replace_entries([])
         if isinstance(snapshot.get("vector"), dict):
@@ -397,3 +381,56 @@ class KnowledgeBoard:
             f"KNOWLEDGE_BOARD_DEBUG: Board cleared. Instance ID: {id(self)}. New entries list ID: {id(self.entries)}"
         )
         metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+
+    def get_active_proposals(self: Self, limit: int = 20) -> list[dict[str, Any]]:
+        proposals = [
+            entry
+            for entry in self.entries
+            if entry.get("entry_type") == KnowledgeEntryType.PROPOSAL.value
+        ]
+        return proposals[-limit:]
+
+    def get_consensus_status(self: Self, proposal_id: str) -> dict[str, Any]:
+        votes = [
+            entry
+            for entry in self.entries
+            if entry.get("entry_type") == KnowledgeEntryType.VOTE.value
+            and entry.get("parent_entry_id") == proposal_id
+        ]
+        approvals = 0
+        rejections = 0
+        for vote in votes:
+            approved = bool((vote.get("reference_metadata") or {}).get("approve", False))
+            if approved:
+                approvals += 1
+            else:
+                rejections += 1
+        return {
+            "proposal_id": proposal_id,
+            "approvals": approvals,
+            "rejections": rejections,
+            "consensus": approvals > rejections,
+        }
+
+    def get_agent_stance_history(self: Self, agent_id: str) -> list[dict[str, Any]]:
+        relevant_entries: list[dict[str, Any]] = []
+        for entry in self.entries:
+            if entry.get("agent_id") != agent_id:
+                continue
+            entry_type = entry.get("entry_type")
+            if entry_type not in {
+                KnowledgeEntryType.VOTE.value,
+                KnowledgeEntryType.ENDORSEMENT.value,
+            }:
+                continue
+            relevant_entries.append(
+                {
+                    "step": entry.get("step"),
+                    "entry_id": entry.get("entry_id"),
+                    "entry_type": entry_type,
+                    "parent_entry_id": entry.get("parent_entry_id"),
+                    "target_agent_id": entry.get("target_agent_id"),
+                    "stance": (entry.get("reference_metadata") or {}).get("stance"),
+                }
+            )
+        return sorted(relevant_entries, key=lambda item: int(item.get("step", 0)))

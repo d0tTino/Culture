@@ -27,6 +27,7 @@ from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.governance import evaluate_policy
 from src.governance.rules_engine import governance_rules_engine
+from src.governance.service import governance
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
 from src.infra.event_log import log_event
 from src.infra.ledger import ledger
@@ -225,6 +226,11 @@ class Simulation:
         else:
             self.knowledge_board = KnowledgeBoard()
             logger.info("Simulation initialized with Knowledge Board.")
+
+        governance.attach_knowledge_board(
+            self.knowledge_board,
+            step_provider=lambda: int(self.current_step),
+        )
 
         # Initialize world map and place agents
         self.world_map = WorldMap()
@@ -923,14 +929,21 @@ class Simulation:
         if requested_action_intent == AgentActionIntent.REQUEST_ROLE_CHANGE.value:
             conflict_outcome += 0.1
 
-        task_outcome = 0.2 if action_intent in {
-            AgentActionIntent.PERFORM_DEEP_ANALYSIS.value,
-            AgentActionIntent.PROPOSE_IDEA.value,
-            AgentActionIntent.BUILD.value,
-            AgentActionIntent.GATHER.value,
-        } else 0.0
+        task_outcome = (
+            0.2
+            if action_intent
+            in {
+                AgentActionIntent.PERFORM_DEEP_ANALYSIS.value,
+                AgentActionIntent.PROPOSE_IDEA.value,
+                AgentActionIntent.BUILD.value,
+                AgentActionIntent.GATHER.value,
+            }
+            else 0.0
+        )
 
-        governance_participation = 0.1 if requested_action_intent != AgentActionIntent.IDLE.value else 0.0
+        governance_participation = (
+            0.1 if requested_action_intent != AgentActionIntent.IDLE.value else 0.0
+        )
 
         return ExperienceSignal(
             social_outcome=social_outcome,
@@ -2322,8 +2335,23 @@ class Simulation:
         return _get_project_details(self)
 
     def get_governance_read_model(self: Self) -> dict[str, Any]:
-        """Return active rules with enforcement statistics for governance audits."""
-        return {"rules": governance_rules_engine.active_rules_read_model()}
+        """Return governance read models for rules, proposals, consensus, and stances."""
+        read_model: dict[str, Any] = {"rules": governance_rules_engine.active_rules_read_model()}
+        board = self.knowledge_board
+        if hasattr(board, "get_active_proposals"):
+            proposals = board.get_active_proposals(limit=20)
+            read_model["active_proposals"] = proposals
+            read_model["consensus_status"] = [
+                board.get_consensus_status(str(p.get("entry_id", "")))
+                for p in proposals
+                if p.get("entry_id")
+            ]
+        if hasattr(board, "get_agent_stance_history"):
+            read_model["agent_stance_history"] = {
+                agent.agent_id: board.get_agent_stance_history(agent.agent_id)
+                for agent in self.agents
+            }
+        return read_model
 
     async def propose_law(
         self: Self, proposer_id: str, text: str, vote_weights: dict[str, int] | None = None
@@ -2335,46 +2363,15 @@ class Simulation:
         if proposer is None:
             return False
 
-        if self.knowledge_board:
-            async with self.knowledge_board.lock:
-                self.knowledge_board.add_law_proposal(
-                    text,
-                    proposer_id,
-                    self.current_step,
-                    self.vector.to_dict(),
-                )
-
         result = await governance.propose_law(
             proposer,
             text,
             self.agents,
             vote_weights,
         )
-        approved = bool(result.get("approved"))
-        rule_materialization = result.get("rule_materialization", {})
-        if self.knowledge_board:
-            decision = str(
-                rule_materialization.get("decision", "accepted" if approved else "rejected")
-            )
-            rule_ids = rule_materialization.get("rule_ids", [])
-            async with self.knowledge_board.lock:
-                self.knowledge_board.add_entry(
-                    BoardEntry(
-                        content_full=f"Law {'approved' if approved else 'rejected'}: {text}",
-                        entry_type="proposal_result",
-                        tags=["governance", "result", decision],
-                        reference_metadata={
-                            "decision": decision,
-                            "rule_ids": rule_ids,
-                            "provenance": rule_materialization.get("provenance", {}),
-                        },
-                    ),
-                    proposer_id,
-                    self.current_step,
-                    self.vector.to_dict(),
-                )
-
-        return approved
+        if isinstance(result, bool):
+            return result
+        return bool(result.get("approved"))
 
     async def forward_proposal(self: Self, proposer_id: str, text: str) -> bool:
         """Forward a proposal to :func:`propose_law`."""

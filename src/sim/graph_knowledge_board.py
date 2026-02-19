@@ -17,15 +17,16 @@ except Exception:  # pragma: no cover - handle missing package
             raise RuntimeError("neo4j not installed")
 
 
-try:  # pragma: no cover - optional dependency
-    from neo4j.exceptions import Neo4jError
-except Exception:  # pragma: no cover - handle missing package
-    Neo4jError = Exception
 from typing_extensions import Self
 
 from src.infra import config
 from src.interfaces import metrics
 from src.sim.knowledge_board import BoardEntry, prepare_entry_payload
+from src.sim.knowledge_entry import (
+    KnowledgeEntryType,
+    KnowledgeRelationshipType,
+    migrate_legacy_entry_dict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,7 @@ class GraphKnowledgeBoard:
         self.lock = asyncio.Lock()
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
 
-    # Enable use as a context manager
-    def __enter__(self: Self) -> Self:  # pragma: no cover - convenience
+    def __enter__(self: Self) -> Self:  # pragma: no cover
         return self
 
     def __exit__(
@@ -60,10 +60,9 @@ class GraphKnowledgeBoard:
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
         tb: Any | None,
-    ) -> None:  # pragma: no cover - convenience
+    ) -> None:  # pragma: no cover
         self.close()
 
-    # --- Internal helpers -------------------------------------------------
     def _run(self: Self, query: str, **params: Any) -> list[Any]:
         with self.driver.session() as session:
             result = session.run(query, **params)
@@ -73,14 +72,12 @@ class GraphKnowledgeBoard:
         res = self._run("MATCH (e:KBEntry) RETURN count(e) AS cnt")
         return int(res[0]["cnt"]) if res else 0
 
-    # --- Public API -------------------------------------------------------
     def get_state(self: Self, max_entries: int = 10) -> list[str]:
         records = self._run(
             "MATCH (e:KBEntry) RETURN e ORDER BY e.step DESC LIMIT $limit",
             limit=max_entries,
         )
         entries = [rec["e"] for rec in records]
-        # Return in chronological order like the in-memory board
         entries = list(reversed(entries))
         return [entry["content_display"] for entry in entries]
 
@@ -92,41 +89,33 @@ class GraphKnowledgeBoard:
         return self.to_snapshot()
 
     def to_snapshot(self: Self) -> dict[str, Any]:
-        """Serialize backend state required to restore this board."""
-
         return {"entries": self.get_full_entries()}
 
     def from_snapshot(self: Self, snapshot: dict[str, Any]) -> None:
-        """Restore board state from a serialized snapshot."""
-
         entries = snapshot.get("entries", [])
         if isinstance(entries, list):
-            self.replace_entries([entry for entry in entries if isinstance(entry, dict)])
+            self.replace_entries(
+                [migrate_legacy_entry_dict(entry) for entry in entries if isinstance(entry, dict)]
+            )
         else:
             self.replace_entries([])
 
     def replace_entries(self: Self, entries: list[dict[str, Any]]) -> None:
-        """Replace graph-backed KB entries from a serialized snapshot."""
         self.clear_board()
         for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            props = dict(entry)
+            props = migrate_legacy_entry_dict(entry)
             agent_id = str(props.get("agent_id", "unknown"))
-            entry_type = str(props.get("entry_type", "note"))
             self._run(
                 """
                 MERGE (a:Agent {agent_id: $agent_id})
                 CREATE (e:KBEntry)
                 SET e = $props
-                SET e.entry_type = $entry_type
                 MERGE (a)-[:AUTHORED]->(e)
                 """,
                 agent_id=agent_id,
                 props=props,
-                entry_type=entry_type,
             )
-            self._create_reference_links(str(props.get("entry_id", "")), props.get("reference_metadata"))
+            self._create_typed_relationships(agent_id=agent_id, props=props)
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
 
     def get_recent_entries_for_prompt(
@@ -173,35 +162,70 @@ class GraphKnowledgeBoard:
             MERGE (a:Agent {agent_id: $agent_id})
             CREATE (e:KBEntry)
             SET e = $props
-            SET e.entry_type = $entry_type
             MERGE (a)-[:AUTHORED]->(e)
             """,
             agent_id=agent_id,
             props=props,
-            entry_type=props["entry_type"],
         )
-        self._create_reference_links(entry_id, props.get("reference_metadata"))
+        self._create_typed_relationships(agent_id=agent_id, props=props)
         metrics.KNOWLEDGE_BOARD_SIZE.set(self._count_entries())
         logger.info(
-            "GraphKnowledgeBoard: Added entry %s by %s at step %s",
-            props["entry_id"],
-            agent_id,
-            step,
+            "GraphKnowledgeBoard: Added entry %s by %s at step %s", entry_id, agent_id, step
         )
         return True
 
-    def record_vote(
-        self: Self,
-        *,
-        voter_agent_id: str,
-        proposal_id: str,
-        approve: bool,
-    ) -> None:
+    def _create_typed_relationships(self: Self, *, agent_id: str, props: dict[str, Any]) -> None:
+        entry_id = str(props.get("entry_id", ""))
+        parent_entry_id = props.get("parent_entry_id")
+        if parent_entry_id:
+            relation = KnowledgeRelationshipType.AMENDS.value
+            relationship_hint = (
+                (props.get("reference_metadata") or {}).get("relationship") or ""
+            ).lower()
+            if relationship_hint == "supersedes":
+                relation = KnowledgeRelationshipType.SUPERCEDES.value
+            self._run(
+                f"""
+                MATCH (source:KBEntry {{entry_id: $entry_id}})
+                MATCH (target:KBEntry {{entry_id: $target_id}})
+                MERGE (source)-[:{relation}]->(target)
+                """,
+                entry_id=entry_id,
+                target_id=str(parent_entry_id),
+            )
+
+        if props.get("entry_type") == KnowledgeEntryType.VOTE.value and parent_entry_id:
+            approve = bool((props.get("reference_metadata") or {}).get("approve", False))
+            self._run(
+                """
+                MERGE (a:Agent {agent_id: $agent_id})
+                MATCH (p:KBEntry {entry_id: $proposal_id})
+                MERGE (a)-[v:VOTED]->(p)
+                SET v.approve = $approve, v.vote_entry_id = $vote_entry_id
+                """,
+                agent_id=agent_id,
+                proposal_id=str(parent_entry_id),
+                approve=approve,
+                vote_entry_id=entry_id,
+            )
+
+        if props.get("entry_type") == KnowledgeEntryType.ENDORSEMENT.value and parent_entry_id:
+            self._run(
+                """
+                MERGE (a:Agent {agent_id: $agent_id})
+                MATCH (target:KBEntry {entry_id: $target_id})
+                MERGE (a)-[:ENDORSED]->(target)
+                """,
+                agent_id=agent_id,
+                target_id=str(parent_entry_id),
+            )
+
+    def record_vote(self: Self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None:
         self._run(
             """
             MERGE (a:Agent {agent_id: $voter_agent_id})
             MATCH (p:KBEntry {entry_id: $proposal_id})
-            MERGE (a)-[v:VOTED {proposal_id: $proposal_id}]->(p)
+            MERGE (a)-[v:VOTED]->(p)
             SET v.approve = $approve
             """,
             voter_agent_id=voter_agent_id,
@@ -233,8 +257,8 @@ class GraphKnowledgeBoard:
         records = self._run(
             """
             MATCH (i:KBEntry {entry_type: 'idea'})
-            OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(i)
-            WITH i, count(v) AS endorsements
+            OPTIONAL MATCH (:Agent)-[e:ENDORSED]->(i)
+            WITH i, count(e) AS endorsements
             WHERE endorsements >= $min_endorsements
             RETURN i AS entry, endorsements
             ORDER BY endorsements DESC, i.step DESC
@@ -244,10 +268,7 @@ class GraphKnowledgeBoard:
             limit=limit,
         )
         return [
-            {
-                **dict(record["entry"]),
-                "endorsement_count": int(record["endorsements"]),
-            }
+            {**dict(record["entry"]), "endorsement_count": int(record["endorsements"])}
             for record in records
         ]
 
@@ -265,25 +286,62 @@ class GraphKnowledgeBoard:
         )
         return [dict(record) for record in records]
 
-    def _create_reference_links(self: Self, entry_id: str, reference_metadata: Any) -> None:
-        if not isinstance(reference_metadata, dict):
-            return
-        references = reference_metadata.get("references")
-        if not isinstance(references, list):
-            return
-        normalized_references = [str(reference_id) for reference_id in references if reference_id]
-        if not normalized_references:
-            return
-        self._run(
+    def get_active_proposals(self: Self, limit: int = 20) -> list[dict[str, Any]]:
+        records = self._run(
             """
-            MATCH (source:KBEntry {entry_id: $entry_id})
-            UNWIND $references AS target_id
-            MATCH (target:KBEntry {entry_id: target_id})
-            MERGE (source)-[:REFERENCES]->(target)
+            MATCH (p:KBEntry {entry_type: 'proposal'})
+            WHERE NOT EXISTS { MATCH (:KBEntry)-[:SUPERCEDES]->(p) }
+            RETURN p AS proposal
+            ORDER BY p.step DESC
+            LIMIT $limit
             """,
-            entry_id=entry_id,
-            references=normalized_references,
+            limit=limit,
         )
+        return [dict(record["proposal"]) for record in records]
+
+    def get_consensus_status(self: Self, proposal_id: str) -> dict[str, Any]:
+        records = self._run(
+            """
+            MATCH (p:KBEntry {entry_id: $proposal_id})
+            OPTIONAL MATCH (:Agent)-[v:VOTED]->(p)
+            WITH p, sum(CASE WHEN v.approve THEN 1 ELSE 0 END) AS approvals,
+                 sum(CASE WHEN v.approve THEN 0 ELSE 1 END) AS rejections
+            RETURN p.entry_id AS proposal_id, approvals, rejections
+            """,
+            proposal_id=proposal_id,
+        )
+        if not records:
+            return {
+                "proposal_id": proposal_id,
+                "approvals": 0,
+                "rejections": 0,
+                "consensus": False,
+            }
+        row = records[0]
+        approvals = int(row["approvals"] or 0)
+        rejections = int(row["rejections"] or 0)
+        return {
+            "proposal_id": row["proposal_id"],
+            "approvals": approvals,
+            "rejections": rejections,
+            "consensus": approvals > rejections,
+        }
+
+    def get_agent_stance_history(self: Self, agent_id: str) -> list[dict[str, Any]]:
+        records = self._run(
+            """
+            MATCH (a:Agent {agent_id: $agent_id})-[:AUTHORED]->(e:KBEntry)
+            WHERE e.entry_type IN ['vote', 'endorsement']
+            RETURN e.entry_id AS entry_id,
+                   e.step AS step,
+                   e.entry_type AS entry_type,
+                   e.parent_entry_id AS parent_entry_id,
+                   e.target_agent_id AS target_agent_id
+            ORDER BY e.step ASC
+            """,
+            agent_id=agent_id,
+        )
+        return [dict(record) for record in records]
 
     def _get_endorsement_count(self: Self, entry_id: str) -> int:
         if not entry_id:
@@ -291,7 +349,7 @@ class GraphKnowledgeBoard:
         records = self._run(
             """
             MATCH (e:KBEntry {entry_id: $entry_id})
-            OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(e)
+            OPTIONAL MATCH (:Agent)-[v:ENDORSED]->(e)
             RETURN count(v) AS endorsements
             """,
             entry_id=entry_id,
@@ -308,7 +366,7 @@ class GraphKnowledgeBoard:
         return self.add_entry(
             BoardEntry(
                 content_full=f"Law proposed: {proposal}",
-                entry_type="proposal",
+                entry_type=KnowledgeEntryType.PROPOSAL,
                 tags=["governance", "proposal"],
             ),
             agent_id,
@@ -321,8 +379,6 @@ class GraphKnowledgeBoard:
         metrics.KNOWLEDGE_BOARD_SIZE.set(0)
 
     def close(self: Self) -> None:
-        """Close the underlying Neo4j driver."""
-        try:
-            self.driver.close()
-        except Neo4jError as exc:  # pragma: no cover - defensive
-            logger.exception("GraphKnowledgeBoard: failed to close driver: %s", exc)
+        close_fn = getattr(self.driver, "close", None)
+        if callable(close_fn):
+            close_fn()

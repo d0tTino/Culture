@@ -8,6 +8,7 @@ import pytest
 
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
 from src.sim.knowledge_board import BoardEntry
+from src.sim.knowledge_entry import KnowledgeEntryType
 
 pytestmark = pytest.mark.unit
 
@@ -29,7 +30,7 @@ class MockSession:
             limit = params["limit"]
             entries = list(reversed(self.driver.entries))[:limit]
             return DummyResult([{"e": e} for e in entries])
-        if "OPTIONAL MATCH (:Agent)-[v:VOTED {approve: true}]->(e)" in query:
+        if "RETURN count(v) AS endorsements" in query:
             return DummyResult(
                 [{"endorsements": self.driver.endorsements.get(params["entry_id"], 0)}]
             )
@@ -49,6 +50,12 @@ class MockSession:
             )
         if "RETURN a.agent_id AS agent_id" in query:
             return DummyResult(self.driver.contribution_rows)
+        if "RETURN p AS proposal" in query:
+            return DummyResult([{"proposal": p} for p in self.driver.active_proposals])
+        if "RETURN p.entry_id AS proposal_id, approvals, rejections" in query:
+            return DummyResult([self.driver.consensus_row])
+        if "WHERE e.entry_type IN ['vote', 'endorsement']" in query:
+            return DummyResult(self.driver.stance_rows)
         if "DETACH DELETE" in query:
             self.driver.entries.clear()
             self.driver.entry_count = 0
@@ -75,6 +82,13 @@ class MockDriver:
         self.proposal_support: dict[str, int] = {}
         self.idea_endorsements: list[tuple[dict[str, Any], int]] = []
         self.contribution_rows: list[dict[str, Any]] = []
+        self.active_proposals: list[dict[str, Any]] = []
+        self.consensus_row: dict[str, Any] = {
+            "proposal_id": "",
+            "approvals": 0,
+            "rejections": 0,
+        }
+        self.stance_rows: list[dict[str, Any]] = []
         self.closed = False
 
     def session(self) -> MockSession:
@@ -84,15 +98,16 @@ class MockDriver:
         self.closed = True
 
 
-def test_add_entry_creates_agent_authorship_and_reference_links() -> None:
+def test_add_entry_creates_authored_and_typed_links() -> None:
     driver = MockDriver()
     board = GraphKnowledgeBoard(driver=driver)
 
     board.add_entry(
         BoardEntry(
-            content_full="new idea",
-            entry_type="idea",
-            reference_metadata={"references": ["proposal-1"]},
+            content_full="approve proposal",
+            entry_type=KnowledgeEntryType.VOTE,
+            parent_entry_id="proposal-1",
+            reference_metadata={"approve": True},
         ),
         agent_id="agent-1",
         step=2,
@@ -100,14 +115,17 @@ def test_add_entry_creates_agent_authorship_and_reference_links() -> None:
 
     queries = [query for query, _ in driver.calls]
     assert any("MERGE (a:Agent" in query and "[:AUTHORED]" in query for query in queries)
-    assert any("MERGE (source)-[:REFERENCES]->(target)" in query for query in queries)
+    assert any("MERGE (source)-[:AMENDS]->(target)" in query for query in queries)
+    assert any("MERGE (a)-[v:VOTED]->(p)" in query for query in queries)
 
 
 def test_query_helpers_and_prompt_relationship_summary() -> None:
     driver = MockDriver()
     board = GraphKnowledgeBoard(driver=driver)
 
-    board.add_entry(BoardEntry(content_full="proposal", entry_type="proposal"), "agent-1", 1)
+    board.add_entry(
+        BoardEntry(content_full="proposal", entry_type=KnowledgeEntryType.PROPOSAL), "agent-1", 1
+    )
     proposal_id = driver.entries[0]["entry_id"]
 
     driver.proposal_support = {proposal_id: 3}
@@ -116,6 +134,11 @@ def test_query_helpers_and_prompt_relationship_summary() -> None:
         {"agent_id": "agent-1", "entry_id": proposal_id, "entry_type": "proposal", "step": 1}
     ]
     driver.endorsements[proposal_id] = 3
+    driver.active_proposals = [{"entry_id": proposal_id, "entry_type": "proposal"}]
+    driver.consensus_row = {"proposal_id": proposal_id, "approvals": 3, "rejections": 1}
+    driver.stance_rows = [
+        {"entry_id": "v1", "step": 2, "entry_type": "vote", "parent_entry_id": proposal_id}
+    ]
 
     board.record_vote(voter_agent_id="agent-2", proposal_id=proposal_id, approve=True)
 
@@ -126,6 +149,11 @@ def test_query_helpers_and_prompt_relationship_summary() -> None:
     assert board.get_agent_contribution_graph() == [
         {"agent_id": "agent-1", "entry_id": proposal_id, "entry_type": "proposal", "step": 1}
     ]
+    assert board.get_active_proposals(limit=5) == [
+        {"entry_id": proposal_id, "entry_type": "proposal"}
+    ]
+    assert board.get_consensus_status(proposal_id)["consensus"] is True
+    assert board.get_agent_stance_history("agent-2") == driver.stance_rows
 
     prompt_entries = board.get_recent_entries_for_prompt(
         max_entries=1,
