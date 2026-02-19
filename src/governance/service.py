@@ -196,6 +196,7 @@ class GovernanceService:
         no_weight = sum(w for w, v in zip(weights, votes) if not v)
         approved = yes_weight > no_weight
         if approved:
+            # Keep legacy law board synced while canonical state lives in governance_rules_engine.
             law_board.add_law(text)
         outcome: dict[str, float | bool | dict[str, Any] | str] = {
             "approved": approved,
@@ -204,7 +205,7 @@ class GovernanceService:
             "ip_spent": ip_spent,
             "proposal_entry_id": proposal_entry_id,
         }
-        rule_materialization = governance_rules_engine.materialize_from_proposal(
+        rule_materialization = governance_rules_engine.proposal_workflow(
             text,
             proposer_id=proposer.agent_id,
             approved=approved,

@@ -49,6 +49,20 @@ class RuleEvaluationResult:
     penalties: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class GovernanceDecisionOutcome:
+    """Structured governance decision returned for agent action execution."""
+
+    outcome: str
+    decision: str
+    allowed: bool
+    action_intent: str
+    rule_ids: list[str] = field(default_factory=list)
+    reason: str | None = None
+    penalties: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class RulesEngine:
     """Materializes accepted proposals into executable action constraints."""
 
@@ -61,9 +75,19 @@ class RulesEngine:
         r"(?P<amount>[0-9]+(?:\.[0-9]+)?)\s*(?P<unit>ip|du)",
         flags=re.IGNORECASE,
     )
+    _REQUIRE_VOTE_PATTERN = re.compile(
+        r"(?:^|\b)(?:require\s+vote|vote\s+required|regulate)\s+(?:for\s+)?(?P<action>[a-z_\-\s]+)",
+        flags=re.IGNORECASE,
+    )
 
     def __init__(self) -> None:
         self._active_rules: dict[str, GovernanceRule] = {}
+        self._governance_state: dict[str, Any] = {
+            "passed_laws": [],
+            "pending_votes": [],
+            "active_offices": [],
+            "sanctions": [],
+        }
 
     @staticmethod
     def _normalize_action(action: str) -> str:
@@ -123,6 +147,19 @@ class RulesEngine:
             )
             materialized.append(rule)
 
+        vote_match = self._REQUIRE_VOTE_PATTERN.search(text)
+        if vote_match:
+            action = self._normalize_action(vote_match.group("action"))
+            rule = GovernanceRule(
+                rule_id=self._rule_id(f"vote:{text}", decided_at),
+                source_text=text,
+                action_intent=action,
+                effective_date=decided_at,
+                decision_mode="vote_required",
+                provenance=provenance,
+            )
+            materialized.append(rule)
+
         ban_match = self._BAN_PATTERN.search(text)
         if ban_match:
             action = self._normalize_action(ban_match.group("action"))
@@ -160,6 +197,7 @@ class RulesEngine:
         """Evaluate ``action_intent`` against active executable rules."""
         normalized_action = self._normalize_action(action_intent or "idle")
         denials: list[str] = []
+        vote_required: list[str] = []
         penalties: list[dict[str, Any]] = []
 
         for rule in self._active_rules.values():
@@ -170,6 +208,10 @@ class RulesEngine:
             if rule.decision_mode == "deny":
                 rule.enforcement_stats["rejected"] += 1
                 denials.append(rule.rule_id)
+                continue
+
+            if rule.decision_mode == "vote_required":
+                vote_required.append(rule.rule_id)
                 continue
 
             if rule.decision_mode == "penalize":
@@ -192,6 +234,14 @@ class RulesEngine:
                 reason="blocked_by_governance_rule",
             )
 
+        if vote_required:
+            return RuleEvaluationResult(
+                allowed=False,
+                decision="vote_required",
+                violated_rules=vote_required,
+                reason="action_requires_governance_vote",
+            )
+
         if penalties:
             return RuleEvaluationResult(
                 allowed=True,
@@ -209,6 +259,140 @@ class RulesEngine:
             decision="accepted",
             violated_rules=[],
         )
+
+    def pre_action_check(self, action_intent: str, *, policy_allowed: bool = True) -> GovernanceDecisionOutcome:
+        """Return structured governance eligibility before side effects are committed."""
+        normalized_action = self._normalize_action(action_intent or "idle")
+        if not policy_allowed:
+            return GovernanceDecisionOutcome(
+                outcome="blocked",
+                decision="policy_denied",
+                allowed=False,
+                action_intent=normalized_action,
+                reason="blocked_by_policy",
+            )
+
+        evaluation = self.evaluate_action(normalized_action)
+        if not evaluation.allowed:
+            mapped_outcome = "needs_vote" if evaluation.decision == "vote_required" else "blocked"
+            return GovernanceDecisionOutcome(
+                outcome=mapped_outcome,
+                decision=evaluation.decision,
+                allowed=False,
+                action_intent=normalized_action,
+                rule_ids=evaluation.violated_rules,
+                reason=evaluation.reason,
+                penalties=evaluation.penalties,
+            )
+
+        if evaluation.penalties:
+            return GovernanceDecisionOutcome(
+                outcome="allowed_with_cost",
+                decision=evaluation.decision,
+                allowed=True,
+                action_intent=normalized_action,
+                rule_ids=evaluation.violated_rules,
+                reason=evaluation.reason,
+                penalties=evaluation.penalties,
+            )
+
+        return GovernanceDecisionOutcome(
+            outcome="allowed",
+            decision=evaluation.decision,
+            allowed=True,
+            action_intent=normalized_action,
+            reason=evaluation.reason,
+        )
+
+    def proposal_workflow(
+        self,
+        proposal_text: str,
+        *,
+        proposer_id: str,
+        approved: bool,
+        proposal_record: dict[str, Any] | None = None,
+        effective_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Canonical governance proposal workflow including state store updates."""
+        materialization = self.materialize_from_proposal(
+            proposal_text,
+            proposer_id=proposer_id,
+            approved=approved,
+            proposal_record=proposal_record,
+            effective_date=effective_date,
+        )
+        decided_at = str(materialization.get("effective_date") or datetime.now(timezone.utc).isoformat())
+        if approved:
+            self.record_passed_law(
+                proposal_text,
+                proposer_id=proposer_id,
+                effective_date=decided_at,
+                proposal_record=proposal_record,
+            )
+        else:
+            self._governance_state["pending_votes"].append(
+                {
+                    "proposal_text": proposal_text,
+                    "proposer_id": proposer_id,
+                    "status": "rejected",
+                    "effective_date": decided_at,
+                }
+            )
+        return materialization
+
+    def post_action_enforcement(
+        self,
+        outcome: GovernanceDecisionOutcome,
+        *,
+        agent_id: str,
+        step: int,
+    ) -> dict[str, Any]:
+        """Apply post-action consequences and return an audit record."""
+        record = {
+            "agent_id": agent_id,
+            "step": int(step),
+            "action_intent": outcome.action_intent,
+            "outcome": outcome.outcome,
+            "decision": outcome.decision,
+            "rule_ids": list(outcome.rule_ids),
+            "reason": outcome.reason,
+            "penalties": list(outcome.penalties),
+        }
+        if outcome.outcome in {"blocked", "needs_vote", "allowed_with_cost"}:
+            self._governance_state["sanctions"].append(record)
+        return record
+
+    def record_passed_law(
+        self,
+        text: str,
+        *,
+        proposer_id: str,
+        effective_date: str,
+        proposal_record: dict[str, Any] | None = None,
+    ) -> None:
+        entry = {
+            "text": text,
+            "proposer_id": proposer_id,
+            "effective_date": effective_date,
+        }
+        if proposal_record:
+            entry["proposal_record"] = proposal_record
+        self._governance_state["passed_laws"].append(entry)
+
+    def current_rules(self) -> list[dict[str, Any]]:
+        return self.active_rules_read_model()
+
+    def pending_votes(self) -> list[dict[str, Any]]:
+        return list(self._governance_state["pending_votes"])
+
+    def active_offices(self) -> list[dict[str, Any]]:
+        return list(self._governance_state["active_offices"])
+
+    def sanctions(self) -> list[dict[str, Any]]:
+        return list(self._governance_state["sanctions"])
+
+    def passed_laws(self) -> list[str]:
+        return [str(item.get("text", "")) for item in self._governance_state["passed_laws"]]
 
     def active_rules_read_model(self) -> list[dict[str, Any]]:
         """Return active rules and their enforcement statistics."""
@@ -229,6 +413,7 @@ class RulesEngine:
 governance_rules_engine = RulesEngine()
 
 __all__ = [
+    "GovernanceDecisionOutcome",
     "GovernanceRule",
     "RuleEvaluationResult",
     "RulePenalty",

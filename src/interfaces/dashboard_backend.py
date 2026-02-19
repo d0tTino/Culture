@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, Final, cast
 from opentelemetry import trace
 from pydantic import BaseModel
 
-from src.governance.law_board import law_board
 from src.governance.rules_engine import governance_rules_engine
 from src.governance.service import governance
 from src.infra import event_log
@@ -231,6 +230,10 @@ class ProposalsResponse(BaseModel):
 
 class GovernanceReadModelResponse(BaseModel):
     rules: list[dict[str, Any]]
+    current_rules: list[dict[str, Any]] = []
+    pending_votes: list[dict[str, Any]] = []
+    active_offices: list[dict[str, Any]] = []
+    sanctions: list[dict[str, Any]] = []
 
 
 class VoteRequest(BaseModel):
@@ -674,15 +677,46 @@ async def api_get_gov() -> Response:
     if sim is not None and hasattr(sim, "get_governance_read_model"):
         model = cast(dict[str, Any], sim.get_governance_read_model())
         return JSONResponse(model)
-    return JSONResponse({"rules": governance_rules_engine.active_rules_read_model()})
+    return JSONResponse({
+        "rules": governance_rules_engine.current_rules(),
+        "current_rules": governance_rules_engine.current_rules(),
+        "pending_votes": governance_rules_engine.pending_votes(),
+        "active_offices": governance_rules_engine.active_offices(),
+        "sanctions": governance_rules_engine.sanctions(),
+    })
 
 
 @app.get("/api/laws", response_model=LawsResponse)
 async def api_get_laws() -> Response:
-    """Return passed laws from the law board."""
+    """Return passed laws from the canonical governance state store."""
 
-    laws = law_board.get_laws()
-    return JSONResponse({"laws": laws})
+    return JSONResponse({"laws": governance_rules_engine.passed_laws()})
+
+
+
+
+@app.get("/api/gov/current_rules")
+async def api_current_rules() -> Response:
+    """Return current executable governance rules."""
+    return JSONResponse({"current_rules": governance_rules_engine.current_rules()})
+
+
+@app.get("/api/gov/pending_votes")
+async def api_pending_votes() -> Response:
+    """Return pending governance vote records."""
+    return JSONResponse({"pending_votes": governance_rules_engine.pending_votes()})
+
+
+@app.get("/api/gov/active_offices")
+async def api_active_offices() -> Response:
+    """Return currently active governance offices."""
+    return JSONResponse({"active_offices": governance_rules_engine.active_offices()})
+
+
+@app.get("/api/gov/sanctions")
+async def api_sanctions() -> Response:
+    """Return active sanctions and post-action enforcement records."""
+    return JSONResponse({"sanctions": governance_rules_engine.sanctions()})
 
 
 @app.get("/api/votes", response_model=VotesResponse)
@@ -1143,8 +1177,10 @@ __all__ = [
     "VoteRecord",
     "VoteRequest",
     "VotesResponse",
+    "api_active_offices",
     "api_agent_stats",
     "api_auctions",
+    "api_current_rules",
     "api_flagged_messages",
     "api_get_gov",
     "api_get_laws",
@@ -1155,8 +1191,10 @@ __all__ = [
     "api_memory_snapshot",
     "api_memory_snapshots",
     "api_misbehavior",
+    "api_pending_votes",
     "api_propose_law",
     "api_recent_proposals",
+    "api_sanctions",
     "api_stake_ip",
     "api_token_balances",
     "api_vote",
