@@ -22,10 +22,8 @@ from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import (
     AgentActionIntent,
     AgentLifecycleState,
-    PersonalityTraits,
 )
 from src.agents.core.personality_engine import ExperienceSignal, PersonalityEngine
-from src.agents.core.roles import ensure_profile, get_role_trait_template
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
@@ -37,17 +35,12 @@ from src.infra.event_log import log_event
 from src.infra.ledger import ledger
 from src.infra.llm_client import get_llm_client
 from src.infra.logging_config import setup_logging
-from src.infra.snapshot import (
-    compute_trace_hash,
-    load_snapshot,
-    save_snapshot,
-    upload_snapshot,
-)
 from src.interfaces.command_bus import CommandBus, parse_bus_command
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
 )
+from src.interfaces.discord_event_listener import DiscordSimulationEventListener
 from src.interfaces.interaction_commands import InteractionContext, InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
@@ -56,6 +49,8 @@ from src.interfaces.metrics import (
 )
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
+from src.sim.control_service import SimulationControlService
+from src.sim.engine import SimulationEngine
 from src.sim.environment import EnvironmentState, EnvironmentSystem
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
@@ -63,6 +58,8 @@ from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
 from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol
 from src.sim.knowledge_entry import KnowledgeEntryType
 from src.sim.lifecycle_service import LifecycleService
+from src.sim.persistence.snapshot_service import SnapshotPersistenceService
+from src.sim.persistence.trace_hash_service import TraceHashService
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
 from src.sim.version_vector import VersionVector
@@ -308,8 +305,11 @@ class Simulation:
 
         # --- Store Discord bot ---
         self.discord_bot = discord_bot
+        self._discord_listener: DiscordSimulationEventListener | None = None
         if discord_bot:
             logger.info("Simulation initialized with Discord bot for sending updates.")
+            self._discord_listener = DiscordSimulationEventListener(discord_bot)
+            self._discord_listener.start()
         else:
             logger.info(
                 "Simulation initialized without Discord bot. No Discord updates will be sent."
@@ -364,6 +364,8 @@ class Simulation:
         self._event_loop_thread = None
         self.interaction_service = InteractionService(self)
         self.command_bus = CommandBus(self.interaction_service)
+        self.control_service = SimulationControlService(self)
+        self.engine = SimulationEngine(self)
 
         # Automatically start listening for external events when an event loop
         # is already running. This allows tests to enqueue events before calling
@@ -452,219 +454,7 @@ class Simulation:
 
     async def handle_control_command(self: Self, cmd: Mapping[str, Any]) -> dict[str, Any] | None:
         """Process a control command sent via the event queue."""
-        try:
-            parsed = parse_bus_command(cmd)
-        except ValidationError:
-            logger.warning("Invalid control command payload: %s", cmd)
-            return None
-        action = getattr(parsed, "action", None) or str(cmd.get("command", ""))
-        if action == "pause":
-            self.paused = True
-        elif action == "resume":
-            self.paused = False
-        elif action == "pause_all":
-            self.paused = True
-            kernel = getattr(self, "event_kernel", None)
-            if kernel is not None and hasattr(kernel, "pause"):
-                try:
-                    kernel.pause()
-                except Exception:  # pragma: no cover - best effort
-                    logger.debug("Kernel pause failed", exc_info=True)
-        elif action == "start":
-            self.paused = False
-        elif action == "stop":
-            self.simulation_complete = True
-            await self.stop_event_listener()
-        elif action == "spawn":
-            agent_id = getattr(parsed, "agent_id", None) or cmd.get("agent_id")
-            if agent_id:
-                normalized_agent_id = str(agent_id)
-                if any(agent.agent_id == normalized_agent_id for agent in self.agents):
-                    warning_message = (
-                        f"Rejected spawn request for duplicate agent_id '{normalized_agent_id}'."
-                    )
-                    logger.warning(warning_message)
-                    await emit_event(
-                        SimulationEvent(
-                            type="spawn_rejected",
-                            data={
-                                "reason": "duplicate_agent_id",
-                                "agent_id": normalized_agent_id,
-                                "step": self.current_step,
-                            },
-                        )
-                    )
-                    if self.discord_bot:
-                        await self.discord_bot.send_simulation_update(content=warning_message)
-                    return
-                try:
-                    from src.agents.core.base_agent import Agent
-
-                    role_value = (
-                        getattr(parsed, "role", None)
-                        if hasattr(parsed, "role")
-                        else cmd.get("role")
-                    )
-                    role_profile = ensure_profile(role_value) if role_value is not None else None
-
-                    trait_overrides: dict[str, float] | None = None
-                    traits_payload = (
-                        getattr(parsed, "traits", None)
-                        if hasattr(parsed, "traits")
-                        else cmd.get("traits")
-                    )
-                    if traits_payload is not None:
-                        if not isinstance(traits_payload, dict):
-                            raise ValueError("spawn traits must be an object")
-                        valid_traits = set(getattr(PersonalityTraits, "model_fields", {}).keys())
-                        if not valid_traits:
-                            valid_traits = set(getattr(PersonalityTraits, "__fields__", {}).keys())
-                        trait_overrides = {}
-                        for trait_name, raw_value in traits_payload.items():
-                            if str(trait_name) not in valid_traits:
-                                raise ValueError(f"Unknown trait: {trait_name}")
-                            try:
-                                trait_overrides[str(trait_name)] = float(raw_value)
-                            except (TypeError, ValueError) as exc:
-                                raise ValueError(
-                                    f"Invalid trait value for {trait_name}: {raw_value!r}"
-                                ) from exc
-
-                    initial_state: dict[str, Any] = {}
-                    if role_profile is not None:
-                        initial_state["current_role"] = role_profile
-
-                    if trait_overrides is not None:
-                        role_name_for_traits = (
-                            role_profile.name if role_profile is not None else "Innovator"
-                        )
-                        merged_traits = get_role_trait_template(role_name_for_traits)
-                        merged_traits.update(trait_overrides)
-                        initial_state["traits"] = PersonalityTraits(**merged_traits)
-
-                    persona = (
-                        getattr(parsed, "persona", None)
-                        if hasattr(parsed, "persona")
-                        else cmd.get("persona")
-                    )
-                    backstory = (
-                        getattr(parsed, "backstory", None)
-                        if hasattr(parsed, "backstory")
-                        else cmd.get("backstory")
-                    )
-                    if persona is not None:
-                        initial_state["persona"] = str(persona)
-                    if backstory is not None:
-                        initial_state["backstory"] = str(backstory)
-
-                    new_agent = Agent(
-                        agent_id=normalized_agent_id,
-                        name=normalized_agent_id,
-                        initial_state=initial_state or None,
-                    )
-                    predecessor_id = cmd.get("predecessor_id")
-                    predecessor = None
-                    if isinstance(predecessor_id, str):
-                        predecessor = next(
-                            (a for a in self.agents if a.agent_id == predecessor_id),
-                            None,
-                        )
-                    await self.spawn_agent(
-                        new_agent,
-                        predecessor=predecessor,
-                        inherit_role=bool(cmd.get("inherit_role", True)),
-                        inherit_context=bool(cmd.get("inherit_context", False)),
-                    )
-                except Exception:
-                    logger.error("Failed to spawn agent %s", agent_id, exc_info=True)
-        elif action == "kill_agent":
-            agent_id = getattr(parsed, "agent_id", None) or cmd.get("agent_id")
-            if agent_id:
-                agent = next((a for a in self.agents if a.agent_id == str(agent_id)), None)
-                if agent is not None:
-                    await self.retire_agent(
-                        agent,
-                        remove_from_simulation=True,
-                        lifecycle_state=AgentLifecycleState.DECEASED,
-                        reason="kill_agent_command",
-                    )
-        elif action == "set_speed":
-            try:
-                self.speed = float(getattr(parsed, "value", None) or cmd.get("value", 1))
-            except (TypeError, ValueError):
-                pass
-        elif action == "post_kb":
-            text = getattr(parsed, "text", None) or cmd.get("text")
-            author = getattr(parsed, "author", None) or cmd.get("author", "human")
-            if text and self.knowledge_board:
-                async with self.knowledge_board.lock:
-                    self.knowledge_board.add_entry(
-                        BoardEntry(
-                            content_full=text,
-                            entry_type="human_message",
-                            tags=["human", "moderation"],
-                        ),
-                        str(author),
-                        self.current_step,
-                        self.vector.to_dict(),
-                    )
-                if self.discord_bot:
-                    embed = self.discord_bot.create_knowledge_board_embed(
-                        str(author),
-                        text,
-                        self.current_step,
-                    )
-                    task = asyncio.create_task(
-                        self.discord_bot.send_simulation_update(
-                            embed=embed,
-                            agent_id=str(author),
-                        )
-                    )
-                    _ = task
-        elif action == "inject_event":
-            text = str(getattr(parsed, "text", None) or cmd.get("text", "")).strip()
-            if not text:
-                return None
-            author = str(getattr(parsed, "author", None) or cmd.get("author", "human"))
-            scope = str(getattr(parsed, "scope", None) or cmd.get("scope", "global"))
-            event_payload = {
-                "type": "world_event",
-                "author": author,
-                "step": self.current_step,
-                "timestamp": time.time(),
-                "scope": scope,
-                "text": text,
-            }
-            msg: SimulationMessage = {
-                "step": self.current_step,
-                "sender_id": author,
-                "recipient_id": None,
-                "content": f"[World Event] {text}",
-                "action_intent": None,
-                "sentiment_score": None,
-            }
-            async with self._msg_lock:
-                self.pending_messages_for_next_round.append(msg)
-                self.messages_to_perceive_this_round.append(msg)
-            await self.event_kernel.emit_environment_event(event_payload)
-            if self.knowledge_board:
-                async with self.knowledge_board.lock:
-                    self.knowledge_board.add_entry(
-                        BoardEntry(
-                            content_full=text,
-                            entry_type="world_event",
-                            tags=["event", scope],
-                        ),
-                        author,
-                        self.current_step,
-                        self.vector.to_dict(),
-                    )
-
-        return {
-            "paused": self.paused,
-            "speed": self.speed,
-            "simulation_complete": self.simulation_complete,
-        }
+        return await self.control_service.handle_control_command(cmd)
 
     async def mute_agent(self: Self, agent_id: str, *, emit_event: bool = True) -> None:
         from .resources import mute_agent as _mute_agent
@@ -940,7 +730,7 @@ class Simulation:
             event = log_event(payload)
             if event is None:
                 event = {**payload}
-                event["trace_hash"] = compute_trace_hash(payload)
+                event["trace_hash"] = TraceHashService.compute(payload)
             event_name = str(payload.get("event_name", "environment"))
             await emit_event(SimulationEvent(type="environment", data=event))
             if event_name == "world_time":
@@ -1323,7 +1113,7 @@ class Simulation:
                 event = log_event(payload)
                 if event is None:
                     event = {**payload}
-                    event["trace_hash"] = compute_trace_hash(payload)
+                    event["trace_hash"] = TraceHashService.compute(payload)
                 trace_hash = event["trace_hash"]
                 await emit_event(SimulationEvent(type="agent_action", data=event))
             finally:
@@ -1383,10 +1173,10 @@ class Simulation:
                 },
                 "world_map": {k: v for k, v in snapshot["world_map"].items() if k != "vector"},
             }
-            snapshot["trace_hash"] = compute_trace_hash(snapshot_no_vector)
+            snapshot["trace_hash"] = TraceHashService.compute(snapshot_no_vector)
             self._last_trace_hash = snapshot["trace_hash"]
-            save_snapshot(self.current_step, snapshot)
-            upload_snapshot(self.current_step)
+            SnapshotPersistenceService.save(self.current_step, snapshot)
+            SnapshotPersistenceService.upload(self.current_step)
             snapshot_event = log_event({"type": "snapshot", **snapshot})
             await emit_event(SimulationEvent(type="snapshot", data=snapshot_event))
 
@@ -1510,7 +1300,7 @@ class Simulation:
                         eval_event["_target_status"] = target_status
                     if target_alerts:
                         eval_event["_target_alerts"] = target_alerts
-                eval_event["trace_hash"] = compute_trace_hash(eval_event)
+                eval_event["trace_hash"] = TraceHashService.compute(eval_event)
             elif target_summary:
                 # Ensure downstream consumers receive the summary even if the
                 # event log implementation returned a cached payload.
@@ -1670,6 +1460,9 @@ class Simulation:
             except asyncio.CancelledError:  # pragma: no cover - expected
                 pass
             self._event_task = None
+        if self._discord_listener is not None:
+            await self._discord_listener.stop()
+            self._discord_listener = None
 
     def add_evaluation_hook(
         self: Self, hook: Callable[[Self, list[Any]], dict[str, Any] | None]
@@ -1893,61 +1686,8 @@ class Simulation:
         gauge.set(value)
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
-        """Dispatch up to ``max_turns`` events via the kernel."""
-        if not self.agents:
-            logger.warning("No agents in simulation to run.")
-            return 0
-
-        await self.start_event_listener()
-
-        # Queue depth before any step work begins.
-        queue_depth = len(getattr(self.event_kernel, "_queue", []))
-        self._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="queue_pre_step", value=queue_depth)
-
-        if max_turns > 1:
-            # Batch mode uses a deterministic 3-phase pipeline for parallel planning.
-            planned = await self._run_step_pipeline(max_turns=max_turns)
-            if planned:
-                return len(planned)
-
-        if self.event_kernel.empty():
-            self.vector.increment(self.agents[self.current_agent_index].get_id())
-            self.event_kernel.schedule_immediate_nowait(
-                self._create_agent_event(self.current_agent_index),
-                agent_id=self.agents[self.current_agent_index].get_id(),
-                vector=self.vector,
-            )
-        agent_id = self.agents[self.current_agent_index].get_id()
-        with trace_agent_action("tick", agent_id=agent_id, step=self.current_step):
-            events = await self.event_kernel.step(max_turns)
-
-            metrics: dict[str, Any] = {}
-            for hook in self.evaluation_hooks:
-                try:
-                    with tracer.start_as_current_span("simulation.evaluation_hook") as span:
-                        span.set_attribute("hook.name", getattr(hook, "__name__", repr(hook)))
-                        span.set_attribute("simulation.step", self.current_step)
-                        result = hook(self, events) or {}
-                        for key, value in result.items():
-                            span.set_attribute(f"metric.{key}", value)
-                        metrics.update(result)
-                except Exception:
-                    logger.exception("Evaluation hook failed")
-            if metrics:
-                self.metrics.append({"step": self.current_step, **metrics})
-                eval_event = log_event(
-                    {"type": "evaluation", "step": self.current_step, **metrics}
-                )
-                if eval_event is None:
-                    eval_event = {
-                        "type": "evaluation",
-                        "step": self.current_step,
-                        **metrics,
-                    }
-                    eval_event["trace_hash"] = compute_trace_hash(eval_event)
-                await emit_event(SimulationEvent(type="evaluation", data=eval_event))
-
-            return len(events)
+        """Dispatch up to ``max_turns`` events via the deterministic simulation engine."""
+        return await self.engine.run_step(max_turns=max_turns)
 
     def _build_step_perception_snapshot(self: Self, turn_index: int) -> Mapping[str, Any]:
         """Build an immutable perception snapshot for a pipeline tick."""
@@ -2085,7 +1825,7 @@ class Simulation:
             restore_rng_state(rng_state)
         expected_hash = event.get("trace_hash")
         if expected_hash is not None:
-            actual_hash = compute_trace_hash({k: v for k, v in event.items() if k != "trace_hash"})
+            actual_hash = TraceHashService.compute({k: v for k, v in event.items() if k != "trace_hash"})
             if actual_hash != expected_hash:
                 raise ValueError(
                     f"Trace hash mismatch for event at step {event.get('step')}:"
@@ -2269,7 +2009,7 @@ class Simulation:
         elif event.get("type") == "snapshot":
             step = event.get("step")
             if isinstance(step, int):
-                snapshot = load_snapshot(step)
+                snapshot = SnapshotPersistenceService.load(step)
                 if snapshot.get("trace_hash") != expected_hash:
                     raise ValueError(
                         f"Snapshot hash mismatch at step {step}:"
@@ -2405,7 +2145,7 @@ class Simulation:
         events_path: str | Path | None = None,
     ) -> Self:
         """Load a snapshot and replay events from the event log."""
-        snap = load_snapshot(snapshot_path)
+        snap = SnapshotPersistenceService.load(snapshot_path)
         sim = cls.from_snapshot(snap, seed=seed)
         from src.infra import event_log
 

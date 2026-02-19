@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
+from src.sim.persistence.trace_hash_service import TraceHashService
 from src.utils.paths import ensure_dir
 
 from .config import SNAPSHOT_COMPRESS, get_config
@@ -35,6 +35,12 @@ S3_PREFIX = cast(str | None, get_config("S3_PREFIX"))
 _s3_client: boto3.client | None = None
 
 
+def compute_trace_hash(data: dict[str, Any]) -> str:
+    """Backward-compatible trace hash helper; use sim persistence services for new code."""
+
+    return TraceHashService.compute(data)
+
+
 def _get_s3_client() -> boto3.client:
     """Return a boto3 S3 client if available."""
     global _s3_client
@@ -44,12 +50,6 @@ def _get_s3_client() -> boto3.client:
         _s3_client = boto3.client("s3")
     return _s3_client
 
-
-def compute_trace_hash(data: dict[str, Any]) -> str:
-    """Return a stable hash for ``data`` used to verify deterministic replays."""
-
-    payload = json.dumps(data, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
 
 
 def _s3_key(step: int, compress: bool) -> str:
@@ -178,24 +178,19 @@ def load_snapshot(
 
     expected = data.get("trace_hash")
     if expected is not None:
-        # Exclude large or non-deterministic vector fields from hashing to
-        # match the computation performed when the snapshot was created.
         data_no_vector = {k: v for k, v in data.items() if k != "trace_hash"}
         if "knowledge_board" in data_no_vector:
             data_no_vector["knowledge_board"] = {
-                k: v
-                for k, v in data.get("knowledge_board", {}).items()
-                if k != "vector"
+                k: v for k, v in data.get("knowledge_board", {}).items() if k != "vector"
             }
         if "world_map" in data_no_vector:
             data_no_vector["world_map"] = {
-                k: v
-                for k, v in data.get("world_map", {}).items()
-                if k != "vector"
+                k: v for k, v in data.get("world_map", {}).items() if k != "vector"
             }
-        actual = compute_trace_hash(data_no_vector)
+        actual = TraceHashService.compute(data_no_vector)
         if actual != expected:
             raise ValueError(
                 f"Trace hash mismatch for snapshot {step}: expected {expected}, computed {actual}"
             )
+
     return data
