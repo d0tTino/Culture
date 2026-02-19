@@ -20,6 +20,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+ENVELOPE_INTENTS = {
+    "human_message",
+    "direct_message",
+    "broadcast",
+    "knowledge_board",
+    "spawn",
+    "moderation",
+    "control",
+    "inject_event",
+}
+
 
 class InteractionResult(BaseModel):
     status: Literal["ok", "rejected", "error"]
@@ -36,53 +47,49 @@ class InteractionContext(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class BroadcastCommand(BaseModel):
-    command_type: Literal["broadcast"] = "broadcast"
-    content: str
-    budget_agent_id: str | None = None
+class InteractionRouting(BaseModel):
+    sender_id: str = "human"
+    source: str = "unknown"
+    channel_id: str | None = None
     recipient_id: str | None = None
     target_agent_id: str | None = None
 
 
-class DirectMessageCommand(BaseModel):
-    command_type: Literal["direct_message"] = "direct_message"
-    content: str
-    recipient_id: str | None = None
-    target_agent_id: str | None = None
+class InteractionAuthScope(BaseModel):
+    permissions: set[str] = Field(default_factory=set)
+
+
+class InteractionBudgetAttribution(BaseModel):
     budget_agent_id: str | None = None
+    attribution_scope: str = "default"
 
 
-class SpawnAgentCommand(BaseModel):
-    command_type: Literal["spawn"] = "spawn"
-    agent_id: str
-    role: str | dict[str, Any] | None = None
-    persona: str | None = None
-    backstory: str | None = None
-    traits: dict[str, float] | None = None
-
-
-class ModerationCommand(BaseModel):
-    command_type: Literal["moderation"] = "moderation"
-    action: str
+class InteractionEnvelope(BaseModel):
+    intent: Literal[
+        "human_message",
+        "direct_message",
+        "broadcast",
+        "knowledge_board",
+        "spawn",
+        "moderation",
+        "control",
+        "inject_event",
+    ]
+    content: str | None = None
+    action: str | None = None
     value: float | None = None
     tags: list[str] | None = None
     prompt: str | None = None
     text: str | None = None
     agent_id: str | None = None
-
-
-class KnowledgeBoardCommand(BaseModel):
-    command_type: Literal["knowledge_board"] = "knowledge_board"
-    content: str
-
-
-InteractionCommand = (
-    BroadcastCommand
-    | DirectMessageCommand
-    | SpawnAgentCommand
-    | ModerationCommand
-    | KnowledgeBoardCommand
-)
+    role: str | dict[str, Any] | None = None
+    persona: str | None = None
+    backstory: str | None = None
+    traits: dict[str, float] | None = None
+    routing: InteractionRouting = Field(default_factory=InteractionRouting)
+    auth: InteractionAuthScope = Field(default_factory=InteractionAuthScope)
+    budget: InteractionBudgetAttribution = Field(default_factory=InteractionBudgetAttribution)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class InteractionService:
@@ -93,7 +100,7 @@ class InteractionService:
 
     async def execute(
         self,
-        command: InteractionCommand,
+        command: InteractionEnvelope,
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
@@ -102,7 +109,7 @@ class InteractionService:
             SimulationEvent(
                 type="human_command",
                 data={
-                    "command_type": command.command_type,
+                    "command_type": command.intent,
                     "sender_id": ctx.sender_id,
                     "source": ctx.source,
                     "step": self.simulation.current_step,
@@ -110,11 +117,12 @@ class InteractionService:
             )
         )
 
-        if isinstance(command, KnowledgeBoardCommand):
-            return await self._dispatch_knowledge_board(command, context=ctx)
-        if isinstance(command, (BroadcastCommand, DirectMessageCommand)):
-            return await self._dispatch_message(command, context=ctx)
-        if isinstance(command, SpawnAgentCommand):
+        envelope = self._normalize_human_message(command)
+        if envelope.intent == "knowledge_board":
+            return await self._dispatch_knowledge_board(envelope, context=ctx)
+        if envelope.intent in {"broadcast", "direct_message"}:
+            return await self._dispatch_message(envelope, context=ctx)
+        if envelope.intent == "spawn":
             if not context_is_authorized(ctx, required={"admin", "moderator"}):
                 return InteractionResult(
                     status="rejected",
@@ -124,40 +132,40 @@ class InteractionService:
             await self.simulation.handle_control_command(
                 {
                     "command": "spawn",
-                    "agent_id": command.agent_id,
-                    "role": command.role,
-                    "persona": command.persona,
-                    "backstory": command.backstory,
-                    "traits": command.traits,
+                    "agent_id": envelope.agent_id,
+                    "role": envelope.role,
+                    "persona": envelope.persona,
+                    "backstory": envelope.backstory,
+                    "traits": envelope.traits,
                 }
             )
             return InteractionResult(
                 status="ok",
-                user_message=f"Spawn request submitted for {command.agent_id}.",
+                user_message=f"Spawn request submitted for {envelope.agent_id}.",
                 reason_code="spawn_submitted",
             )
-        if isinstance(command, ModerationCommand):
+        if envelope.intent in {"moderation", "control", "inject_event"}:
             if not context_is_authorized(ctx, required={"admin", "moderator"}):
                 return InteractionResult(
                     status="rejected",
                     user_message="You are not authorized to run moderation commands.",
                     reason_code="unauthorized",
                 )
-            payload: dict[str, Any] = {"command": command.action}
-            if command.value is not None:
-                payload["value"] = command.value
-            if command.tags is not None:
-                payload["tags"] = command.tags
-            if command.prompt is not None:
-                payload["prompt"] = command.prompt
-            if command.text is not None:
-                payload["text"] = command.text
-            if command.agent_id is not None:
-                payload["agent_id"] = command.agent_id
-            if command.action == "inject_event" and command.prompt is not None:
-                payload["scope"] = command.prompt
-            if command.action == "inject_event" and command.agent_id is not None:
-                payload["author"] = command.agent_id
+            payload: dict[str, Any] = {"command": envelope.action}
+            if envelope.value is not None:
+                payload["value"] = envelope.value
+            if envelope.tags is not None:
+                payload["tags"] = envelope.tags
+            if envelope.prompt is not None:
+                payload["prompt"] = envelope.prompt
+            if envelope.text is not None:
+                payload["text"] = envelope.text
+            if envelope.agent_id is not None:
+                payload["agent_id"] = envelope.agent_id
+            if envelope.action == "inject_event" and envelope.prompt is not None:
+                payload["scope"] = envelope.prompt
+            if envelope.action == "inject_event" and envelope.agent_id is not None:
+                payload["author"] = envelope.agent_id
             state = await self.simulation.handle_control_command(payload)
             return InteractionResult(
                 status="ok",
@@ -173,11 +181,11 @@ class InteractionService:
 
     async def _dispatch_knowledge_board(
         self,
-        command: KnowledgeBoardCommand,
+        command: InteractionEnvelope,
         *,
         context: InteractionContext,
     ) -> InteractionResult:
-        content = command.content.strip()
+        content = str(command.content or "").strip()
         if not content:
             return InteractionResult(
                 status="rejected",
@@ -225,11 +233,11 @@ class InteractionService:
 
     async def _dispatch_message(
         self,
-        command: BroadcastCommand | DirectMessageCommand,
+        command: InteractionEnvelope,
         *,
         context: InteractionContext,
     ) -> InteractionResult:
-        text = command.content.strip()
+        text = str(command.content or "").strip()
         if not text:
             return InteractionResult(
                 status="rejected",
@@ -275,7 +283,7 @@ class InteractionService:
                 reason_code="no_agents",
             )
 
-        broadcast = isinstance(command, BroadcastCommand)
+        broadcast = command.intent == "broadcast"
         target = self._resolve_target(command)
         budget_agent_id = self._resolve_budget_agent_id(command, target.agent_id)
         budget_agent = next(
@@ -378,7 +386,7 @@ class InteractionService:
                 "target_agent_id": target.agent_id,
                 "budget_agent_id": budget_agent_id,
                 "broadcast": broadcast,
-                "recipient_id": command.recipient_id,
+                "recipient_id": command.routing.recipient_id,
                 "text": text,
                 "ip_cost": ip_cost,
                 "du_cost": du_cost,
@@ -399,23 +407,23 @@ class InteractionService:
             data={"target_agent_id": target.agent_id, "budget_agent_id": budget_agent_id},
         )
 
-    def _resolve_target(self, command: BroadcastCommand | DirectMessageCommand) -> Any:
+    def _resolve_target(self, command: InteractionEnvelope) -> Any:
         target: Any | None = None
-        if command.target_agent_id:
+        if command.routing.target_agent_id:
             target = next(
                 (
                     agent
                     for agent in self.simulation.agents
-                    if agent.agent_id == command.target_agent_id
+                    if agent.agent_id == command.routing.target_agent_id
                 ),
                 None,
             )
-        if target is None and command.recipient_id:
+        if target is None and command.routing.recipient_id:
             target = next(
                 (
                     agent
                     for agent in self.simulation.agents
-                    if agent.agent_id == command.recipient_id
+                    if agent.agent_id == command.routing.recipient_id
                 ),
                 None,
             )
@@ -434,12 +442,12 @@ class InteractionService:
 
     def _resolve_budget_agent_id(
         self,
-        command: BroadcastCommand | DirectMessageCommand,
+        command: InteractionEnvelope,
         fallback: str,
     ) -> str:
         configured_budget_id = config.get_config("HUMAN_COMMAND_BUDGET_AGENT_ID")
-        if command.budget_agent_id:
-            return command.budget_agent_id
+        if command.budget.budget_agent_id:
+            return command.budget.budget_agent_id
         if isinstance(configured_budget_id, str) and configured_budget_id:
             return configured_budget_id
         return fallback
@@ -450,48 +458,74 @@ class InteractionService:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
+        envelope = self._envelope_from_payload(payload, context)
+        return await self.execute(envelope, context=context)
+
+    def _envelope_from_payload(
+        self,
+        payload: Mapping[str, Any],
+        context: InteractionContext | None,
+    ) -> InteractionEnvelope:
         cmd_type = str(payload.get("command") or payload.get("command_type") or "").strip()
+        ctx = context or InteractionContext()
         try:
-            if cmd_type == "broadcast":
-                command = BroadcastCommand(
-                    content=str(payload.get("content", "")),
+            intent = cmd_type if cmd_type else "moderation"
+            if intent == "dm":
+                intent = "direct_message"
+            if intent == "kb":
+                intent = "knowledge_board"
+            if intent in {"pause", "resume", "pause_all", "start", "stop", "set_speed", "kill_agent"}:
+                intent = "control"
+            if intent == "inject_event":
+                intent = "inject_event"
+            if intent not in ENVELOPE_INTENTS:
+                intent = "moderation"
+            return InteractionEnvelope(
+                intent=intent,
+                content=self._optional_str(payload.get("content")),
+                action=(cmd_type or self._optional_str(payload.get("action"))) if intent != "control" else cmd_type,
+                value=self._optional_float(payload.get("value")),
+                tags=self._optional_tags(payload.get("tags")),
+                prompt=self._optional_str(payload.get("prompt")) or self._optional_str(payload.get("scope")),
+                text=self._optional_str(payload.get("text")) or self._optional_str(payload.get("content")),
+                agent_id=self._optional_str(payload.get("agent_id")) or self._optional_str(payload.get("author")),
+                role=payload.get("role"),
+                persona=self._optional_str(payload.get("persona")),
+                backstory=self._optional_str(payload.get("backstory")),
+                traits=payload.get("traits"),
+                routing=InteractionRouting(
+                    sender_id=str(payload.get("sender_id", ctx.sender_id)),
+                    source=str(payload.get("source", ctx.source)),
+                    channel_id=self._optional_str(payload.get("channel_id")) or ctx.channel_id,
                     recipient_id=self._optional_str(payload.get("recipient_id")),
                     target_agent_id=self._optional_str(payload.get("target_agent_id")),
-                    budget_agent_id=self._optional_str(payload.get("budget_agent_id")),
-                )
-            elif cmd_type in {"direct_message", "dm"}:
-                command = DirectMessageCommand(
-                    content=str(payload.get("content", "")),
-                    recipient_id=self._optional_str(payload.get("recipient_id")),
-                    target_agent_id=self._optional_str(payload.get("target_agent_id")),
-                    budget_agent_id=self._optional_str(payload.get("budget_agent_id")),
-                )
-            elif cmd_type in {"kb", "knowledge_board"}:
-                command = KnowledgeBoardCommand(content=str(payload.get("content", "")))
-            elif cmd_type == "spawn":
-                command = SpawnAgentCommand(
-                    agent_id=str(payload.get("agent_id", "")).strip(),
-                    role=payload.get("role"),
-                    persona=self._optional_str(payload.get("persona")),
-                    backstory=self._optional_str(payload.get("backstory")),
-                    traits=payload.get("traits"),
-                )
-            else:
-                command = ModerationCommand(
-                    action=cmd_type or str(payload.get("action", "")).strip(),
-                    value=self._optional_float(payload.get("value")),
-                    tags=self._optional_tags(payload.get("tags")),
-                    prompt=self._optional_str(payload.get("prompt")),
-                    text=self._optional_str(payload.get("text")),
-                    agent_id=self._optional_str(payload.get("agent_id")),
-                )
-        except Exception as exc:
-            return InteractionResult(
-                status="rejected",
-                user_message=f"Invalid command payload: {exc}",
-                reason_code="invalid_payload",
+                ),
+                auth=InteractionAuthScope(
+                    permissions=set(payload.get("permissions", []))
+                    if isinstance(payload.get("permissions"), list | set | tuple)
+                    else set(ctx.permissions),
+                ),
+                budget=InteractionBudgetAttribution(
+                    budget_agent_id=self._optional_str(payload.get("budget_agent_id"))
+                ),
+                metadata={k: v for k, v in payload.items()},
             )
-        return await self.execute(command, context=context)
+        except Exception as exc:
+            raise ValueError(f"Invalid command payload: {exc}") from exc
+
+    def _normalize_human_message(self, command: InteractionEnvelope) -> InteractionEnvelope:
+        if command.intent != "human_message":
+            return command
+        message = str(command.content or "").strip()
+        if message.startswith("/kb "):
+            return command.model_copy(update={"intent": "knowledge_board", "content": message[4:]})
+        if message == "/broadcast":
+            return command.model_copy(update={"intent": "broadcast", "content": ""})
+        if message.startswith("/broadcast "):
+            return command.model_copy(
+                update={"intent": "broadcast", "content": message[len("/broadcast ") :]}
+            )
+        return command.model_copy(update={"intent": "direct_message", "content": message})
 
     @staticmethod
     def _optional_str(value: Any) -> str | None:

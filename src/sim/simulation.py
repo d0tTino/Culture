@@ -48,13 +48,7 @@ from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
 )
-from src.interfaces.interaction_commands import (
-    BroadcastCommand,
-    DirectMessageCommand,
-    InteractionContext,
-    InteractionService,
-    KnowledgeBoardCommand,
-)
+from src.interfaces.interaction_commands import InteractionContext, InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
     STEP_PHASE_LATENCY_MS,
@@ -416,53 +410,35 @@ class Simulation:
     async def _handle_human_command(
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
-        """Handle a human-issued command or prompt."""
-        payload = metadata or {}
-        sender_id = str(payload.get("sender_id", "human"))
+        """Handle a human-issued command or prompt via the unified interaction service."""
+        payload = dict(metadata or {})
         raw_channel_id = (
             payload.get("channel_id")
             or payload.get("source_channel_id")
             or payload.get("target_channel_id")
         )
-        channel_id = str(raw_channel_id) if raw_channel_id is not None else None
-        permissions = payload.get("permissions")
-        permission_set = set(permissions) if isinstance(permissions, list | set | tuple) else set()
         context = InteractionContext(
-            sender_id=sender_id,
-            channel_id=channel_id,
+            sender_id=str(payload.get("sender_id", "human")),
+            channel_id=str(raw_channel_id) if raw_channel_id is not None else None,
             source=str(payload.get("source", "simulation")),
-            permissions=permission_set,
+            permissions=set(payload.get("permissions", []))
+            if isinstance(payload.get("permissions"), list | set | tuple)
+            else set(),
             metadata={k: v for k, v in payload.items() if k not in {"permissions"}},
         )
-
-        cleaned_text = (text or "").strip()
-        if cleaned_text.startswith("/kb "):
-            command = KnowledgeBoardCommand(content=cleaned_text[4:])
-        else:
-            is_broadcast = bool(payload.get("broadcast", False))
-            command_text = cleaned_text
-            if cleaned_text == "/broadcast":
-                is_broadcast = True
-                command_text = ""
-            elif cleaned_text.startswith("/broadcast "):
-                is_broadcast = True
-                command_text = cleaned_text[len("/broadcast ") :]
-            command_cls = BroadcastCommand if is_broadcast else DirectMessageCommand
-            command = command_cls(
-                content=command_text,
-                recipient_id=str(payload.get("recipient_id"))
-                if isinstance(payload.get("recipient_id"), str)
-                else None,
-                target_agent_id=str(payload.get("target_agent_id"))
-                if isinstance(payload.get("target_agent_id"), str)
-                else None,
-                budget_agent_id=str(payload.get("budget_agent_id"))
-                if isinstance(payload.get("budget_agent_id"), str)
-                else None,
-            )
-
-        result = await self.interaction_service.execute(command, context=context)
+        command_type = payload.get("command_type")
+        if not command_type and bool(payload.get("broadcast")):
+            command_type = "broadcast"
+        result = await self.interaction_service.execute_from_payload(
+            {
+                "command_type": command_type or "human_message",
+                "content": text,
+                **payload,
+            },
+            context=context,
+        )
         if result.status != "ok" and self.discord_bot:
+            channel_id = context.channel_id
             target_channel_id = (
                 int(channel_id)
                 if channel_id is not None and channel_id.isdigit()
@@ -470,7 +446,7 @@ class Simulation:
             )
             await self.discord_bot.send_simulation_update(
                 result.user_message,
-                agent_id=sender_id,
+                agent_id=context.sender_id,
                 target_channel_id=target_channel_id,
             )
 
