@@ -28,6 +28,7 @@ from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
 from src.governance import evaluate_policy
+from src.governance.decision_kernel import PolicyDecisionService
 from src.governance.rules_engine import governance_rules_engine
 from src.governance.service import governance
 from src.infra import config  # Import to access MAX_PROJECT_MEMBERS
@@ -372,6 +373,7 @@ class Simulation:
         self._event_loop_thread = None
         self.interaction_service = InteractionService(self)
         self.command_bus = CommandBus(self.interaction_service)
+        self.decision_service = PolicyDecisionService()
         self.control_service = SimulationControlService(self)
         self.engine = SimulationEngine(self)
 
@@ -496,6 +498,29 @@ class Simulation:
 
     async def handle_moderation_command(self: Self, cmd: dict[str, Any]) -> None:
         """Process moderation actions like muting or penalties."""
+        from src.interfaces.interaction_commands import InteractionContext, InteractionEnvelope
+
+        envelope = InteractionEnvelope.model_validate(
+            {
+                "intent": "moderation",
+                "action": cmd.get("command"),
+                "agent_id": cmd.get("agent_id"),
+                "metadata": cmd,
+            }
+        )
+        decision = self.decision_service.decide(
+            envelope=envelope,
+            context=InteractionContext(
+                sender_id="simulation",
+                source="simulation",
+                permissions={"admin", "moderator"},
+            ),
+            simulation=self,
+            stage="moderation",
+        )
+        if decision.decision != "allow":
+            return
+
         action = cmd.get("command")
         agent_id = cmd.get("agent_id")
         if action == "mute" and agent_id:
