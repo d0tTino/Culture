@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from src.governance.decision_kernel import DecisionProvenance
 from src.interfaces.interaction_commands import (
     InteractionContext,
     InteractionEnvelope,
@@ -42,6 +43,10 @@ class CommandBus:
                 status="rejected",
                 user_message=f"Invalid command payload: {exc}",
                 reason_code="invalid_payload",
+                decision_provenance=DecisionProvenance(
+                    policy_id="interaction-policy-v1",
+                    rule_id="policy.validation.payload",
+                ),
             )
         return await self.dispatch(envelope, context=context)
 

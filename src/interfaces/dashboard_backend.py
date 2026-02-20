@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 from opentelemetry import trace
 from pydantic import BaseModel
 
+from src.governance.decision_kernel import PolicyDecisionService
 from src.governance.rules_engine import governance_rules_engine
 from src.governance.service import governance
 from src.infra import event_log
@@ -36,6 +37,7 @@ SEMANTIC_SUMMARIES_ERROR: Final[dict[str, str]] = {"error": "summary retrieval f
 DEFAULT_CONTEXT = SimulationContext()
 
 API_TOKEN: str | None = None
+DECISION_KERNEL = PolicyDecisionService()
 
 
 def configure_api_token(token: str | None) -> None:
@@ -1013,6 +1015,37 @@ async def handle_control_command(
             "message": result.user_message,
             "reason_code": result.reason_code,
             "data": result.data,
+            "decision_provenance": result.decision_provenance.model_dump(),
+        }
+
+    from src.interfaces.interaction_commands import InteractionContext, InteractionEnvelope
+
+    fallback_envelope = InteractionEnvelope.model_validate(
+        {
+            "intent": "control",
+            "action": str(cmd.get("command") or ""),
+            "value": cmd.get("value"),
+            "tags": cmd.get("tags"),
+            "metadata": dict(cmd),
+        }
+    )
+    decision = DECISION_KERNEL.decide(
+        envelope=fallback_envelope,
+        context=InteractionContext(
+            sender_id="dashboard",
+            source="dashboard",
+            permissions={"admin", "moderator"},
+        ),
+        simulation=simulation,
+        stage="control",
+    )
+    if decision.decision != "allow":
+        return {
+            "status": "rejected",
+            "message": decision.user_message or "Command rejected.",
+            "reason_code": decision.reason_code,
+            "decision_provenance": decision.provenance.model_dump(),
+            "data": decision.metadata or None,
         }
 
     action = cmd.get("command")
@@ -1030,7 +1063,11 @@ async def handle_control_command(
         if isinstance(tags, list):
             BREAKPOINT_TAGS.clear()
             BREAKPOINT_TAGS.update(str(t) for t in tags)
-    return {**ctx.sim_state, "breakpoints": list(BREAKPOINT_TAGS)}
+    return {
+        **ctx.sim_state,
+        "breakpoints": list(BREAKPOINT_TAGS),
+        "decision_provenance": decision.provenance.model_dump(),
+    }
 
 
 try:

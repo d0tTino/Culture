@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
 from src.agents.core.agent_state import AgentActionIntent
+from src.governance.decision_kernel import DecisionProvenance, PolicyDecisionService
 from src.infra import config
 from src.infra import ledger as infra_ledger
 from src.infra.event_log import log_event
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
-from src.interfaces.interaction_policy import check_cooldown, context_is_authorized
 from src.sim.knowledge_board import BoardEntry
 
 if TYPE_CHECKING:
@@ -37,6 +36,7 @@ class InteractionResult(BaseModel):
     user_message: str
     reason_code: str
     data: dict[str, Any] | None = None
+    decision_provenance: DecisionProvenance
 
 
 class InteractionContext(BaseModel):
@@ -97,6 +97,7 @@ class InteractionService:
 
     def __init__(self, simulation: Simulation) -> None:
         self.simulation = simulation
+        self.decision_service = PolicyDecisionService()
 
     async def execute(
         self,
@@ -117,18 +118,38 @@ class InteractionService:
             )
         )
 
-        envelope = self._normalize_human_message(command)
+        entry_decision = self.decision_service.decide(
+            envelope=command,
+            context=ctx,
+            simulation=self.simulation,
+            stage="entry",
+        )
+        if entry_decision.decision == "transform":
+            envelope = command.model_copy(update=entry_decision.transformed_updates)
+        else:
+            envelope = command
+
+        if entry_decision.decision == "deny":
+            return InteractionResult(
+                status="rejected",
+                user_message=entry_decision.user_message or "Command rejected.",
+                reason_code=entry_decision.reason_code,
+                data=entry_decision.metadata or None,
+                decision_provenance=entry_decision.provenance,
+            )
+        if entry_decision.decision == "requires_vote":
+            return InteractionResult(
+                status="rejected",
+                user_message=entry_decision.user_message or "Command requires vote.",
+                reason_code=entry_decision.reason_code,
+                decision_provenance=entry_decision.provenance,
+            )
+
         if envelope.intent == "knowledge_board":
             return await self._dispatch_knowledge_board(envelope, context=ctx)
         if envelope.intent in {"broadcast", "direct_message"}:
             return await self._dispatch_message(envelope, context=ctx)
         if envelope.intent == "spawn":
-            if not context_is_authorized(ctx, required={"admin", "moderator"}):
-                return InteractionResult(
-                    status="rejected",
-                    user_message="You are not authorized to spawn agents.",
-                    reason_code="unauthorized",
-                )
             await self.simulation.handle_control_command(
                 {
                     "command": "spawn",
@@ -143,14 +164,9 @@ class InteractionService:
                 status="ok",
                 user_message=f"Spawn request submitted for {envelope.agent_id}.",
                 reason_code="spawn_submitted",
+                decision_provenance=entry_decision.provenance,
             )
         if envelope.intent in {"moderation", "control", "inject_event"}:
-            if not context_is_authorized(ctx, required={"admin", "moderator"}):
-                return InteractionResult(
-                    status="rejected",
-                    user_message="You are not authorized to run moderation commands.",
-                    reason_code="unauthorized",
-                )
             payload: dict[str, Any] = {"command": envelope.action}
             if envelope.value is not None:
                 payload["value"] = envelope.value
@@ -172,11 +188,13 @@ class InteractionService:
                 user_message="Command accepted.",
                 reason_code="moderation_applied",
                 data=state if isinstance(state, dict) else None,
+                decision_provenance=entry_decision.provenance,
             )
         return InteractionResult(
             status="error",
             user_message="Unknown command.",
             reason_code="unsupported_command",
+            decision_provenance=entry_decision.provenance,
         )
 
     async def _dispatch_knowledge_board(
@@ -191,6 +209,10 @@ class InteractionService:
                 status="rejected",
                 user_message="Knowledge Board entry cannot be empty.",
                 reason_code="empty_message",
+                decision_provenance=DecisionProvenance(
+                    policy_id="interaction-policy-v1",
+                    rule_id="policy.validation.knowledge_board.empty",
+                ),
             )
         board = self.simulation.knowledge_board
         if board is None:
@@ -198,22 +220,25 @@ class InteractionService:
                 status="rejected",
                 user_message="Knowledge Board is not available.",
                 reason_code="kb_unavailable",
+                decision_provenance=DecisionProvenance(
+                    policy_id="interaction-policy-v1",
+                    rule_id="policy.validation.knowledge_board.unavailable",
+                ),
             )
-        now = time.monotonic()
-        retry_after = check_cooldown(
-            key="knowledge_board",
-            now=now,
-            cooldown=self.simulation._kb_cooldown,
-            state={"knowledge_board": self.simulation._last_kb_time},
+        decision = self.decision_service.decide(
+            envelope=command,
+            context=context,
+            simulation=self.simulation,
+            stage="knowledge_board",
         )
-        if retry_after is not None:
+        if decision.decision != "allow":
             return InteractionResult(
                 status="rejected",
-                user_message="Knowledge Board is cooling down. Please try again shortly.",
-                reason_code="kb_rate_limited",
+                user_message=decision.user_message or "Knowledge board command rejected.",
+                reason_code=decision.reason_code,
+                data=decision.metadata or None,
+                decision_provenance=decision.provenance,
             )
-
-        self.simulation._last_kb_time = now
         async with board.lock:
             board.add_entry(
                 BoardEntry(
@@ -229,6 +254,7 @@ class InteractionService:
             status="ok",
             user_message="Posted to Knowledge Board.",
             reason_code="kb_posted",
+            decision_provenance=decision.provenance,
         )
 
     async def _dispatch_message(
@@ -243,20 +269,29 @@ class InteractionService:
                 status="rejected",
                 user_message="Message cannot be empty.",
                 reason_code="empty_message",
+                decision_provenance=DecisionProvenance(
+                    policy_id="interaction-policy-v1",
+                    rule_id="policy.validation.message.empty",
+                ),
             )
 
-        now = time.monotonic()
-        channel_id = context.channel_id
-        relay_scope = (
-            context.sender_id if channel_id is None else f"{context.sender_id}:{channel_id}"
+        decision = self.decision_service.decide(
+            envelope=command,
+            context=context,
+            simulation=self.simulation,
+            stage="message",
         )
-        retry_after = check_cooldown(
-            key=relay_scope,
-            now=now,
-            cooldown=self.simulation._relay_cooldown,
-            state=self.simulation._last_relay_times,
-        )
-        if retry_after is not None:
+        if decision.decision == "requires_vote":
+            return InteractionResult(
+                status="rejected",
+                user_message=decision.user_message or "Command requires vote.",
+                reason_code=decision.reason_code,
+                decision_provenance=decision.provenance,
+            )
+
+        if decision.decision != "allow":
+            retry_after = float(decision.metadata.get("retry_after_seconds") or 0.0)
+            relay_scope = str(decision.metadata.get("scope") or context.sender_id)
             await emit_event(
                 SimulationEvent(
                     type="human_command_rate_limited",
@@ -270,17 +305,10 @@ class InteractionService:
             )
             return InteractionResult(
                 status="rejected",
-                user_message=(
-                    f"Rate limited: please wait {retry_after:.1f}s before sending another message."
-                ),
-                reason_code="rate_limited",
-                data={"retry_after_seconds": retry_after},
-            )
-        if not self.simulation.agents:
-            return InteractionResult(
-                status="rejected",
-                user_message="No agents are available to receive messages.",
-                reason_code="no_agents",
+                user_message=decision.user_message or "Command rejected.",
+                reason_code=decision.reason_code,
+                data=decision.metadata or None,
+                decision_provenance=decision.provenance,
             )
 
         broadcast = command.intent == "broadcast"
@@ -317,6 +345,7 @@ class InteractionService:
                 status="rejected",
                 user_message=str(exc),
                 reason_code="du_budget_exceeded",
+                decision_provenance=decision.provenance,
             )
 
         if state is not None and (state.ip < ip_cost or state.du < du_cost):
@@ -324,6 +353,7 @@ class InteractionService:
                 status="rejected",
                 user_message="Insufficient IP/DU",
                 reason_code="insufficient_resources",
+                decision_provenance=decision.provenance,
             )
 
         if state is not None:
@@ -392,6 +422,7 @@ class InteractionService:
                 "du_cost": du_cost,
                 "messages": [dict(msg) for msg in msgs],
                 "reason_code": "message_dispatched",
+                "decision_provenance": decision.provenance.model_dump(),
             }
         )
 
@@ -405,6 +436,7 @@ class InteractionService:
             user_message="Broadcast sent." if broadcast else "Message sent.",
             reason_code="message_dispatched",
             data={"target_agent_id": target.agent_id, "budget_agent_id": budget_agent_id},
+            decision_provenance=decision.provenance,
         )
 
     def _resolve_target(self, command: InteractionEnvelope) -> Any:
@@ -512,20 +544,6 @@ class InteractionService:
             )
         except Exception as exc:
             raise ValueError(f"Invalid command payload: {exc}") from exc
-
-    def _normalize_human_message(self, command: InteractionEnvelope) -> InteractionEnvelope:
-        if command.intent != "human_message":
-            return command
-        message = str(command.content or "").strip()
-        if message.startswith("/kb "):
-            return command.model_copy(update={"intent": "knowledge_board", "content": message[4:]})
-        if message == "/broadcast":
-            return command.model_copy(update={"intent": "broadcast", "content": ""})
-        if message.startswith("/broadcast "):
-            return command.model_copy(
-                update={"intent": "broadcast", "content": message[len("/broadcast ") :]}
-            )
-        return command.model_copy(update={"intent": "direct_message", "content": message})
 
     @staticmethod
     def _optional_str(value: Any) -> str | None:
