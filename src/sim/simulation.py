@@ -71,6 +71,7 @@ from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 from src.sim.persistence.trace_hash_service import TraceHashService
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
+from src.sim.scheduler_protocol import SchedulerProtocol
 from src.sim.version_vector import VersionVector
 from src.sim.world_map import WorldMap
 
@@ -131,6 +132,7 @@ class Simulation:
         evaluation_hook_names: Sequence[str] | None = None,
         evaluation_targets: Mapping[str, Any] | None = None,
         success_metrics: Mapping[str, Any] | None = None,
+        scheduler: SchedulerProtocol | None = None,
     ) -> None:
         """
         Initializes the Simulation instance.
@@ -205,7 +207,7 @@ class Simulation:
         self.personality_engine = PersonalityEngine()
         self.lifecycle_service = LifecycleService()
         self.simulation_complete = False
-        self.event_kernel = EventKernel()
+        self.event_kernel: SchedulerProtocol = scheduler or EventKernel()
         self.vector = VersionVector()
         self.paused: bool = False
         self.speed: float = 1.0

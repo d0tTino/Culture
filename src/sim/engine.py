@@ -29,7 +29,7 @@ class SimulationEngine:
 
         await sim.start_event_listener()
 
-        queue_depth = len(getattr(sim.event_kernel, "_queue", []))
+        queue_depth = sim.event_kernel.queue_depth()
         sim._set_labeled_gauge(STEP_PHASE_QUEUE_DEPTH, phase="queue_pre_step", value=queue_depth)
 
         if max_turns > 1:

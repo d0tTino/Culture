@@ -1,108 +1,101 @@
-"""Priority-queue based discrete event scheduler."""
+"""Deprecated adapter over :class:`src.sim.event_kernel.EventKernel`."""
 
 from __future__ import annotations
 
-import heapq
+import warnings
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from typing_extensions import Self
 
+from src.sim.event_kernel import EventKernel
+
 from .event import Event
 
 
 class DiscreteEventKernel:
-    """A minimal discrete-event simulation kernel."""
+    """Compatibility adapter retained for tests and fixtures only."""
 
     def __init__(self: Self) -> None:
-        self._queue: list[Event] = []
-        self._seq = 0
-        self.now: int = 0
-        self._paused = False
+        warnings.warn(
+            "DiscreteEventKernel is deprecated; use EventKernel directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self._kernel = EventKernel()
 
-    # ------------------------------------------------------------------
-    # scheduling helpers
+    @property
+    def now(self: Self) -> int:
+        return self._kernel.current_step
+
+    def _to_legacy_event(self: Self, event: Any) -> Event:
+        return Event(ts=int(event.step), seq=int(event.count), callback=event.callback)
+
+    # scheduling helpers -------------------------------------------------
     def schedule_at_nowait(
-        self: Self, ts: int, callback: Callable[[], Awaitable[None]], **_kwargs: Any
+        self: Self, ts: int, callback: Callable[[], Awaitable[None]], **kwargs: Any
     ) -> None:
-        """Schedule ``callback`` to run at ``ts``."""
-        heapq.heappush(self._queue, Event(ts, self._seq, callback))
-        self._seq += 1
+        self._kernel.schedule_at_nowait(ts, callback, **kwargs)
 
     async def schedule_at(
-        self: Self, ts: int, callback: Callable[[], Awaitable[None]], **_kwargs: Any
+        self: Self, ts: int, callback: Callable[[], Awaitable[None]], **kwargs: Any
     ) -> None:
-        self.schedule_at_nowait(ts, callback, **_kwargs)
+        await self._kernel.schedule_at(ts, callback, **kwargs)
 
     def schedule_immediate_nowait(
-        self: Self, callback: Callable[[], Awaitable[None]], **_kwargs: Any
+        self: Self, callback: Callable[[], Awaitable[None]], **kwargs: Any
     ) -> None:
-        self.schedule_at_nowait(self.now, callback, **_kwargs)
+        self._kernel.schedule_immediate_nowait(callback, **kwargs)
 
     async def schedule_immediate(
-        self: Self, callback: Callable[[], Awaitable[None]], **_kwargs: Any
+        self: Self, callback: Callable[[], Awaitable[None]], **kwargs: Any
     ) -> None:
-        self.schedule_immediate_nowait(callback, **_kwargs)
+        await self._kernel.schedule_immediate(callback, **kwargs)
 
     def schedule_in_nowait(
-        self: Self, delay: int, callback: Callable[[], Awaitable[None]], **_kwargs: Any
+        self: Self, delay: int, callback: Callable[[], Awaitable[None]], **kwargs: Any
     ) -> None:
-        self.schedule_at_nowait(self.now + delay, callback, **_kwargs)
+        self._kernel.schedule_in_nowait(delay, callback, **kwargs)
 
     async def schedule_in(
-        self: Self, delay: int, callback: Callable[[], Awaitable[None]], **_kwargs: Any
+        self: Self, delay: int, callback: Callable[[], Awaitable[None]], **kwargs: Any
     ) -> None:
-        self.schedule_in_nowait(delay, callback, **_kwargs)
+        await self._kernel.schedule_in(delay, callback, **kwargs)
 
-    # ------------------------------------------------------------------
+    # run/flow control ---------------------------------------------------
     def empty(self: Self) -> bool:
-        return not self._queue
+        return self._kernel.empty()
 
     def pause(self: Self) -> None:
-        self._paused = True
+        self._kernel.pause()
 
     async def resume(self: Self) -> list[Event]:
-        self._paused = False
-        return await self.run()
+        return [self._to_legacy_event(event) for event in await self._kernel.resume()]
 
     async def run(self: Self) -> list[Event]:
-        """Run until the queue is empty or paused."""
-        executed: list[Event] = []
-        while self._queue and not self._paused:
-            executed.extend(await self.step(1))
-        return executed
+        events = await self._kernel.dispatch(limit=self._kernel.queue_depth())
+        return [self._to_legacy_event(event) for event in events]
 
     async def step(self: Self, n: int = 1) -> list[Event]:
-        """Execute up to ``n`` events."""
-        executed: list[Event] = []
-        for _ in range(n):
-            if not self._queue or self._paused:
-                break
-            event = heapq.heappop(self._queue)
-            self.now = max(self.now, event.ts)
-            await event.callback()
-            executed.append(event)
-        return executed
+        return [self._to_legacy_event(event) for event in await self._kernel.step(n)]
 
     async def fast_forward(self: Self, until_ts: int) -> list[Event]:
-        """Execute events with ``ts`` <= ``until_ts``."""
         executed: list[Event] = []
-        while self._queue and self._queue[0].ts <= until_ts and not self._paused:
-            event = heapq.heappop(self._queue)
-            self.now = event.ts
-            await event.callback()
-            executed.append(event)
+        while not self.empty() and self._kernel._queue[0].step <= until_ts:
+            next_events = await self.step(1)
+            if not next_events:
+                break
+            executed.extend(next_events)
         return executed
 
-    # Stubs to satisfy existing Simulation interface ---------------------------------
-    async def emit_environment_event(
-        self: Self, _event: dict[str, Any]
-    ) -> None:  # pragma: no cover
-        """Stub for compatibility with the older kernel."""
-        return None
+    # compatibility stubs ------------------------------------------------
+    async def emit_environment_event(self: Self, event: dict[str, Any]) -> None:
+        await self._kernel.emit_environment_event(event)
 
     async def forward_external_events(
-        self: Self, _handler: Callable[[str], Awaitable[None]]
-    ) -> None:  # pragma: no cover
-        """Stub for compatibility with the older kernel."""
-        return None
+        self: Self, handler: Callable[[str], Awaitable[None]]
+    ) -> None:
+        async def _adapted_handler(content: str, _metadata: dict[str, Any] | None) -> None:
+            await handler(content)
+
+        await self._kernel.forward_external_events(_adapted_handler)

@@ -46,6 +46,7 @@ class EventKernel:
         self.current_step = 0
         self._budgets: dict[str, int] = {}
         self.vector = VersionVector()
+        self._paused = False
 
     def set_budget(self: Self, agent_id: str, tokens: int) -> None:
         """Set the token budget for an agent."""
@@ -211,7 +212,7 @@ class EventKernel:
     async def dispatch(self: Self, limit: int) -> list[Event]:
         """Dispatch up to ``limit`` queued events in sorted order."""
         executed: list[Event] = []
-        while len(executed) < limit and self._queue:
+        while len(executed) < limit and self._queue and not self._paused:
             event = heapq.heappop(self._queue)
             if event.step < self.current_step:
                 continue
@@ -234,8 +235,28 @@ class EventKernel:
         """Compatibility wrapper for old ``step`` API."""
         return await self.dispatch(limit)
 
+    def pause(self: Self) -> None:
+        self._paused = True
+
+    async def resume(self: Self) -> list[Event]:
+        self._paused = False
+        return await self.dispatch(limit=len(self._queue))
+
     def empty(self: Self) -> bool:
         return not self._queue
+
+    def queue_depth(self: Self) -> int:
+        return len(self._queue)
+
+    def event_metadata(self: Self, event: Event) -> dict[str, Any]:
+        return {
+            "step": event.step,
+            "count": event.count,
+            "tokens": event.tokens,
+            "agent_id": event.agent_id,
+            "vector": event.vector.to_dict(),
+            "trace_hash": event.trace_hash,
+        }
 
     async def emit_environment_event(self: Self, event: dict[str, Any]) -> None:
         """Log and forward an environment event."""
