@@ -271,9 +271,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -336,9 +336,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -437,9 +437,11 @@ class Simulation:
             sender_id=str(payload.get("sender_id", "human")),
             channel_id=str(raw_channel_id) if raw_channel_id is not None else None,
             source=str(payload.get("source", "simulation")),
-            permissions=set(payload.get("permissions", []))
-            if isinstance(payload.get("permissions"), list | set | tuple)
-            else set(),
+            permissions=(
+                set(payload.get("permissions", []))
+                if isinstance(payload.get("permissions"), list | set | tuple)
+                else set()
+            ),
             metadata={k: v for k, v in payload.items() if k not in {"permissions"}},
         )
         command_type = payload.get("command_type")
@@ -894,7 +896,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -1210,14 +1214,7 @@ class Simulation:
                 },
                 "trace_hash": self._last_trace_hash,
             }
-            snapshot_no_vector = {
-                **{k: v for k, v in snapshot.items() if k != "trace_hash"},
-                "knowledge_board": {
-                    k: v for k, v in snapshot["knowledge_board"].items() if k != "vector"
-                },
-                "world_map": {k: v for k, v in snapshot["world_map"].items() if k != "vector"},
-            }
-            snapshot["trace_hash"] = TraceHashService.compute(snapshot_no_vector)
+            snapshot["trace_hash"] = SnapshotPersistenceService.compute_hash(snapshot)
             self._last_trace_hash = snapshot["trace_hash"]
             SnapshotPersistenceService.save(self.current_step, snapshot)
             SnapshotPersistenceService.upload(self.current_step)
@@ -1444,9 +1441,11 @@ class Simulation:
                 sender_id=str(evt.data.get("sender_id", evt.data.get("author", "external"))),
                 channel_id=str(evt.data.get("channel_id")) if evt.data.get("channel_id") else None,
                 source=str(evt.data.get("source", "event_bus")),
-                permissions=set(evt.data.get("permissions", []))
-                if isinstance(evt.data.get("permissions"), list)
-                else set(),
+                permissions=(
+                    set(evt.data.get("permissions", []))
+                    if isinstance(evt.data.get("permissions"), list)
+                    else set()
+                ),
                 metadata={k: v for k, v in evt.data.items()},
             )
             await self.command_bus.dispatch(parse_bus_command(evt.data), context=context)
@@ -2112,7 +2111,9 @@ class Simulation:
         sim.world_season = int(world_season_value) if world_season_value is not None else None
         sim.environment_state.weather = str(env_snapshot["weather"])
         sim.environment_state.season_effects = dict(env_snapshot["season_effects"])
-        sim.environment_state.active_global_modifiers = list(env_snapshot["active_global_modifiers"])
+        sim.environment_state.active_global_modifiers = list(
+            env_snapshot["active_global_modifiers"]
+        )
         sim.environment_state.council_window_active = bool(env_snapshot["council_window_active"])
         snapshot_turn_quantum = int(snapshot.get("turns_per_world_tick", sim.turns_per_world_tick))
         sim.turns_per_world_tick = max(1, snapshot_turn_quantum)
