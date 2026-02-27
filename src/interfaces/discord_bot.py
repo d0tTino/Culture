@@ -9,7 +9,6 @@ IP/DU cost for the currently active agent.
 import asyncio
 import json
 import logging
-import re
 import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
@@ -32,6 +31,7 @@ from src.interfaces.interaction_policy import (
     has_control_command_permission,
     set_max_rate,
 )
+from src.interfaces.transport_adapters import parse_discord_message_routing
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
 
@@ -258,41 +258,6 @@ def create_onboarding_embed(channel_id: int) -> Any:
 
 
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
-_MENTION_TARGET_RE = re.compile(r"^@(?P<agent>[\w.-]+)\s*:\s*(?P<content>.+)$", re.DOTALL)
-_DM_TARGET_RE = re.compile(r"^/dm\s+(?P<agent>[\w.-]+)\s+(?P<content>.+)$", re.DOTALL)
-
-
-def _parse_human_message_routing(content: str) -> tuple[str | None, bool, str, str | None]:
-    """Parse optional routing directives from plain Discord messages."""
-    cleaned = content.strip()
-    if not cleaned:
-        return None, False, "", None
-
-    if cleaned == "/broadcast":
-        return None, True, "", "Broadcast message cannot be empty. Use /broadcast <message>."
-
-    if cleaned.startswith("/broadcast "):
-        payload = cleaned[len("/broadcast ") :].strip()
-        if not payload:
-            return (
-                None,
-                True,
-                "",
-                "Broadcast message cannot be empty. Use /broadcast <message>.",
-            )
-        return None, True, payload, None
-
-    mention_match = _MENTION_TARGET_RE.match(cleaned)
-    if mention_match:
-        return mention_match.group("agent"), False, mention_match.group("content").strip(), None
-
-    dm_match = _DM_TARGET_RE.match(cleaned)
-    if dm_match:
-        return dm_match.group("agent"), False, dm_match.group("content").strip(), None
-
-    return None, False, cleaned, None
-
-
 def _parse_json_object_argument(raw: str | None, field_name: str) -> dict[str, Any] | None:
     """Parse a JSON object argument from a slash-command string option."""
     if raw is None:
@@ -699,38 +664,40 @@ class SimulationDiscordBot:
                     if user_id and channel_id:
                         self.user_channels[str(user_id)] = channel_id
                         self.last_user_id = str(user_id)
-                    parsed_content = content.strip()
+                    recipient, is_broadcast, parsed_content, validation_error = parse_discord_message_routing(content)
+                    if validation_error is not None:
+                        await send_channel_message(channel, content=validation_error)
+                        return
                     if not parsed_content:
                         return
-                    recipient = self.channel_to_agent.get(channel_id)
-                    sender = None
-                    if user_id:
-                        sender = self.user_agents.get(str(user_id))
-                    agent_id = recipient or sender or _default_agent_for_channel(self, channel_id)
-                    span.set_attribute("discord.agent.id", agent_id or "")
-                    if agent_id is None:
+                    sender = self.user_agents.get(str(user_id)) if user_id else None
+                    fallback_agent = _default_agent_for_channel(self, channel_id)
+                    target_agent_id = recipient or sender or fallback_agent
+                    span.set_attribute("discord.agent.id", target_agent_id or "")
+                    if target_agent_id is None:
                         await send_channel_message(
                             channel,
                             content="No agents available to route this message",
                         )
                         return
                     if user_id and sender is None:
-                        self.user_agents[str(user_id)] = agent_id
-                    self.last_agent_id = agent_id
+                        self.user_agents[str(user_id)] = target_agent_id
+                    self.last_agent_id = target_agent_id
                     self.last_channel_id = channel_id
                     bus = get_command_bus(self.context)
                     if bus is None:
                         return
+                    intent = "broadcast" if is_broadcast else ("direct_message" if recipient else "human_message")
                     result = await bus.dispatch(
                         InteractionEnvelope(
-                            intent="human_message",
+                            intent=intent,
                             content=parsed_content,
                             routing={
                                 "sender_id": str(user_id) if user_id is not None else "human",
                                 "channel_id": str(channel_id) if channel_id is not None else None,
                                 "source": "discord",
                                 "recipient_id": recipient,
-                                "target_agent_id": agent_id,
+                                "target_agent_id": target_agent_id,
                             },
                         )
                     )
