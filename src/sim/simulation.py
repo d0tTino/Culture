@@ -75,6 +75,7 @@ from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
 from src.sim.scheduler_protocol import SchedulerProtocol
 from src.sim.version_vector import VersionVector
+from src.sim.world_context import WorldContextProjection
 from src.sim.world_map import WorldMap
 
 from .event_bus import get_event_bus
@@ -758,20 +759,51 @@ class Simulation:
     def world_season(self: Self, value: int | None) -> None:
         self.environment_state.world_season = int(value) if value is not None else None
 
-    def _world_time_snapshot(self: Self) -> dict[str, Any]:
-        """Return the structured world-time payload used in events and perception."""
-        return self.environment_system.world_time_snapshot()
+    def _build_world_context_projection(self: Self, *, actor_id: str) -> WorldContextProjection:
+        return WorldContextProjection.build(
+            turn_index=self.current_step,
+            actor_id=actor_id,
+            environment_system=self.environment_system,
+            world_map=self.world_map,
+        )
+
+    @staticmethod
+    def _environment_context_from_projection(
+        projection: WorldContextProjection,
+        *,
+        effect_hooks: dict[str, Any],
+    ) -> dict[str, Any]:
+        return projection.to_environment_context(effect_hooks=effect_hooks)
+
+    @staticmethod
+    def _world_time_from_projection(projection: WorldContextProjection) -> dict[str, Any]:
+        return {
+            "world_tick": projection.time.world_tick,
+            "world_hour": projection.time.world_hour,
+            "world_day": projection.time.world_day,
+            "world_season": projection.time.world_season,
+            "formatted": projection.time.formatted,
+        }
 
     async def _emit_environment_observability_events(
-        self: Self, events: Sequence[Mapping[str, Any]], *, step: int
+        self: Self,
+        events: Sequence[Mapping[str, Any]],
+        *,
+        step: int,
+        world_projection: WorldContextProjection,
     ) -> None:
+        environment_context = self._environment_context_from_projection(
+            world_projection,
+            effect_hooks=self.environment_system._condition_hooks(),
+        )
+        world_time = self._world_time_from_projection(world_projection)
         for raw_event in events:
             payload = {
                 **dict(raw_event),
                 "step": step,
-                "environment_context": self.environment_system.build_perception_context(
-                    turn_index=step
-                ),
+                "environment_context": environment_context,
+                "world_time": world_time,
+                "world_context_projection": world_projection.to_dict(),
             }
             event = log_event(payload)
             if event is None:
@@ -780,9 +812,7 @@ class Simulation:
             event_name = str(payload.get("event_name", "environment"))
             await emit_event(SimulationEvent(type="environment", data=event))
             if event_name == "world_time":
-                await self.send_discord_update(
-                    message=f"🕒 {self._world_time_snapshot()['formatted']}"
-                )
+                await self.send_discord_update(message=f"🕒 {world_time['formatted']}")
 
     async def send_discord_update(
         self: Self,
@@ -859,11 +889,12 @@ class Simulation:
         # Increment turn index, then sync world time to the configured tick boundary.
         self.current_step += 1
         environment_events = self.environment_system.tick(self.current_step)
-        await self._emit_environment_observability_events(
-            environment_events, step=self.current_step
-        )
         agent = self.agents[agent_index]
         agent_id = agent.agent_id
+        world_projection = self._build_world_context_projection(actor_id=agent_id)
+        await self._emit_environment_observability_events(
+            environment_events, step=self.current_step, world_projection=world_projection
+        )
         if agent_id in self.muted_agents:
             self.current_agent_index = (agent_index + 1) % len(self.agents)
             return
@@ -920,9 +951,13 @@ class Simulation:
             perception_data["knowledge_board_content"] = (
                 self.knowledge_board.get_recent_entries_for_prompt()
             )
-        perception_data["environment_context"] = self.environment_system.build_perception_context(
-            turn_index=self.current_step
+        effect_hooks = self.environment_system._condition_hooks()
+        environment_context = self._environment_context_from_projection(
+            world_projection,
+            effect_hooks=effect_hooks,
         )
+        world_time = self._world_time_from_projection(world_projection)
+        perception_data["environment_context"] = environment_context
         mood_before = float(current_agent_state.mood_level)
 
         # decide
@@ -1020,10 +1055,9 @@ class Simulation:
                 {
                     "step": self.current_step,
                     "turn_index": self.current_step,
-                    "environment_context": self.environment_system.build_perception_context(
-                        turn_index=self.current_step
-                    ),
-                    "world_time": self._world_time_snapshot(),
+                    "environment_context": environment_context,
+                    "world_time": world_time,
+                    "world_context_projection": world_projection.to_dict(),
                     "sender_id": agent_id,
                     "recipient_id": message_recipient_id,
                     "content": message_content,
@@ -1137,10 +1171,9 @@ class Simulation:
                     "agent_id": agent_id,
                     "step": self.current_step,
                     "turn_index": self.current_step,
-                    "environment_context": self.environment_system.build_perception_context(
-                        turn_index=self.current_step
-                    ),
-                    "world_time": self._world_time_snapshot(),
+                    "environment_context": environment_context,
+                    "world_time": world_time,
+                    "world_context_projection": world_projection.to_dict(),
                     "action_intent": action_intent_str,
                     "governance_enforcement": {
                         "decision": governance_outcome.decision,
@@ -1210,6 +1243,7 @@ class Simulation:
                     "active_global_modifiers": self.environment_state.active_global_modifiers,
                     "council_window_active": self.environment_state.council_window_active,
                 },
+                "metadata": {"world_context_projection": world_projection.to_dict()},
                 "trace_hash": self._last_trace_hash,
             }
             snapshot["trace_hash"] = SnapshotPersistenceService.compute_hash(snapshot)
@@ -1465,7 +1499,7 @@ class Simulation:
         msg: SimulationMessage = {
             "step": self.current_step,
             "turn_index": self.current_step,
-            "world_time": self._world_time_snapshot(),
+            "world_time": self.environment_system.world_time_snapshot(),
             "sender_id": sender,
             "recipient_id": recipient,
             "content": content,
@@ -1730,9 +1764,18 @@ class Simulation:
         """Dispatch up to ``max_turns`` events via the deterministic simulation engine."""
         return await self.engine.run_step(max_turns=max_turns)
 
-    def _build_step_perception_snapshot(self: Self, turn_index: int) -> Mapping[str, Any]:
+    def _build_step_perception_snapshot(
+        self: Self, turn_index: int, *, actor_id: str | None = None
+    ) -> Mapping[str, Any]:
         """Build an immutable perception snapshot for a pipeline tick."""
 
+        projection = self._build_world_context_projection(
+            actor_id=actor_id or self.agents[self.current_agent_index].agent_id
+        )
+        environment_context = self._environment_context_from_projection(
+            projection,
+            effect_hooks=self.environment_system._condition_hooks(),
+        )
         snapshot: dict[str, Any] = {
             "perceived_messages": copy.deepcopy(self.messages_to_perceive_this_round),
             "knowledge_board_content": (
@@ -1741,9 +1784,8 @@ class Simulation:
                 else []
             ),
             "turn_index": turn_index,
-            "environment_context": copy.deepcopy(
-                self.environment_system.build_perception_context(turn_index=turn_index)
-            ),
+            "environment_context": copy.deepcopy(environment_context),
+            "world_context_projection": projection.to_dict(),
         }
         return MappingProxyType(snapshot)
 

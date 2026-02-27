@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 from src.sim.simulation import Simulation
 
 
@@ -54,7 +55,8 @@ async def test_environment_tick_rollover_and_daily_reset(monkeypatch):
     sim = Simulation(
         [DummyAgent()], memory_service=SimpleNamespace(vector_store=None, semantic_manager=None)
     )
-    sim.personality_engine.update_traits = lambda *args, **kwargs: []
+    sim.personality_engine.apply_experience_drift = lambda *args, **kwargs: []
+    sim._assert_trait_update_invariants = lambda *args, **kwargs: None
     await sim._run_agent_turn(0)
     assert sim.world_hour == 0
     assert sim.world_day == 0
@@ -98,7 +100,8 @@ async def test_environment_context_in_perception(monkeypatch):
     sim = Simulation(
         [agent], memory_service=SimpleNamespace(vector_store=None, semantic_manager=None)
     )
-    sim.personality_engine.update_traits = lambda *args, **kwargs: []
+    sim.personality_engine.apply_experience_drift = lambda *args, **kwargs: []
+    sim._assert_trait_update_invariants = lambda *args, **kwargs: None
     await sim._run_agent_turn(0)
 
     assert agent.last_perception is not None
@@ -131,7 +134,8 @@ async def test_agent_action_event_contains_environment_context(monkeypatch):
     sim = Simulation(
         [agent], memory_service=SimpleNamespace(vector_store=None, semantic_manager=None)
     )
-    sim.personality_engine.update_traits = lambda *args, **kwargs: []
+    sim.personality_engine.apply_experience_drift = lambda *args, **kwargs: []
+    sim._assert_trait_update_invariants = lambda *args, **kwargs: None
 
     await sim._run_agent_turn(0)
 
@@ -145,5 +149,71 @@ async def test_agent_action_event_contains_environment_context(monkeypatch):
     assert payload["turn_index"] == sim.current_step
     assert payload["environment_context"]["time"]["world_tick"] == sim.world_tick_index
     assert payload["environment_context"]["time"]["world_day"] == sim.world_day
+    await sim.stop_event_listener()
+    sim.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_world_context_projection_consistent_across_consumers(monkeypatch):
+    monkeypatch.setenv("WORLD_TICK_TURN_QUANTUM", "1")
+    monkeypatch.setenv("WORLD_TIME_BROADCAST_CADENCE_TICKS", "1")
+    monkeypatch.setenv("SNAPSHOT_INTERVAL_STEPS", "1")
+
+    monkeypatch.setattr("src.sim.simulation.evaluate_policy", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        "src.sim.simulation.log_event", lambda data: {**data, "trace_hash": "hash"}
+    )
+    emit_event = AsyncMock()
+    monkeypatch.setattr("src.sim.simulation.emit_event", emit_event)
+    rm = SimpleNamespace(
+        cap_tick=lambda **kwargs: None, set_du_budget=lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr("src.sim.simulation.get_resource_manager", lambda: rm)
+
+    captured_snapshots: list[dict] = []
+
+    def _save(step: int, snapshot: dict, directory: str = "snapshots") -> None:
+        captured_snapshots.append(snapshot)
+
+    monkeypatch.setattr(SnapshotPersistenceService, "save", staticmethod(_save))
+    monkeypatch.setattr(SnapshotPersistenceService, "upload", staticmethod(lambda *args, **kwargs: None))
+
+    agent = DummyAgent()
+    sim = Simulation(
+        [agent], memory_service=SimpleNamespace(vector_store=None, semantic_manager=None)
+    )
+    sim.personality_engine.apply_experience_drift = lambda *args, **kwargs: []
+    sim._assert_trait_update_invariants = lambda *args, **kwargs: None
+
+    await sim._run_agent_turn(0)
+    await sim._run_agent_turn(0)
+
+    projection_from_perception = agent.last_perception["environment_context"]
+
+    environment_event = next(
+        call.args[0].data
+        for call in emit_event.await_args_list
+        if call.args[0].type == "environment" and call.args[0].data.get("step") == sim.current_step
+    )
+    agent_action_event = next(
+        call.args[0].data
+        for call in emit_event.await_args_list
+        if call.args[0].type == "agent_action" and call.args[0].data.get("step") == sim.current_step
+    )
+    snapshot = captured_snapshots[-1]
+
+    expected_projection = agent_action_event["world_context_projection"]
+    assert environment_event["world_context_projection"] == expected_projection
+    assert snapshot["metadata"]["world_context_projection"] == expected_projection
+    assert projection_from_perception["time"] == expected_projection["time"]
+    assert projection_from_perception["weather"] == expected_projection["weather"]
+    assert projection_from_perception["season"] == expected_projection["season"]
+    assert projection_from_perception["council_window_active"] == expected_projection["council"][
+        "council_window_active"
+    ]
+    assert projection_from_perception["map_neighborhood"] == expected_projection["map_neighborhood"]
+    assert expected_projection["projection_version"] == 1
+
     await sim.stop_event_listener()
     sim.close()
