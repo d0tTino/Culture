@@ -525,7 +525,14 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         return self.traits.summarize()
 
     def apply_trait_drift(self, signals: dict[str, float] | None = None, max_step: float = 0.03) -> None:
-        """Apply bounded, small trait updates from interaction/reflection signals."""
+        """Deprecated helper kept for tests/legacy serialization compatibility only."""
+        from warnings import warn
+
+        warn(
+            "AgentState.apply_trait_drift is deprecated for production flows; use PersonalityEngine APIs.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         updates = signals or {}
         if not updates:
             return
