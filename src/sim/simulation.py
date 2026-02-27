@@ -56,12 +56,13 @@ from src.sim.engine import SimulationEngine
 from src.sim.environment import EnvironmentState, EnvironmentSystem
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
-from src.sim.knowledge_board import BoardEntry, KnowledgeBoard
+from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.knowledge_board_protocol import (
     KnowledgeBoardProtocol,
     UnsupportedKnowledgeBoardCapabilityError,
     as_semantic_query_store,
 )
+from src.sim.knowledge_board_service import KnowledgeBoardService
 from src.sim.knowledge_entry import KnowledgeEntryType
 from src.sim.lifecycle_service import LifecycleService
 from src.sim.persistence.snapshot_migrations import (
@@ -257,6 +258,12 @@ class Simulation:
             step_provider=lambda: int(self.current_step),
         )
 
+        self.knowledge_board_service = KnowledgeBoardService(
+            self.knowledge_board,
+            step_provider=lambda: int(self.current_step),
+            vector_provider=lambda: self.vector.to_dict(),
+        )
+
         # Initialize world map and place agents
         self.world_map = WorldMap()
         self._init_tasks: list[asyncio.Task[Any]] = []
@@ -271,9 +278,9 @@ class Simulation:
         logger.info("Simulation initialized with world map.")
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -336,9 +343,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -582,18 +589,14 @@ class Simulation:
             except Exception:
                 pass
             if self.knowledge_board:
-                async with self.knowledge_board.lock:
-                    self.knowledge_board.add_entry(
-                        BoardEntry(
-                            content_full=f"Agent {parent.agent_id} spawned child {agent.agent_id}",
-                            entry_type="spawn_event",
-                            tags=["population", "spawn"],
-                            reference_metadata={"child_id": agent.agent_id},
-                        ),
-                        parent.agent_id,
-                        self.current_step,
-                        self.vector.to_dict(),
-                    )
+                await self.knowledge_board_service.post_event(
+                    actor_id=parent.agent_id,
+                    content=f"Agent {parent.agent_id} spawned child {agent.agent_id}",
+                    event_type=KnowledgeEntryType.SPAWN_EVENT,
+                    tags=["population", "spawn"],
+                    reference_metadata={"child_id": agent.agent_id},
+                    causal_source="simulation.spawn_agent.parent",
+                )
         else:
             if hasattr(agent.state, "mutate_genes"):
                 agent.state.mutate_genes(mutation_rate)
@@ -606,21 +609,16 @@ class Simulation:
                 inherit_context=inherit_context,
             )
             if self.knowledge_board:
-                async with self.knowledge_board.lock:
-                    self.knowledge_board.add_entry(
-                        BoardEntry(
-                            content_full=(
-                                f"Agent {agent.agent_id} designated successor of "
-                                f"{predecessor.agent_id}"
-                            ),
-                            entry_type="spawn_event",
-                            tags=["population", "succession"],
-                            reference_metadata=succession,
-                        ),
-                        predecessor.agent_id,
-                        self.current_step,
-                        self.vector.to_dict(),
-                    )
+                await self.knowledge_board_service.post_event(
+                    actor_id=predecessor.agent_id,
+                    content=(
+                        f"Agent {agent.agent_id} designated successor of {predecessor.agent_id}"
+                    ),
+                    event_type=KnowledgeEntryType.SPAWN_EVENT,
+                    tags=["population", "succession"],
+                    reference_metadata=succession,
+                    causal_source="simulation.spawn_agent.successor",
+                )
 
         self.agents.append(agent)
         await self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
@@ -661,26 +659,14 @@ class Simulation:
             )
 
         if self.knowledge_board:
-            async with self.knowledge_board.lock:
-                self.knowledge_board.add_entry(
-                    BoardEntry(
-                        content_full=(
-                            f"Agent {agent.agent_id} transitioned lifecycle "
-                            f"{transition.from_state.value} -> {transition.to_state.value}"
-                        ),
-                        entry_type="retirement",
-                        tags=["population", "retirement", transition.to_state.value],
-                        reference_metadata={
-                            "from_state": transition.from_state.value,
-                            "to_state": transition.to_state.value,
-                            "reason": reason,
-                            "legacy_artifacts": transition.artifacts,
-                        },
-                    ),
-                    agent.agent_id,
-                    self.current_step,
-                    self.vector.to_dict(),
-                )
+            await self.knowledge_board_service.post_lifecycle_transition(
+                actor_id=agent.agent_id,
+                from_state=transition.from_state.value,
+                to_state=transition.to_state.value,
+                reason=reason,
+                legacy_artifacts=transition.artifacts,
+                causal_source="lifecycle_service.transition",
+            )
         agent.update_state(agent.state)
         await self.world_map.remove_agent(agent.agent_id)
         if remove_from_simulation:
@@ -896,9 +882,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -989,37 +973,28 @@ class Simulation:
         )
 
         if self.knowledge_board:
-            async with self.knowledge_board.lock:
-                self.knowledge_board.add_entry(
-                    BoardEntry(
-                        content_full=(
-                            f"Governance enforcement {governance_outcome.outcome} for action "
-                            f"'{requested_action_intent}' by {agent_id}"
-                        ),
-                        entry_type=KnowledgeEntryType.GOVERNANCE_DECISION.value,
-                        tags=[
-                            "governance",
-                            governance_outcome.outcome,
-                            governance_outcome.decision,
-                        ],
-                        reference_metadata={
-                            "decision": governance_outcome.decision,
-                            "outcome": governance_outcome.outcome,
-                            "rule_ids": governance_outcome.rule_ids,
-                            "provenance": {
-                                "agent_id": agent_id,
-                                "step": self.current_step,
-                                "policy_allowed": policy_allowed,
-                                "rule_reason": governance_outcome.reason,
-                                "penalties": governance_outcome.penalties,
-                                "audit": governance_audit,
-                            },
-                        },
-                    ),
-                    agent_id,
-                    self.current_step,
-                    self.vector.to_dict(),
-                )
+            await self.knowledge_board_service.post_event(
+                actor_id=agent_id,
+                content=(
+                    f"Governance enforcement {governance_outcome.outcome} for action "
+                    f"'{requested_action_intent}' by {agent_id}"
+                ),
+                event_type=KnowledgeEntryType.GOVERNANCE_DECISION,
+                tags=["governance", governance_outcome.outcome, governance_outcome.decision],
+                governance_rule_id=(
+                    governance_outcome.rule_ids[0] if governance_outcome.rule_ids else None
+                ),
+                reference_metadata={
+                    "decision": governance_outcome.decision,
+                    "outcome": governance_outcome.outcome,
+                    "rule_ids": governance_outcome.rule_ids,
+                    "policy_allowed": policy_allowed,
+                    "rule_reason": governance_outcome.reason,
+                    "penalties": governance_outcome.penalties,
+                    "audit": governance_audit,
+                },
+                causal_source="governance_rules_engine.post_action_enforcement",
+            )
         if message_content:
             msg_data = cast(
                 SimulationMessage,
@@ -1047,17 +1022,12 @@ class Simulation:
                 and action_intent_str == AgentActionIntent.PROPOSE_IDEA.value
                 and message_recipient_id is None
             ):
-                async with self.knowledge_board.lock:
-                    self.knowledge_board.add_entry(
-                        BoardEntry(
-                            content_full=message_content,
-                            entry_type="idea",
-                            tags=["agent", "proposal"],
-                        ),
-                        agent_id,
-                        self.current_step,
-                        self.vector.to_dict(),
-                    )
+                await self.knowledge_board_service.post_idea(
+                    actor_id=agent_id,
+                    content=message_content,
+                    tags=["agent"],
+                    causal_source="agent_action.propose_idea",
+                )
 
         self.agents[agent_index] = agent
 

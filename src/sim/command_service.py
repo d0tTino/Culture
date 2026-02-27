@@ -19,7 +19,6 @@ from src.interfaces.interaction_schema import (
     InteractionResult,
 )
 from src.shared.typing import SimulationMessage
-from src.sim.knowledge_board import BoardEntry
 
 if TYPE_CHECKING:
     from src.sim.simulation import Simulation
@@ -175,7 +174,11 @@ class SimulationCommandService:
         elif action == "inject_event":
             await self._inject_world_event(envelope)
 
-        return {"paused": sim.paused, "speed": sim.speed, "simulation_complete": sim.simulation_complete}
+        return {
+            "paused": sim.paused,
+            "speed": sim.speed,
+            "simulation_complete": sim.simulation_complete,
+        }
 
     async def _spawn_agent(self, envelope: InteractionEnvelope) -> None:
         sim = self.simulation
@@ -186,7 +189,11 @@ class SimulationCommandService:
             await emit_event(
                 SimulationEvent(
                     type="spawn_rejected",
-                    data={"reason": "duplicate_agent_id", "agent_id": agent_id, "step": sim.current_step},
+                    data={
+                        "reason": "duplicate_agent_id",
+                        "agent_id": agent_id,
+                        "step": sim.current_step,
+                    },
                 )
             )
             return
@@ -213,13 +220,12 @@ class SimulationCommandService:
         text = envelope.text
         author = envelope.agent_id or "human"
         if text and sim.knowledge_board:
-            async with sim.knowledge_board.lock:
-                sim.knowledge_board.add_entry(
-                    BoardEntry(content_full=text, entry_type="human_message", tags=["human", "moderation"]),
-                    str(author),
-                    sim.current_step,
-                    sim.vector.to_dict(),
-                )
+            await sim.knowledge_board_service.post_human_message(
+                actor_id=str(author),
+                content=text,
+                tags=["moderation"],
+                causal_source="command_service.post_knowledge_board",
+            )
             await emit_event(
                 SimulationEvent(
                     type="knowledge_board",
@@ -255,15 +261,17 @@ class SimulationCommandService:
             sim.messages_to_perceive_this_round.append(msg)
         await sim.event_kernel.emit_environment_event(event_payload)
         if sim.knowledge_board:
-            async with sim.knowledge_board.lock:
-                sim.knowledge_board.add_entry(
-                    BoardEntry(content_full=text, entry_type="world_event", tags=["event", scope]),
-                    author,
-                    sim.current_step,
-                    sim.vector.to_dict(),
-                )
+            await sim.knowledge_board_service.post_event(
+                actor_id=author,
+                content=text,
+                event_type="world_event",
+                tags=[scope],
+                causal_source="command_service.inject_world_event",
+            )
 
-    async def _dispatch_knowledge_board(self, command: InteractionEnvelope, *, context: InteractionContext) -> InteractionResult:
+    async def _dispatch_knowledge_board(
+        self, command: InteractionEnvelope, *, context: InteractionContext
+    ) -> InteractionResult:
         content = str(command.content or "").strip()
         if not content:
             return InteractionResult(
@@ -300,13 +308,12 @@ class SimulationCommandService:
                 data=decision.metadata or None,
                 decision_provenance=decision.provenance,
             )
-        async with board.lock:
-            board.add_entry(
-                BoardEntry(content_full=content, entry_type="human_message", tags=["human", "knowledge_board"]),
-                context.sender_id,
-                self.simulation.current_step,
-                self.simulation.vector.to_dict(),
-            )
+        await self.simulation.knowledge_board_service.post_human_message(
+            actor_id=context.sender_id,
+            content=content,
+            tags=["knowledge_board"],
+            causal_source="command_service.dispatch_knowledge_board",
+        )
         return InteractionResult(
             status="ok",
             user_message="Posted to Knowledge Board.",
@@ -314,7 +321,9 @@ class SimulationCommandService:
             decision_provenance=decision.provenance,
         )
 
-    async def _dispatch_message(self, command: InteractionEnvelope, *, context: InteractionContext) -> InteractionResult:
+    async def _dispatch_message(
+        self, command: InteractionEnvelope, *, context: InteractionContext
+    ) -> InteractionResult:
         text = str(command.content or "").strip()
         if not text:
             return InteractionResult(
@@ -364,12 +373,22 @@ class SimulationCommandService:
         broadcast = command.intent == "broadcast"
         target = self._resolve_target(command)
         budget_agent_id = self._resolve_budget_agent_id(command, target.agent_id)
-        budget_agent = next((a for a in self.simulation.agents if a.agent_id == budget_agent_id), None)
+        budget_agent = next(
+            (a for a in self.simulation.agents if a.agent_id == budget_agent_id), None
+        )
         state = budget_agent.state if budget_agent is not None else None
 
         if broadcast:
-            ip_cost = float(config.get_config("IP_COST_BROADCAST_MESSAGE") or config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
-            du_cost = float(config.get_config("DU_COST_BROADCAST_ACTION") or config.get_config("DU_COST_PER_ACTION") or 0.0)
+            ip_cost = float(
+                config.get_config("IP_COST_BROADCAST_MESSAGE")
+                or config.get_config("IP_COST_SEND_DIRECT_MESSAGE")
+                or 0.0
+            )
+            du_cost = float(
+                config.get_config("DU_COST_BROADCAST_ACTION")
+                or config.get_config("DU_COST_PER_ACTION")
+                or 0.0
+            )
         else:
             ip_cost = float(config.get_config("IP_COST_SEND_DIRECT_MESSAGE") or 0.0)
             du_cost = float(config.get_config("DU_COST_PER_ACTION") or 0.0)
@@ -462,11 +481,32 @@ class SimulationCommandService:
     def _resolve_target(self, command: InteractionEnvelope) -> Any:
         target = None
         if command.routing.target_agent_id:
-            target = next((a for a in self.simulation.agents if a.agent_id == command.routing.target_agent_id), None)
+            target = next(
+                (
+                    a
+                    for a in self.simulation.agents
+                    if a.agent_id == command.routing.target_agent_id
+                ),
+                None,
+            )
         if target is None and command.routing.recipient_id:
-            target = next((a for a in self.simulation.agents if a.agent_id == command.routing.recipient_id), None)
-        if target is None and self.simulation.discord_bot and self.simulation.discord_bot.last_agent_id:
-            target = next((a for a in self.simulation.agents if a.agent_id == self.simulation.discord_bot.last_agent_id), None)
+            target = next(
+                (a for a in self.simulation.agents if a.agent_id == command.routing.recipient_id),
+                None,
+            )
+        if (
+            target is None
+            and self.simulation.discord_bot
+            and self.simulation.discord_bot.last_agent_id
+        ):
+            target = next(
+                (
+                    a
+                    for a in self.simulation.agents
+                    if a.agent_id == self.simulation.discord_bot.last_agent_id
+                ),
+                None,
+            )
         return target or self.simulation.agents[self.simulation.current_agent_index]
 
     def _resolve_budget_agent_id(self, command: InteractionEnvelope, fallback: str) -> str:
