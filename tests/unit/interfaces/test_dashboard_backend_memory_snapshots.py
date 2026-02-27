@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from src.infra.snapshot import compute_trace_hash, save_snapshot
+from src.infra.snapshot import save_snapshot
 from src.interfaces import dashboard_backend as db
+from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 
 
 @pytest.mark.unit
@@ -13,8 +14,8 @@ async def test_api_memory_snapshots(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     # create several snapshot files
     steps = [1, 2, 3]
     for step in steps:
-        data = {"step": step}
-        data["trace_hash"] = compute_trace_hash(data)
+        data = {"step": step, "snapshot_schema_version": 3}
+        data["trace_hash"] = SnapshotPersistenceService.compute_hash(data)
         save_snapshot(step, data, directory=tmp_path)
     monkeypatch.setattr(db, "SNAPSHOT_DIR", tmp_path)
 
@@ -25,8 +26,8 @@ async def test_api_memory_snapshots(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_api_memory_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    data = {"step": 5}
-    data["trace_hash"] = compute_trace_hash(data)
+    data = {"step": 5, "snapshot_schema_version": 3}
+    data["trace_hash"] = SnapshotPersistenceService.compute_hash(data)
     save_snapshot(5, data, directory=tmp_path)
     monkeypatch.setattr(db, "SNAPSHOT_DIR", tmp_path)
 

@@ -7,7 +7,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
 
-from src.sim.persistence.snapshot_migrations import CURRENT_SNAPSHOT_SCHEMA_VERSION
 from src.sim.persistence.trace_hash_service import TraceHashService
 from src.utils.paths import ensure_dir
 
@@ -37,20 +36,9 @@ _s3_client: boto3.client | None = None
 
 
 def compute_trace_hash(data: dict[str, Any]) -> str:
-    """Backward-compatible trace hash helper; use sim persistence services for new code."""
+    """Backward-compatible trace hash helper."""
 
     return TraceHashService.compute(data)
-
-
-def _validate_snapshot_schema_version(data: dict[str, Any]) -> None:
-    version = data.get("snapshot_schema_version")
-    if not isinstance(version, int):
-        raise ValueError("Snapshot schema version is missing or invalid")
-    if version < 1 or version > CURRENT_SNAPSHOT_SCHEMA_VERSION:
-        raise ValueError(
-            f"Unsupported snapshot schema version {version}; "
-            f"supported range is [1, {CURRENT_SNAPSHOT_SCHEMA_VERSION}]"
-        )
 
 
 def _get_s3_client() -> boto3.client:
@@ -61,7 +49,6 @@ def _get_s3_client() -> boto3.client:
             raise RuntimeError("boto3 is required for S3 operations")
         _s3_client = boto3.client("s3")
     return _s3_client
-
 
 
 def _s3_key(step: int, compress: bool) -> str:
@@ -109,8 +96,6 @@ def save_snapshot(
         Folder where snapshots will be stored.
     """
     compress = SNAPSHOT_COMPRESS if compress is None else compress
-    _validate_snapshot_schema_version(data)
-
     path = ensure_dir(directory)
 
     if compress:
@@ -133,13 +118,7 @@ def load_snapshot(
     directory: str | Path = "snapshots",
     compress: bool | None = None,
 ) -> dict[str, Any]:
-    """Load ``directory/snapshot_{step}.json`` or ``.json.zst`` and verify hash.
-
-    Raises
-    ------
-    ValueError
-        If the recomputed trace hash does not match the stored value.
-    """
+    """Load ``directory/snapshot_{step}.json`` or ``.json.zst``."""
 
     compress = SNAPSHOT_COMPRESS if compress is None else compress
 
@@ -188,24 +167,5 @@ def load_snapshot(
     else:
         with file_path.open("r", encoding="utf-8") as f:
             data = cast(dict[str, Any], json.load(f))
-
-    _validate_snapshot_schema_version(data)
-
-    expected = data.get("trace_hash")
-    if expected is not None:
-        data_no_vector = {k: v for k, v in data.items() if k != "trace_hash"}
-        if "knowledge_board" in data_no_vector:
-            data_no_vector["knowledge_board"] = {
-                k: v for k, v in data.get("knowledge_board", {}).items() if k != "vector"
-            }
-        if "world_map" in data_no_vector:
-            data_no_vector["world_map"] = {
-                k: v for k, v in data.get("world_map", {}).items() if k != "vector"
-            }
-        actual = TraceHashService.compute(data_no_vector)
-        if actual != expected:
-            raise ValueError(
-                f"Trace hash mismatch for snapshot {step}: expected {expected}, computed {actual}"
-            )
 
     return data

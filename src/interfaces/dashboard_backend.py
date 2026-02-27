@@ -18,10 +18,10 @@ from src.governance.service import governance
 from src.infra import event_log
 from src.infra import metrics as infra_metrics
 from src.infra.ledger import ledger
-from src.infra.snapshot import load_snapshot
 from src.interfaces import metrics
 from src.sim.context import SimulationContext
 from src.sim.event_bus import get_event_bus
+from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 
 from .widget_registry import WidgetRegistry
 
@@ -679,13 +679,15 @@ async def api_get_gov() -> Response:
     if sim is not None and hasattr(sim, "get_governance_read_model"):
         model = cast(dict[str, Any], sim.get_governance_read_model())
         return JSONResponse(model)
-    return JSONResponse({
-        "rules": governance_rules_engine.current_rules(),
-        "current_rules": governance_rules_engine.current_rules(),
-        "pending_votes": governance_rules_engine.pending_votes(),
-        "active_offices": governance_rules_engine.active_offices(),
-        "sanctions": governance_rules_engine.sanctions(),
-    })
+    return JSONResponse(
+        {
+            "rules": governance_rules_engine.current_rules(),
+            "current_rules": governance_rules_engine.current_rules(),
+            "pending_votes": governance_rules_engine.pending_votes(),
+            "active_offices": governance_rules_engine.active_offices(),
+            "sanctions": governance_rules_engine.sanctions(),
+        }
+    )
 
 
 @app.get("/api/laws", response_model=LawsResponse)
@@ -693,8 +695,6 @@ async def api_get_laws() -> Response:
     """Return passed laws from the canonical governance state store."""
 
     return JSONResponse({"laws": governance_rules_engine.passed_laws()})
-
-
 
 
 @app.get("/api/gov/current_rules")
@@ -845,7 +845,9 @@ async def api_memory_snapshot(step: int) -> Response:
     """Return memory snapshot data for the given step."""
 
     try:
-        data = await asyncio.to_thread(load_snapshot, step, directory=SNAPSHOT_DIR)
+        data = await asyncio.to_thread(
+            SnapshotPersistenceService.load, step, directory=SNAPSHOT_DIR
+        )
     except Exception:  # pragma: no cover - invalid or missing snapshot
         resp = JSONResponse({"error": "not_found"}, status_code=404)
         if not hasattr(resp, "status_code"):
