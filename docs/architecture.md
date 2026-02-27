@@ -526,6 +526,19 @@ The project-related components:
 5. **Environment Updates**: Update shared resources like the knowledge board
 6. **Observation**: Record metrics and state for analysis
 
+### Event Scheduler Ordering Contract
+
+The simulation uses a single source-of-truth scheduler (`EventKernel`) behind a narrow scheduler protocol consumed by `Simulation` and `SimulationEngine`.
+
+Event ordering is deterministic and uses the following tie-break rules:
+
+1. **Primary key: `step`** — lower simulated step executes first.
+2. **Secondary key: `count`** — for equal `step`, lower insertion count executes first (FIFO for same-step events).
+3. **Trace metadata** — every dispatched event carries stable metadata (`step`, `count`, `tokens`, `agent_id`, vector clock, and `trace_hash`) used for replay verification.
+
+Pause/resume behavior is also defined by the protocol: `pause()` prevents further dispatch, and `resume()` continues dispatching in the same deterministic order from the remaining queue.
+
+
 ## 9. Interfaces
 
 ### Overview
