@@ -1,0 +1,73 @@
+import pytest
+
+from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.knowledge_board_service import KnowledgeBoardService
+from src.sim.knowledge_entry import KnowledgeEntryType
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_post_methods_add_minimal_provenance() -> None:
+    step = 12
+    board = KnowledgeBoard()
+    service = KnowledgeBoardService(
+        board,
+        step_provider=lambda: step,
+        vector_provider=lambda: {"sim": step},
+    )
+
+    await service.post_idea(actor_id="agent-1", content="idea", causal_source="test.idea")
+    await service.post_vote(
+        actor_id="agent-2",
+        proposal_id="proposal-1",
+        approve=True,
+        causal_source="test.vote",
+    )
+    await service.post_event(actor_id="agent-3", content="event", causal_source="test.event")
+    await service.post_lifecycle_transition(
+        actor_id="agent-4",
+        from_state="active",
+        to_state="retired",
+        reason="done",
+        legacy_artifacts=["artifact"],
+        causal_source="test.lifecycle",
+    )
+    await service.post_human_message(
+        actor_id="human",
+        content="hello",
+        causal_source="test.human",
+    )
+
+    assert len(board.entries) == 5
+    for entry in board.entries:
+        metadata = entry.get("reference_metadata") or {}
+        provenance = metadata.get("provenance") or {}
+        assert provenance.get("step") == step
+        assert provenance.get("actor") == entry["agent_id"]
+        assert isinstance(provenance.get("causal_source"), str)
+        assert provenance["causal_source"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_governance_linkage_is_attached_to_entry_and_metadata() -> None:
+    board = KnowledgeBoard()
+    service = KnowledgeBoardService(
+        board,
+        step_provider=lambda: 7,
+        vector_provider=lambda: {"sim": 7},
+    )
+
+    await service.post_event(
+        actor_id="agent-1",
+        content="governance event",
+        event_type=KnowledgeEntryType.GOVERNANCE_DECISION,
+        governance_rule_id="rule-123",
+        causal_source="test.governance",
+    )
+
+    entry = board.entries[-1]
+    assert entry["governance_rule_id"] == "rule-123"
+    metadata = entry.get("reference_metadata") or {}
+    governance = metadata.get("governance") or {}
+    assert governance.get("rule_id") == "rule-123"
