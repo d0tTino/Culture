@@ -50,6 +50,7 @@ from src.interfaces.metrics import (
 )
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
+from src.sim.command_service import SimulationCommandService
 from src.sim.control_service import SimulationControlService
 from src.sim.engine import SimulationEngine
 from src.sim.environment import EnvironmentState, EnvironmentSystem
@@ -371,6 +372,7 @@ class Simulation:
         self._event_task = None
         self._event_loop = None
         self._event_loop_thread = None
+        self.command_service = SimulationCommandService(self)
         self.interaction_service = InteractionService(self)
         self.command_bus = CommandBus(self.interaction_service)
         self.decision_service = PolicyDecisionService()
@@ -441,7 +443,7 @@ class Simulation:
         command_type = payload.get("command_type")
         if not command_type and bool(payload.get("broadcast")):
             command_type = "broadcast"
-        result = await self.interaction_service.execute_from_payload(
+        result = await self.command_service.execute_from_payload(
             {
                 "command_type": command_type or "human_message",
                 "content": text,

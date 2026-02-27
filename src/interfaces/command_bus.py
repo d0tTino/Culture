@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from src.governance.decision_kernel import DecisionProvenance
-from src.interfaces.interaction_commands import (
+from src.interfaces.interaction_schema import (
     InteractionContext,
     InteractionEnvelope,
     InteractionResult,

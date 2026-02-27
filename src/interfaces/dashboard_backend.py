@@ -996,77 +996,42 @@ async def websocket_events(websocket: WebSocket) -> None:
 async def handle_control_command(
     cmd: dict[str, Any], ctx: SimulationContext = DEFAULT_CONTEXT
 ) -> dict[str, Any]:
-    """Process a control command via the interaction service when available."""
+    """Process dashboard control command through the canonical command service."""
     simulation = ctx.sim_state.get("simulation")
-    bus = getattr(simulation, "command_bus", None)
-    if bus is not None:
-        from src.interfaces.interaction_commands import InteractionContext
+    if simulation is None or getattr(simulation, "command_service", None) is None:
+        action = str(cmd.get("command") or "")
+        if action == "pause":
+            ctx.sim_state["paused"] = True
+        elif action == "resume":
+            ctx.sim_state["paused"] = False
+        elif action == "set_speed":
+            try:
+                ctx.sim_state["speed"] = float(cmd.get("value", ctx.sim_state.get("speed", 1.0)))
+            except (TypeError, ValueError):
+                pass
+        elif action == "set_breakpoints":
+            tags = cmd.get("tags")
+            if isinstance(tags, list):
+                BREAKPOINT_TAGS.clear()
+                BREAKPOINT_TAGS.update(str(t) for t in tags)
+        return {**ctx.sim_state, "breakpoints": list(BREAKPOINT_TAGS)}
 
-        result = await bus.dispatch_payload(
-            cmd,
-            context=InteractionContext(
-                sender_id="dashboard",
-                source="dashboard",
-                permissions={"admin", "moderator"},
-            ),
-        )
-        return {
-            "status": result.status,
-            "message": result.user_message,
-            "reason_code": result.reason_code,
-            "data": result.data,
-            "decision_provenance": result.decision_provenance.model_dump(),
-        }
+    from src.interfaces.interaction_schema import InteractionContext
 
-    from src.interfaces.interaction_commands import InteractionContext, InteractionEnvelope
-
-    fallback_envelope = InteractionEnvelope.model_validate(
-        {
-            "intent": "control",
-            "action": str(cmd.get("command") or ""),
-            "value": cmd.get("value"),
-            "tags": cmd.get("tags"),
-            "metadata": dict(cmd),
-        }
-    )
-    decision = DECISION_KERNEL.decide(
-        envelope=fallback_envelope,
+    result = await simulation.command_service.execute_from_payload(
+        cmd,
         context=InteractionContext(
             sender_id="dashboard",
             source="dashboard",
             permissions={"admin", "moderator"},
         ),
-        simulation=simulation,
-        stage="control",
     )
-    if decision.decision != "allow":
-        return {
-            "status": "rejected",
-            "message": decision.user_message or "Command rejected.",
-            "reason_code": decision.reason_code,
-            "decision_provenance": decision.provenance.model_dump(),
-            "data": decision.metadata or None,
-        }
-
-    action = cmd.get("command")
-    if action == "pause":
-        ctx.sim_state["paused"] = True
-    elif action == "resume":
-        ctx.sim_state["paused"] = False
-    elif action == "set_speed":
-        try:
-            ctx.sim_state["speed"] = float(cmd.get("value", 1))
-        except (TypeError, ValueError):
-            pass
-    elif action == "set_breakpoints":
-        tags = cmd.get("tags")
-        if isinstance(tags, list):
-            BREAKPOINT_TAGS.clear()
-            BREAKPOINT_TAGS.update(str(t) for t in tags)
     return {
-        **ctx.sim_state,
-        "breakpoints": list(BREAKPOINT_TAGS),
-        "decision_provenance": decision.provenance.model_dump(),
+        "status": result.status,
+        "message": result.user_message,
+        "reason_code": result.reason_code,
+        "data": result.data,
+        "decision_provenance": result.decision_provenance.model_dump(),
     }
 
 
