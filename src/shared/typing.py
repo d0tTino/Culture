@@ -73,6 +73,8 @@ class SimulationMessage(TypedDict):
     step: int
     turn_index: NotRequired[int]
     world_time: NotRequired[JSONDict]
+    environment_context: NotRequired[JSONDict]
+    world_context_projection: NotRequired[JSONDict]
     sender_id: str
     recipient_id: str | None
     content: str
