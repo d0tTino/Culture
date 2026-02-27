@@ -430,6 +430,25 @@ class Simulation:
 
         # current_round = (self.current_step -1) // len(self.agents) # Not clearly used, commenting out
 
+    def _assert_trait_update_invariants(
+        self,
+        state: Any,
+        trait_records: Sequence[dict[str, float | str | int]],
+        *,
+        max_step: float,
+    ) -> None:
+        trait_values = state.traits.model_dump()
+        for trait, value in trait_values.items():
+            if not 0.0 <= float(value) <= 1.0:
+                raise AssertionError(f"Trait '{trait}' out of bounds: {value}")
+
+        for record in trait_records:
+            delta = float(record.get("delta", 0.0))
+            if abs(delta) > (max_step + 1e-9):
+                raise AssertionError(f"Trait drift exceeded per-step max: {record}")
+            if not record.get("cause") or not record.get("source"):
+                raise AssertionError(f"Trait audit record missing cause/source: {record}")
+
     async def _handle_human_command(
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
@@ -1069,7 +1088,16 @@ class Simulation:
             mood_after=float(current_agent_state.mood_level),
             rule_allowed=bool(governance_outcome.allowed),
         )
-        self.personality_engine.update_traits(current_agent_state, experience_signals)
+        trait_records = self.personality_engine.apply_experience_drift(
+            current_agent_state,
+            experience_signals,
+            source="simulation.turn",
+        )
+        self._assert_trait_update_invariants(
+            current_agent_state,
+            trait_records,
+            max_step=0.01,
+        )
         self.agents[agent_index].update_state(current_agent_state)
 
         async with self._msg_lock:

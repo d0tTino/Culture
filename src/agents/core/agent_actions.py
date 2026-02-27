@@ -105,28 +105,15 @@ def change_role(state: AgentState, new_role: str, current_step: int) -> bool:
         ledger.log_change(state.agent_id, state.ip - start_ip, 0.0, "role_change")
     except Exception:  # pragma: no cover - ledger optional
         logger.debug("Ledger logging failed", exc_info=True)
+    previous_role = state.current_role.name
     state.current_role = create_role_profile(new_role)
     state.role_embedding = list(state.current_role.embedding)
-    template = state.traits.__class__(**get_role_trait_template(new_role))
-    state.apply_trait_drift(
-        {
-            "openness": (template.openness - state.traits.openness) * 0.25,
-            "analytical_focus": (
-                template.analytical_focus - state.traits.analytical_focus
-            )
-            * 0.25,
-            "empathy": (template.empathy - state.traits.empathy) * 0.25,
-            "assertiveness": (template.assertiveness - state.traits.assertiveness) * 0.25,
-            "emotional_sensitivity": (
-                template.emotional_sensitivity - state.traits.emotional_sensitivity
-            )
-            * 0.25,
-            "resilience": (template.resilience - state.traits.resilience) * 0.25,
-            "trust_baseline": (template.trust_baseline - state.traits.trust_baseline)
-            * 0.25,
-            "adaptability": (template.adaptability - state.traits.adaptability) * 0.25,
-        },
+    _ENGINE.apply_role_transition_blend(
+        state,
+        target_traits=get_role_trait_template(new_role),
+        blend_ratio=0.25,
         max_step=0.03,
+        source=f"role_change:{previous_role}->{new_role}",
     )
     state.reputation_score = state.current_role.reputation
     state.steps_in_current_role = 0

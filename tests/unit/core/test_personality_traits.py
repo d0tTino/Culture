@@ -2,6 +2,7 @@ import pytest
 
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState, PersonalityTraits
+from src.agents.core.personality_engine import ExperienceSignal, PersonalityEngine
 from src.agents.core.roles import ROLE_ANALYZER, ROLE_FACILITATOR, get_role_trait_template
 
 
@@ -45,5 +46,10 @@ def test_traits_modulate_mood_response() -> None:
 def test_trait_drift_is_bounded() -> None:
     state = AgentState(agent_id="a3", name="drift")
     before = state.traits.trust_baseline
-    state.apply_trait_drift({"trust_baseline": 1.0}, max_step=0.01)
+    PersonalityEngine().apply_experience_drift(
+        state,
+        ExperienceSignal(social_outcome=100.0),
+        max_step=0.01,
+        source="test.bound",
+    )
     assert state.traits.trust_baseline == pytest.approx(before + 0.01)
