@@ -11,14 +11,15 @@ from src.governance.decision_kernel import DecisionProvenance, PolicyDecisionSer
 from src.infra import config
 from src.infra import ledger as infra_ledger
 from src.infra.event_log import log_event
-from src.interfaces.command_bus import parse_bus_command
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
+from src.interfaces.domain_command_adapters import command_from_payload
 from src.interfaces.interaction_schema import (
     InteractionContext,
     InteractionEnvelope,
     InteractionResult,
 )
 from src.shared.typing import SimulationMessage
+from src.sim.commands.domain_commands import DomainCommandT
 
 if TYPE_CHECKING:
     from src.sim.simulation import Simulation
@@ -39,32 +40,22 @@ class SimulationCommandService:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        try:
-            envelope = parse_bus_command(payload, context=context)
-        except Exception as exc:
-            return InteractionResult(
-                status="rejected",
-                user_message=f"Invalid command payload: {exc}",
-                reason_code="invalid_payload",
-                decision_provenance=DecisionProvenance(
-                    policy_id="interaction-policy-v1",
-                    rule_id="policy.validation.payload",
-                ),
-            )
-        return await self.execute(envelope, context=context)
+        command = command_from_payload(payload, context=context)
+        return await self.execute(command, context=context)
 
     async def execute(
         self,
-        command: InteractionEnvelope,
+        command: DomainCommandT,
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
         ctx = context or InteractionContext()
+        envelope = command.to_envelope(context=ctx)
         await emit_event(
             SimulationEvent(
                 type="human_command",
                 data={
-                    "command_type": command.intent,
+                    "command_type": envelope.intent,
                     "sender_id": ctx.sender_id,
                     "source": ctx.source,
                     "step": self.simulation.current_step,
@@ -73,15 +64,15 @@ class SimulationCommandService:
         )
 
         entry_decision = self.decision_service.decide(
-            envelope=command,
+            envelope=envelope,
             context=ctx,
             simulation=self.simulation,
             stage="entry",
         )
         envelope = (
-            command.model_copy(update=entry_decision.transformed_updates)
+            envelope.model_copy(update=entry_decision.transformed_updates)
             if entry_decision.decision == "transform"
-            else command
+            else envelope
         )
 
         if entry_decision.decision == "deny":
@@ -425,7 +416,7 @@ class SimulationCommandService:
         except Exception:
             logger.debug("Ledger spend failed", exc_info=True)
 
-        world_time = self.simulation._world_time_snapshot()
+        world_time = self.simulation.environment_system.world_time_snapshot()
         turn_index = self.simulation.current_step
         recipients = self.simulation.agents if broadcast else [target]
         msgs = [

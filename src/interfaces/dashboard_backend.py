@@ -19,6 +19,7 @@ from src.infra import event_log
 from src.infra import metrics as infra_metrics
 from src.infra.ledger import ledger
 from src.interfaces import metrics
+from src.interfaces.domain_command_adapters import command_from_payload
 from src.sim.context import SimulationContext
 from src.sim.event_bus import get_event_bus
 from src.sim.persistence.snapshot_service import SnapshotPersistenceService
@@ -1020,14 +1021,13 @@ async def handle_control_command(
 
     from src.interfaces.interaction_schema import InteractionContext
 
-    result = await simulation.command_service.execute_from_payload(
-        cmd,
-        context=InteractionContext(
-            sender_id="dashboard",
-            source="dashboard",
-            permissions={"admin", "moderator"},
-        ),
+    context = InteractionContext(
+        sender_id="dashboard",
+        source="dashboard",
+        permissions={"admin", "moderator"},
     )
+    command = command_from_payload(cmd, context=context)
+    result = await simulation.command_dispatcher.dispatch(command, context=context)
     return {
         "status": result.status,
         "message": result.user_message,
