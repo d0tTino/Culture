@@ -25,6 +25,26 @@ DEFAULT_TRAIT_POLICY_COEFFICIENTS: dict[str, float] = {
 }
 
 
+TRAIT_KEYS: tuple[str, ...] = (
+    "openness",
+    "analytical_focus",
+    "empathy",
+    "assertiveness",
+    "emotional_sensitivity",
+    "resilience",
+    "trust_baseline",
+    "adaptability",
+)
+
+
+def normalize_trait_projection(traits: PersonalityTraits) -> dict[str, dict[str, float]]:
+    """Return normalized trait projection used by all trait influence computations."""
+
+    raw = {key: float(getattr(traits, key)) for key in TRAIT_KEYS}
+    centered = {key: value - 0.5 for key, value in raw.items()}
+    return {"raw": raw, "centered": centered}
+
+
 def _coefficient(
     coefficients: Mapping[str, float] | None,
     key: str,
@@ -35,7 +55,7 @@ def _coefficient(
 
 
 def action_intent_biasing(
-    traits: PersonalityTraits,
+    trait_projection: Mapping[str, Mapping[str, float]],
     available_actions: Sequence[str],
     coefficients: Mapping[str, float] | None = None,
 ) -> dict[str, float]:
@@ -47,13 +67,7 @@ def action_intent_biasing(
     assertive_w = _coefficient(coefficients, "action_bias.assertiveness")
     adaptability_w = _coefficient(coefficients, "action_bias.adaptability")
 
-    centered = {
-        "openness": traits.openness - 0.5,
-        "analytical_focus": traits.analytical_focus - 0.5,
-        "empathy": traits.empathy - 0.5,
-        "assertiveness": traits.assertiveness - 0.5,
-        "adaptability": traits.adaptability - 0.5,
-    }
+    centered = trait_projection["centered"]
 
     templates = {
         "propose_idea": (1.0, 0.2, 0.2, 0.8, 0.4),
@@ -80,21 +94,22 @@ def action_intent_biasing(
 
 
 def mood_update_multiplier(
-    traits: PersonalityTraits,
+    trait_projection: Mapping[str, Mapping[str, float]],
     coefficients: Mapping[str, float] | None = None,
 ) -> float:
     """Return multiplier applied to sentiment before mood update rates."""
 
     sensitivity_weight = _coefficient(coefficients, "mood.sensitivity_weight")
     resilience_weight = _coefficient(coefficients, "mood.resilience_weight")
+    centered = trait_projection["centered"]
     multiplier = 1.0 + (
-        sensitivity_weight * (traits.emotional_sensitivity - 0.5)
-    ) - (resilience_weight * (traits.resilience - 0.5))
+        sensitivity_weight * centered["emotional_sensitivity"]
+    ) - (resilience_weight * centered["resilience"])
     return max(0.1, multiplier)
 
 
 def relationship_update_sensitivity(
-    traits: PersonalityTraits,
+    trait_projection: Mapping[str, Mapping[str, float]],
     *,
     is_targeted: bool,
     coefficients: Mapping[str, float] | None = None,
@@ -105,7 +120,7 @@ def relationship_update_sensitivity(
     trust_weight = _coefficient(coefficients, "relationship.trust_weight")
     targeted_weight = _coefficient(coefficients, "relationship.targeted_weight")
     targeted_factor = targeted_weight if is_targeted else 1.0
-    return targeted_factor * (base + trust_weight * traits.trust_baseline)
+    return targeted_factor * (base + trust_weight * trait_projection["raw"]["trust_baseline"])
 
 
 def trait_drift_from_experience(

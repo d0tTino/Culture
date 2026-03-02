@@ -309,6 +309,7 @@ class AgentStateData(BaseModel):
     current_role: RoleProfile = Field(default_factory=_get_default_role_profile)
     traits: PersonalityTraits = Field(default_factory=PersonalityTraits)
     trait_change_audit: list[dict[str, Any]] = Field(default_factory=list)
+    personality_transition_events: list[dict[str, Any]] = Field(default_factory=list)
     steps_in_current_role: int = 0
     reputation: dict[str, float] = Field(default_factory=dict)
     role_reputation: dict[str, float] = Field(default_factory=dict)

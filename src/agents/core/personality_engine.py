@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import cast
 from warnings import warn
 
 from pydantic import BaseModel
 
 from .agent_state import AgentState
+from .personality_transition import PersonalityTransition, TraitDelta
 from .trait_policy import (
     action_intent_biasing,
     merge_trait_policy_coefficients,
     mood_update_multiplier,
+    normalize_trait_projection,
     relationship_update_sensitivity,
     trait_drift_from_experience,
 )
@@ -29,17 +31,26 @@ class ExperienceSignal(BaseModel):
 class PersonalityEngine:
     """Sole owner of personality-dependent strategy and trait drift updates."""
 
-    def _apply_trait_adjustments(
+    def _coefficients(self, state: AgentState) -> dict[str, float]:
+        coefficients = merge_trait_policy_coefficients(state.trait_policy_coefficients)
+        return cast(dict[str, float], coefficients)
+
+    def trait_projection(self, state: AgentState) -> dict[str, dict[str, float]]:
+        """Return normalized trait projection consumed by influence policy points."""
+
+        return normalize_trait_projection(state.traits)
+
+    def _build_transition(
         self,
         state: AgentState,
-        deltas: dict[str, float],
+        deltas: Mapping[str, float],
         *,
         max_step: float,
         cause: str,
         source: str,
-        context: dict[str, float | str] | None = None,
-    ) -> list[dict[str, float | str | int]]:
-        records: list[dict[str, float | str | int]] = []
+        input_signals: Mapping[str, float] | None = None,
+    ) -> PersonalityTransition:
+        transition_deltas: list[TraitDelta] = []
         for trait, proposed_delta in deltas.items():
             if not hasattr(state.traits, trait):
                 continue
@@ -49,45 +60,94 @@ class PersonalityEngine:
             applied_delta = after - before
             if abs(applied_delta) < 1e-12:
                 continue
-            setattr(state.traits, trait, after)
+            transition_deltas.append(
+                TraitDelta(
+                    trait=trait,
+                    before=before,
+                    proposed_delta=float(proposed_delta),
+                    bounded_delta=applied_delta,
+                    after=after,
+                )
+            )
+
+        return PersonalityTransition(
+            step=int(state.step_counter),
+            cause=cause,
+            source=source,
+            max_step=float(max_step),
+            input_signals={str(k): float(v) for k, v in (input_signals or {}).items()},
+            deltas=transition_deltas,
+        )
+
+    def _reduce_transition(
+        self,
+        state: AgentState,
+        transition: PersonalityTransition,
+    ) -> list[dict[str, float | str | int]]:
+        """Apply transition event through a single reducer and persist event history."""
+
+        records: list[dict[str, float | str | int]] = []
+        for delta in transition.deltas:
+            setattr(state.traits, delta.trait, delta.after)
             record: dict[str, float | str | int] = {
-                "step": int(state.step_counter),
-                "trait": trait,
-                "before": before,
-                "delta": applied_delta,
-                "after": after,
-                "cause": cause,
-                "source": source,
+                "step": transition.step,
+                "trait": delta.trait,
+                "before": delta.before,
+                "delta": delta.bounded_delta,
+                "after": delta.after,
+                "cause": transition.cause,
+                "source": transition.source,
             }
-            if context:
-                record.update(context)
+            if transition.input_signals:
+                record.update(transition.input_signals)
             records.append(record)
 
+        transition.resulting_traits = self.trait_projection(state)["raw"]
+        dumped = transition.model_dump(mode="python") if hasattr(transition, "model_dump") else transition.dict()
+        state.personality_transition_events.append(dumped)
         if records:
             state.trait_change_audit.extend(records)
         return records
 
-    def _coefficients(self, state: AgentState) -> dict[str, float]:
-        coefficients = merge_trait_policy_coefficients(state.trait_policy_coefficients)
-        return cast(dict[str, float], coefficients)
+    def replay_transitions(
+        self,
+        initial_traits: Mapping[str, float],
+        transitions: Sequence[Mapping[str, object] | PersonalityTransition],
+    ) -> dict[str, float]:
+        """Replay transitions deterministically from a seed trait state."""
+
+        replayed = {str(k): float(v) for k, v in initial_traits.items()}
+        for entry in transitions:
+            transition = (
+                entry
+                if isinstance(entry, PersonalityTransition)
+                else (
+                    PersonalityTransition.model_validate(entry)
+                    if hasattr(PersonalityTransition, "model_validate")
+                    else PersonalityTransition.parse_obj(entry)
+                )
+            )
+            for delta in transition.deltas:
+                replayed[delta.trait] = float(delta.after)
+        return replayed
 
     def action_biases(self, state: AgentState, available_actions: Sequence[str]) -> dict[str, float]:
         return cast(
             dict[str, float],
             action_intent_biasing(
-                state.traits,
+                self.trait_projection(state),
                 available_actions,
                 self._coefficients(state),
             ),
         )
 
     def mood_multiplier(self, state: AgentState) -> float:
-        return float(mood_update_multiplier(state.traits, self._coefficients(state)))
+        return float(mood_update_multiplier(self.trait_projection(state), self._coefficients(state)))
 
     def relationship_sensitivity(self, state: AgentState, *, is_targeted: bool) -> float:
         return float(
             relationship_update_sensitivity(
-                state.traits,
+                self.trait_projection(state),
                 is_targeted=is_targeted,
                 coefficients=self._coefficients(state),
             )
@@ -103,11 +163,12 @@ class PersonalityEngine:
     ) -> list[dict[str, float | str | int]]:
         """Apply bounded per-turn drift updates and persist an audit trail on ``state``."""
 
+        projection = self.trait_projection(state)
         drift = trait_drift_from_experience(
             {
                 "social_outcome": signals.social_outcome,
                 "mood_level": signals.mood_trajectory,
-                "adaptability": state.traits.adaptability,
+                "adaptability": projection["raw"]["adaptability"],
             },
             self._coefficients(state),
         )
@@ -115,20 +176,15 @@ class PersonalityEngine:
         drift["adaptability"] += 0.003 * signals.governance_participation
         drift["assertiveness"] += 0.002 * signals.conflict_outcome
 
-        return self._apply_trait_adjustments(
+        transition = self._build_transition(
             state,
             drift,
             max_step=max_step,
             cause="experience_drift",
             source=source,
-            context={
-                "social_outcome": signals.social_outcome,
-                "conflict_outcome": signals.conflict_outcome,
-                "task_outcome": signals.task_outcome,
-                "mood_trajectory": signals.mood_trajectory,
-                "governance_participation": signals.governance_participation,
-            },
+            input_signals=signals.model_dump(),
         )
+        return self._reduce_transition(state, transition)
 
     def apply_role_transition_blend(
         self,
@@ -146,14 +202,15 @@ class PersonalityEngine:
             for trait, target in target_traits.items()
             if hasattr(state.traits, trait)
         }
-        return self._apply_trait_adjustments(
+        transition = self._build_transition(
             state,
             deltas,
             max_step=max_step,
             cause="role_transition_blend",
             source=source,
-            context={"blend_ratio": blend_ratio},
+            input_signals={"blend_ratio": blend_ratio},
         )
+        return self._reduce_transition(state, transition)
 
     def apply_exogenous_trait_intervention(
         self,
@@ -166,13 +223,14 @@ class PersonalityEngine:
     ) -> list[dict[str, float | str | int]]:
         """Apply external/admin trait edits through the same bounded/audited engine path."""
 
-        return self._apply_trait_adjustments(
+        transition = self._build_transition(
             state,
             trait_updates,
             max_step=max_step,
             cause=cause,
             source=source,
         )
+        return self._reduce_transition(state, transition)
 
     def update_traits(
         self,
