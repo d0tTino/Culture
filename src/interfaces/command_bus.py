@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from src.governance.decision_kernel import DecisionProvenance
 from src.interfaces.domain_command_adapters import command_from_envelope, command_from_payload
 from src.interfaces.interaction_schema import (
+    BaseInteractionEnvelope,
     InteractionContext,
     InteractionEnvelope,
     InteractionResult,
@@ -30,7 +31,7 @@ class CommandBus:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        normalized = command_from_envelope(command) if isinstance(command, InteractionEnvelope) else command
+        normalized = command_from_envelope(command) if isinstance(command, BaseInteractionEnvelope) else command
         return await self.interaction_service.execute(normalized, context=context)
 
     async def dispatch_payload(

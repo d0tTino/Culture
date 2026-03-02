@@ -531,9 +531,12 @@ class Simulation:
 
     async def handle_moderation_command(self: Self, cmd: dict[str, Any]) -> None:
         """Process moderation actions like muting or penalties."""
-        from src.interfaces.interaction_schema import InteractionContext, InteractionEnvelope
+        from src.interfaces.interaction_schema import (
+            InteractionContext,
+            parse_interaction_envelope,
+        )
 
-        envelope = InteractionEnvelope.model_validate(
+        envelope = parse_interaction_envelope(
             {
                 "intent": "moderation",
                 "action": cmd.get("command"),

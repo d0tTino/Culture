@@ -31,7 +31,13 @@ from src.interfaces.interaction_policy import (
     has_control_command_permission,
     set_max_rate,
 )
-from src.interfaces.interaction_schema import InteractionContext, InteractionEnvelope
+from src.interfaces.interaction_schema import (
+    ControlEnvelope,
+    InjectEventEnvelope,
+    InteractionContext,
+    KnowledgeBoardEnvelope,
+    SpawnEnvelope,
+)
 from src.interfaces.transport_adapters import parse_discord_message_routing
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
@@ -1315,8 +1321,7 @@ async def slash_pause(interaction: Any) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="pause",
                     routing={
                         "sender_id": str(getattr(interaction, "user", "discord")),
@@ -1336,8 +1341,7 @@ async def slash_resume(interaction: Any) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="resume",
                     routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
                     auth={"permissions": {"admin", "moderator"}},
@@ -1357,8 +1361,7 @@ async def slash_pause_all(interaction: Any) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="pause_all",
                     routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
                     auth={"permissions": {"admin", "moderator"}},
@@ -1378,8 +1381,7 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="kill_agent",
                     agent_id=agent_id,
                     routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
@@ -1421,8 +1423,7 @@ async def slash_start(interaction: Any) -> None:
             if bus is None:
                 raise RuntimeError("command bus unavailable")
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="start",
                     routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
                     auth={"permissions": {"admin", "moderator"}},
@@ -1478,8 +1479,7 @@ async def slash_stop(interaction: Any) -> None:
             if bus is None:
                 raise RuntimeError("command bus unavailable")
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="stop",
                     routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
                     auth={"permissions": {"admin", "moderator"}},
@@ -1561,8 +1561,7 @@ async def slash_spawn(
             if bus is None:
                 raise RuntimeError("command bus unavailable")
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="spawn",
+                SpawnEnvelope(
                     agent_id=agent_id,
                     role=spawn_kwargs.get("role"),
                     persona=spawn_kwargs.get("persona"),
@@ -1623,8 +1622,7 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="control",
+                ControlEnvelope(
                     action="set_speed",
                     value=value,
                     routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
@@ -1657,9 +1655,8 @@ async def slash_kb(interaction: Any, text: str) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="knowledge_board",
-                    content=text,
+                KnowledgeBoardEnvelope(
+                    text=text,
                     routing={"sender_id": str(getattr(interaction, "user", "human")), "source": "discord"},
                 )
             )
@@ -1681,11 +1678,9 @@ async def slash_event(interaction: Any, text: str) -> None:
         bus = get_command_bus(ctx)
         if bus is not None:
             await bus.dispatch(
-                InteractionEnvelope(
-                    intent="inject_event",
-                    action="inject_event",
+                InjectEventEnvelope(
                     text=text,
-                    prompt="global",
+                    scope="global",
                     agent_id=str(getattr(interaction, "user", "human")),
                     routing={"sender_id": str(getattr(interaction, "user", "human")), "source": "discord"},
                     auth={"permissions": {"admin", "moderator"}},

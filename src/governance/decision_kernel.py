@@ -52,29 +52,29 @@ class PolicyDecisionService:
         if envelope.intent in {"moderation", "control", "inject_event"}:
             return self._control_decision(envelope=envelope, context=context)
         if envelope.intent == "human_message":
-            content = str(envelope.content or "").strip()
+            content = str(envelope.text or "").strip()
             if content == "/broadcast":
                 return self._transform(
                     "policy.normalize.human_message",
                     "normalized_human_command",
-                    {"intent": "broadcast", "content": ""},
+                    {"intent": "broadcast", "text": ""},
                 )
             if content.startswith("/broadcast "):
                 return self._transform(
                     "policy.normalize.human_message",
                     "normalized_human_command",
-                    {"intent": "broadcast", "content": content[len("/broadcast ") :]},
+                    {"intent": "broadcast", "text": content[len("/broadcast ") :]},
                 )
             if content.startswith("/kb "):
                 return self._transform(
                     "policy.normalize.human_message",
                     "normalized_human_command",
-                    {"intent": "knowledge_board", "content": content[4:]},
+                    {"intent": "knowledge_board", "text": content[4:]},
                 )
             return self._transform(
                 "policy.normalize.human_message",
                 "normalized_human_command",
-                {"intent": "direct_message", "content": content},
+                {"intent": "direct_message", "text": content},
             )
         return self._allow("policy.entry", "policy_allowed")
 

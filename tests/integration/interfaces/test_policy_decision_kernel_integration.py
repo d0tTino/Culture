@@ -1,7 +1,8 @@
 import pytest
 
 from src.interfaces import dashboard_backend as db
-from src.interfaces.interaction_commands import InteractionContext, InteractionEnvelope
+from src.interfaces.interaction_commands import InteractionContext
+from src.interfaces.interaction_schema import HumanMessageEnvelope
 from src.sim.simulation import Simulation
 
 
@@ -36,9 +37,8 @@ class DummyAgent:
 async def test_equivalent_human_message_has_identical_policy_outcome() -> None:
     sim = Simulation([DummyAgent("alpha"), DummyAgent("beta")])
     try:
-        envelope = InteractionEnvelope(
-            intent="human_message",
-            content="hello kernel",
+        envelope = HumanMessageEnvelope(
+            text="hello kernel",
             routing={"sender_id": "user-1", "source": "discord"},
             metadata={"request_id": "equiv-1"},
         )
@@ -50,7 +50,7 @@ async def test_equivalent_human_message_has_identical_policy_outcome() -> None:
         dashboard_result = await sim.command_bus.dispatch_payload(
             {
                 "command_type": "human_message",
-                "content": "hello kernel",
+                "text": "hello kernel",
                 "sender_id": "user-1",
                 "source": "dashboard",
                 "request_id": "equiv-1",
