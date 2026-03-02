@@ -36,12 +36,13 @@ from src.infra.event_log import log_event
 from src.infra.ledger import ledger
 from src.infra.llm_client import get_llm_client
 from src.infra.logging_config import setup_logging
-from src.interfaces.command_bus import CommandBus, parse_bus_command
+from src.interfaces.command_bus import CommandBus
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
     emit_event,
 )
 from src.interfaces.discord_event_listener import DiscordSimulationEventListener
+from src.interfaces.domain_command_adapters import command_from_payload
 from src.interfaces.interaction_commands import InteractionContext, InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
@@ -51,6 +52,7 @@ from src.interfaces.metrics import (
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
 from src.sim.command_service import SimulationCommandService
+from src.sim.commands.dispatcher import SimulationCommandDispatcher
 from src.sim.control_service import SimulationControlService
 from src.sim.engine import SimulationEngine
 from src.sim.environment import EnvironmentState, EnvironmentSystem
@@ -383,6 +385,7 @@ class Simulation:
         self._event_loop = None
         self._event_loop_thread = None
         self.command_service = SimulationCommandService(self)
+        self.command_dispatcher = SimulationCommandDispatcher(self.command_service)
         self.interaction_service = InteractionService(self)
         self.command_bus = CommandBus(self.interaction_service)
         self.decision_service = PolicyDecisionService()
@@ -474,14 +477,11 @@ class Simulation:
         command_type = payload.get("command_type")
         if not command_type and bool(payload.get("broadcast")):
             command_type = "broadcast"
-        result = await self.command_service.execute_from_payload(
-            {
-                "command_type": command_type or "human_message",
-                "content": text,
-                **payload,
-            },
+        command = command_from_payload(
+            {"command_type": command_type or "human_message", "content": text, **payload},
             context=context,
         )
+        result = await self.command_dispatcher.dispatch(command, context=context)
         if result.status != "ok" and self.discord_bot:
             channel_id = context.channel_id
             target_channel_id = (
@@ -531,7 +531,7 @@ class Simulation:
 
     async def handle_moderation_command(self: Self, cmd: dict[str, Any]) -> None:
         """Process moderation actions like muting or penalties."""
-        from src.interfaces.interaction_commands import InteractionContext, InteractionEnvelope
+        from src.interfaces.interaction_schema import InteractionContext, InteractionEnvelope
 
         envelope = InteractionEnvelope.model_validate(
             {
@@ -1480,7 +1480,7 @@ class Simulation:
                 ),
                 metadata={k: v for k, v in evt.data.items()},
             )
-            await self.command_bus.dispatch(parse_bus_command(evt.data), context=context)
+            await self.command_bus.dispatch_payload(evt.data, context=context)
             return
         if evt.type == "moderation":
             context = InteractionContext(
@@ -1489,7 +1489,7 @@ class Simulation:
                 permissions={"admin", "moderator"},
                 metadata={k: v for k, v in evt.data.items()},
             )
-            await self.command_bus.dispatch(parse_bus_command(evt.data), context=context)
+            await self.command_bus.dispatch_payload(evt.data, context=context)
             return
         sender = str(evt.data.get("author", "external"))
         if sender in self.muted_agents:

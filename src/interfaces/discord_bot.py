@@ -24,13 +24,14 @@ from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
-from src.interfaces.interaction_commands import InteractionEnvelope
+from src.interfaces.domain_command_adapters import command_from_discord_message
 from src.interfaces.interaction_policy import (
     check_command_rate_limit,
     has_admin_permission,
     has_control_command_permission,
     set_max_rate,
 )
+from src.interfaces.interaction_schema import InteractionContext, InteractionEnvelope
 from src.interfaces.transport_adapters import parse_discord_message_routing
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
@@ -687,19 +688,20 @@ class SimulationDiscordBot:
                     bus = get_command_bus(self.context)
                     if bus is None:
                         return
-                    intent = "broadcast" if is_broadcast else ("direct_message" if recipient else "human_message")
+                    command = command_from_discord_message(
+                        content=parsed_content,
+                        recipient_id=recipient,
+                        is_broadcast=is_broadcast,
+                        target_agent_id=target_agent_id,
+                        raw_payload={"channel_id": channel_id, "user_id": user_id},
+                    )
                     result = await bus.dispatch(
-                        InteractionEnvelope(
-                            intent=intent,
-                            content=parsed_content,
-                            routing={
-                                "sender_id": str(user_id) if user_id is not None else "human",
-                                "channel_id": str(channel_id) if channel_id is not None else None,
-                                "source": "discord",
-                                "recipient_id": recipient,
-                                "target_agent_id": target_agent_id,
-                            },
-                        )
+                        command,
+                        context=InteractionContext(
+                            sender_id=str(user_id) if user_id is not None else "human",
+                            channel_id=str(channel_id) if channel_id is not None else None,
+                            source="discord",
+                        ),
                     )
                     if result.status != "ok":
                         await send_channel_message(channel, content=result.user_message)

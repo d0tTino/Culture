@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from src.interfaces.interaction_commands import InteractionContext, InteractionEnvelope
+from src.interfaces.interaction_commands import InteractionContext
+from src.sim.commands.domain_commands import HumanMessageCommand
 
 pytestmark = pytest.mark.unit
 
@@ -46,11 +47,7 @@ def _snapshot(sim) -> tuple[list[tuple[str, str]], float, float]:
 async def _run_path(path: str, sim, content: str):
     if path == "discord":
         result = await sim.command_bus.dispatch(
-            InteractionEnvelope(
-                intent="human_message",
-                content=content,
-                routing={"sender_id": "user-1", "source": "discord"},
-            ),
+            HumanMessageCommand(content=content),
             context=InteractionContext(sender_id="user-1", source="discord"),
         )
     elif path == "dashboard":
