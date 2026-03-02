@@ -4,7 +4,18 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.interfaces.interaction_schema import InteractionContext, InteractionEnvelope
+from src.interfaces.interaction_schema import (
+    BroadcastEnvelope,
+    ControlEnvelope,
+    DirectMessageEnvelope,
+    HumanMessageEnvelope,
+    InjectEventEnvelope,
+    InteractionContext,
+    InteractionEnvelope,
+    KnowledgeBoardEnvelope,
+    ModerationEnvelope,
+    SpawnEnvelope,
+)
 
 
 class DomainCommand(BaseModel):
@@ -22,9 +33,8 @@ class HumanMessageCommand(DomainCommand):
     target_agent_id: str | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="human_message",
-            content=self.content,
+        return HumanMessageEnvelope(
+            text=self.content,
             routing={
                 "sender_id": context.sender_id,
                 "source": context.source,
@@ -45,9 +55,8 @@ class DirectMessageCommand(DomainCommand):
     budget_agent_id: str | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="direct_message",
-            content=self.content,
+        return DirectMessageEnvelope(
+            text=self.content,
             routing={
                 "sender_id": context.sender_id,
                 "source": context.source,
@@ -67,9 +76,8 @@ class BroadcastCommand(DomainCommand):
     budget_agent_id: str | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="broadcast",
-            content=self.content,
+        return BroadcastEnvelope(
+            text=self.content,
             routing={
                 "sender_id": context.sender_id,
                 "source": context.source,
@@ -86,9 +94,8 @@ class KnowledgeBoardCommand(DomainCommand):
     content: str
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="knowledge_board",
-            content=self.content,
+        return KnowledgeBoardEnvelope(
+            text=self.content,
             routing={"sender_id": context.sender_id, "source": context.source},
             auth={"permissions": set(context.permissions)},
             metadata=self.metadata,
@@ -104,9 +111,7 @@ class SpawnAgentCommand(DomainCommand):
     traits: dict[str, float] | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="spawn",
-            action="spawn",
+        return SpawnEnvelope(
             agent_id=self.agent_id,
             role=self.role,
             persona=self.persona,
@@ -126,8 +131,7 @@ class ControlCommand(DomainCommand):
     agent_id: str | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="control",
+        return ControlEnvelope(
             action=self.action,
             value=self.value,
             tags=self.tags,
@@ -145,8 +149,7 @@ class ModerationCommand(DomainCommand):
     value: float | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="moderation",
+        return ModerationEnvelope(
             action=self.action,
             agent_id=self.agent_id,
             value=self.value,
@@ -163,10 +166,9 @@ class InjectEventCommand(DomainCommand):
     agent_id: str | None = None
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
-        return InteractionEnvelope(
-            intent="inject_event",
+        return InjectEventEnvelope(
             text=self.text,
-            prompt=self.scope,
+            scope=self.scope,
             agent_id=self.agent_id,
             routing={"sender_id": context.sender_id, "source": context.source},
             auth={"permissions": set(context.permissions)},

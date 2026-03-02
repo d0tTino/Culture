@@ -14,9 +14,17 @@ from src.infra.event_log import log_event
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
 from src.interfaces.domain_command_adapters import command_from_payload
 from src.interfaces.interaction_schema import (
+    BroadcastEnvelope,
+    ControlEnvelope,
+    DirectMessageEnvelope,
+    HumanMessageEnvelope,
+    InjectEventEnvelope,
     InteractionContext,
-    InteractionEnvelope,
     InteractionResult,
+    KnowledgeBoardEnvelope,
+    ModerationEnvelope,
+    SpawnEnvelope,
+    parse_interaction_envelope,
 )
 from src.shared.typing import SimulationMessage
 from src.sim.commands.domain_commands import DomainCommandT
@@ -69,11 +77,10 @@ class SimulationCommandService:
             simulation=self.simulation,
             stage="entry",
         )
-        envelope = (
-            envelope.model_copy(update=entry_decision.transformed_updates)
-            if entry_decision.decision == "transform"
-            else envelope
-        )
+        if entry_decision.decision == "transform":
+            transformed = envelope.model_dump()
+            transformed.update(entry_decision.transformed_updates)
+            envelope = parse_interaction_envelope(transformed)
 
         if entry_decision.decision == "deny":
             return InteractionResult(
@@ -91,11 +98,11 @@ class SimulationCommandService:
                 decision_provenance=entry_decision.provenance,
             )
 
-        if envelope.intent == "knowledge_board":
+        if isinstance(envelope, KnowledgeBoardEnvelope):
             return await self._dispatch_knowledge_board(envelope, context=ctx)
-        if envelope.intent in {"human_message", "broadcast", "direct_message"}:
+        if isinstance(envelope, (HumanMessageEnvelope, BroadcastEnvelope, DirectMessageEnvelope)):
             return await self._dispatch_message(envelope, context=ctx)
-        if envelope.intent in {"spawn", "moderation", "control", "inject_event"}:
+        if isinstance(envelope, (SpawnEnvelope, ModerationEnvelope, ControlEnvelope, InjectEventEnvelope)):
             return await self._dispatch_control(envelope, provenance=entry_decision.provenance)
 
         return InteractionResult(
@@ -107,7 +114,7 @@ class SimulationCommandService:
 
     async def _dispatch_control(
         self,
-        envelope: InteractionEnvelope,
+        envelope: SpawnEnvelope | ModerationEnvelope | ControlEnvelope | InjectEventEnvelope,
         *,
         provenance: DecisionProvenance,
     ) -> InteractionResult:
@@ -120,11 +127,16 @@ class SimulationCommandService:
             decision_provenance=provenance,
         )
 
-    async def _apply_control_action(self, envelope: InteractionEnvelope) -> dict[str, Any] | None:
+    async def _apply_control_action(
+        self, envelope: SpawnEnvelope | ModerationEnvelope | ControlEnvelope | InjectEventEnvelope
+    ) -> dict[str, Any] | None:
         sim = self.simulation
-        action = str(envelope.action or "").strip()
-        if envelope.intent == "spawn" and action != "spawn":
+        if isinstance(envelope, SpawnEnvelope):
             action = "spawn"
+        elif isinstance(envelope, InjectEventEnvelope):
+            action = "inject_event"
+        else:
+            action = str(envelope.action).strip()
 
         if action == "pause":
             sim.paused = True
@@ -143,7 +155,7 @@ class SimulationCommandService:
         elif action == "stop":
             sim.simulation_complete = True
             await sim.stop_event_listener()
-        elif action == "spawn":
+        elif action == "spawn" and isinstance(envelope, SpawnEnvelope):
             await self._spawn_agent(envelope)
         elif action == "kill_agent":
             if envelope.agent_id:
@@ -160,9 +172,9 @@ class SimulationCommandService:
                 sim.speed = float(envelope.value or 1)
             except (TypeError, ValueError):
                 pass
-        elif action == "post_kb":
+        elif action == "post_kb" and isinstance(envelope, (ModerationEnvelope, ControlEnvelope)):
             await self._post_knowledge_board(envelope)
-        elif action == "inject_event":
+        elif action == "inject_event" and isinstance(envelope, InjectEventEnvelope):
             await self._inject_world_event(envelope)
 
         return {
@@ -171,7 +183,7 @@ class SimulationCommandService:
             "simulation_complete": sim.simulation_complete,
         }
 
-    async def _spawn_agent(self, envelope: InteractionEnvelope) -> None:
+    async def _spawn_agent(self, envelope: SpawnEnvelope) -> None:
         sim = self.simulation
         if not envelope.agent_id:
             return
@@ -206,9 +218,9 @@ class SimulationCommandService:
         new_agent = Agent(agent_id=agent_id, name=agent_id, initial_state=initial_state or None)
         await sim.spawn_agent(new_agent)
 
-    async def _post_knowledge_board(self, envelope: InteractionEnvelope) -> None:
+    async def _post_knowledge_board(self, envelope: ModerationEnvelope | ControlEnvelope) -> None:
         sim = self.simulation
-        text = envelope.text
+        text = str(envelope.metadata.get("text") or envelope.metadata.get("content") or "").strip()
         author = envelope.agent_id or "human"
         if text and sim.knowledge_board:
             await sim.knowledge_board_service.post_human_message(
@@ -224,13 +236,13 @@ class SimulationCommandService:
                 )
             )
 
-    async def _inject_world_event(self, envelope: InteractionEnvelope) -> None:
+    async def _inject_world_event(self, envelope: InjectEventEnvelope) -> None:
         sim = self.simulation
         text = str(envelope.text or "").strip()
         if not text:
             return
         author = str(envelope.agent_id or "human")
-        scope = str(envelope.prompt or "global")
+        scope = str(envelope.scope or "global")
         event_payload = {
             "type": "world_event",
             "author": author,
@@ -261,9 +273,9 @@ class SimulationCommandService:
             )
 
     async def _dispatch_knowledge_board(
-        self, command: InteractionEnvelope, *, context: InteractionContext
+        self, command: KnowledgeBoardEnvelope, *, context: InteractionContext
     ) -> InteractionResult:
-        content = str(command.content or "").strip()
+        content = str(command.text or "").strip()
         if not content:
             return InteractionResult(
                 status="rejected",
@@ -313,9 +325,12 @@ class SimulationCommandService:
         )
 
     async def _dispatch_message(
-        self, command: InteractionEnvelope, *, context: InteractionContext
+        self,
+        command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope,
+        *,
+        context: InteractionContext,
     ) -> InteractionResult:
-        text = str(command.content or "").strip()
+        text = str(command.text or "").strip()
         if not text:
             return InteractionResult(
                 status="rejected",
@@ -469,7 +484,7 @@ class SimulationCommandService:
             decision_provenance=decision.provenance,
         )
 
-    def _resolve_target(self, command: InteractionEnvelope) -> Any:
+    def _resolve_target(self, command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope) -> Any:
         target = None
         if command.routing.target_agent_id:
             target = next(
@@ -500,7 +515,9 @@ class SimulationCommandService:
             )
         return target or self.simulation.agents[self.simulation.current_agent_index]
 
-    def _resolve_budget_agent_id(self, command: InteractionEnvelope, fallback: str) -> str:
+    def _resolve_budget_agent_id(
+        self, command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope, fallback: str
+    ) -> str:
         configured_budget_id = config.get_config("HUMAN_COMMAND_BUDGET_AGENT_ID")
         if command.budget.budget_agent_id:
             return command.budget.budget_agent_id
