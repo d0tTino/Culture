@@ -1,0 +1,11 @@
+{
+  "phase_order": [
+    "perception",
+    "decision",
+    "action",
+    "post_step"
+  ],
+  "emitted_event_types": [
+    "evaluation"
+  ]
+}

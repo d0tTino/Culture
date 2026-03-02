@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
 from src.sim.simulation import EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE, Simulation
 
+SNAPSHOT_PATH = Path(__file__).with_name("fixtures") / "event_step_runtime_snapshot.json"
+
+
+def _load_snapshot() -> dict[str, object]:
+    return json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+
+
 
 class DummyAgentState:
     def __init__(self) -> None:
         self.ip = 0.0
         self.du = 0.0
+        self.mood_level = 0.0
         self.short_term_memory = []
         self.messages_sent_count = 0
         self.last_message_step = None
@@ -94,5 +104,32 @@ async def test_lifecycle_invariant_evaluation_event_emits_step(monkeypatch: pyte
     assert evaluation
     assert "step" in (evaluation[-1].data or {})
     assert EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE["metrics_event_semantics"]
+    await sim.stop_event_listener()
+    sim.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_lifecycle_runtime_snapshot_phase_order_and_event_sequence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sim = Simulation([DummyAgent("A")])
+    sim.event_kernel.step = AsyncMock(return_value=[])  # type: ignore[assignment]
+    emitted: list[object] = []
+
+    async def _emit(evt: object) -> None:
+        emitted.append(evt)
+
+    monkeypatch.setattr("src.sim.engine.emit_event", _emit)
+    await sim.run_step()
+
+    context = sim.engine.last_step_context
+    assert context is not None
+
+    actual = {
+        "phase_order": context.phase_order,
+        "emitted_event_types": [getattr(evt, "type", "") for evt in emitted],
+    }
+    assert actual == _load_snapshot()
     await sim.stop_event_listener()
     sim.close()
