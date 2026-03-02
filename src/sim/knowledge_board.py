@@ -216,6 +216,22 @@ class KnowledgeBoard:
             )
             return recent_entries
 
+    def begin_transaction(self: Self) -> dict[str, Any]:
+        """Capture a snapshot that can be used for compensating rollback."""
+
+        return self.to_snapshot()
+
+    def commit_transaction(self: Self, tx_context: object) -> None:
+        """Finalize a transaction context (no-op for in-memory board)."""
+
+        _ = tx_context
+
+    def rollback_transaction(self: Self, tx_context: object) -> None:
+        """Restore the board from a previously captured transaction snapshot."""
+
+        if isinstance(tx_context, dict):
+            self.from_snapshot(tx_context)
+
     def get_full_entries(self: Self) -> list[dict[str, Any]]:
         """Returns a copy of all entries on the board."""
         return list(self.entries)  # Return a copy

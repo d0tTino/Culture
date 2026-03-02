@@ -71,6 +71,17 @@ class SemanticQueryStore(Protocol):
     def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]: ...
 
 
+@runtime_checkable
+class TransactionalKnowledgeBoardProtocol(Protocol):
+    """Capability for transactional writes with explicit rollback hooks."""
+
+    def begin_transaction(self) -> object: ...
+
+    def commit_transaction(self, tx_context: object) -> None: ...
+
+    def rollback_transaction(self, tx_context: object) -> None: ...
+
+
 class KnowledgeBoardCapabilityError(RuntimeError):
     """Base error for capability resolution failures."""
 

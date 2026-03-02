@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import math
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any, cast
@@ -8,6 +9,12 @@ from typing import Any, cast
 from typing_extensions import Self
 
 from src.agents.core.base_agent import Agent
+from src.governance.knowledge_governance_transaction import (
+    GovernanceMutation,
+    KnowledgeGovernanceTransaction,
+    make_proposal_idempotency_key,
+    make_vote_idempotency_key,
+)
 from src.infra.ledger import ledger
 from src.sim.knowledge_board_protocol import (
     EntryStore,
@@ -19,6 +26,13 @@ from src.utils.policy import evaluate_with_opa
 
 from .law_board import law_board
 from .rules_engine import governance_rules_engine
+
+
+async def _emit_governance_event(payload: dict[str, Any]) -> None:
+    from src.interfaces.dashboard_backend import SimulationEvent, emit_event
+
+    event_type = str(payload.get("type", "governance"))
+    await emit_event(SimulationEvent(type=event_type, data=payload))
 
 
 def quadratic_vote_weight(ip_balance: float, staked_ip: float = 0.0) -> float:
@@ -36,6 +50,7 @@ class GovernanceService:
     def __init__(self) -> None:
         self._knowledge_board: EntryStore | None = None
         self._step_provider: Callable[[], int] = lambda: 0
+        self._transaction_service: KnowledgeGovernanceTransaction | None = None
 
     def attach_knowledge_board(
         self,
@@ -47,26 +62,17 @@ class GovernanceService:
         self._knowledge_board = board
         if step_provider is not None:
             self._step_provider = step_provider
+        self._transaction_service = (
+            KnowledgeGovernanceTransaction(board, step_provider=self._step_provider)
+            if board is not None
+            else None
+        )
 
     def _current_step(self) -> int:
         try:
             return int(self._step_provider())
         except Exception:
             return 0
-
-    def _write_governance_entry(
-        self,
-        *,
-        agent_id: str,
-        entry: KnowledgeEntry,
-    ) -> None:
-        board = self._knowledge_board
-        if board is None:
-            return
-        try:
-            board.add_entry(entry, agent_id, self._current_step())
-        except Exception:
-            return
 
     async def vote(self: Self, agent: Agent, proposal: str) -> bool:
         """Return the agent's vote (True=approve) using the OPA policy."""
@@ -94,6 +100,16 @@ class GovernanceService:
         except Exception:
             return False
 
+        if not proposal_entry_id or self._knowledge_board is None or self._transaction_service is None:
+            return approve
+
+        step = self._current_step()
+        idempotency_key = make_vote_idempotency_key(
+            voter_id=agent.agent_id,
+            proposal_entry_id=proposal_entry_id,
+            approve=approve,
+            step=step,
+        )
         vote_entry = KnowledgeEntry(
             content_full=f"{'Approve' if approve else 'Reject'} vote for: {proposal}",
             entry_type=KnowledgeEntryType.VOTE,
@@ -104,19 +120,35 @@ class GovernanceService:
                 "approve": approve,
                 "weight": weight,
                 "stance": "approve" if approve else "reject",
+                "idempotency_key": idempotency_key,
             },
         )
-        self._write_governance_entry(agent_id=agent.agent_id, entry=vote_entry)
-        if proposal_entry_id and self._knowledge_board:
+
+        def apply_vote() -> tuple[str, str, bool] | None:
             try:
                 as_proposal_voting_store(self._knowledge_board).record_vote(
                     voter_agent_id=agent.agent_id,
                     proposal_id=proposal_entry_id,
                     approve=approve,
                 )
+                return (agent.agent_id, proposal_entry_id, approve)
             except UnsupportedKnowledgeBoardCapabilityError:
-                pass
-        return approve
+                return None
+
+        mutation = GovernanceMutation(apply=apply_vote, rollback=lambda _token: None)
+        return await self._transaction_service.execute(
+            actor_id=agent.agent_id,
+            board_entry=vote_entry,
+            idempotency_key=idempotency_key,
+            governance_mutation=mutation,
+            emit_event=_emit_governance_event,
+            event_payload={
+                "type": "governance_vote",
+                "actor_id": agent.agent_id,
+                "proposal_entry_id": proposal_entry_id,
+                "approve": approve,
+            },
+        )
 
     async def stake_ip(self: Self, agent_id: str, amount: float) -> float:
         """Stake ``amount`` of IP for ``agent_id`` and return total staked IP."""
@@ -158,6 +190,12 @@ class GovernanceService:
             tags=["governance", "proposal"],
         )
         proposal_entry_id = ""
+        step = self._current_step()
+        idempotency_key = make_proposal_idempotency_key(
+            proposer_id=proposer.agent_id,
+            text=text,
+            step=step,
+        )
         if self._knowledge_board is not None:
             from src.sim.knowledge_board import prepare_entry_payload
 
@@ -166,7 +204,6 @@ class GovernanceService:
                 proposer.agent_id,
                 self._current_step(),
             )
-            self._write_governance_entry(agent_id=proposer.agent_id, entry=proposal_payload)
 
         votes = await asyncio.gather(*[self.vote(a, text) for a in agents])
         weights: list[float] = []
@@ -203,8 +240,8 @@ class GovernanceService:
         no_weight = sum(w for w, v in zip(weights, votes) if not v)
         approved = yes_weight > no_weight
         if approved:
-            # Keep legacy law board synced while canonical state lives in governance_rules_engine.
             law_board.add_law(text)
+
         outcome: dict[str, float | bool | dict[str, Any] | str] = {
             "approved": approved,
             "yes_weight": yes_weight,
@@ -212,56 +249,104 @@ class GovernanceService:
             "ip_spent": ip_spent,
             "proposal_entry_id": proposal_entry_id,
         }
-        rule_materialization = governance_rules_engine.proposal_workflow(
-            text,
-            proposer_id=proposer.agent_id,
-            approved=approved,
-            proposal_record=outcome,
-        )
-        outcome["rule_materialization"] = rule_materialization
+
+        rule_materialization: dict[str, Any] | None = None
+        governance_before = copy.deepcopy(governance_rules_engine._governance_state)
+        active_rules_before = copy.deepcopy(governance_rules_engine._active_rules)
+
+        def apply_proposal_mutation() -> dict[str, Any]:
+            nonlocal rule_materialization
+            rule_materialization = governance_rules_engine.proposal_workflow(
+                text,
+                proposer_id=proposer.agent_id,
+                approved=approved,
+                proposal_record=outcome,
+            )
+            return {
+                "governance_state": governance_before,
+                "active_rules": active_rules_before,
+            }
+
+        def rollback_proposal_mutation(token: Any) -> None:
+            if not isinstance(token, dict):
+                return
+            governance_rules_engine._governance_state = dict(token.get("governance_state", {}))
+            governance_rules_engine._active_rules = dict(token.get("active_rules", {}))
+
+        if self._knowledge_board is not None and self._transaction_service is not None:
+            proposal_payload.reference_metadata = {
+                "idempotency_key": idempotency_key,
+                "kind": "proposal",
+            }
+            proposal_ok = await self._transaction_service.execute(
+                actor_id=proposer.agent_id,
+                board_entry=proposal_payload,
+                idempotency_key=idempotency_key,
+                governance_mutation=GovernanceMutation(
+                    apply=apply_proposal_mutation,
+                    rollback=rollback_proposal_mutation,
+                ),
+                emit_event=_emit_governance_event,
+                event_payload={
+                    "type": "governance_proposal",
+                    "actor_id": proposer.agent_id,
+                    "proposal_text": text,
+                },
+            )
+            if not proposal_ok:
+                return False
+        else:
+            rule_materialization = governance_rules_engine.proposal_workflow(
+                text,
+                proposer_id=proposer.agent_id,
+                approved=approved,
+                proposal_record=outcome,
+            )
+
+        outcome["rule_materialization"] = rule_materialization or {}
         governance_rule_id = (
-            str(rule_materialization.get("rule_id"))
+            str((rule_materialization or {}).get("rule_id"))
             if isinstance(rule_materialization, dict)
             else None
         )
 
         if self._knowledge_board is not None:
             for agent, vote in zip(agents, votes):
-                self._write_governance_entry(
-                    agent_id=agent.agent_id,
-                    entry=KnowledgeEntry(
-                        content_full=f"{'Approve' if vote else 'Reject'} vote for proposal: {text}",
-                        entry_type=KnowledgeEntryType.VOTE,
-                        parent_entry_id=proposal_entry_id or None,
-                        governance_rule_id=governance_rule_id,
-                        tags=["governance", "vote"],
-                        reference_metadata={
-                            "approve": vote,
-                            "stance": "approve" if vote else "reject",
-                        },
-                    ),
+                await self.vote_weighted(
+                    agent,
+                    text,
+                    weight=1,
+                    approve=vote,
+                    proposal_entry_id=proposal_entry_id or None,
+                    governance_rule_id=governance_rule_id,
                 )
-                if proposal_entry_id:
-                    try:
-                        as_proposal_voting_store(self._knowledge_board).record_vote(
-                            voter_agent_id=agent.agent_id,
-                            proposal_id=proposal_entry_id,
-                            approve=vote,
-                        )
-                    except UnsupportedKnowledgeBoardCapabilityError:
-                        pass
 
-            if approved:
-                self._write_governance_entry(
-                    agent_id=proposer.agent_id,
-                    entry=KnowledgeEntry(
-                        content_full=f"Law ratified: {text}",
-                        entry_type=KnowledgeEntryType.LAW,
-                        parent_entry_id=proposal_entry_id or None,
-                        governance_rule_id=governance_rule_id,
-                        tags=["governance", "law"],
-                        reference_metadata={"relationship": "supersedes"},
+            if approved and self._transaction_service is not None:
+                law_entry = KnowledgeEntry(
+                    content_full=f"Law ratified: {text}",
+                    entry_type=KnowledgeEntryType.LAW,
+                    parent_entry_id=proposal_entry_id or None,
+                    governance_rule_id=governance_rule_id,
+                    tags=["governance", "law"],
+                    reference_metadata={
+                        "relationship": "supersedes",
+                        "idempotency_key": f"law:{idempotency_key}",
+                    },
+                )
+                await self._transaction_service.execute(
+                    actor_id=proposer.agent_id,
+                    board_entry=law_entry,
+                    idempotency_key=f"law:{idempotency_key}",
+                    governance_mutation=GovernanceMutation(
+                        apply=lambda: None,
+                        rollback=lambda _token: None,
                     ),
+                    emit_event=_emit_governance_event,
+                    event_payload={
+                        "type": "governance_law_applied",
+                        "actor_id": proposer.agent_id,
+                        "proposal_text": text,
+                    },
                 )
 
         try:
