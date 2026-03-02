@@ -72,6 +72,23 @@ class GraphKnowledgeBoard:
         res = self._run("MATCH (e:KBEntry) RETURN count(e) AS cnt")
         return int(res[0]["cnt"]) if res else 0
 
+
+    def begin_transaction(self: Self) -> dict[str, Any]:
+        """Capture a snapshot used for compensating rollback."""
+
+        return self.to_snapshot()
+
+    def commit_transaction(self: Self, tx_context: object) -> None:
+        """Finalize a transaction context (graph backend commits per-query)."""
+
+        _ = tx_context
+
+    def rollback_transaction(self: Self, tx_context: object) -> None:
+        """Restore graph state from a captured snapshot."""
+
+        if isinstance(tx_context, dict):
+            self.from_snapshot(tx_context)
+
     def get_state(self: Self, max_entries: int = 10) -> list[str]:
         records = self._run(
             "MATCH (e:KBEntry) RETURN e ORDER BY e.step DESC LIMIT $limit",
