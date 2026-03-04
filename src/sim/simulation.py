@@ -59,12 +59,10 @@ from src.sim.engine import SimulationEngine
 from src.sim.engines.persistence_engine import PersistenceEngine
 from src.sim.environment import EnvironmentState, EnvironmentSystem
 from src.sim.event_kernel import EventKernel
-from src.sim.graph_knowledge_board import GraphKnowledgeBoard
-from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.knowledge_board_protocol import (
+    GraphKnowledgeBoardAdapter,
+    InMemoryKnowledgeBoardAdapter,
     KnowledgeBoardProtocol,
-    UnsupportedKnowledgeBoardCapabilityError,
-    as_semantic_query_store,
 )
 from src.sim.knowledge_board_service import KnowledgeBoardService
 from src.sim.knowledge_entry import KnowledgeEntryType
@@ -239,11 +237,11 @@ class Simulation:
         # --- NEW: Initialize Knowledge Board ---
         self.knowledge_board: KnowledgeBoardProtocol
         if config.KNOWLEDGE_BOARD_BACKEND == "graph":
-            self.knowledge_board = GraphKnowledgeBoard()
-            logger.info("Simulation initialized with Graph Knowledge Board.")
+            self.knowledge_board = GraphKnowledgeBoardAdapter()
+            logger.info("Simulation initialized with Graph Knowledge Board adapter.")
         else:
-            self.knowledge_board = KnowledgeBoard()
-            logger.info("Simulation initialized with Knowledge Board.")
+            self.knowledge_board = InMemoryKnowledgeBoardAdapter()
+            logger.info("Simulation initialized with in-memory Knowledge Board adapter.")
 
         governance.attach_knowledge_board(
             self.knowledge_board,
@@ -300,6 +298,7 @@ class Simulation:
             try:
                 memory_service = MemoryService(vector_store_manager, semantic_manager)
             except Exception:  # pragma: no cover - fallback for constrained environments
+
                 class _OfflineTokenizer:
                     def encode(self, text: str) -> list[int]:
                         return [ord(ch) for ch in text]
@@ -1860,6 +1859,7 @@ class Simulation:
         )
 
         phase_start = time.perf_counter()
+
         async def _run_plan(plan: Mapping[str, Any]) -> Mapping[str, Any]:
             return await self.agents[int(plan["agent_index"])].run_turn(
                 simulation_step=int(plan["simulation_step"]),
@@ -2191,7 +2191,9 @@ class Simulation:
         return cast(Self, PersistenceEngine().from_snapshot(cls, snapshot, seed=seed))
 
     @classmethod
-    def _from_snapshot_impl(cls: type[Self], snapshot: dict[str, Any], seed: int | None = None) -> Self:
+    def _from_snapshot_impl(
+        cls: type[Self], snapshot: dict[str, Any], seed: int | None = None
+    ) -> Self:
         from src.agents.core.base_agent import Agent  # avoid circular import at module level
 
         snapshot = migrate_snapshot(snapshot)
@@ -2199,6 +2201,7 @@ class Simulation:
         agents_data = snapshot.get("agents", [])
         agents = [Agent(agent_id=a.get("agent_id", str(i))) for i, a in enumerate(agents_data)]
         sim_seed = seed if seed is not None else snapshot.get("seed")
+
         class _OfflineTokenizer:
             def encode(self, text: str) -> list[int]:
                 return [ord(ch) for ch in text]
@@ -2433,24 +2436,17 @@ class Simulation:
             "active_offices": governance_rules_engine.active_offices(),
             "sanctions": governance_rules_engine.sanctions(),
         }
-        board = self.knowledge_board
-        try:
-            semantic_queries = as_semantic_query_store(board)
-        except UnsupportedKnowledgeBoardCapabilityError:
-            semantic_queries = None
-
-        if semantic_queries is not None:
-            proposals = semantic_queries.get_active_proposals(limit=20)
-            read_model["active_proposals"] = proposals
-            read_model["consensus_status"] = [
-                semantic_queries.get_consensus_status(str(p.get("entry_id", "")))
-                for p in proposals
-                if p.get("entry_id")
-            ]
-            read_model["agent_stance_history"] = {
-                agent.agent_id: semantic_queries.get_agent_stance_history(agent.agent_id)
-                for agent in self.agents
-            }
+        proposals = self.knowledge_board.get_active_proposals(limit=20)
+        read_model["active_proposals"] = proposals
+        read_model["consensus_status"] = [
+            self.knowledge_board.get_consensus_status(str(p.get("entry_id", "")))
+            for p in proposals
+            if p.get("entry_id")
+        ]
+        read_model["agent_stance_history"] = {
+            agent.agent_id: self.knowledge_board.get_agent_stance_history(agent.agent_id)
+            for agent in self.agents
+        }
         return read_model
 
     async def propose_law(
