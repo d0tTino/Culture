@@ -5,8 +5,9 @@ import time
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from src.agents.core.agent_state import AgentActionIntent, AgentLifecycleState, PersonalityTraits
-from src.agents.core.roles import ensure_profile, get_role_trait_template
+from src.agents.core.agent_state import AgentActionIntent, AgentLifecycleState
+from src.agents.core.personality_profile_factory import PersonalityProfileFactory
+from src.agents.core.roles import ensure_profile
 from src.governance.decision_kernel import DecisionProvenance, PolicyDecisionService
 from src.infra import config
 from src.infra import ledger as infra_ledger
@@ -207,13 +208,19 @@ class SimulationCommandService:
         initial_state: dict[str, Any] = {}
         if role_profile is not None:
             initial_state["current_role"] = role_profile
+        if envelope.persona is not None:
+            initial_state["persona"] = str(envelope.persona)
+        if envelope.backstory is not None:
+            initial_state["backstory"] = str(envelope.backstory)
         if isinstance(envelope.traits, dict):
-            merged_traits = get_role_trait_template(
-                role_profile.name if role_profile is not None else "Innovator"
-            )
-            for trait_name, raw_value in envelope.traits.items():
-                merged_traits[str(trait_name)] = float(raw_value)
-            initial_state["traits"] = PersonalityTraits(**merged_traits)
+            try:
+                factory = PersonalityProfileFactory()
+                initial_state["traits"] = factory.create_initial_traits(
+                    role=role_profile or "Innovator",
+                    overrides=envelope.traits,
+                )
+            except Exception:
+                return
 
         new_agent = Agent(agent_id=agent_id, name=agent_id, initial_state=initial_state or None)
         await sim.spawn_agent(new_agent)

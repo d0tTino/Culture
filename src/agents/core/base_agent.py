@@ -37,6 +37,7 @@ from src.sim.resource_manager import get_resource_manager
 
 from .embedding_utils import compute_embedding
 from .personality_engine import PersonalityEngine
+from .personality_profile_factory import PersonalityProfileFactory
 from .roles import ensure_profile
 
 if TYPE_CHECKING:
@@ -248,6 +249,12 @@ class Agent:
         agent_state_kwargs["current_role"] = ensure_profile(role_value)
         if role_embedding is not None:
             agent_state_kwargs["current_role"].embedding = role_embedding
+        trait_factory = PersonalityProfileFactory()
+        trait_overrides = cast(Any, agent_state_kwargs.get("traits"))
+        agent_state_kwargs["traits"] = trait_factory.create_initial_traits(
+            role=agent_state_kwargs["current_role"],
+            overrides=trait_overrides,
+        )
         agent_state_kwargs["role_embedding"] = list(agent_state_kwargs["current_role"].embedding)
         agent_state_kwargs["reputation_score"] = agent_state_kwargs["current_role"].reputation
         agent_state_kwargs["steps_in_current_role"] = steps_in_role  # derived above

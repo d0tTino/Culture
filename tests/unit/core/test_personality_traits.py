@@ -3,22 +3,20 @@ import pytest
 from src.agents.core.agent_controller import AgentController
 from src.agents.core.agent_state import AgentState, PersonalityTraits
 from src.agents.core.personality_engine import ExperienceSignal, PersonalityEngine
+from src.agents.core.personality_profile_factory import PersonalityProfileFactory
 from src.agents.core.roles import ROLE_ANALYZER, ROLE_FACILITATOR, get_role_trait_template
 
 
 @pytest.mark.unit
 def test_role_trait_templates_seed_state() -> None:
-    facilitator = AgentState(
-        agent_id="a1",
-        name="fac",
-        current_role=ROLE_FACILITATOR,
-    )
-    analyzer = AgentState(agent_id="a2", name="ana", current_role=ROLE_ANALYZER)
+    factory = PersonalityProfileFactory()
+    facilitator_traits = factory.create_initial_traits(role=ROLE_FACILITATOR)
+    analyzer_traits = factory.create_initial_traits(role=ROLE_ANALYZER)
 
-    assert facilitator.traits.empathy == pytest.approx(
+    assert facilitator_traits.empathy == pytest.approx(
         get_role_trait_template(ROLE_FACILITATOR)["empathy"]
     )
-    assert analyzer.traits.analytical_focus == pytest.approx(
+    assert analyzer_traits.analytical_focus == pytest.approx(
         get_role_trait_template(ROLE_ANALYZER)["analytical_focus"]
     )
 

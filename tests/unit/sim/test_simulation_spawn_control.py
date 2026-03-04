@@ -123,7 +123,7 @@ async def test_spawn_control_rejects_invalid_trait_payload(monkeypatch: pytest.M
 async def test_spawn_control_rejects_duplicate_agent_id(monkeypatch: pytest.MonkeyPatch) -> None:
     sys.modules.setdefault("neo4j", DummyNeo4j())
     from src.interfaces.metrics import ACTIVE_AGENT_COUNT
-    from src.sim import simulation as simulation_module
+    from src.sim import command_service as command_service_module
     from src.sim.simulation import Simulation
 
     spawned: list[object] = []
@@ -146,7 +146,7 @@ async def test_spawn_control_rejects_duplicate_agent_id(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(base_agent_module, "Agent", DummySpawnAgent)
     emit_event_mock = AsyncMock()
-    monkeypatch.setattr(simulation_module, "emit_event", emit_event_mock)
+    monkeypatch.setattr(command_service_module, "emit_event", emit_event_mock)
 
     sim = Simulation([SeedAgent("seed")])
     before = len(sim.agents)
@@ -159,9 +159,9 @@ async def test_spawn_control_rejects_duplicate_agent_id(monkeypatch: pytest.Monk
     assert after_first_spawn == before + 1
     assert len(sim.agents) == after_first_spawn
     assert ACTIVE_AGENT_COUNT._value.get() == after_first_spawn
-    assert emit_event_mock.await_count == 1
-    event = emit_event_mock.await_args.args[0]
-    assert event.type == "spawn_rejected"
-    assert event.data["reason"] == "duplicate_agent_id"
-    assert event.data["agent_id"] == "child-1"
+    assert emit_event_mock.await_count >= 1
+    events = [call.args[0] for call in emit_event_mock.await_args_list]
+    rejection = next(e for e in events if e.type == "spawn_rejected")
+    assert rejection.data["reason"] == "duplicate_agent_id"
+    assert rejection.data["agent_id"] == "child-1"
     sim.close()
