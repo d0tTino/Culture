@@ -1732,6 +1732,82 @@ class Simulation:
         }
         return MappingProxyType(snapshot)
 
+    def _build_tick_read_snapshot(self: Self, *, turn_index: int) -> Mapping[str, Any]:
+        """Capture an immutable read-only snapshot for all decision workers in a tick."""
+
+        snapshot = {
+            "turn_index": turn_index,
+            "messages": copy.deepcopy(self.messages_to_perceive_this_round),
+            "knowledge_board": (
+                copy.deepcopy(self.knowledge_board.get_recent_entries_for_prompt())
+                if self.knowledge_board
+                else []
+            ),
+            "world_map": copy.deepcopy(self.world_map.to_dict()),
+            "governance": {
+                "current_rules": copy.deepcopy(governance_rules_engine.current_rules()),
+                "active_offices": copy.deepcopy(governance_rules_engine.active_offices()),
+            },
+            "vector": copy.deepcopy(self.vector.to_dict()),
+        }
+        return MappingProxyType(snapshot)
+
+    @staticmethod
+    def _action_resource_key(intent: Mapping[str, Any]) -> str:
+        """Derive contention key used for deterministic conflict resolution."""
+
+        map_action = intent.get("map_action")
+        if isinstance(map_action, Mapping):
+            action = str(map_action.get("action", "unknown"))
+            if action in {"gather", "build", "move"}:
+                x = map_action.get("x", map_action.get("dx", ""))
+                y = map_action.get("y", map_action.get("dy", ""))
+                return f"map:{action}:{x}:{y}"
+        recipient = intent.get("message_recipient_id")
+        if recipient:
+            return f"message:{recipient}"
+        return f"agent:{intent.get('agent_id', '')}"
+
+    @staticmethod
+    def _is_governance_sensitive(intent: Mapping[str, Any]) -> bool:
+        action = str(intent.get("action_intent", ""))
+        return action in {
+            AgentActionIntent.REQUEST_ROLE_CHANGE.value,
+            AgentActionIntent.PROPOSE_IDEA.value,
+            AgentActionIntent.CREATE_PROJECT.value,
+            AgentActionIntent.JOIN_PROJECT.value,
+            AgentActionIntent.LEAVE_PROJECT.value,
+        }
+
+    def _resolve_tick_conflicts(
+        self: Self, intents: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Resolve resource/message/governance conflicts in deterministic order."""
+
+        accepted: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        locked_resources: set[str] = set()
+        governance_claimed = False
+
+        for intent in sorted(intents, key=self._deterministic_commit_sort_key):
+            resource_key = str(intent.get("resource", ""))
+            if resource_key in locked_resources:
+                intent["merge_outcome"] = "rejected_resource_conflict"
+                rejected.append(intent)
+                continue
+            if self._is_governance_sensitive(intent):
+                if governance_claimed:
+                    intent["merge_outcome"] = "rejected_governance_conflict"
+                    rejected.append(intent)
+                    continue
+                governance_claimed = True
+
+            locked_resources.add(resource_key)
+            intent["merge_outcome"] = "accepted"
+            accepted.append(intent)
+
+        return accepted, rejected
+
     @staticmethod
     def _deterministic_commit_sort_key(plan: Mapping[str, Any]) -> tuple[str, str, str, int]:
         """Sort key that stabilizes replay for same-resource/target commit conflicts."""
@@ -1743,7 +1819,12 @@ class Simulation:
             int(plan.get("batch_index", 0)),
         )
 
-    async def _run_step_pipeline(self: Self, max_turns: int) -> list[dict[str, Any]]:
+    async def _run_step_pipeline(
+        self: Self,
+        max_turns: int,
+        *,
+        parallel_decision: bool = True,
+    ) -> list[dict[str, Any]]:
         """Run a phased step pipeline: perception, parallel planning, deterministic commit."""
 
         if not self.agents:
@@ -1751,6 +1832,8 @@ class Simulation:
 
         batch_size = min(max_turns, len(self.agents))
         base_step = self.current_step + 1
+
+        tick_snapshot = self._build_tick_read_snapshot(turn_index=base_step)
 
         phase_start = time.perf_counter()
         plans: list[dict[str, Any]] = []
@@ -1765,6 +1848,7 @@ class Simulation:
                     "simulation_step": base_step + idx,
                     "resource": "agent_turn",
                     "target": agent.agent_id,
+                    "tick_snapshot": tick_snapshot,
                     "snapshot": self._build_step_perception_snapshot(base_step + idx),
                 }
             )
@@ -1778,17 +1862,21 @@ class Simulation:
         )
 
         phase_start = time.perf_counter()
-        planning_tasks = [
-            self.agents[int(plan["agent_index"])].run_turn(
+        async def _run_plan(plan: Mapping[str, Any]) -> Mapping[str, Any]:
+            return await self.agents[int(plan["agent_index"])].run_turn(
                 simulation_step=int(plan["simulation_step"]),
                 environment_perception=dict(cast(Mapping[str, Any], plan["snapshot"])),
                 memory_service=self.memory_service,
                 vector_store_manager=self.vector_store_manager,
                 knowledge_board=self.knowledge_board,
             )
-            for plan in plans
-        ]
-        planning_results = await asyncio.gather(*planning_tasks)
+
+        if parallel_decision:
+            planning_results = await asyncio.gather(*[_run_plan(plan) for plan in plans])
+        else:
+            planning_results = []
+            for plan in plans:
+                planning_results.append(await _run_plan(plan))
         self._set_labeled_gauge(
             STEP_PHASE_LATENCY_MS,
             phase="concurrent_planning",
@@ -1796,18 +1884,47 @@ class Simulation:
         )
 
         phase_start = time.perf_counter()
+        intents: list[dict[str, Any]] = []
         for plan, output in zip(plans, planning_results, strict=False):
             plan["output"] = output
             if isinstance(output, Mapping):
-                plan["resource"] = str(output.get("resource", plan["resource"]))
-                plan["target"] = str(output.get("target", plan["target"]))
-        ordered = sorted(plans, key=self._deterministic_commit_sort_key)
+                action_intent = str(output.get("action_intent", AgentActionIntent.IDLE.value))
+                intent = {
+                    "batch_index": int(plan["batch_index"]),
+                    "agent_index": int(plan["agent_index"]),
+                    "agent_id": str(plan["agent_id"]),
+                    "simulation_step": int(plan["simulation_step"]),
+                    "action_intent": action_intent,
+                    "requested_action_intent": action_intent,
+                    "message_content": output.get("message_content"),
+                    "message_recipient_id": output.get("message_recipient_id"),
+                    "map_action": output.get("map_action"),
+                    "resource": self._action_resource_key(
+                        {
+                            "agent_id": plan["agent_id"],
+                            "action_intent": action_intent,
+                            "map_action": output.get("map_action"),
+                            "message_recipient_id": output.get("message_recipient_id"),
+                        }
+                    ),
+                    "target": str(output.get("target", plan["target"])),
+                    "metadata": {
+                        "governance_sensitive": self._is_governance_sensitive(
+                            {"action_intent": action_intent}
+                        ),
+                        "tick_snapshot_turn": tick_snapshot["turn_index"],
+                    },
+                }
+                intents.append(intent)
+
+        ordered, rejected = self._resolve_tick_conflicts(intents)
         committed: list[dict[str, Any]] = []
-        for plan in ordered:
-            committed.append(cast(dict[str, Any], plan.get("output", {})))
+        for intent in ordered:
+            committed.append(intent)
             self.total_turns_executed += 1
-        self.current_step += len(committed)
-        self.current_agent_index = (self.current_agent_index + len(committed)) % len(self.agents)
+        committed.extend(rejected)
+        self.current_step += len(intents)
+        self.current_agent_index = (self.current_agent_index + len(intents)) % len(self.agents)
         self._set_labeled_gauge(
             STEP_PHASE_LATENCY_MS,
             phase="deterministic_commit_apply",
