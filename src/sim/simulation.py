@@ -66,13 +66,13 @@ from src.sim.knowledge_board_protocol import (
 )
 from src.sim.knowledge_board_service import KnowledgeBoardService
 from src.sim.knowledge_entry import KnowledgeEntryType
-from src.sim.lifecycle_service import LifecycleService
 from src.sim.persistence.snapshot_migrations import (
     CURRENT_SNAPSHOT_SCHEMA_VERSION,
     migrate_snapshot,
 )
 from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 from src.sim.persistence.trace_hash_service import TraceHashService
+from src.sim.population_service import PopulationService
 from src.sim.quests import generate_quest
 from src.sim.resource_manager import get_resource_manager
 from src.sim.runtime import ExternalEventIngestionService
@@ -201,7 +201,7 @@ class Simulation:
         self.total_turns_executed = 0
         self.resource_manager = get_resource_manager()
         self.personality_engine = PersonalityEngine()
-        self.lifecycle_service = LifecycleService()
+        self.population_service = PopulationService()
         self.simulation_complete = False
         self.event_kernel: SchedulerProtocol = scheduler or EventKernel()
         self.vector = VersionVector()
@@ -642,26 +642,21 @@ class Simulation:
                 agent.state.mutate_genes(mutation_rate)
 
         if predecessor is not None:
-            succession = self.lifecycle_service.register_successor(
+            succession = await self.population_service.register_successor(
+                simulation=self,
                 predecessor=predecessor,
                 successor=agent,
                 inherit_role=inherit_role,
                 inherit_context=inherit_context,
             )
-            if self.knowledge_board:
-                await self.knowledge_board_service.post_event(
-                    actor_id=predecessor.agent_id,
-                    content=(
-                        f"Agent {agent.agent_id} designated successor of {predecessor.agent_id}"
-                    ),
-                    event_type=KnowledgeEntryType.SPAWN_EVENT,
-                    tags=["population", "succession"],
-                    reference_metadata=succession,
-                    causal_source="simulation.spawn_agent.successor",
-                )
 
         self.agents.append(agent)
         await self.world_map.add_agent(agent.agent_id, x=len(self.agents) - 1, y=0)
+        await self.population_service.emit_agent_joined(
+            simulation=self,
+            agent=agent,
+            source="simulation.spawn_agent",
+        )
         self._update_collective_metrics()
         ACTIVE_AGENT_COUNT.set(len(self.agents))
 
@@ -674,39 +669,15 @@ class Simulation:
         reason: str = "",
     ) -> None:
         """Retire an agent, compute inheritance, and optionally remove from simulation."""
-        transition = self.lifecycle_service.transition(
+        transition = await self.population_service.transition_lifecycle(
+            simulation=self,
             agent=agent,
             to_state=lifecycle_state,
-            step=self.current_step,
             reason=reason,
-            projects=self.projects,
+            initiated_by="system",
+            permissions={"admin"},
+            autonomous=True,
         )
-        lifecycle_event = log_event(
-            {
-                "type": "agent_lifecycle_transition",
-                "step": self.current_step,
-                "agent_id": agent.agent_id,
-                "from_state": transition.from_state.value,
-                "to_state": transition.to_state.value,
-                "reason": reason,
-                "legacy_artifacts": transition.artifacts,
-                "memory_archival_policy": transition.archival_policy,
-            }
-        )
-        if lifecycle_event is not None:
-            await emit_event(
-                SimulationEvent(type="agent_lifecycle_transition", data=lifecycle_event)
-            )
-
-        if self.knowledge_board:
-            await self.knowledge_board_service.post_lifecycle_transition(
-                actor_id=agent.agent_id,
-                from_state=transition.from_state.value,
-                to_state=transition.to_state.value,
-                reason=reason,
-                legacy_artifacts=transition.artifacts,
-                causal_source="lifecycle_service.transition",
-            )
         agent.update_state(agent.state)
         await self.world_map.remove_agent(agent.agent_id)
         if remove_from_simulation:
