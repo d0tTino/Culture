@@ -7,33 +7,84 @@ from heapq import heappop, heappush
 from typing import Any
 
 from .version_vector import VersionVector
+from .world.state import WorldState
 
 
 class ResourceToken(str, Enum):
-    """Tokens representing resources that agents can collect."""
-
     WOOD = "wood"
 
 
 class StructureType(str, Enum):
-    """Types of structures that agents can build."""
-
     HUT = "hut"
 
 
 class WorldMap:
-    """Simple grid-based world map for agent interactions."""
+    """Grid map backed by WorldState.spatial/resources."""
 
-    def __init__(self, width: int = 50, height: int = 50) -> None:
+    def __init__(
+        self, width: int = 50, height: int = 50, *, world_state: WorldState | None = None
+    ) -> None:
         self.lock = asyncio.Lock()
-        self.width = width
-        self.height = height
-        self.agent_positions: dict[str, tuple[int, int]] = {}
-        self.resources: dict[tuple[int, int], dict[str, int]] = {}
-        self.buildings: dict[tuple[int, int], str] = {}
-        self.agent_resources: dict[str, dict[str, int]] = {}
-        self.obstacles: set[tuple[int, int]] = set()
         self.vector = VersionVector()
+        self.world_state = world_state or WorldState()
+        self.world_state.spatial.width = width
+        self.world_state.spatial.height = height
+
+    @property
+    def width(self) -> int:
+        return self.world_state.spatial.width
+
+    @width.setter
+    def width(self, value: int) -> None:
+        self.world_state.spatial.width = int(value)
+
+    @property
+    def height(self) -> int:
+        return self.world_state.spatial.height
+
+    @height.setter
+    def height(self, value: int) -> None:
+        self.world_state.spatial.height = int(value)
+
+    @property
+    def agent_positions(self) -> dict[str, tuple[int, int]]:
+        return self.world_state.spatial.agent_positions
+
+    @agent_positions.setter
+    def agent_positions(self, value: dict[str, tuple[int, int]]) -> None:
+        self.world_state.spatial.agent_positions = value
+
+    @property
+    def resources(self) -> dict[tuple[int, int], dict[str, int]]:
+        return self.world_state.spatial.resources
+
+    @resources.setter
+    def resources(self, value: dict[tuple[int, int], dict[str, int]]) -> None:
+        self.world_state.spatial.resources = value
+
+    @property
+    def buildings(self) -> dict[tuple[int, int], str]:
+        return self.world_state.spatial.buildings
+
+    @buildings.setter
+    def buildings(self, value: dict[tuple[int, int], str]) -> None:
+        self.world_state.spatial.buildings = value
+
+    @property
+    def agent_resources(self) -> dict[str, dict[str, int]]:
+        return self.world_state.resources.agent_inventories
+
+    @agent_resources.setter
+    def agent_resources(self, value: dict[str, dict[str, int]]) -> None:
+        self.world_state.resources.agent_inventories = value
+
+    @property
+    def obstacles(self) -> set[tuple[int, int]]:
+        return self.world_state.spatial.obstacles
+
+    @obstacles.setter
+    def obstacles(self, value: set[tuple[int, int]]) -> None:
+        self.world_state.spatial.obstacles = value
 
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
@@ -46,36 +97,26 @@ class WorldMap:
             self.obstacles.add((x, y))
 
     async def add_agent(self, agent_id: str, x: int = 0, y: int = 0) -> None:
-        """Place ``agent_id`` on the map and initialize its inventory."""
-
         async with self.lock:
             self.agent_positions[agent_id] = (x, y)
             self.agent_resources.setdefault(agent_id, {})
 
     async def remove_agent(self, agent_id: str) -> None:
-        """Remove ``agent_id`` from map position and inventory state."""
-
         async with self.lock:
             self.agent_positions.pop(agent_id, None)
             self.agent_resources.pop(agent_id, None)
 
     async def add_resource(self, x: int, y: int, resource: ResourceToken, amount: int = 1) -> None:
-        """Add ``amount`` of ``resource`` to the specified cell."""
-
         async with self.lock:
             cell = self.resources.setdefault((x, y), {})
             cell[resource.value] = cell.get(resource.value, 0) + amount
+            self.world_state.resources.global_inventory[resource.value] = (
+                self.world_state.resources.global_inventory.get(resource.value, 0) + amount
+            )
 
     async def move(
-        self,
-        agent_id: str,
-        dx: int,
-        dy: int,
-        *,
-        vector: dict[str, int] | None = None,
+        self, agent_id: str, dx: int, dy: int, *, vector: dict[str, int] | None = None
     ) -> tuple[int, int]:
-        """Move ``agent_id`` by ``dx`` and ``dy`` within map bounds."""
-
         async with self.lock:
             x, y = self.agent_positions.get(agent_id, (0, 0))
             new_x = min(max(x + dx, 0), self.width - 1)
@@ -83,22 +124,16 @@ class WorldMap:
             if not self.passable(new_x, new_y):
                 return x, y
             self.agent_positions[agent_id] = (new_x, new_y)
-            if vector is not None:
+            (
                 self.vector.merge(VersionVector(vector))
-            else:
-                self.vector.increment(agent_id)
+                if vector is not None
+                else self.vector.increment(agent_id)
+            )
             return new_x, new_y
 
     async def move_to(
-        self,
-        agent_id: str,
-        dest_x: int,
-        dest_y: int,
-        *,
-        vector: dict[str, int] | None = None,
+        self, agent_id: str, dest_x: int, dest_y: int, *, vector: dict[str, int] | None = None
     ) -> tuple[int, int]:
-        """Move ``agent_id`` one step toward ``dest_x``, ``dest_y`` using A*."""
-
         async with self.lock:
             start = self.agent_positions.get(agent_id, (0, 0))
             path = self.find_path(start, (dest_x, dest_y))
@@ -107,10 +142,11 @@ class WorldMap:
             nxt = path[1]
             if self.passable(*nxt):
                 self.agent_positions[agent_id] = nxt
-                if vector is not None:
+                (
                     self.vector.merge(VersionVector(vector))
-                else:
-                    self.vector.increment(agent_id)
+                    if vector is not None
+                    else self.vector.increment(agent_id)
+                )
                 return nxt
             return start
 
@@ -125,84 +161,66 @@ class WorldMap:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def find_path(self, start: tuple[int, int], goal: tuple[int, int]) -> list[tuple[int, int]]:
-        """Return a path from ``start`` to ``goal`` using A* search."""
-
         if not self.in_bounds(*goal) or not self.passable(*goal):
             return [start]
-
         frontier: list[tuple[int, tuple[int, int]]] = []
         heappush(frontier, (0, start))
         came_from: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
         cost_so_far: dict[tuple[int, int], int] = {start: 0}
-
         while frontier:
             _, current = heappop(frontier)
-
             if current == goal:
                 break
-
             for nxt in self.neighbors(current):
                 new_cost = cost_so_far[current] + 1
                 if nxt not in cost_so_far or new_cost < cost_so_far[nxt]:
                     cost_so_far[nxt] = new_cost
-                    priority = new_cost + self.heuristic(nxt, goal)
-                    heappush(frontier, (priority, nxt))
+                    heappush(frontier, (new_cost + self.heuristic(nxt, goal), nxt))
                     came_from[nxt] = current
-
         if goal not in came_from:
             return [start]
-
         path: list[tuple[int, int]] = []
         curr: tuple[int, int] | None = goal
         while curr is not None:
             path.append(curr)
             curr = came_from.get(curr)
-        path.reverse()
-        return path
+        return list(reversed(path))
 
     async def gather(
-        self,
-        agent_id: str,
-        resource: ResourceToken,
-        *,
-        vector: dict[str, int] | None = None,
+        self, agent_id: str, resource: ResourceToken, *, vector: dict[str, int] | None = None
     ) -> bool:
-        """Collect ``resource`` from the agent's current position."""
-
         async with self.lock:
             pos = self.agent_positions.get(agent_id)
             if pos is None:
                 return False
             cell = self.resources.get(pos)
-            res_key = resource.value
-            if not cell or cell.get(res_key, 0) <= 0:
+            key = resource.value
+            if not cell or cell.get(key, 0) <= 0:
                 return False
-            cell[res_key] -= 1
-            if cell[res_key] == 0:
-                del cell[res_key]
+            cell[key] -= 1
+            if cell[key] == 0:
+                del cell[key]
             bag = self.agent_resources.setdefault(agent_id, {})
-            bag[res_key] = bag.get(res_key, 0) + 1
+            bag[key] = bag.get(key, 0) + 1
+            self.world_state.resources.global_inventory[key] = max(
+                0, self.world_state.resources.global_inventory.get(key, 0) - 1
+            )
             try:
                 from src.infra.ledger import ledger
 
-                ledger.add_tokens(agent_id, res_key, 1)
-            except Exception:  # pragma: no cover - optional
+                ledger.add_tokens(agent_id, key, 1)
+            except Exception:
                 pass
-            if vector is not None:
+            (
                 self.vector.merge(VersionVector(vector))
-            else:
-                self.vector.increment(agent_id)
+                if vector is not None
+                else self.vector.increment(agent_id)
+            )
             return True
 
     async def build(
-        self,
-        agent_id: str,
-        structure: StructureType,
-        *,
-        vector: dict[str, int] | None = None,
+        self, agent_id: str, structure: StructureType, *, vector: dict[str, int] | None = None
     ) -> bool:
-        """Construct a ``structure`` at the agent's current location."""
-
         async with self.lock:
             pos = self.agent_positions.get(agent_id)
             if pos is None:
@@ -219,12 +237,13 @@ class WorldMap:
                 from src.infra.ledger import ledger
 
                 ledger.remove_tokens(agent_id, ResourceToken.WOOD.value, 1)
-            except Exception:  # pragma: no cover - optional
+            except Exception:
                 pass
-            if vector is not None:
+            (
                 self.vector.merge(VersionVector(vector))
-            else:
-                self.vector.increment(agent_id)
+                if vector is not None
+                else self.vector.increment(agent_id)
+            )
             return True
 
     def to_dict(self) -> dict[str, Any]:

@@ -78,6 +78,7 @@ from src.sim.resource_manager import get_resource_manager
 from src.sim.runtime import ExternalEventIngestionService
 from src.sim.scheduler_protocol import SchedulerProtocol
 from src.sim.version_vector import VersionVector
+from src.sim.world import ActionRulesEngine, WorldPerceptionBuilder, WorldState
 from src.sim.world_context import WorldContextProjection
 from src.sim.world_map import WorldMap
 
@@ -174,8 +175,11 @@ class Simulation:
         self.environment_state = EnvironmentState(
             world_season=0 if self.world_season_length_days else None
         )
+        self.world_state = WorldState()
+        self.world_state.temporal.world_season = self.environment_state.world_season
         self.environment_system = EnvironmentSystem(
             state=self.environment_state,
+            world_state=self.world_state,
             world_ticks_per_day=self.world_ticks_per_day,
             turns_per_world_tick=self.turns_per_world_tick,
             world_season_length_days=self.world_season_length_days,
@@ -255,7 +259,7 @@ class Simulation:
         )
 
         # Initialize world map and place agents
-        self.world_map = WorldMap()
+        self.world_map = WorldMap(world_state=self.world_state)
         self._init_tasks: list[asyncio.Task[Any]] = []
         for idx, ag in enumerate(self.agents):
             try:
@@ -266,11 +270,13 @@ class Simulation:
                 task = loop.create_task(self.world_map.add_agent(ag.agent_id, x=idx, y=0))
                 self._init_tasks.append(task)
         logger.info("Simulation initialized with world map.")
+        self.world_perception_builder = WorldPerceptionBuilder()
+        self.action_rules_engine = ActionRulesEngine()
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[
-            str, dict[str, Any]
-        ] = {}  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[str, dict[str, Any]] = (
+            {}
+        )  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -345,9 +351,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[
-            SimulationMessage
-        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[SimulationMessage] = (
+            []
+        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -946,7 +952,9 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = (
+                    []
+                )  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -960,19 +968,22 @@ class Simulation:
         # Per-turn contract: perceive -> decide -> act -> record signals -> update personality
         # perceive
         async with self._msg_lock:
-            perception_data["perceived_messages"] = list(self.messages_to_perceive_this_round)
-        if self.knowledge_board:
-            perception_data["knowledge_board_content"] = (
-                self.knowledge_board.get_recent_entries_for_prompt()
-            )
-        effect_hooks = self.environment_system._condition_hooks()
-        environment_context = self._environment_context_from_projection(
-            world_projection,
-            effect_hooks=effect_hooks,
+            perceived_messages = list(self.messages_to_perceive_this_round)
+        knowledge_board_content = (
+            self.knowledge_board.get_recent_entries_for_prompt() if self.knowledge_board else []
         )
+        effect_hooks = self.environment_system._condition_hooks()
+        perception_data = self.world_perception_builder.build(
+            world_state=self.world_state,
+            actor_id=agent_id,
+            turn_index=self.current_step,
+            effect_hooks=effect_hooks,
+            perceived_messages=perceived_messages,
+            knowledge_board_content=knowledge_board_content,
+        )
+        environment_context = cast(dict[str, Any], perception_data["environment_context"])
         world_time = self._world_time_from_projection(world_projection)
-        perception_data["environment_context"] = environment_context
-        mood_before = float(current_agent_state.mood_level)
+        mood_before = float(getattr(current_agent_state, "mood_level", 0.0))
 
         # decide
         with trace_agent_action("agent_activation", agent_id=agent_id, step=self.current_step):
@@ -1117,15 +1128,24 @@ class Simulation:
                     has_role_change = True
 
         if isinstance(map_action, dict):
-            from .world_map_actions import process_map_action
-
-            await process_map_action(
-                self,
-                agent_index,
-                agent_id,
-                current_agent_state,
-                map_action,
+            action_name = str(map_action.get("action", ""))
+            precondition = self.action_rules_engine.check(
+                world_state=self.world_state,
+                action=action_name,
+                actor_id=agent_id,
             )
+            if precondition.allowed:
+                from .world_map_actions import process_map_action
+
+                await process_map_action(
+                    self,
+                    agent_index,
+                    agent_id,
+                    current_agent_state,
+                    map_action,
+                )
+            else:
+                map_action = None
 
         # record signals -> update personality
         experience_signals = self._record_experience_signals(
@@ -1133,7 +1153,7 @@ class Simulation:
             requested_action_intent=requested_action_intent,
             message_recipient_id=message_recipient_id,
             mood_before=mood_before,
-            mood_after=float(current_agent_state.mood_level),
+            mood_after=float(getattr(current_agent_state, "mood_level", 0.0)),
             rule_allowed=bool(governance_outcome.allowed),
         )
         trait_records = self.personality_engine.apply_experience_drift(
@@ -1221,6 +1241,7 @@ class Simulation:
                 "collective_du": self.collective_du,
                 "knowledge_board": self.knowledge_board.to_snapshot(),
                 "world_map": self.world_map.to_dict(),
+                "world_state": self.world_state.snapshot(),
                 "agents": [
                     {
                         "agent_id": ag.agent_id,
@@ -1741,6 +1762,7 @@ class Simulation:
                 else []
             ),
             "world_map": copy.deepcopy(self.world_map.to_dict()),
+            "world_state": copy.deepcopy(self.world_state.snapshot()),
             "governance": {
                 "current_rules": copy.deepcopy(governance_rules_engine.current_rules()),
                 "active_offices": copy.deepcopy(governance_rules_engine.active_offices()),
@@ -2262,6 +2284,10 @@ class Simulation:
             sim.knowledge_board.from_snapshot(kb)
 
         wm = snapshot.get("world_map", {})
+        ws = snapshot.get("world_state")
+        if isinstance(ws, dict):
+            sim.world_state = WorldState.from_snapshot(ws)
+            sim.world_map.world_state = sim.world_state
         if wm:
             sim.world_map.width = int(wm.get("width", sim.world_map.width))
             sim.world_map.height = int(wm.get("height", sim.world_map.height))

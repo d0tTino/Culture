@@ -48,6 +48,15 @@ async def process_map_action(
     """
     action_type = map_action.get("action")
     details: dict[str, Any] = {}
+    if isinstance(action_type, str) and hasattr(sim, "action_rules_engine"):
+        decision = sim.action_rules_engine.check(
+            world_state=sim.world_state,
+            action=action_type,
+            actor_id=agent_id,
+        )
+        if not decision.allowed:
+            details = {"blocked": True, "reason": decision.reason}
+            action_type = "idle"
     if action_type == "move":
         if "x" in map_action and "y" in map_action:
             tx = int(map_action.get("x", 0))
@@ -88,9 +97,16 @@ async def process_map_action(
                     run_auction("gather", agent_id, config.MAP_GATHER_DU_COST)
                     current_state.du -= config.MAP_GATHER_DU_COST
                 start_du = current_state.du
+                mult = (
+                    sim.action_rules_engine.resource_multiplier(
+                        world_state=sim.world_state, action="gather"
+                    )
+                    if hasattr(sim, "action_rules_engine")
+                    else 1.0
+                )
                 current_state.ip -= config.MAP_GATHER_IP_COST
-                current_state.ip += config.MAP_GATHER_IP_REWARD
-                current_state.du += config.MAP_GATHER_DU_REWARD
+                current_state.ip += config.MAP_GATHER_IP_REWARD * mult
+                current_state.du += config.MAP_GATHER_DU_REWARD * mult
                 log_reward(
                     agent_id,
                     current_state.ip - start_ip,
@@ -113,9 +129,16 @@ async def process_map_action(
                     run_auction("build", agent_id, config.MAP_BUILD_DU_COST)
                     current_state.du -= config.MAP_BUILD_DU_COST
                 start_du = current_state.du
+                mult = (
+                    sim.action_rules_engine.resource_multiplier(
+                        world_state=sim.world_state, action="build"
+                    )
+                    if hasattr(sim, "action_rules_engine")
+                    else 1.0
+                )
                 current_state.ip -= config.MAP_BUILD_IP_COST
-                current_state.ip += config.MAP_BUILD_IP_REWARD
-                current_state.du += config.MAP_BUILD_DU_REWARD
+                current_state.ip += config.MAP_BUILD_IP_REWARD * mult
+                current_state.du += config.MAP_BUILD_DU_REWARD * mult
                 log_reward(
                     agent_id,
                     current_state.ip - start_ip,

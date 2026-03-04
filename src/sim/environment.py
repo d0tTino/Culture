@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.sim.world.state import WorldState
+
 
 @dataclass
 class EnvironmentState:
@@ -34,8 +36,12 @@ class EnvironmentSystem:
         council_window_start_hour: int = 9,
         council_window_duration_hours: int = 3,
         world_time_broadcast_cadence_ticks: int = 24,
+        world_state: WorldState | None = None,
     ) -> None:
         self.state = state
+        self.world_state = world_state
+        if world_state is not None:
+            self._sync_state_to_world()
         self.world_ticks_per_day = max(1, int(world_ticks_per_day))
         self.turns_per_world_tick = max(1, int(turns_per_world_tick))
         self.world_season_length_days = (
@@ -46,6 +52,34 @@ class EnvironmentSystem:
         self.council_window_start_hour = max(0, int(council_window_start_hour))
         self.council_window_duration_hours = max(1, int(council_window_duration_hours))
         self.world_time_broadcast_cadence_ticks = max(1, int(world_time_broadcast_cadence_ticks))
+
+    def _sync_state_to_world(self) -> None:
+        if self.world_state is None:
+            return
+        self.world_state.temporal.world_tick = self.state.world_tick
+        self.world_state.temporal.world_hour = self.state.world_hour
+        self.world_state.temporal.world_day = self.state.world_day
+        self.world_state.temporal.world_season = self.state.world_season
+        self.world_state.environment.weather = self.state.weather
+        self.world_state.environment.season_effects = dict(self.state.season_effects)
+        self.world_state.environment.active_global_modifiers = list(
+            self.state.active_global_modifiers
+        )
+        self.world_state.environment.council_window_active = self.state.council_window_active
+
+    def _sync_world_to_state(self) -> None:
+        if self.world_state is None:
+            return
+        self.state.world_tick = self.world_state.temporal.world_tick
+        self.state.world_hour = self.world_state.temporal.world_hour
+        self.state.world_day = self.world_state.temporal.world_day
+        self.state.world_season = self.world_state.temporal.world_season
+        self.state.weather = self.world_state.environment.weather
+        self.state.season_effects = dict(self.world_state.environment.season_effects)
+        self.state.active_global_modifiers = list(
+            self.world_state.environment.active_global_modifiers
+        )
+        self.state.council_window_active = self.world_state.environment.council_window_active
 
     def _format_world_time(self) -> str:
         time_str = f"Day {self.state.world_day}, {self.state.world_hour:02d}:00"
@@ -59,6 +93,7 @@ class EnvironmentSystem:
         return self._SEASON_NAMES[self.state.world_season % len(self._SEASON_NAMES)]
 
     def _condition_hooks(self) -> dict[str, Any]:
+        # unchanged semantics
         weather_hooks: dict[str, dict[str, Any]] = {
             "clear": {
                 "resource_multipliers": {"gather": 1.0, "build": 1.0},
@@ -101,18 +136,20 @@ class EnvironmentSystem:
         }
         weather = weather_hooks.get(self.state.weather, weather_hooks["clear"])
         season = season_hooks.get(self._season_name() or "spring", {})
-        resource = {
-            **weather.get("resource_multipliers", {}),
-            **season.get("resource_multipliers", {}),
-        }
-        mood = {**weather.get("mood_modifiers", {}), **season.get("mood_modifiers", {})}
         return {
-            "resource_multipliers": resource,
+            "resource_multipliers": {
+                **weather.get("resource_multipliers", {}),
+                **season.get("resource_multipliers", {}),
+            },
             "allowed_actions": list(weather.get("allowed_actions", ["*"])),
-            "mood_modifiers": mood,
+            "mood_modifiers": {
+                **weather.get("mood_modifiers", {}),
+                **season.get("mood_modifiers", {}),
+            },
         }
 
     def world_time_snapshot(self) -> dict[str, Any]:
+        self._sync_world_to_state()
         return {
             "world_tick": self.state.world_tick,
             "world_hour": self.state.world_hour,
@@ -121,22 +158,10 @@ class EnvironmentSystem:
             "formatted": self._format_world_time(),
         }
 
-    def build_perception_context(self, *, turn_index: int) -> dict[str, Any]:
-        return {
-            "turn_index": turn_index,
-            "time": self.world_time_snapshot(),
-            "weather": self.state.weather,
-            "season": self._season_name(),
-            "season_effects": dict(self.state.season_effects),
-            "active_global_modifiers": list(self.state.active_global_modifiers),
-            "council_window_active": self.state.council_window_active,
-            "effect_hooks": self._condition_hooks(),
-        }
-
     def tick(self, turn_index: int) -> list[dict[str, Any]]:
+        self._sync_world_to_state()
         if turn_index <= 0:
             return []
-
         target_tick = (turn_index - 1) // self.turns_per_world_tick
         events: list[dict[str, Any]] = []
         while self.state.world_tick < target_tick:
@@ -146,14 +171,12 @@ class EnvironmentSystem:
                 self.state.world_hour = 0
                 self.state.world_day += 1
                 events.append(self._event("daily_reset", turn_index))
-
             if self.state.world_tick % self.weather_shift_interval_ticks == 0:
                 idx = (self.state.world_tick // self.weather_shift_interval_ticks) % len(
                     self._WEATHER_CYCLE
                 )
                 self.state.weather = self._WEATHER_CYCLE[idx]
                 events.append(self._event("weather_shift", turn_index))
-
             if self.world_season_length_days and self.state.world_day > 0:
                 new_season = self.state.world_day // self.world_season_length_days
                 if new_season != self.state.world_season:
@@ -163,7 +186,6 @@ class EnvironmentSystem:
                         "hooks": self._condition_hooks(),
                     }
                     events.append(self._event("season_transition", turn_index))
-
             is_council_day = (self.state.world_day % self.council_window_days) == 0
             in_hour_window = (
                 self.council_window_start_hour
@@ -174,10 +196,9 @@ class EnvironmentSystem:
             if council_active != self.state.council_window_active:
                 self.state.council_window_active = council_active
                 events.append(self._event("council_meeting_window", turn_index))
-
             if self.state.world_tick % self.world_time_broadcast_cadence_ticks == 0:
                 events.append(self._event("world_time", turn_index))
-
+        self._sync_state_to_world()
         return events
 
     def _event(self, event_name: str, turn_index: int) -> dict[str, Any]:
