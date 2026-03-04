@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.sim.contracts.tick_context import TickContext
+
 
 @dataclass(slots=True)
 class StepContext:
@@ -13,3 +15,4 @@ class StepContext:
     phase_order: list[str] = field(default_factory=list)
     planned_outputs: list[dict[str, Any]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
+    tick_context: TickContext | None = None

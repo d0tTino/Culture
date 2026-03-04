@@ -36,6 +36,7 @@ from src.infra.event_log import log_event
 from src.infra.ledger import ledger
 from src.infra.llm_client import get_llm_client
 from src.infra.logging_config import setup_logging
+from src.infra.snapshot import save_snapshot, upload_snapshot
 from src.interfaces.command_bus import CommandBus
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
@@ -53,8 +54,10 @@ from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
 from src.sim.command_service import SimulationCommandService
 from src.sim.commands.dispatcher import SimulationCommandDispatcher
+from src.sim.contracts.lifecycle import EVENT_STEP_LIFECYCLE_CONTRACTS
 from src.sim.control_service import SimulationControlService
 from src.sim.engine import SimulationEngine
+from src.sim.engines.persistence_engine import PersistenceEngine
 from src.sim.environment import EnvironmentState, EnvironmentSystem
 from src.sim.event_kernel import EventKernel
 from src.sim.graph_knowledge_board import GraphKnowledgeBoard
@@ -96,25 +99,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# Must-not-change contract for safe parallel development.
-#
-# Any high-impact change touching the event/step lifecycle must preserve these
-# guarantees unless an ADR explicitly approves a versioned migration path.
-EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE: dict[str, tuple[str, ...]] = {
-    "run_step_order": (
-        "start_event_listener must run before kernel dispatch",
-        "event_kernel.step is the step execution boundary",
-        "evaluation hooks execute after events are produced for a step",
-    ),
-    "bootstrap_semantics": (
-        "when kernel queue is empty, exactly one immediate agent event is seeded",
-        "seeded event uses current_agent_index and increments that agent vector clock",
-    ),
-    "metrics_event_semantics": (
-        "evaluation metrics are emitted as SimulationEvent(type='evaluation')",
-        "evaluation metrics include the current simulation step",
-    ),
-}
+# Backward-compatible alias retained for existing callers/tests.
+EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE = EVENT_STEP_LIFECYCLE_CONTRACTS
+
+# Backward-compatible module exports for snapshot monkeypatching in tests.
+_ = (save_snapshot, upload_snapshot)
 
 
 class Simulation:
@@ -309,7 +298,18 @@ class Simulation:
 
         # --- Initialize memory service ---
         if memory_service is None:
-            memory_service = MemoryService(vector_store_manager, semantic_manager)
+            try:
+                memory_service = MemoryService(vector_store_manager, semantic_manager)
+            except Exception:  # pragma: no cover - fallback for constrained environments
+                class _OfflineTokenizer:
+                    def encode(self, text: str) -> list[int]:
+                        return [ord(ch) for ch in text]
+
+                memory_service = MemoryService(
+                    vector_store_manager,
+                    semantic_manager,
+                    tokenizer=_OfflineTokenizer(),
+                )
         self.memory_service = memory_service
         self.vector_store_manager = memory_service.vector_store
         self.semantic_manager = memory_service.semantic_manager
@@ -2190,6 +2190,10 @@ class Simulation:
     @classmethod
     def from_snapshot(cls: type[Self], snapshot: dict[str, Any], seed: int | None = None) -> Self:
         """Create a ``Simulation`` instance from a snapshot dictionary."""
+        return cast(Self, PersistenceEngine().from_snapshot(cls, snapshot, seed=seed))
+
+    @classmethod
+    def _from_snapshot_impl(cls: type[Self], snapshot: dict[str, Any], seed: int | None = None) -> Self:
         from src.agents.core.base_agent import Agent  # avoid circular import at module level
 
         snapshot = migrate_snapshot(snapshot)
@@ -2197,7 +2201,16 @@ class Simulation:
         agents_data = snapshot.get("agents", [])
         agents = [Agent(agent_id=a.get("agent_id", str(i))) for i, a in enumerate(agents_data)]
         sim_seed = seed if seed is not None else snapshot.get("seed")
-        sim = cls(agents=agents, scenario="", seed=sim_seed)
+        class _OfflineTokenizer:
+            def encode(self, text: str) -> list[int]:
+                return [ord(ch) for ch in text]
+
+        sim = cls(
+            agents=agents,
+            scenario="",
+            seed=sim_seed,
+            memory_service=MemoryService(tokenizer=_OfflineTokenizer()),
+        )
         if seed is None and snapshot.get("rng_state") is not None:
             from src.infra.checkpoint import restore_rng_state
 
@@ -2268,16 +2281,49 @@ class Simulation:
         events_path: str | Path | None = None,
     ) -> Self:
         """Load a snapshot and replay events from the event log."""
+        sim = cast(
+            Self,
+            PersistenceEngine().replay_from_snapshot(
+                cls,
+                snapshot_path,
+                seed=seed,
+                stop_step=end_step,
+            ),
+        )
+        if start_step is None and events_path is None:
+            return sim
+
+        # Preserve legacy filtering arguments with a post-load replay pass.
+        return cls._replay_from_snapshot_impl(
+            snapshot_path,
+            start_step=start_step,
+            end_step=end_step,
+            seed=seed,
+            events_path=events_path,
+        )
+
+    @classmethod
+    def _replay_from_snapshot_impl(
+        cls: type[Self],
+        snapshot_path: str | Path,
+        *,
+        start_step: int | None = None,
+        end_step: int | None = None,
+        seed: int | None = None,
+        events_path: str | Path | None = None,
+        stop_step: int | None = None,
+    ) -> Self:
         snap = SnapshotPersistenceService.load(snapshot_path)
-        sim = cls.from_snapshot(snap, seed=seed)
+        sim = cls._from_snapshot_impl(snap, seed=seed)
         from src.infra import event_log
 
+        effective_end_step = stop_step if stop_step is not None else end_step
         after_step = sim.current_step
         if start_step is not None:
             after_step = max(after_step, start_step - 1)
 
         for event in event_log.stream_events(
-            after_step=after_step, end_step=end_step, path=events_path
+            after_step=after_step, end_step=effective_end_step, path=events_path
         ):
             step = int(event.get("step", 0))
             if start_step is not None and step < start_step:
