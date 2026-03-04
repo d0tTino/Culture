@@ -8,7 +8,8 @@ from opentelemetry import trace
 from src.infra.event_log import log_event
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
 from src.sim.persistence.trace_hash_service import TraceHashService
-from src.sim.runtime import ActionPhase, DecisionPhase, PerceptionPhase, PostStepPhase, StepContext
+from src.sim.runtime import StepContext
+from src.sim.simulation_kernel import SimulationKernel
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -19,10 +20,7 @@ class SimulationEngine:
 
     def __init__(self, simulation: Any) -> None:
         self.simulation = simulation
-        self.perception_phase = PerceptionPhase()
-        self.decision_phase = DecisionPhase()
-        self.action_phase = ActionPhase()
-        self.post_step_phase = PostStepPhase()
+        self.kernel = SimulationKernel()
         self.last_step_context: StepContext | None = None
 
     async def run_step(self, max_turns: int = 1) -> int:
@@ -32,15 +30,9 @@ class SimulationEngine:
             return 0
 
         context = StepContext(max_turns=max_turns)
-        await self.perception_phase.execute(sim, context)
-        await self.decision_phase.execute(sim, context)
-        await self.action_phase.execute(sim, context)
-        await self.post_step_phase.execute(sim, context)
+        result = await self.kernel.run_tick(sim, context)
         self.last_step_context = context
-
-        if context.planned_outputs:
-            return len(context.planned_outputs)
-        return len(context.events)
+        return result
 
     async def emit_evaluation_events(self, events: list[dict[str, Any]]) -> None:
         sim = self.simulation
