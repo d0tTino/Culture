@@ -8,6 +8,7 @@ from src.interfaces.interaction_schema import (
     InteractionAuthScope,
     InteractionBudgetAttribution,
     InteractionContext,
+    InteractionIntent,
     InteractionResult,
     InteractionRouting,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "InteractionAuthScope",
     "InteractionBudgetAttribution",
     "InteractionContext",
+    "InteractionIntent",
     "InteractionResult",
     "InteractionRouting",
     "InteractionService",

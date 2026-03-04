@@ -57,7 +57,7 @@ class InteractionBudgetAttribution(BaseModel):
     attribution_scope: str = "default"
 
 
-class BaseInteractionEnvelope(BaseModel):
+class BaseInteractionIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     intent: str
@@ -67,27 +67,27 @@ class BaseInteractionEnvelope(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class HumanMessageEnvelope(BaseInteractionEnvelope):
+class HumanMessageIntent(BaseInteractionIntent):
     intent: Literal["human_message"] = "human_message"
     text: str
 
 
-class DirectMessageEnvelope(BaseInteractionEnvelope):
+class DirectMessageIntent(BaseInteractionIntent):
     intent: Literal["direct_message"] = "direct_message"
     text: str
 
 
-class BroadcastEnvelope(BaseInteractionEnvelope):
+class BroadcastIntent(BaseInteractionIntent):
     intent: Literal["broadcast"] = "broadcast"
     text: str
 
 
-class KnowledgeBoardEnvelope(BaseInteractionEnvelope):
+class KnowledgeBoardIntent(BaseInteractionIntent):
     intent: Literal["knowledge_board"] = "knowledge_board"
     text: str
 
 
-class SpawnEnvelope(BaseInteractionEnvelope):
+class SpawnIntent(BaseInteractionIntent):
     intent: Literal["spawn"] = "spawn"
     agent_id: str | None = None
     role: str | dict[str, Any] | None = None
@@ -96,7 +96,7 @@ class SpawnEnvelope(BaseInteractionEnvelope):
     traits: dict[str, float] | None = None
 
 
-class ControlEnvelope(BaseInteractionEnvelope):
+class ControlIntent(BaseInteractionIntent):
     intent: Literal["control"] = "control"
     action: str
     value: float | None = None
@@ -104,34 +104,48 @@ class ControlEnvelope(BaseInteractionEnvelope):
     agent_id: str | None = None
 
 
-class ModerationEnvelope(BaseInteractionEnvelope):
+class ModerationIntent(BaseInteractionIntent):
     intent: Literal["moderation"] = "moderation"
     action: str
     agent_id: str | None = None
     value: float | None = None
 
 
-class InjectEventEnvelope(BaseInteractionEnvelope):
+class InjectEventIntent(BaseInteractionIntent):
     intent: Literal["inject_event"] = "inject_event"
     text: str
     scope: str = "global"
     agent_id: str | None = None
 
 
-InteractionEnvelope = Annotated[
-    HumanMessageEnvelope
-    | DirectMessageEnvelope
-    | BroadcastEnvelope
-    | KnowledgeBoardEnvelope
-    | SpawnEnvelope
-    | ControlEnvelope
-    | ModerationEnvelope
-    | InjectEventEnvelope,
+InteractionIntent = Annotated[
+    HumanMessageIntent
+    | DirectMessageIntent
+    | BroadcastIntent
+    | KnowledgeBoardIntent
+    | SpawnIntent
+    | ControlIntent
+    | ModerationIntent
+    | InjectEventIntent,
     Field(discriminator="intent"),
 ]
 
-_INTERACTION_ENVELOPE_ADAPTER = TypeAdapter(InteractionEnvelope)
+_INTERACTION_INTENT_ADAPTER = TypeAdapter(InteractionIntent)
 
 
-def parse_interaction_envelope(payload: dict[str, Any]) -> InteractionEnvelope:
-    return _INTERACTION_ENVELOPE_ADAPTER.validate_python(payload)
+def parse_interaction_intent(payload: dict[str, Any]) -> InteractionIntent:
+    return _INTERACTION_INTENT_ADAPTER.validate_python(payload)
+
+
+# Backward-compatible aliases during transport migration.
+BaseInteractionEnvelope = BaseInteractionIntent
+HumanMessageEnvelope = HumanMessageIntent
+DirectMessageEnvelope = DirectMessageIntent
+BroadcastEnvelope = BroadcastIntent
+KnowledgeBoardEnvelope = KnowledgeBoardIntent
+SpawnEnvelope = SpawnIntent
+ControlEnvelope = ControlIntent
+ModerationEnvelope = ModerationIntent
+InjectEventEnvelope = InjectEventIntent
+InteractionEnvelope = InteractionIntent
+parse_interaction_envelope = parse_interaction_intent

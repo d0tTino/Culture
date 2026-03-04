@@ -8,10 +8,10 @@ from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from src.infra import config
+from src.utils.policy import evaluate_with_opa
 
 if TYPE_CHECKING:
-    from src.interfaces.interaction_commands import InteractionContext
-from src.utils.policy import evaluate_with_opa
+    from src.interfaces.interaction_schema import InteractionContext
 
 logger = logging.getLogger(__name__)
 

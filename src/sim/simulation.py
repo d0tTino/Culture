@@ -43,7 +43,6 @@ from src.interfaces.dashboard_backend import (
     emit_event,
 )
 from src.interfaces.discord_event_listener import DiscordSimulationEventListener
-from src.interfaces.domain_command_adapters import command_from_payload
 from src.interfaces.interaction_commands import InteractionContext, InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
@@ -491,11 +490,10 @@ class Simulation:
         command_type = payload.get("command_type")
         if not command_type and bool(payload.get("broadcast")):
             command_type = "broadcast"
-        command = command_from_payload(
+        result = await self.interaction_service.execute_from_payload(
             {"command_type": command_type or "human_message", "content": text, **payload},
             context=context,
         )
-        result = await self.command_dispatcher.dispatch(command, context=context)
         if result.status != "ok" and self.discord_bot:
             channel_id = context.channel_id
             target_channel_id = (

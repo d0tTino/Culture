@@ -24,9 +24,10 @@ from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
-from src.interfaces.domain_command_adapters import command_from_discord_message
 from src.interfaces.interaction_policy import (
     check_command_rate_limit,
+    discord_interaction_context,
+    discord_message_to_intent_payload,
     has_admin_permission,
     has_control_command_permission,
     set_max_rate,
@@ -34,11 +35,9 @@ from src.interfaces.interaction_policy import (
 from src.interfaces.interaction_schema import (
     ControlEnvelope,
     InjectEventEnvelope,
-    InteractionContext,
     KnowledgeBoardEnvelope,
     SpawnEnvelope,
 )
-from src.interfaces.transport_adapters import parse_discord_message_routing
 from src.sim.context import SimulationContext
 from src.utils.policy import allow_message, evaluate_with_opa
 
@@ -671,42 +670,33 @@ class SimulationDiscordBot:
                     if user_id and channel_id:
                         self.user_channels[str(user_id)] = channel_id
                         self.last_user_id = str(user_id)
-                    recipient, is_broadcast, parsed_content, validation_error = parse_discord_message_routing(content)
+                    sender = self.user_agents.get(str(user_id)) if user_id else None
+                    fallback_agent = _default_agent_for_channel(self, channel_id)
+                    payload, validation_error = discord_message_to_intent_payload(
+                        content=content,
+                        sender_agent_id=sender,
+                        fallback_agent_id=fallback_agent,
+                        raw_metadata={"channel_id": channel_id, "user_id": user_id},
+                    )
                     if validation_error is not None:
                         await send_channel_message(channel, content=validation_error)
                         return
-                    if not parsed_content:
+                    if payload is None:
                         return
-                    sender = self.user_agents.get(str(user_id)) if user_id else None
-                    fallback_agent = _default_agent_for_channel(self, channel_id)
-                    target_agent_id = recipient or sender or fallback_agent
+                    target_agent_id = payload.get("target_agent_id")
                     span.set_attribute("discord.agent.id", target_agent_id or "")
-                    if target_agent_id is None:
-                        await send_channel_message(
-                            channel,
-                            content="No agents available to route this message",
-                        )
-                        return
-                    if user_id and sender is None:
-                        self.user_agents[str(user_id)] = target_agent_id
+                    if user_id and sender is None and target_agent_id is not None:
+                        self.user_agents[str(user_id)] = str(target_agent_id)
                     self.last_agent_id = target_agent_id
                     self.last_channel_id = channel_id
                     bus = get_command_bus(self.context)
                     if bus is None:
                         return
-                    command = command_from_discord_message(
-                        content=parsed_content,
-                        recipient_id=recipient,
-                        is_broadcast=is_broadcast,
-                        target_agent_id=target_agent_id,
-                        raw_payload={"channel_id": channel_id, "user_id": user_id},
-                    )
-                    result = await bus.dispatch(
-                        command,
-                        context=InteractionContext(
-                            sender_id=str(user_id) if user_id is not None else "human",
-                            channel_id=str(channel_id) if channel_id is not None else None,
-                            source="discord",
+                    result = await bus.dispatch_payload(
+                        payload,
+                        context=discord_interaction_context(
+                            user=user,
+                            channel=channel,
                         ),
                     )
                     if result.status != "ok":
