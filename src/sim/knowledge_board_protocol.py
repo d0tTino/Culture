@@ -1,68 +1,72 @@
-"""Protocol definitions and capability adapters for knowledge board backends."""
+"""Protocol definitions and adapters for knowledge board backends."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
+from src.sim.graph_knowledge_board import GraphKnowledgeBoard
+from src.sim.knowledge_board import KnowledgeBoard
 from src.sim.knowledge_entry import KnowledgeEntry
 
 
-@runtime_checkable
-class KnowledgeBoardProtocol(Protocol):
-    """Core interface required by simulation knowledge board backends."""
+@dataclass(frozen=True)
+class TimeRange:
+    start_step: int | None = None
+    end_step: int | None = None
 
-    def add_entry(
+
+@dataclass(frozen=True)
+class KnowledgeQuery:
+    semantic: str | None = None
+    topics: tuple[str, ...] = ()
+    time_range: TimeRange | None = None
+    limit: int = 20
+
+
+@runtime_checkable
+class KnowledgeBoardCapabilities(Protocol):
+    """Strict capability contract used by callers."""
+
+    lock: Any
+
+    def append_entry(
         self,
         entry: str | KnowledgeEntry,
+        *,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
     ) -> bool: ...
 
-    def replace_entries(self, entries: list[dict[str, Any]]) -> None: ...
+    def link_entries(
+        self,
+        *,
+        source_entry_id: str,
+        target_entry_id: str,
+        relationship: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool: ...
+
+    def query_entries(self, query: KnowledgeQuery) -> list[dict[str, Any]]: ...
+
+    def aggregate_votes(
+        self, proposal_ids: list[str] | None = None
+    ) -> dict[str, dict[str, int]]: ...
+
+    def begin_transaction(self) -> object: ...
+
+    def commit_transaction(self, tx_context: object) -> None: ...
+
+    def rollback_transaction(self, tx_context: object) -> None: ...
 
     def to_snapshot(self) -> dict[str, Any]: ...
 
     def from_snapshot(self, snapshot: dict[str, Any]) -> None: ...
 
+    def replace_entries(self, entries: list[dict[str, Any]]) -> None: ...
+
     def get_recent_entries_for_prompt(self, max_entries: int = 5) -> list[str]: ...
-
-
-@runtime_checkable
-class EntryStore(KnowledgeBoardProtocol, Protocol):
-    """Capability for core knowledge entry storage and retrieval."""
-
-
-@runtime_checkable
-class RelationshipStore(Protocol):
-    """Capability for relationship-level graph projections."""
-
-    def get_endorsed_ideas(
-        self,
-        *,
-        min_endorsements: int = 1,
-        limit: int = 20,
-    ) -> list[dict[str, Any]]: ...
-
-    def get_agent_contribution_graph(
-        self, agent_id: str | None = None
-    ) -> list[dict[str, Any]]: ...
-
-
-@runtime_checkable
-class ProposalVotingStore(Protocol):
-    """Capability for proposal voting persistence and support queries."""
-
-    def record_vote(self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None: ...
-
-    def get_proposal_support_counts(
-        self, proposal_ids: list[str] | None = None
-    ) -> dict[str, int]: ...
-
-
-@runtime_checkable
-class SemanticQueryStore(Protocol):
-    """Capability for governance-oriented read models used by agents/UI."""
 
     def get_active_proposals(self, limit: int = 20) -> list[dict[str, Any]]: ...
 
@@ -70,16 +74,16 @@ class SemanticQueryStore(Protocol):
 
     def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]: ...
 
+    def record_vote(self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None: ...
 
-@runtime_checkable
-class TransactionalKnowledgeBoardProtocol(Protocol):
-    """Capability for transactional writes with explicit rollback hooks."""
 
-    def begin_transaction(self) -> object: ...
-
-    def commit_transaction(self, tx_context: object) -> None: ...
-
-    def rollback_transaction(self, tx_context: object) -> None: ...
+# Backward-compatible alias.
+KnowledgeBoardProtocol = KnowledgeBoardCapabilities
+EntryStore = KnowledgeBoardCapabilities
+SemanticQueryStore = KnowledgeBoardCapabilities
+ProposalVotingStore = KnowledgeBoardCapabilities
+RelationshipStore = KnowledgeBoardCapabilities
+TransactionalKnowledgeBoardProtocol = KnowledgeBoardCapabilities
 
 
 class KnowledgeBoardCapabilityError(RuntimeError):
@@ -108,80 +112,347 @@ def _require_capability(board: object, capability: type[CapabilityT], name: str)
 
 
 def as_entry_store(board: object) -> EntryStore:
-    """Adapt ``board`` to :class:`EntryStore` or fail explicitly."""
-
-    return _require_capability(board, EntryStore, "EntryStore")
+    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
 
 
 def as_relationship_store(board: object) -> RelationshipStore:
-    """Adapt ``board`` to :class:`RelationshipStore` or fail explicitly."""
-
-    return _require_capability(board, RelationshipStore, "RelationshipStore")
+    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
 
 
 def as_proposal_voting_store(board: object) -> ProposalVotingStore:
-    """Adapt ``board`` to :class:`ProposalVotingStore` or fail explicitly."""
-
-    return _require_capability(board, ProposalVotingStore, "ProposalVotingStore")
+    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
 
 
 def as_semantic_query_store(board: object) -> SemanticQueryStore:
-    """Adapt ``board`` to :class:`SemanticQueryStore` or fail explicitly."""
-
-    return _require_capability(board, SemanticQueryStore, "SemanticQueryStore")
+    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
 
 
-@runtime_checkable
-class KnowledgeBoardVoteProtocol(Protocol):
-    """Optional voting extension supported by graph-backed boards."""
+def _normalize_entries(
+    entries: list[dict[str, Any]], query: KnowledgeQuery
+) -> list[dict[str, Any]]:
+    filtered = entries
+    if query.topics:
+        topics = {topic.lower() for topic in query.topics}
+        filtered = [
+            entry
+            for entry in filtered
+            if topics.intersection({str(tag).lower() for tag in entry.get("tags", [])})
+        ]
+    if query.time_range is not None:
+        start = query.time_range.start_step
+        end = query.time_range.end_step
+        filtered = [
+            entry
+            for entry in filtered
+            if (start is None or int(entry.get("step", -1)) >= start)
+            and (end is None or int(entry.get("step", -1)) <= end)
+        ]
+    if query.semantic:
+        needle = query.semantic.lower().strip()
+        filtered = [
+            entry
+            for entry in filtered
+            if needle in str(entry.get("content_full", "")).lower()
+            or needle in str(entry.get("content_summary", "")).lower()
+        ]
+    return filtered[-max(1, query.limit) :]
 
-    def record_vote(self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None: ...
 
-    def get_proposal_support_counts(
-        self, proposal_ids: list[str] | None = None
-    ) -> dict[str, int]: ...
+def _aggregate_vote_entries(
+    entries: list[dict[str, Any]], proposal_ids: list[str] | None = None
+) -> dict[str, dict[str, int]]:
+    allowed = set(proposal_ids or []) if proposal_ids else None
+    result: dict[str, dict[str, int]] = {}
+    for entry in entries:
+        if entry.get("entry_type") != "vote":
+            continue
+        proposal_id = str(entry.get("parent_entry_id") or "")
+        if not proposal_id or (allowed is not None and proposal_id not in allowed):
+            continue
+        row = result.setdefault(proposal_id, {"approvals": 0, "rejections": 0, "support": 0})
+        approve = bool((entry.get("reference_metadata") or {}).get("approve", False))
+        if approve:
+            row["approvals"] += 1
+            row["support"] += 1
+        else:
+            row["rejections"] += 1
+    return result
 
 
-@runtime_checkable
-class KnowledgeBoardGraphProtocol(Protocol):
-    """Optional graph query extension supported by graph-backed boards."""
+class InMemoryKnowledgeBoardAdapter:
+    """Adapter that exposes strict capability contract for in-memory board."""
 
-    def get_endorsed_ideas(
+    def __init__(self, board: KnowledgeBoard | None = None) -> None:
+        self._board = board or KnowledgeBoard()
+        self.lock = self._board.lock
+        self._links: list[dict[str, Any]] = []
+
+    def add_entry(
+        self,
+        entry: str | KnowledgeEntry,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
+        return self.append_entry(entry, agent_id=agent_id, step=step, vector=vector)
+
+    def append_entry(
+        self,
+        entry: str | KnowledgeEntry,
+        *,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
+        return self._board.add_entry(entry, agent_id=agent_id, step=step, vector=vector)
+
+    def link_entries(
         self,
         *,
-        min_endorsements: int = 1,
-        limit: int = 20,
-    ) -> list[dict[str, Any]]: ...
+        source_entry_id: str,
+        target_entry_id: str,
+        relationship: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        self._links.append(
+            {
+                "source": source_entry_id,
+                "target": target_entry_id,
+                "relationship": relationship.lower(),
+                "metadata": dict(metadata or {}),
+            }
+        )
+        return True
 
-    def get_agent_contribution_graph(
-        self, agent_id: str | None = None
-    ) -> list[dict[str, Any]]: ...
+    def query_entries(self, query: KnowledgeQuery) -> list[dict[str, Any]]:
+        return _normalize_entries(self._board.get_full_entries(), query)
+
+    def aggregate_votes(self, proposal_ids: list[str] | None = None) -> dict[str, dict[str, int]]:
+        return _aggregate_vote_entries(self._board.get_full_entries(), proposal_ids)
+
+    def record_vote(self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None:
+        self.append_entry(
+            KnowledgeEntry(
+                content_full=f"Vote by {voter_agent_id} on {proposal_id}",
+                entry_type="vote",
+                parent_entry_id=proposal_id,
+                reference_metadata={"approve": approve},
+            ),
+            agent_id=voter_agent_id,
+            step=0,
+        )
+
+    def get_proposal_support_counts(self, proposal_ids: list[str] | None = None) -> dict[str, int]:
+        return {pid: vals["support"] for pid, vals in self.aggregate_votes(proposal_ids).items()}
+
+    def begin_transaction(self) -> object:
+        return {"snapshot": self.to_snapshot()}
+
+    def commit_transaction(self, tx_context: object) -> None:
+        _ = tx_context
+
+    def rollback_transaction(self, tx_context: object) -> None:
+        if isinstance(tx_context, dict) and isinstance(tx_context.get("snapshot"), dict):
+            self.from_snapshot(cast(dict[str, Any], tx_context["snapshot"]))
+
+    def get_recent_entries_for_prompt(self, max_entries: int = 5) -> list[str]:
+        return self._board.get_recent_entries_for_prompt(max_entries=max_entries)
+
+    def get_full_entries(self) -> list[dict[str, Any]]:
+        return self._board.get_full_entries()
+
+    def replace_entries(self, entries: list[dict[str, Any]]) -> None:
+        self._board.replace_entries(entries)
+
+    def to_snapshot(self) -> dict[str, Any]:
+        snapshot = self._board.to_snapshot()
+        snapshot["links"] = list(self._links)
+        return snapshot
+
+    def from_snapshot(self, snapshot: dict[str, Any]) -> None:
+        self._board.from_snapshot(snapshot)
+        links = snapshot.get("links", [])
+        self._links = [dict(link) for link in links if isinstance(link, dict)]
+
+    def get_active_proposals(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self.query_entries(KnowledgeQuery(topics=("proposal",), limit=limit))
+
+    def get_consensus_status(self, proposal_id: str) -> dict[str, Any]:
+        agg = self.aggregate_votes([proposal_id]).get(
+            proposal_id, {"approvals": 0, "rejections": 0}
+        )
+        return {
+            "proposal_id": proposal_id,
+            "approvals": agg["approvals"],
+            "rejections": agg["rejections"],
+            "consensus": agg["approvals"] > agg["rejections"],
+        }
+
+    def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]:
+        return [
+            entry
+            for entry in self._board.get_full_entries()
+            if entry.get("agent_id") == agent_id
+            and entry.get("entry_type") in {"vote", "endorsement"}
+        ]
+
+
+class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
+    """Adapter for graph board with operation-journal rollback semantics."""
+
+    def __init__(self, board: GraphKnowledgeBoard | None = None) -> None:
+        self._graph = board or GraphKnowledgeBoard()
+        self.lock = self._graph.lock
+        self._tx_journal: dict[int, dict[str, list[dict[str, Any]]]] = {}
+
+    def append_entry(
+        self,
+        entry: str | KnowledgeEntry,
+        *,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
+        ok = self._graph.add_entry(entry, agent_id=agent_id, step=step, vector=vector)
+        if ok and self._tx_journal:
+            added = self._graph.get_full_entries()[-1]
+            for journal in self._tx_journal.values():
+                journal.setdefault("entries", []).append(
+                    {"entry_id": str(added.get("entry_id", ""))}
+                )
+        return ok
+
+    def add_entry(
+        self,
+        entry: str | KnowledgeEntry,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
+        return self.append_entry(entry, agent_id=agent_id, step=step, vector=vector)
+
+    def link_entries(
+        self,
+        *,
+        source_entry_id: str,
+        target_entry_id: str,
+        relationship: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        rel = relationship.upper()
+        self._graph._run(
+            f"""
+            MATCH (source:KBEntry {{entry_id: $source_entry_id}})
+            MATCH (target:KBEntry {{entry_id: $target_entry_id}})
+            MERGE (source)-[r:{rel}]->(target)
+            SET r += $metadata
+            """,
+            source_entry_id=source_entry_id,
+            target_entry_id=target_entry_id,
+            metadata=dict(metadata or {}),
+        )
+        for journal in self._tx_journal.values():
+            journal.setdefault("links", []).append(
+                {"source": source_entry_id, "target": target_entry_id, "relationship": rel}
+            )
+        return True
+
+    def query_entries(self, query: KnowledgeQuery) -> list[dict[str, Any]]:
+        return _normalize_entries(self._graph.get_full_entries(), query)
+
+    def aggregate_votes(self, proposal_ids: list[str] | None = None) -> dict[str, dict[str, int]]:
+        return _aggregate_vote_entries(self._graph.get_full_entries(), proposal_ids)
+
+    def record_vote(self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None:
+        self._graph.record_vote(
+            voter_agent_id=voter_agent_id, proposal_id=proposal_id, approve=approve
+        )
+
+    def get_proposal_support_counts(self, proposal_ids: list[str] | None = None) -> dict[str, int]:
+        return {pid: row["support"] for pid, row in self.aggregate_votes(proposal_ids).items()}
+
+    def begin_transaction(self) -> object:
+        tx_id = id(object())
+        self._tx_journal[tx_id] = {"entries": [], "links": []}
+        return tx_id
+
+    def commit_transaction(self, tx_context: object) -> None:
+        if isinstance(tx_context, int):
+            self._tx_journal.pop(tx_context, None)
+
+    def rollback_transaction(self, tx_context: object) -> None:
+        if not isinstance(tx_context, int):
+            return
+        journal = self._tx_journal.pop(tx_context, None)
+        if journal is None:
+            return
+        for link in reversed(journal.get("links", [])):
+            self._graph._run(
+                f"""
+                MATCH (source:KBEntry {{entry_id: $source}})-[r:{link["relationship"]}]->(target:KBEntry {{entry_id: $target}})
+                DELETE r
+                """,
+                source=link["source"],
+                target=link["target"],
+            )
+        for entry in reversed(journal.get("entries", [])):
+            self._graph._run(
+                "MATCH (e:KBEntry {entry_id: $entry_id}) DETACH DELETE e",
+                entry_id=entry.get("entry_id", ""),
+            )
+
+    def get_recent_entries_for_prompt(self, max_entries: int = 5) -> list[str]:
+        return self._graph.get_recent_entries_for_prompt(max_entries=max_entries)
+
+    def replace_entries(self, entries: list[dict[str, Any]]) -> None:
+        self._graph.replace_entries(entries)
+
+    def to_snapshot(self) -> dict[str, Any]:
+        return self._graph.to_snapshot()
+
+    def from_snapshot(self, snapshot: dict[str, Any]) -> None:
+        self._graph.from_snapshot(snapshot)
+
+    def get_active_proposals(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self._graph.get_active_proposals(limit=limit)
+
+    def get_consensus_status(self, proposal_id: str) -> dict[str, Any]:
+        return self._graph.get_consensus_status(proposal_id)
+
+    def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]:
+        return self._graph.get_agent_stance_history(agent_id)
+
+
+class VectorAugmentedKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
+    """Optional in-memory adapter with simple vector similarity hook."""
+
+    def __init__(self, board: KnowledgeBoard | None = None) -> None:
+        super().__init__(board=board)
+        self._semantic_vectors: dict[str, set[str]] = {}
+
+    def append_entry(
+        self,
+        entry: str | KnowledgeEntry,
+        *,
+        agent_id: str,
+        step: int,
+        vector: dict[str, int] | None = None,
+    ) -> bool:
+        ok = super().append_entry(entry, agent_id=agent_id, step=step, vector=vector)
+        if ok:
+            latest = self.get_full_entries()[-1]
+            text = str(latest.get("content_full", "")).lower()
+            self._semantic_vectors[str(latest.get("entry_id", ""))] = set(text.split())
+        return ok
 
 
 def supports_voting(board: object) -> bool:
-    """Return ``True`` when the board supports voting extension APIs."""
-
-    return isinstance(board, ProposalVotingStore)
+    return hasattr(board, "record_vote") and hasattr(board, "get_proposal_support_counts")
 
 
 def supports_graph_queries(board: object) -> bool:
-    """Return ``True`` when the board supports graph query extension APIs."""
-
-    return isinstance(board, RelationshipStore)
-
-
-@runtime_checkable
-class KnowledgeBoardReadModelProtocol(Protocol):
-    """Optional read-model extension used by UI and agent views."""
-
-    def get_active_proposals(self, limit: int = 20) -> list[dict[str, Any]]: ...
-
-    def get_consensus_status(self, proposal_id: str) -> dict[str, Any]: ...
-
-    def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]: ...
+    return hasattr(board, "get_endorsed_ideas") and hasattr(board, "get_agent_contribution_graph")
 
 
 def supports_read_models(board: object) -> bool:
-    """Return ``True`` when board supports governance read-model APIs."""
-
-    return isinstance(board, SemanticQueryStore)
+    return hasattr(board, "get_active_proposals") and hasattr(board, "get_consensus_status")

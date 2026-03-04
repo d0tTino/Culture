@@ -16,11 +16,7 @@ from src.governance.knowledge_governance_transaction import (
     make_vote_idempotency_key,
 )
 from src.infra.ledger import ledger
-from src.sim.knowledge_board_protocol import (
-    EntryStore,
-    UnsupportedKnowledgeBoardCapabilityError,
-    as_proposal_voting_store,
-)
+from src.sim.knowledge_board_protocol import EntryStore
 from src.sim.knowledge_entry import KnowledgeEntry, KnowledgeEntryType
 from src.utils.policy import evaluate_with_opa
 
@@ -100,7 +96,11 @@ class GovernanceService:
         except Exception:
             return False
 
-        if not proposal_entry_id or self._knowledge_board is None or self._transaction_service is None:
+        if (
+            not proposal_entry_id
+            or self._knowledge_board is None
+            or self._transaction_service is None
+        ):
             return approve
 
         step = self._current_step()
@@ -125,15 +125,12 @@ class GovernanceService:
         )
 
         def apply_vote() -> tuple[str, str, bool] | None:
-            try:
-                as_proposal_voting_store(self._knowledge_board).record_vote(
-                    voter_agent_id=agent.agent_id,
-                    proposal_id=proposal_entry_id,
-                    approve=approve,
-                )
-                return (agent.agent_id, proposal_entry_id, approve)
-            except UnsupportedKnowledgeBoardCapabilityError:
-                return None
+            self._knowledge_board.record_vote(
+                voter_agent_id=agent.agent_id,
+                proposal_id=proposal_entry_id,
+                approve=approve,
+            )
+            return (agent.agent_id, proposal_entry_id, approve)
 
         mutation = GovernanceMutation(apply=apply_vote, rollback=lambda _token: None)
         return await self._transaction_service.execute(
