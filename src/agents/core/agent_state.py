@@ -31,6 +31,7 @@ from src.agents.core.roles import (
     ensure_profile,
     get_role_trait_template,
 )
+from src.agents.core.personality_transition import TraitTransitionLog
 from .embedding_utils import compute_embedding
 from src.infra.config import get_config  # Import get_config function
 from src.langgraph import RetrieverNode
@@ -262,18 +263,6 @@ class AgentStateData(BaseModel):
 
     def __init__(self, **data: Any) -> None:
         """Initialize and conditionally call ``model_post_init`` for Pydantic v1."""
-        if "traits" not in data:
-            role_value = data.get("current_role")
-            if role_value is None:
-                role_name = _get_default_role()
-            elif isinstance(role_value, RoleProfile):
-                role_name = role_value.name
-            elif isinstance(role_value, dict):
-                role_name = str(role_value.get("name", _get_default_role()))
-            else:
-                role_name = str(role_value)
-            data["traits"] = PersonalityTraits(**get_role_trait_template(role_name))
-
         super().__init__(**data)
         if hasattr(self, "model_post_init"):
             self.model_post_init(None)
@@ -310,6 +299,7 @@ class AgentStateData(BaseModel):
     traits: PersonalityTraits = Field(default_factory=PersonalityTraits)
     trait_change_audit: list[dict[str, Any]] = Field(default_factory=list)
     personality_transition_events: list[dict[str, Any]] = Field(default_factory=list)
+    trait_transition_log: TraitTransitionLog = Field(default_factory=TraitTransitionLog)
     steps_in_current_role: int = 0
     reputation: dict[str, float] = Field(default_factory=dict)
     role_reputation: dict[str, float] = Field(default_factory=dict)
@@ -524,30 +514,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
     @property
     def trait_summary(self) -> str:
         return self.traits.summarize()
-
-    def apply_trait_drift(self, signals: dict[str, float] | None = None, max_step: float = 0.03) -> None:
-        """Deprecated helper kept for tests/legacy serialization compatibility only."""
-        from warnings import warn
-
-        warn(
-            "AgentState.apply_trait_drift is deprecated for production flows; use PersonalityEngine APIs.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        updates = signals or {}
-        if not updates:
-            return
-
-        def _clamp01(value: float) -> float:
-            return max(0.0, min(1.0, value))
-
-        for key, influence in updates.items():
-            if not hasattr(self.traits, key):
-                continue
-            current = float(getattr(self.traits, key))
-            delta = max(-max_step, min(max_step, float(influence)))
-            setattr(self.traits, key, _clamp01(current + delta))
-
     # ------------------------------------------------------------------
     # Compatibility properties
     # ------------------------------------------------------------------
@@ -663,18 +629,6 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             llm_client_config = model.llm_client_config
             llm_client = model.llm_client
             mock_llm_client = model.mock_llm_client
-
-
-        if isinstance(model, dict):
-            if not model.get("traits"):
-                role_name = getattr(model.get("current_role"), "name", None) or str(
-                    model.get("current_role") or _get_default_role()
-                )
-                model["traits"] = PersonalityTraits(**get_role_trait_template(role_name))
-        else:
-            if getattr(model, "traits", None) is None:
-                role_name = getattr(model.current_role, "name", _get_default_role())
-                model.traits = PersonalityTraits(**get_role_trait_template(role_name))
 
         if not llm_client:
             if mock_llm_client:

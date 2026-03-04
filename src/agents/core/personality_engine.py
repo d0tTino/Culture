@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from typing import cast
-from warnings import warn
 
 from pydantic import BaseModel
 
 from .agent_state import AgentState
-from .personality_transition import PersonalityTransition, TraitDelta
+from .personality_transition import PersonalityTransition, TraitDelta, TraitTransitionLog
 from .trait_policy import (
     action_intent_biasing,
     merge_trait_policy_coefficients,
@@ -38,7 +37,7 @@ class PersonalityEngine:
     def trait_projection(self, state: AgentState) -> dict[str, dict[str, float]]:
         """Return normalized trait projection consumed by influence policy points."""
 
-        return normalize_trait_projection(state.traits)
+        return cast(dict[str, dict[str, float]], normalize_trait_projection(state.traits))
 
     def _build_transition(
         self,
@@ -103,6 +102,11 @@ class PersonalityEngine:
             records.append(record)
 
         transition.resulting_traits = self.trait_projection(state)["raw"]
+        if not state.trait_transition_log.seed_traits:
+            state.trait_transition_log.seed_traits = {
+                delta.trait: delta.before for delta in transition.deltas
+            } or dict(transition.resulting_traits)
+        state.trait_transition_log.append(transition)
         dumped = transition.model_dump(mode="python") if hasattr(transition, "model_dump") else transition.dict()
         state.personality_transition_events.append(dumped)
         if records:
@@ -112,12 +116,18 @@ class PersonalityEngine:
     def replay_transitions(
         self,
         initial_traits: Mapping[str, float],
-        transitions: Sequence[Mapping[str, object] | PersonalityTransition],
+        transitions: Sequence[Mapping[str, object] | PersonalityTransition] | TraitTransitionLog,
     ) -> dict[str, float]:
         """Replay transitions deterministically from a seed trait state."""
-
+        transition_stream: Sequence[Mapping[str, object] | PersonalityTransition]
+        if isinstance(transitions, TraitTransitionLog):
+            if not transitions.verify_hash_chain():
+                raise ValueError("TraitTransitionLog hash chain verification failed")
+            transition_stream = transitions.transitions
+        else:
+            transition_stream = transitions
         replayed = {str(k): float(v) for k, v in initial_traits.items()}
-        for entry in transitions:
+        for entry in transition_stream:
             transition = (
                 entry
                 if isinstance(entry, PersonalityTransition)
@@ -231,22 +241,3 @@ class PersonalityEngine:
             source=source,
         )
         return self._reduce_transition(state, transition)
-
-    def update_traits(
-        self,
-        state: AgentState,
-        signals: ExperienceSignal,
-        *,
-        max_step: float = 0.01,
-    ) -> list[dict[str, float | str | int]]:
-        warn(
-            "PersonalityEngine.update_traits is deprecated; use apply_experience_drift instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.apply_experience_drift(
-            state,
-            signals,
-            max_step=max_step,
-            source="legacy.update_traits",
-        )
