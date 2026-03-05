@@ -137,3 +137,30 @@ class WorldState:
                 },
             ),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class EnvironmentTickDelta:
+    """Immutable delta emitted by the environment system for each tick update."""
+
+    event_name: str
+    turn_index: int
+    world_time: dict[str, Any]
+    weather: str
+    season: str | None
+    council_window_active: bool
+    active_global_modifiers: tuple[str, ...]
+    effect_hooks: dict[str, Any]
+
+    def as_event(self) -> dict[str, Any]:
+        return {
+            "type": "environment",
+            "event_name": self.event_name,
+            "turn_index": self.turn_index,
+            "world_time": dict(self.world_time),
+            "weather": self.weather,
+            "season": self.season,
+            "council_window_active": self.council_window_active,
+            "active_global_modifiers": list(self.active_global_modifiers),
+            "effect_hooks": dict(self.effect_hooks),
+        }

@@ -206,6 +206,24 @@ class PopulationService:
         )
         return payload
 
+
+    def apply_lifecycle_transition_event(self, *, agent: Any, event: dict[str, Any]) -> None:
+        """Project a persisted lifecycle transition event onto an agent state."""
+        to_state = AgentLifecycleState(str(event.get("to_state", AgentLifecycleState.ACTIVE.value)))
+        history = list(getattr(agent.state, "lifecycle_history", []) or [])
+        history.append(
+            {
+                "step": int(event.get("step", 0)),
+                "from": str(event.get("from_state", "active")),
+                "to": to_state.value,
+                "reason": str(event.get("reason", "")),
+            }
+        )
+        agent.state.lifecycle_state = to_state
+        agent.state.lifecycle_history = history
+        agent.state.legacy_artifacts = dict(event.get("legacy_artifacts") or {})
+        agent.state.memory_archival_policy = dict(event.get("memory_archival_policy") or {})
+
     def _enforce_policy(
         self,
         *,

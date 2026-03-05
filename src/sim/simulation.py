@@ -43,7 +43,7 @@ from src.interfaces.dashboard_backend import (
     emit_event,
 )
 from src.interfaces.discord_event_listener import DiscordSimulationEventListener
-from src.interfaces.interaction_commands import InteractionContext, InteractionService
+from src.interfaces.interaction_commands import InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
     STEP_PHASE_LATENCY_MS,
@@ -474,43 +474,8 @@ class Simulation:
     async def _handle_human_command(
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
-        """Handle a human-issued command or prompt via the unified interaction service."""
-        payload = dict(metadata or {})
-        raw_channel_id = (
-            payload.get("channel_id")
-            or payload.get("source_channel_id")
-            or payload.get("target_channel_id")
-        )
-        context = InteractionContext(
-            sender_id=str(payload.get("sender_id", "human")),
-            channel_id=str(raw_channel_id) if raw_channel_id is not None else None,
-            source=str(payload.get("source", "simulation")),
-            permissions=(
-                set(payload.get("permissions", []))
-                if isinstance(payload.get("permissions"), list | set | tuple)
-                else set()
-            ),
-            metadata={k: v for k, v in payload.items() if k not in {"permissions"}},
-        )
-        command_type = payload.get("command_type")
-        if not command_type and bool(payload.get("broadcast")):
-            command_type = "broadcast"
-        result = await self.interaction_service.execute_from_payload(
-            {"command_type": command_type or "human_message", "content": text, **payload},
-            context=context,
-        )
-        if result.status != "ok" and self.discord_bot:
-            channel_id = context.channel_id
-            target_channel_id = (
-                int(channel_id)
-                if channel_id is not None and channel_id.isdigit()
-                else self.discord_bot.last_channel_id
-            )
-            await self.discord_bot.send_simulation_update(
-                result.user_message,
-                agent_id=context.sender_id,
-                target_channel_id=target_channel_id,
-            )
+        """Delegate inbound command parsing/routing to the ingestion service."""
+        await self.external_event_ingestion.handle_human_command(text, metadata)
 
     async def handle_control_command(self: Self, cmd: Mapping[str, Any]) -> dict[str, Any] | None:
         """Process a control command sent via the event queue."""
@@ -879,7 +844,8 @@ class Simulation:
 
         # Increment turn index, then sync world time to the configured tick boundary.
         self.current_step += 1
-        environment_events = self.environment_system.tick(self.current_step)
+        environment_deltas = self.environment_system.tick(self.current_step)
+        environment_events = [delta.as_event() for delta in environment_deltas]
         agent = self.agents[agent_index]
         agent_id = agent.agent_id
         world_projection = self._build_world_context_projection(actor_id=agent_id)
@@ -2159,22 +2125,9 @@ class Simulation:
             for agent in self.agents:
                 if agent.agent_id != aid:
                     continue
-                to_state_raw = str(event.get("to_state", AgentLifecycleState.ACTIVE.value))
-                to_state = AgentLifecycleState(to_state_raw)
-                history = list(getattr(agent.state, "lifecycle_history", []) or [])
-                history.append(
-                    {
-                        "step": int(event.get("step", self.current_step)),
-                        "from": str(event.get("from_state", "active")),
-                        "to": to_state.value,
-                        "reason": str(event.get("reason", "")),
-                    }
-                )
-                agent.state.lifecycle_state = to_state
-                agent.state.lifecycle_history = history
-                agent.state.legacy_artifacts = dict(event.get("legacy_artifacts") or {})
-                agent.state.memory_archival_policy = dict(
-                    event.get("memory_archival_policy") or {}
+                self.population_service.apply_lifecycle_transition_event(
+                    agent=agent,
+                    event={"step": self.current_step, **event},
                 )
                 break
 
@@ -2410,29 +2363,23 @@ class Simulation:
 
     def current_rules(self: Self) -> list[dict[str, Any]]:
         """Read API for agents/UI: current executable governance rules."""
-        return governance_rules_engine.current_rules()
+        return governance.query.current_rules()
 
     def pending_votes(self: Self) -> list[dict[str, Any]]:
         """Read API for agents/UI: pending governance votes."""
-        return governance_rules_engine.pending_votes()
+        return governance.query.pending_votes()
 
     def active_offices(self: Self) -> list[dict[str, Any]]:
         """Read API for agents/UI: active governance offices."""
-        return governance_rules_engine.active_offices()
+        return governance.query.active_offices()
 
     def sanctions(self: Self) -> list[dict[str, Any]]:
         """Read API for agents/UI: sanctions and enforcement records."""
-        return governance_rules_engine.sanctions()
+        return governance.query.sanctions()
 
     def get_governance_read_model(self: Self) -> dict[str, Any]:
         """Return governance read models for rules, voting, offices, sanctions, and stances."""
-        read_model: dict[str, Any] = {
-            "rules": governance_rules_engine.current_rules(),
-            "current_rules": governance_rules_engine.current_rules(),
-            "pending_votes": governance_rules_engine.pending_votes(),
-            "active_offices": governance_rules_engine.active_offices(),
-            "sanctions": governance_rules_engine.sanctions(),
-        }
+        read_model: dict[str, Any] = governance.query.read_model()
         proposals = self.knowledge_board.get_active_proposals(limit=20)
         read_model["active_proposals"] = proposals
         read_model["consensus_status"] = [

@@ -4,7 +4,10 @@ import asyncio
 from typing import Any
 
 from src.interfaces.dashboard_backend import SimulationEvent
-from src.interfaces.interaction_commands import InteractionContext
+from src.interfaces.external_event_routing import (
+    build_interaction_context,
+    normalize_human_command_payload,
+)
 from src.shared.typing import SimulationMessage
 from src.sim.event_bus import get_event_bus
 
@@ -58,31 +61,38 @@ class ExternalEventIngestionService:
         finally:
             bus.unsubscribe(queue)
 
+    async def handle_human_command(
+        self, text: str, metadata: dict[str, Any] | None = None
+    ) -> None:
+        sim = self.simulation
+        payload = normalize_human_command_payload(text, metadata)
+        context = build_interaction_context(payload, default_source="simulation")
+        result = await sim.interaction_service.execute_from_payload(payload, context=context)
+        if result.status == "ok" or not sim.discord_bot:
+            return
+        channel_id = context.channel_id
+        target_channel_id = (
+            int(channel_id)
+            if channel_id is not None and channel_id.isdigit()
+            else sim.discord_bot.last_channel_id
+        )
+        await sim.discord_bot.send_simulation_update(
+            result.user_message,
+            agent_id=context.sender_id,
+            target_channel_id=target_channel_id,
+        )
+
     async def route_event(self, evt: SimulationEvent) -> None:
         sim = self.simulation
         if not evt.data:
             return
         if evt.type == "control":
-            context = InteractionContext(
-                sender_id=str(evt.data.get("sender_id", evt.data.get("author", "external"))),
-                channel_id=str(evt.data.get("channel_id")) if evt.data.get("channel_id") else None,
-                source=str(evt.data.get("source", "event_bus")),
-                permissions=(
-                    set(evt.data.get("permissions", []))
-                    if isinstance(evt.data.get("permissions"), list)
-                    else set()
-                ),
-                metadata={k: v for k, v in evt.data.items()},
-            )
+            context = build_interaction_context(evt.data, default_source="event_bus")
             await sim.command_bus.dispatch_payload(evt.data, context=context)
             return
         if evt.type == "moderation":
-            context = InteractionContext(
-                sender_id=str(evt.data.get("sender_id", evt.data.get("author", "external"))),
-                source=str(evt.data.get("source", "event_bus")),
-                permissions={"admin", "moderator"},
-                metadata={k: v for k, v in evt.data.items()},
-            )
+            context = build_interaction_context(evt.data, default_source="event_bus")
+            context.permissions.update({"admin", "moderator"})
             await sim.command_bus.dispatch_payload(evt.data, context=context)
             return
 

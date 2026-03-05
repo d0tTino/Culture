@@ -40,11 +40,38 @@ def quadratic_vote_weight(ip_balance: float, staked_ip: float = 0.0) -> float:
     return math.sqrt(max(0.0, ip_balance + staked_ip))
 
 
+class GovernanceQueryService:
+    """Narrow read-only governance projection API for orchestration layers."""
+
+    def current_rules(self) -> list[dict[str, Any]]:
+        return governance_rules_engine.current_rules()
+
+    def pending_votes(self) -> list[dict[str, Any]]:
+        return governance_rules_engine.pending_votes()
+
+    def active_offices(self) -> list[dict[str, Any]]:
+        return governance_rules_engine.active_offices()
+
+    def sanctions(self) -> list[dict[str, Any]]:
+        return governance_rules_engine.sanctions()
+
+    def read_model(self) -> dict[str, Any]:
+        rules = self.current_rules()
+        return {
+            "rules": rules,
+            "current_rules": rules,
+            "pending_votes": self.pending_votes(),
+            "active_offices": self.active_offices(),
+            "sanctions": self.sanctions(),
+        }
+
+
 class GovernanceService:
     """Service coordinating law proposals and voting."""
 
     def __init__(self) -> None:
         self._knowledge_board: EntryStore | None = None
+        self.query = GovernanceQueryService()
         self._step_provider: Callable[[], int] = lambda: 0
         self._transaction_service: KnowledgeGovernanceTransaction | None = None
 
@@ -369,4 +396,4 @@ class GovernanceService:
 
 governance = GovernanceService()
 
-__all__ = ["GovernanceService", "governance", "quadratic_vote_weight"]
+__all__ = ["GovernanceQueryService", "GovernanceService", "governance", "quadratic_vote_weight"]
