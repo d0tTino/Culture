@@ -7,7 +7,9 @@ from typing import Any
 class PersistenceEngine:
     """Encapsulates snapshot/replay/checkpointing entrypoints."""
 
-    def from_snapshot(self, simulation_cls: type[Any], snapshot: dict[str, Any], seed: int | None = None) -> Any:
+    def from_snapshot(
+        self, simulation_cls: type[Any], snapshot: dict[str, Any], seed: int | None = None
+    ) -> Any:
         return simulation_cls._from_snapshot_impl(snapshot, seed=seed)
 
     def replay_from_snapshot(
@@ -23,3 +25,10 @@ class PersistenceEngine:
             seed=seed,
             stop_step=stop_step,
         )
+
+    def capture_tick(self, simulation: Any, tick: Any) -> dict[str, Any]:
+        return {
+            "step": tick.step,
+            "trace_hash": getattr(simulation, "_last_trace_hash", ""),
+            "replay_metadata": dict(tick.replay_metadata),
+        }
