@@ -8,8 +8,8 @@ _MENTION_TARGET_RE = re.compile(r"^@(?P<agent>[\w.-]+)\s*:\s*(?P<content>.+)$", 
 _DM_TARGET_RE = re.compile(r"^/dm\s+(?P<agent>[\w.-]+)\s+(?P<content>.+)$", re.DOTALL)
 
 
-def parse_discord_message_routing(content: str) -> tuple[str | None, bool, str, str | None]:
-    """Parse optional routing directives from plain Discord messages."""
+def parse_message_routing(content: str) -> tuple[str | None, bool, str, str | None]:
+    """Parse optional transport-neutral routing directives from text input."""
     cleaned = content.strip()
     if not cleaned:
         return None, False, "", None
@@ -46,8 +46,8 @@ def discord_message_to_intent_payload(
     fallback_agent_id: str | None,
     raw_metadata: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Convert Discord content into canonical interaction payload."""
-    recipient, is_broadcast, parsed_content, validation_error = parse_discord_message_routing(content)
+    """Convert text content into canonical interaction payload."""
+    recipient, is_broadcast, parsed_content, validation_error = parse_message_routing(content)
     if validation_error is not None:
         return None, validation_error
     if not parsed_content:
@@ -58,8 +58,15 @@ def discord_message_to_intent_payload(
     payload: dict[str, Any] = {
         "intent": "broadcast" if is_broadcast else ("direct_message" if recipient else "human_message"),
         "text": parsed_content,
-        "target_agent_id": target_agent_id,
-        "recipient_id": recipient,
+        "routing": {
+            "target_agent_id": target_agent_id,
+            "recipient_id": recipient,
+        },
         "metadata": dict(raw_metadata or {}),
     }
     return payload, None
+
+
+def parse_discord_message_routing(content: str) -> tuple[str | None, bool, str, str | None]:
+    """Backward-compatible alias for transport adapters."""
+    return parse_message_routing(content)

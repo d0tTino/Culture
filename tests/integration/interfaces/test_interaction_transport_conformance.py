@@ -10,7 +10,7 @@ from src.interfaces.interaction_policy import (
     discord_interaction_context,
     discord_message_to_intent_payload,
 )
-from src.interfaces.interaction_schema import InteractionContext
+from src.interfaces.interaction_schema import InteractionContext, parse_interaction_intent
 
 
 class DummyDiscordClient:
@@ -52,11 +52,7 @@ class DummyAgent:
 async def _pending_message_shape(sim) -> tuple[str, str | None, str | None]:
     async with sim._msg_lock:
         msg = sim.pending_messages_for_next_round[-1]
-        return (
-            str(msg.get("content", "")),
-            msg.get("recipient_id"),
-            msg.get("target_agent_id"),
-        )
+        return (str(msg.get("content", "")), msg.get("recipient_id"), msg.get("target_agent_id"))
 
 
 @pytest.mark.integration
@@ -71,8 +67,6 @@ async def test_intent_conformance_across_transports(tmp_path: Path) -> None:
         patch("src.sim.simulation.ledger", ledger),
         patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient),
     ):
-        # Discord transport adapter -> canonical intent
-        discord_sim = Simulation([DummyAgent("A")])
         discord_payload, err = discord_message_to_intent_payload(
             content="hello world",
             sender_agent_id=None,
@@ -81,8 +75,11 @@ async def test_intent_conformance_across_transports(tmp_path: Path) -> None:
         )
         assert err is None
         assert discord_payload is not None
-        discord_result = await discord_sim.interaction_service.execute_from_payload(
-            discord_payload,
+        canonical_intent = parse_interaction_intent(discord_payload)
+
+        discord_sim = Simulation([DummyAgent("A")])
+        discord_result = await discord_sim.interaction_service.execute_intent(
+            canonical_intent,
             context=discord_interaction_context(
                 user=SimpleNamespace(id=20),
                 channel=SimpleNamespace(id=10),
@@ -90,26 +87,16 @@ async def test_intent_conformance_across_transports(tmp_path: Path) -> None:
         )
         discord_outcome = await _pending_message_shape(discord_sim)
 
-        # Dashboard transport -> same canonical intent and same domain outcome
         dashboard_sim = Simulation([DummyAgent("A")])
-        dashboard_result = await dashboard_sim.interaction_service.execute_from_payload(
-            {
-                "intent": "human_message",
-                "text": "hello world",
-                "target_agent_id": "A",
-            },
+        dashboard_result = await dashboard_sim.interaction_service.execute_intent(
+            canonical_intent,
             context=InteractionContext(sender_id="dashboard", source="dashboard"),
         )
         dashboard_outcome = await _pending_message_shape(dashboard_sim)
 
-        # Future websocket/API transport -> same canonical intent through same service
         ws_sim = Simulation([DummyAgent("A")])
-        ws_result = await ws_sim.interaction_service.execute_from_payload(
-            {
-                "intent": "human_message",
-                "text": "hello world",
-                "target_agent_id": "A",
-            },
+        ws_result = await ws_sim.interaction_service.execute_intent(
+            canonical_intent,
             context=InteractionContext(sender_id="api-user", source="websocket"),
         )
         ws_outcome = await _pending_message_shape(ws_sim)

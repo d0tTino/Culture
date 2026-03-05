@@ -11,7 +11,9 @@ from src.infra import config
 from src.utils.policy import evaluate_with_opa
 
 if TYPE_CHECKING:
-    from src.interfaces.interaction_schema import InteractionContext
+    from src.interfaces.interaction_schema import InteractionContext, InteractionIdentity
+
+from src.interfaces.interaction_schema import InteractionIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +25,19 @@ _COMMAND_HISTORY: dict[str, deque[float]] = {}
 _COMMAND_LOCKS: dict[str, asyncio.Lock] = {}
 _MAX_RATE: int = 5
 
-
 def has_admin_permission(user: Any) -> bool:
-    perms = getattr(getattr(user, "guild_permissions", None), "administrator", False)
-    return bool(perms)
+    return bool(getattr(getattr(user, "guild_permissions", None), "administrator", False))
+
+
+def _coerce_identity(identity: InteractionIdentity | Any) -> InteractionIdentity:
+    if isinstance(identity, InteractionIdentity):
+        return identity
+    user_id = getattr(identity, "id", "") if identity is not None else ""
+    return InteractionIdentity(
+        principal_id=str(user_id) if user_id else "",
+        source="discord",
+        is_admin=has_admin_permission(identity),
+    )
 
 
 def _coerce_to_bool(value: object) -> bool:
@@ -61,18 +72,20 @@ def get_command_rate_limit_window() -> float:
 
 
 async def has_control_command_permission(
-    user: Any,
+    identity: InteractionIdentity | Any,
     command: str,
     *,
     agent_id: str | None = None,
 ) -> bool:
-    if has_admin_permission(user):
+    identity = _coerce_identity(identity)
+    if identity.is_admin:
         return True
     if not allow_control_via_opa():
         return False
-    payload = {
+    payload: dict[str, str] = {
         "command": command,
-        "user_id": str(getattr(user, "id", "")),
+        "user_id": identity.principal_id,
+        "source": identity.source,
     }
     if agent_id is not None:
         payload["agent_id"] = agent_id
@@ -80,8 +93,9 @@ async def has_control_command_permission(
     return bool(allowed)
 
 
-async def check_command_rate_limit(user: Any) -> bool:
-    user_id = str(getattr(user, "id", ""))
+async def check_command_rate_limit(identity: InteractionIdentity | Any) -> bool:
+    identity = _coerce_identity(identity)
+    user_id = identity.principal_id
     if not user_id:
         return True
     lock = _COMMAND_LOCKS.setdefault(user_id, asyncio.Lock())

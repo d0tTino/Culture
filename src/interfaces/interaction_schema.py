@@ -34,6 +34,16 @@ class InteractionContext(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class InteractionIdentity(BaseModel):
+    """Transport-agnostic identity metadata used by interaction policy."""
+
+    principal_id: str = ""
+    source: str = "unknown"
+    channel_id: str | None = None
+    is_admin: bool = False
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
 class InteractionRouting(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -134,7 +144,14 @@ _INTERACTION_INTENT_ADAPTER = TypeAdapter(InteractionIntent)
 
 
 def parse_interaction_intent(payload: dict[str, Any]) -> InteractionIntent:
-    return _INTERACTION_INTENT_ADAPTER.validate_python(payload)
+    normalized = dict(payload)
+    routing = dict(normalized.get("routing") or {}) if isinstance(normalized.get("routing"), dict) else {}
+    for key in ("sender_id", "source", "channel_id", "recipient_id", "target_agent_id"):
+        if key in normalized and key not in routing:
+            routing[key] = normalized[key]
+    if routing:
+        normalized["routing"] = routing
+    return _INTERACTION_INTENT_ADAPTER.validate_python(normalized)
 
 
 # Backward-compatible aliases during transport migration.

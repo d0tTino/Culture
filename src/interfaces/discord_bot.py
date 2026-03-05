@@ -20,15 +20,18 @@ import httpx
 from opentelemetry import trace
 from typing_extensions import Self
 
+import src.interfaces.interaction_policy.permissions as interaction_permissions
 from src.infra import config, event_log
 from src.infra.ledger import ledger
 from src.interfaces import dashboard_backend as db
 from src.interfaces import metrics
 from src.interfaces.interaction_policy import (
-    check_command_rate_limit,
+    check_command_rate_limit as policy_check_command_rate_limit,
+)
+from src.interfaces.interaction_policy import (
+    discord_identity,
     discord_interaction_context,
     discord_message_to_intent_payload,
-    has_admin_permission,
     has_control_command_permission,
     set_max_rate,
 )
@@ -77,6 +80,16 @@ message_sse_queue = dashboard_message_queue
 
 
 _DEFAULT_DASHBOARD_API_BASE_URL = "http://localhost:8000"
+_MAX_RATE = 5
+has_admin_permission = interaction_permissions.has_admin_permission
+reset_command_counts = interaction_permissions.reset_command_counts
+
+
+async def check_command_rate_limit(user: Any) -> bool:
+    """Backward-compatible wrapper delegated to interaction policy."""
+    set_max_rate(_MAX_RATE)
+    interaction_permissions.time = time
+    return await policy_check_command_rate_limit(user)
 
 
 def _dashboard_api_base_url() -> str:
@@ -683,7 +696,8 @@ class SimulationDiscordBot:
                         return
                     if payload is None:
                         return
-                    target_agent_id = payload.get("target_agent_id")
+                    routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+                    target_agent_id = routing.get("target_agent_id")
                     span.set_attribute("discord.agent.id", target_agent_id or "")
                     if user_id and sender is None and target_agent_id is not None:
                         self.user_agents[str(user_id)] = str(target_agent_id)
@@ -1194,16 +1208,22 @@ def _global_context_resolver() -> tuple[Any, Any]:
 
 
 async def _has_control_command_permission(
-    user: Any, command: str, *, agent_id: str | None = None
+    user: Any,
+    channel: Any,
+    command: str,
+    *,
+    agent_id: str | None = None,
 ) -> bool:
     """Return True when the user may execute privileged control commands."""
 
-    return await has_control_command_permission(user, command, agent_id=agent_id)
+    identity = discord_identity(user=user, channel=channel)
+    return await has_control_command_permission(identity, command, agent_id=agent_id)
 
 
 async def _rate_limit_check(interaction: Any) -> bool:
     """Global slash-command check enforcing per-user rate limits."""
-    if await check_command_rate_limit(getattr(interaction, "user", None)):
+    identity = discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None))
+    if await check_command_rate_limit(identity):
         return True
     try:
         await send_interaction_response(interaction, "rate limit exceeded", ephemeral=True)
@@ -1343,7 +1363,7 @@ async def slash_resume(interaction: Any) -> None:
 async def slash_pause_all(interaction: Any) -> None:
     """Pause all activity in the simulation. Administrator only."""
     with command_span("pause_all", interaction) as span:
-        if not has_admin_permission(getattr(interaction, "user", None)):
+        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         bot_instance = get_active_bot()
@@ -1363,7 +1383,7 @@ async def slash_pause_all(interaction: Any) -> None:
 async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
     """Remove an agent from the simulation. Administrator only."""
     with command_span("kill_agent", interaction, agent_id=agent_id) as span:
-        if not has_admin_permission(getattr(interaction, "user", None)):
+        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         bot_instance = get_active_bot()
@@ -1403,6 +1423,7 @@ async def slash_start(interaction: Any) -> None:
             agent_id = bot_instance.channel_to_agent.get(chan_id)
         if not await _has_control_command_permission(
             getattr(interaction, "user", None),
+            getattr(interaction, "channel", None),
             "start",
             agent_id=agent_id,
         ):
@@ -1459,6 +1480,7 @@ async def slash_stop(interaction: Any) -> None:
             agent_id = bot_instance.channel_to_agent.get(chan_id)
         if not await _has_control_command_permission(
             getattr(interaction, "user", None),
+            getattr(interaction, "channel", None),
             "stop",
             agent_id=agent_id,
         ):
@@ -1526,6 +1548,7 @@ async def slash_spawn(
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
         if not await _has_control_command_permission(
             getattr(interaction, "user", None),
+            getattr(interaction, "channel", None),
             "spawn",
             agent_id=agent_id,
         ):
@@ -1586,7 +1609,7 @@ async def slash_spawn(
 async def slash_kill(interaction: Any) -> None:
     """Shutdown the bot. Administrator only."""
     with command_span("kill", interaction) as span:
-        if not has_admin_permission(getattr(interaction, "user", None)):
+        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         await send_interaction_response(interaction, "shutting down", ephemeral=True)
@@ -1596,7 +1619,7 @@ async def slash_kill(interaction: Any) -> None:
 async def slash_set_max_rate(interaction: Any, value: int) -> None:
     """Adjust the per-user command rate limit."""
     with command_span("set_max_rate", interaction) as span:
-        if not has_admin_permission(getattr(interaction, "user", None)):
+        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         set_max_rate(value)
@@ -1659,6 +1682,7 @@ async def slash_event(interaction: Any, text: str) -> None:
         span.set_attribute("discord.message.length", len(text))
         if not await _has_control_command_permission(
             getattr(interaction, "user", None),
+            getattr(interaction, "channel", None),
             "inject_event",
         ):
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
