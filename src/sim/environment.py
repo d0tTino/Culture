@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.sim.world.state import WorldState
+from src.sim.world.state import EnvironmentTickDelta, WorldState
 
 
 @dataclass
@@ -158,12 +158,12 @@ class EnvironmentSystem:
             "formatted": self._format_world_time(),
         }
 
-    def tick(self, turn_index: int) -> list[dict[str, Any]]:
+    def tick(self, turn_index: int) -> tuple[EnvironmentTickDelta, ...]:
         self._sync_world_to_state()
         if turn_index <= 0:
-            return []
+            return ()
         target_tick = (turn_index - 1) // self.turns_per_world_tick
-        events: list[dict[str, Any]] = []
+        events: list[EnvironmentTickDelta] = []
         while self.state.world_tick < target_tick:
             self.state.world_tick += 1
             self.state.world_hour += 1
@@ -199,17 +199,16 @@ class EnvironmentSystem:
             if self.state.world_tick % self.world_time_broadcast_cadence_ticks == 0:
                 events.append(self._event("world_time", turn_index))
         self._sync_state_to_world()
-        return events
+        return tuple(events)
 
-    def _event(self, event_name: str, turn_index: int) -> dict[str, Any]:
-        return {
-            "type": "environment",
-            "event_name": event_name,
-            "turn_index": turn_index,
-            "world_time": self.world_time_snapshot(),
-            "weather": self.state.weather,
-            "season": self._season_name(),
-            "council_window_active": self.state.council_window_active,
-            "active_global_modifiers": list(self.state.active_global_modifiers),
-            "effect_hooks": self._condition_hooks(),
-        }
+    def _event(self, event_name: str, turn_index: int) -> EnvironmentTickDelta:
+        return EnvironmentTickDelta(
+            event_name=event_name,
+            turn_index=turn_index,
+            world_time=self.world_time_snapshot(),
+            weather=self.state.weather,
+            season=self._season_name(),
+            council_window_active=self.state.council_window_active,
+            active_global_modifiers=tuple(self.state.active_global_modifiers),
+            effect_hooks=self._condition_hooks(),
+        )

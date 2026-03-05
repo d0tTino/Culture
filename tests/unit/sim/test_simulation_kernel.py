@@ -90,6 +90,6 @@ async def test_kernel_runs_tick_and_populates_context() -> None:
     count = await kernel.run_tick(simulation, context)
 
     assert count == 1
-    assert context.phase_order == ["perception", "decision", "action", "post_step"]
+    assert context.phase_order == ["ingest", "decide", "apply", "persist", "publish"]
     assert context.tick_context is not None
     assert simulation._evaluated

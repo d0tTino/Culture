@@ -7,9 +7,9 @@ from opentelemetry import trace
 
 from src.infra.event_log import log_event
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
+from src.sim.kernel.simulation_kernel import SimulationKernel
 from src.sim.persistence.trace_hash_service import TraceHashService
 from src.sim.runtime import StepContext
-from src.sim.simulation_kernel import SimulationKernel
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
