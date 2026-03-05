@@ -23,3 +23,12 @@ class DomainEventReducer:
                 context.planned_outputs = list(event.payload.get("planned_outputs", []))
             elif event.name == "scheduler_events_ready":
                 context.events = list(event.payload.get("events", []))
+            elif event.name == "bootstrap_agent_event_requested":
+                agent_index = int(event.payload["agent_index"])
+                agent_id = str(event.payload["agent_id"])
+                simulation.vector.increment(agent_id)
+                simulation.event_kernel.schedule_immediate_nowait(
+                    simulation._create_agent_event(agent_index),
+                    agent_id=agent_id,
+                    vector=simulation.vector,
+                )

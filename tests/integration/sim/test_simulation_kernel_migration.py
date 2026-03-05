@@ -60,9 +60,15 @@ def test_replay_from_snapshot_preserves_event_reducer_behavior(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("src.agents.core.base_agent.Agent", DummySnapshotAgent)
-    snapshot = json.loads((FIXTURES / "normalized_from_v1_snapshot_v3.json").read_text(encoding="utf-8"))
+    snapshot = json.loads(
+        (FIXTURES / "normalized_from_v1_snapshot_v3.json").read_text(encoding="utf-8")
+    )
     events = [
-        {"type": "tick", "step": snapshot["step"] + 1, "agent_id": snapshot["agents"][0]["agent_id"]}
+        {
+            "type": "tick",
+            "step": snapshot["step"] + 1,
+            "agent_id": snapshot["agents"][0]["agent_id"],
+        }
     ]
 
     monkeypatch.setattr(
@@ -73,3 +79,45 @@ def test_replay_from_snapshot_preserves_event_reducer_behavior(
     replay = Simulation.replay_from_snapshot("ignored.json")
 
     assert replay.current_step >= snapshot["step"]
+
+
+@pytest.mark.integration
+def test_simulation_facade_delegates_persistence_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.agents.core.base_agent.Agent", DummySnapshotAgent)
+    historical = json.loads((FIXTURES / "historical_snapshot_v1.json").read_text(encoding="utf-8"))
+
+    calls: list[tuple[str, object]] = []
+
+    def _from_snapshot(
+        _self: object,
+        simulation_cls: type[Simulation],
+        snapshot: dict[str, object],
+        seed: int | None = None,
+    ) -> Simulation:
+        calls.append(("from_snapshot", seed))
+        return simulation_cls._from_snapshot_impl(snapshot, seed=seed)
+
+    def _replay(
+        _self: object,
+        simulation_cls: type[Simulation],
+        _snapshot_path: str | Path,
+        *,
+        seed: int | None = None,
+        stop_step: int | None = None,
+    ) -> Simulation:
+        calls.append(("replay_from_snapshot", stop_step))
+        return simulation_cls._from_snapshot_impl(historical, seed=seed)
+
+    monkeypatch.setattr(
+        "src.sim.engines.persistence_engine.PersistenceEngine.from_snapshot", _from_snapshot
+    )
+    monkeypatch.setattr(
+        "src.sim.engines.persistence_engine.PersistenceEngine.replay_from_snapshot", _replay
+    )
+
+    from_snapshot = Simulation.from_snapshot(historical, seed=7)
+    replayed = Simulation.replay_from_snapshot("ignored.json", end_step=42)
+
+    assert from_snapshot.current_step == historical["step"]
+    assert replayed.current_step == historical["step"]
+    assert calls == [("from_snapshot", 7), ("replay_from_snapshot", 42)]

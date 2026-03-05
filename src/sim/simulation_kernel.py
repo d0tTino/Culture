@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.sim.contracts.lifecycle import LIFECYCLE_PHASES
 from src.sim.engines.interaction_engine import InteractionEngine
 from src.sim.engines.persistence_engine import PersistenceEngine
 from src.sim.engines.reducers import DomainEventReducer
@@ -26,17 +27,27 @@ class SimulationKernel:
         tick = self.world_engine.build_tick_context(simulation)
         context.tick_context = tick
 
-        context.phase_order.append("perception")
-        self.reducer.apply(simulation, context, await self.interaction_engine.ingress(simulation, tick))
+        context.phase_order.append(LIFECYCLE_PHASES[0])
+        self.reducer.apply(
+            simulation, context, await self.interaction_engine.ingress(simulation, tick)
+        )
 
-        context.phase_order.append("decision")
-        self.reducer.apply(simulation, context, await self.turn_engine.plan(simulation, context, tick))
+        context.phase_order.append(LIFECYCLE_PHASES[1])
+        self.reducer.apply(
+            simulation, context, await self.turn_engine.plan(simulation, context, tick)
+        )
 
-        context.phase_order.append("action")
-        self.reducer.apply(simulation, context, await self.turn_engine.commit(simulation, context, tick))
+        context.phase_order.append(LIFECYCLE_PHASES[2])
+        self.reducer.apply(
+            simulation, context, await self.turn_engine.prepare_commit(simulation, context, tick)
+        )
+        self.reducer.apply(
+            simulation, context, await self.turn_engine.commit(simulation, context, tick)
+        )
 
-        context.phase_order.append("post_step")
+        context.phase_order.append(LIFECYCLE_PHASES[3])
         _ = self.society_engine.snapshot(simulation, tick)
+        _ = self.persistence_engine.capture_tick(simulation, tick)
         if not context.planned_outputs:
             await simulation.engine.emit_evaluation_events(context.events)
 
