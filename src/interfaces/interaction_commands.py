@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.interfaces.domain_command_adapters import command_from_envelope
 from src.interfaces.interaction_schema import (
     ENVELOPE_INTENTS,
     InteractionAuthScope,
@@ -11,7 +10,6 @@ from src.interfaces.interaction_schema import (
     InteractionIntent,
     InteractionResult,
     InteractionRouting,
-    parse_interaction_intent,
 )
 
 if TYPE_CHECKING:
@@ -33,14 +31,13 @@ class InteractionService:
     ) -> InteractionResult:
         return await self.simulation.command_dispatcher.dispatch(command, context=context)
 
-
     async def execute_intent(
         self,
         intent: InteractionIntent,
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        return await self.execute(command_from_envelope(intent), context=context)
+        return await self.simulation.command_dispatcher.dispatch_envelope(intent, context=context)
 
     async def execute_from_payload(
         self,
@@ -48,8 +45,7 @@ class InteractionService:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        intent = parse_interaction_intent(payload)
-        return await self.execute_intent(intent, context=context)
+        return await self.simulation.command_dispatcher.dispatch_payload(payload, context=context)
 
 
 __all__ = [

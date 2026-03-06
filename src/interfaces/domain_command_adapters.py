@@ -42,8 +42,14 @@ def parse_bus_command(
     auth = data.get("auth") if isinstance(data.get("auth"), Mapping) else {}
     budget = data.get("budget") if isinstance(data.get("budget"), Mapping) else {}
 
+    metadata = _metadata_with_context(data, ctx)
+    correlation_id = (
+        data.get("correlation_id") or metadata.get("correlation_id") or metadata.get("request_id")
+    )
+
     envelope_payload: dict[str, Any] = {
         "intent": intent,
+        "correlation_id": str(correlation_id) if correlation_id is not None else None,
         "routing": {
             "sender_id": routing.get("sender_id") or data.get("sender_id") or ctx.sender_id,
             "source": routing.get("source") or data.get("source") or ctx.source,
@@ -60,7 +66,7 @@ def parse_bus_command(
             "budget_agent_id": budget.get("budget_agent_id") or data.get("budget_agent_id"),
             "attribution_scope": budget.get("attribution_scope") or "default",
         },
-        "metadata": _metadata_with_context(data, ctx),
+        "metadata": metadata,
     }
 
     if intent in {"human_message", "direct_message", "broadcast", "knowledge_board"}:
@@ -115,7 +121,9 @@ def command_from_discord_message(
 ) -> DomainCommandT:
     metadata = dict(raw_payload or {})
     if is_broadcast:
-        return BroadcastCommand(content=content, budget_agent_id=budget_agent_id, metadata=metadata)
+        return BroadcastCommand(
+            content=content, budget_agent_id=budget_agent_id, metadata=metadata
+        )
     if recipient_id is not None:
         return DirectMessageCommand(
             content=content,
@@ -190,7 +198,11 @@ def command_from_envelope(envelope: InteractionEnvelope) -> DomainCommandT:
 
 def _canonical_intent(data: Mapping[str, Any]) -> str:
     command = str(
-        data.get("intent") or data.get("type") or data.get("command_type") or data.get("command") or ""
+        data.get("intent")
+        or data.get("type")
+        or data.get("command_type")
+        or data.get("command")
+        or ""
     ).strip()
     if command == "dm":
         return "direct_message"
@@ -202,7 +214,14 @@ def _canonical_intent(data: Mapping[str, Any]) -> str:
         return "moderation"
     if command == "inject_event":
         return "inject_event"
-    if command in {"human_message", "direct_message", "broadcast", "knowledge_board", "spawn", "control"}:
+    if command in {
+        "human_message",
+        "direct_message",
+        "broadcast",
+        "knowledge_board",
+        "spawn",
+        "control",
+    }:
         return command
     return "human_message"
 
@@ -216,7 +235,9 @@ def _normalize_legacy_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         data["scope"] = data["prompt"]
         warnings.warn("'prompt' is deprecated; use 'scope'.", DeprecationWarning, stacklevel=3)
     if "command_type" in data and "intent" not in data and "type" not in data:
-        warnings.warn("'command_type' is deprecated; use 'intent'.", DeprecationWarning, stacklevel=3)
+        warnings.warn(
+            "'command_type' is deprecated; use 'intent'.", DeprecationWarning, stacklevel=3
+        )
     if "type" in data and "intent" not in data:
         data["intent"] = data["type"]
         warnings.warn("'type' is deprecated; use 'intent'.", DeprecationWarning, stacklevel=3)

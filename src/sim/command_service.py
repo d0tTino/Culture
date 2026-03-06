@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.agents.core.agent_state import AgentActionIntent, AgentLifecycleState
 from src.agents.core.personality_profile_factory import PersonalityProfileFactory
@@ -13,7 +14,6 @@ from src.infra import config
 from src.infra import ledger as infra_ledger
 from src.infra.event_log import log_event
 from src.interfaces.dashboard_backend import SimulationEvent, emit_event
-from src.interfaces.domain_command_adapters import command_from_payload
 from src.interfaces.interaction_schema import (
     BroadcastEnvelope,
     ControlEnvelope,
@@ -49,8 +49,7 @@ class SimulationCommandService:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        command = command_from_payload(payload, context=context)
-        return await self.execute(command, context=context)
+        return await self.simulation.command_dispatcher.dispatch_payload(payload, context=context)
 
     async def execute(
         self,
@@ -103,7 +102,9 @@ class SimulationCommandService:
             return await self._dispatch_knowledge_board(envelope, context=ctx)
         if isinstance(envelope, (HumanMessageEnvelope, BroadcastEnvelope, DirectMessageEnvelope)):
             return await self._dispatch_message(envelope, context=ctx)
-        if isinstance(envelope, (SpawnEnvelope, ModerationEnvelope, ControlEnvelope, InjectEventEnvelope)):
+        if isinstance(
+            envelope, (SpawnEnvelope, ModerationEnvelope, ControlEnvelope, InjectEventEnvelope)
+        ):
             return await self._dispatch_control(envelope, provenance=entry_decision.provenance)
 
         return InteractionResult(
@@ -177,12 +178,61 @@ class SimulationCommandService:
             await self._post_knowledge_board(envelope)
         elif action == "inject_event" and isinstance(envelope, InjectEventEnvelope):
             await self._inject_world_event(envelope)
+        elif action in {"nudge", "propose", "propose_law", "vote", "gov"}:
+            return await self._handle_governance_or_nudge(action, envelope)
 
         return {
             "paused": sim.paused,
             "speed": sim.speed,
             "simulation_complete": sim.simulation_complete,
         }
+
+    async def _handle_governance_or_nudge(
+        self,
+        action: str,
+        envelope: SpawnEnvelope | ModerationEnvelope | ControlEnvelope | InjectEventEnvelope,
+    ) -> dict[str, Any]:
+        sim = self.simulation
+        if action == "nudge":
+            prompt = str(
+                envelope.metadata.get("prompt") or envelope.metadata.get("text") or ""
+            ).strip()
+            if prompt:
+                await emit_event(SimulationEvent(type="nudge", data={"prompt": prompt}))
+            return {"ack": "nudge_sent"}
+
+        if action in {"propose", "propose_law"}:
+            proposer_id = str(envelope.agent_id or envelope.routing.target_agent_id or "")
+            text = str(envelope.metadata.get("text") or "").strip()
+            vote_weights = envelope.metadata.get("vote_weights")
+            if isinstance(vote_weights, str):
+                vote_weights = json.loads(vote_weights)
+            approved = False
+            if proposer_id and text and hasattr(sim, "propose_law"):
+                approved = bool(await sim.propose_law(proposer_id, text, vote_weights))
+            return {"approved": approved}
+
+        if action == "vote":
+            text = str(envelope.metadata.get("text") or "").strip()
+            approve = bool(envelope.metadata.get("approve", True))
+            voter_id = str(envelope.agent_id or envelope.routing.target_agent_id or "")
+            agent = next((a for a in sim.agents if a.agent_id == voter_id), None)
+            if agent is None:
+                return {"vote": False}
+            from src.governance.service import governance
+
+            vote_cast = bool(await governance.vote_weighted(agent, text, 1, approve))
+            return {"vote": vote_cast}
+
+        if action == "gov":
+            model = (
+                sim.get_governance_read_model()
+                if hasattr(sim, "get_governance_read_model")
+                else {}
+            )
+            return {"rules": cast(dict[str, Any], model).get("rules", [])}
+
+        return {"ack": "noop"}
 
     async def _spawn_agent(self, envelope: SpawnEnvelope) -> None:
         sim = self.simulation
@@ -491,7 +541,9 @@ class SimulationCommandService:
             decision_provenance=decision.provenance,
         )
 
-    def _resolve_target(self, command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope) -> Any:
+    def _resolve_target(
+        self, command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope
+    ) -> Any:
         target = None
         if command.routing.target_agent_id:
             target = next(
@@ -523,7 +575,9 @@ class SimulationCommandService:
         return target or self.simulation.agents[self.simulation.current_agent_index]
 
     def _resolve_budget_agent_id(
-        self, command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope, fallback: str
+        self,
+        command: HumanMessageEnvelope | BroadcastEnvelope | DirectMessageEnvelope,
+        fallback: str,
     ) -> str:
         configured_budget_id = config.get_config("HUMAN_COMMAND_BUDGET_AGENT_ID")
         if command.budget.budget_agent_id:
