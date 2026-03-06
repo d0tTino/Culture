@@ -72,7 +72,11 @@ def test_core_operations_match_backend_contract(
 ) -> None:
     board = factory()
 
-    board.add_entry("alpha", agent_id="agent-1", step=1)
+    board.add_entry(
+        BoardEntry(content_full="alpha", entry_type="note"),
+        agent_id="agent-1",
+        step=1,
+    )
     board.add_entry(
         BoardEntry(content_full="beta", entry_type="idea", content_summary="summary-beta"),
         agent_id="agent-2",
@@ -110,7 +114,11 @@ def test_snapshot_replay_invariants(
         agent_id="agent-3",
         step=5,
     )
-    source.add_entry("follow up", agent_id="agent-4", step=6)
+    source.add_entry(
+        BoardEntry(content_full="follow up", entry_type="note"),
+        agent_id="agent-4",
+        step=6,
+    )
 
     restored = factory()
     restored.from_snapshot(source.to_snapshot())

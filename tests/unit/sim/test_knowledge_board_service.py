@@ -40,10 +40,10 @@ async def test_post_methods_add_minimal_provenance() -> None:
 
     assert len(board.entries) == 5
     for entry in board.entries:
-        metadata = entry.get("reference_metadata") or {}
+        metadata = entry.reference_metadata or {}
         provenance = metadata.get("provenance") or {}
         assert provenance.get("step") == step
-        assert provenance.get("actor") == entry["agent_id"]
+        assert provenance.get("actor") == entry.agent_id
         assert isinstance(provenance.get("causal_source"), str)
         assert provenance["causal_source"]
 
@@ -67,7 +67,7 @@ async def test_governance_linkage_is_attached_to_entry_and_metadata() -> None:
     )
 
     entry = board.entries[-1]
-    assert entry["governance_rule_id"] == "rule-123"
-    metadata = entry.get("reference_metadata") or {}
+    assert entry.governance_rule_id == "rule-123"
+    metadata = entry.reference_metadata or {}
     governance = metadata.get("governance") or {}
     assert governance.get("rule_id") == "rule-123"

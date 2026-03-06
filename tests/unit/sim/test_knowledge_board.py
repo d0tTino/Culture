@@ -64,7 +64,6 @@ def test_get_recent_entries_with_none_summary() -> None:
         agent_id="A",
         step=1,
     )
-    kb.entries[-1]["content_summary"] = None
     result = kb.get_recent_entries_for_prompt(1)
     assert result == ["[Step 1, A]: entry"]
 
@@ -184,7 +183,7 @@ def test_read_models_and_snapshot_migration() -> None:
         }
     )
 
-    assert kb.entries[0]["parent_entry_id"] == "legacy-parent"
+    assert kb.get_full_entries()[0]["parent_entry_id"] == "legacy-parent"
     assert kb.get_active_proposals(limit=10)[0]["entry_id"] == "p1"
     status = kb.get_consensus_status("p1")
     assert status["approvals"] == 1
@@ -192,9 +191,7 @@ def test_read_models_and_snapshot_migration() -> None:
     assert kb.get_agent_stance_history("A")[0]["entry_type"] == "vote"
 
 
-def test_string_entry_retains_default_type() -> None:
+def test_non_typed_entry_is_rejected() -> None:
     kb = KnowledgeBoard()
-    kb.add_entry("legacy", agent_id="A", step=1)
-    stored = kb.get_full_entries()[-1]
-    assert stored["entry_type"] == "note"
-    assert stored["tags"] == []
+    ok = kb.add_entry("legacy", agent_id="A", step=1)  # type: ignore[arg-type]
+    assert ok is False

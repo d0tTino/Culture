@@ -15,9 +15,11 @@ from src.interfaces import metrics
 from src.shared.telemetry import trace_agent_action
 
 from .knowledge_entry import (
+    ENTRY_SCHEMA_VERSION,
     KnowledgeEntry,
+    KnowledgeEntryRecord,
     KnowledgeEntryType,
-    migrate_legacy_entry_dict,
+    migrate_entry_dict,
 )
 from .version_vector import VersionVector
 
@@ -66,14 +68,11 @@ __all__ = ["BoardEntry", "KnowledgeBoard", "prepare_entry_payload"]
 
 
 def prepare_entry_payload(
-    entry: str | BoardEntry,
+    entry: BoardEntry,
     agent_id: str,
     step: int,
-) -> tuple[str, dict[str, Any]]:
-    if isinstance(entry, BoardEntry):
-        payload = entry
-    else:
-        payload = BoardEntry(entry, entry_type=_DEFAULT_ENTRY_TYPE)
+) -> tuple[str, KnowledgeEntryRecord]:
+    payload = entry
 
     max_length = int(getattr(config, "MAX_KB_ENTRY_LENGTH", 2048))
     content_full = payload.content_full[:max_length]
@@ -120,22 +119,23 @@ def prepare_entry_payload(
         seed = json.dumps(seed_payload, sort_keys=True, default=str)
 
     entry_id = str(uuid.uuid5(uuid.NAMESPACE_OID, seed))
-    entry_dict = {
-        "entry_id": entry_id,
-        "step": step,
-        "agent_id": agent_id,
-        "entry_type": entry_type,
-        "tags": tags,
-        "reference_metadata": reference_metadata,
-        "parent_entry_id": payload.parent_entry_id,
-        "target_agent_id": payload.target_agent_id,
-        "project_id": payload.project_id,
-        "governance_rule_id": payload.governance_rule_id,
-        "content_full": content_full,
-        "content_display": display_content,
-        "content_summary": content_summary,
-    }
-    return entry_id, entry_dict
+    record = KnowledgeEntryRecord(
+        entry_id=entry_id,
+        step=step,
+        agent_id=agent_id,
+        entry_type=entry_type,
+        tags=tuple(tags),
+        reference_metadata=reference_metadata,
+        parent_entry_id=payload.parent_entry_id,
+        target_agent_id=payload.target_agent_id,
+        project_id=payload.project_id,
+        governance_rule_id=payload.governance_rule_id,
+        content_full=content_full,
+        content_display=display_content,
+        content_summary=content_summary,
+        entry_schema_version=ENTRY_SCHEMA_VERSION,
+    )
+    return entry_id, record
 
 
 class LoggingList(list[T], Generic[T]):
@@ -170,7 +170,7 @@ class KnowledgeBoard:
     Maintains a list of knowledge entries as structured dictionaries.
     """
 
-    entries: LoggingList[dict[str, Any]]
+    entries: LoggingList[KnowledgeEntryRecord]
 
     def __init__(self: Self, entries: list[dict[str, Any]] | None = None) -> None:
         """
@@ -178,7 +178,7 @@ class KnowledgeBoard:
         """
         # If initial entries are provided, use them, otherwise start with an empty LoggingList
         if entries is not None:
-            self.entries = LoggingList(entries)
+            self.entries = LoggingList(self._records_from_dicts(entries))
         else:
             self.entries = LoggingList()
         self.vector = VersionVector()
@@ -206,7 +206,7 @@ class KnowledgeBoard:
         with trace_agent_action("knowledge_board.get_state", max_entries=max_entries):
             # Return the display_content for the most recent entries, up to max_entries
             recent_entries = (
-                [entry["content_display"] for entry in self.entries[-max_entries:]]
+                [entry.content_display for entry in self.entries[-max_entries:]]
                 if self.entries
                 else []
             )
@@ -234,7 +234,7 @@ class KnowledgeBoard:
 
     def get_full_entries(self: Self) -> list[dict[str, Any]]:
         """Returns a copy of all entries on the board."""
-        return list(self.entries)  # Return a copy
+        return [entry.to_dict() for entry in self.entries]
 
     def to_dict(self: Self) -> dict[str, Any]:
         """Serialize the knowledge board to a dictionary."""
@@ -251,7 +251,7 @@ class KnowledgeBoard:
         entries = snapshot.get("entries", [])
         if isinstance(entries, list):
             self.replace_entries(
-                [migrate_legacy_entry_dict(entry) for entry in entries if isinstance(entry, dict)]
+                [migrate_entry_dict(entry) for entry in entries if isinstance(entry, dict)]
             )
         else:
             self.replace_entries([])
@@ -260,8 +260,39 @@ class KnowledgeBoard:
 
     def replace_entries(self: Self, entries: list[dict[str, Any]]) -> None:
         """Replace the board contents with precomputed entries."""
-        self.entries = LoggingList(list(entries))
+        self.entries = LoggingList(self._records_from_dicts(entries))
         metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
+
+    def _records_from_dicts(self: Self, entries: list[dict[str, Any]]) -> list[KnowledgeEntryRecord]:
+        records: list[KnowledgeEntryRecord] = []
+        for entry in entries:
+            migrated = migrate_entry_dict(entry)
+            try:
+                records.append(
+                    KnowledgeEntryRecord(
+                        entry_id=str(migrated.get("entry_id") or ""),
+                        step=int(migrated.get("step") or 0),
+                        agent_id=str(migrated.get("agent_id") or "unknown"),
+                        entry_type=str(migrated.get("entry_type") or KnowledgeEntryType.NOTE.value),
+                        content_full=str(migrated.get("content_full") or ""),
+                        content_display=str(migrated.get("content_display") or ""),
+                        content_summary=str(
+                            migrated.get("content_summary") or migrated.get("content_full") or ""
+                        ),
+                        tags=tuple(migrated.get("tags") or ()),
+                        parent_entry_id=migrated.get("parent_entry_id"),
+                        target_agent_id=migrated.get("target_agent_id"),
+                        project_id=migrated.get("project_id"),
+                        governance_rule_id=migrated.get("governance_rule_id"),
+                        reference_metadata=migrated.get("reference_metadata"),
+                        entry_schema_version=int(
+                            migrated.get("entry_schema_version", ENTRY_SCHEMA_VERSION)
+                        ),
+                    )
+                )
+            except (TypeError, ValueError):
+                continue
+        return records
 
     def get_recent_entries_for_prompt(self: Self, max_entries: int = 5) -> list[str]:
         """
@@ -291,12 +322,9 @@ class KnowledgeBoard:
 
             formatted_entries = []
             for entry in recent_raw_entries:
-                step = entry.get("step", "N/A")
-                agent_id = entry.get("agent_id", "Unknown Agent")
-                content_summary = entry.get("content_summary") or entry.get(
-                    "content_full",
-                    "N/A",
-                )
+                step = entry.step
+                agent_id = entry.agent_id
+                content_summary = entry.content_summary or entry.content_full
                 # Cast to string so None or other non-string values don't raise
                 # errors when we check the length for truncation
                 content_summary = str(content_summary)
@@ -311,7 +339,7 @@ class KnowledgeBoard:
 
     def add_entry(
         self: Self,
-        entry: str | BoardEntry,
+        entry: BoardEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
@@ -329,8 +357,8 @@ class KnowledgeBoard:
         """
         try:
             with trace_agent_action("knowledge_board.add_entry", agent_id=agent_id, step=step):
-                entry_id, new_entry_dict = prepare_entry_payload(entry, agent_id, step)
-                self.entries.append(new_entry_dict)  # Append first
+                entry_id, new_entry = prepare_entry_payload(entry, agent_id, step)
+                self.entries.append(new_entry)
                 if vector is not None:
                     self.vector.merge(VersionVector(vector))
                 else:
@@ -350,7 +378,7 @@ class KnowledgeBoard:
                 metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
                 logger.info(  # Log after append
-                    f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry}'. "
+                    f"KnowledgeBoard: Added entry ID {entry_id} by {agent_id} at step {step}: '{entry.content_full}'. "
                     f"New board size: {len(self.entries)}. Instance ID: {id(self)}. Entries list ID: {id(self.entries)}"
                 )
                 logger.debug(
@@ -402,21 +430,20 @@ class KnowledgeBoard:
         proposals = [
             entry
             for entry in self.entries
-            if entry.get("entry_type") == KnowledgeEntryType.PROPOSAL.value
+            if entry.entry_type == KnowledgeEntryType.PROPOSAL.value
         ]
-        return proposals[-limit:]
+        return [entry.to_dict() for entry in proposals[-limit:]]
 
     def get_consensus_status(self: Self, proposal_id: str) -> dict[str, Any]:
         votes = [
             entry
             for entry in self.entries
-            if entry.get("entry_type") == KnowledgeEntryType.VOTE.value
-            and entry.get("parent_entry_id") == proposal_id
+            if entry.entry_type == KnowledgeEntryType.VOTE.value and entry.parent_entry_id == proposal_id
         ]
         approvals = 0
         rejections = 0
         for vote in votes:
-            approved = bool((vote.get("reference_metadata") or {}).get("approve", False))
+            approved = bool((vote.reference_metadata or {}).get("approve", False))
             if approved:
                 approvals += 1
             else:
@@ -431,9 +458,9 @@ class KnowledgeBoard:
     def get_agent_stance_history(self: Self, agent_id: str) -> list[dict[str, Any]]:
         relevant_entries: list[dict[str, Any]] = []
         for entry in self.entries:
-            if entry.get("agent_id") != agent_id:
+            if entry.agent_id != agent_id:
                 continue
-            entry_type = entry.get("entry_type")
+            entry_type = entry.entry_type
             if entry_type not in {
                 KnowledgeEntryType.VOTE.value,
                 KnowledgeEntryType.ENDORSEMENT.value,
@@ -441,12 +468,51 @@ class KnowledgeBoard:
                 continue
             relevant_entries.append(
                 {
-                    "step": entry.get("step"),
-                    "entry_id": entry.get("entry_id"),
+                    "step": entry.step,
+                    "entry_id": entry.entry_id,
                     "entry_type": entry_type,
-                    "parent_entry_id": entry.get("parent_entry_id"),
-                    "target_agent_id": entry.get("target_agent_id"),
-                    "stance": (entry.get("reference_metadata") or {}).get("stance"),
+                    "parent_entry_id": entry.parent_entry_id,
+                    "target_agent_id": entry.target_agent_id,
+                    "stance": (entry.reference_metadata or {}).get("stance"),
                 }
             )
         return sorted(relevant_entries, key=lambda item: int(item.get("step", 0)))
+
+    def get_active_proposal_projection(self: Self, limit: int = 20) -> list[Any]:
+        from .knowledge_board_protocol import ActiveProposalProjection
+
+        return [
+            ActiveProposalProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                agent_id=str(item.get("agent_id", "")),
+                content_summary=str(item.get("content_summary") or item.get("content_full") or ""),
+            )
+            for item in self.get_active_proposals(limit)
+        ]
+
+    def get_consensus_projection(self: Self, proposal_id: str) -> Any:
+        from .knowledge_board_protocol import ConsensusStatusProjection
+
+        row = self.get_consensus_status(proposal_id)
+        return ConsensusStatusProjection(
+            proposal_id=str(row.get("proposal_id", proposal_id)),
+            approvals=int(row.get("approvals", 0)),
+            rejections=int(row.get("rejections", 0)),
+            consensus=bool(row.get("consensus", False)),
+        )
+
+    def get_agent_stance_projection(self: Self, agent_id: str) -> list[Any]:
+        from .knowledge_board_protocol import AgentStanceProjection
+
+        return [
+            AgentStanceProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                entry_type=str(item.get("entry_type", "")),
+                parent_entry_id=item.get("parent_entry_id"),
+                target_agent_id=item.get("target_agent_id"),
+                stance=item.get("stance"),
+            )
+            for item in self.get_agent_stance_history(agent_id)
+        ]

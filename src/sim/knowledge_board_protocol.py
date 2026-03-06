@@ -24,6 +24,32 @@ class KnowledgeQuery:
     limit: int = 20
 
 
+@dataclass(frozen=True)
+class ActiveProposalProjection:
+    entry_id: str
+    step: int
+    agent_id: str
+    content_summary: str
+
+
+@dataclass(frozen=True)
+class ConsensusStatusProjection:
+    proposal_id: str
+    approvals: int
+    rejections: int
+    consensus: bool
+
+
+@dataclass(frozen=True)
+class AgentStanceProjection:
+    entry_id: str
+    step: int
+    entry_type: str
+    parent_entry_id: str | None
+    target_agent_id: str | None
+    stance: str | None
+
+
 @runtime_checkable
 class KnowledgeBoardCapabilities(Protocol):
     """Strict capability contract used by callers."""
@@ -32,7 +58,7 @@ class KnowledgeBoardCapabilities(Protocol):
 
     def append_entry(
         self,
-        entry: str | KnowledgeEntry,
+        entry: KnowledgeEntry,
         *,
         agent_id: str,
         step: int,
@@ -73,6 +99,12 @@ class KnowledgeBoardCapabilities(Protocol):
     def get_consensus_status(self, proposal_id: str) -> dict[str, Any]: ...
 
     def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]: ...
+
+    def get_active_proposal_projection(self, limit: int = 20) -> list[ActiveProposalProjection]: ...
+
+    def get_consensus_projection(self, proposal_id: str) -> ConsensusStatusProjection: ...
+
+    def get_agent_stance_projection(self, agent_id: str) -> list[AgentStanceProjection]: ...
 
     def record_vote(self, *, voter_agent_id: str, proposal_id: str, approve: bool) -> None: ...
 
@@ -189,7 +221,7 @@ class InMemoryKnowledgeBoardAdapter:
 
     def add_entry(
         self,
-        entry: str | KnowledgeEntry,
+        entry: KnowledgeEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
@@ -198,7 +230,7 @@ class InMemoryKnowledgeBoardAdapter:
 
     def append_entry(
         self,
-        entry: str | KnowledgeEntry,
+        entry: KnowledgeEntry,
         *,
         agent_id: str,
         step: int,
@@ -296,6 +328,41 @@ class InMemoryKnowledgeBoardAdapter:
             and entry.get("entry_type") in {"vote", "endorsement"}
         ]
 
+    def get_active_proposal_projection(self, limit: int = 20) -> list[ActiveProposalProjection]:
+        return [
+            ActiveProposalProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                agent_id=str(item.get("agent_id", "")),
+                content_summary=str(item.get("content_summary") or item.get("content_full") or ""),
+            )
+            for item in self._board.get_active_proposals(limit)
+        ]
+
+    def get_consensus_projection(self, proposal_id: str) -> ConsensusStatusProjection:
+        row = self.get_consensus_status(proposal_id)
+        return ConsensusStatusProjection(
+            proposal_id=str(row.get("proposal_id", proposal_id)),
+            approvals=int(row.get("approvals", 0)),
+            rejections=int(row.get("rejections", 0)),
+            consensus=bool(row.get("consensus", False)),
+        )
+
+    def get_agent_stance_projection(self, agent_id: str) -> list[AgentStanceProjection]:
+        return [
+            AgentStanceProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                entry_type=str(item.get("entry_type", "")),
+                parent_entry_id=item.get("parent_entry_id"),
+                target_agent_id=item.get("target_agent_id"),
+                stance=(item.get("reference_metadata") or {}).get("stance")
+                if isinstance(item.get("reference_metadata"), dict)
+                else item.get("stance"),
+            )
+            for item in self.get_agent_stance_history(agent_id)
+        ]
+
 
 class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
     """Adapter for graph board with operation-journal rollback semantics."""
@@ -307,7 +374,7 @@ class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
 
     def append_entry(
         self,
-        entry: str | KnowledgeEntry,
+        entry: KnowledgeEntry,
         *,
         agent_id: str,
         step: int,
@@ -324,7 +391,7 @@ class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
 
     def add_entry(
         self,
-        entry: str | KnowledgeEntry,
+        entry: KnowledgeEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
@@ -422,6 +489,39 @@ class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
     def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]:
         return self._graph.get_agent_stance_history(agent_id)
 
+    def get_active_proposal_projection(self, limit: int = 20) -> list[ActiveProposalProjection]:
+        return [
+            ActiveProposalProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                agent_id=str(item.get("agent_id", "")),
+                content_summary=str(item.get("content_summary") or item.get("content_full") or ""),
+            )
+            for item in self._graph.get_active_proposals(limit)
+        ]
+
+    def get_consensus_projection(self, proposal_id: str) -> ConsensusStatusProjection:
+        row = self._graph.get_consensus_status(proposal_id)
+        return ConsensusStatusProjection(
+            proposal_id=str(row.get("proposal_id", proposal_id)),
+            approvals=int(row.get("approvals", 0)),
+            rejections=int(row.get("rejections", 0)),
+            consensus=bool(row.get("consensus", False)),
+        )
+
+    def get_agent_stance_projection(self, agent_id: str) -> list[AgentStanceProjection]:
+        return [
+            AgentStanceProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                entry_type=str(item.get("entry_type", "")),
+                parent_entry_id=item.get("parent_entry_id"),
+                target_agent_id=item.get("target_agent_id"),
+                stance=item.get("stance"),
+            )
+            for item in self._graph.get_agent_stance_history(agent_id)
+        ]
+
 
 class VectorAugmentedKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
     """Optional in-memory adapter with simple vector similarity hook."""
@@ -432,7 +532,7 @@ class VectorAugmentedKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
 
     def append_entry(
         self,
-        entry: str | KnowledgeEntry,
+        entry: KnowledgeEntry,
         *,
         agent_id: str,
         step: int,

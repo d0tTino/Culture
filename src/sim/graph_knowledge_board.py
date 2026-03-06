@@ -25,7 +25,7 @@ from src.sim.knowledge_board import BoardEntry, prepare_entry_payload
 from src.sim.knowledge_entry import (
     KnowledgeEntryType,
     KnowledgeRelationshipType,
-    migrate_legacy_entry_dict,
+    migrate_entry_dict,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ class GraphKnowledgeBoard:
         entries = snapshot.get("entries", [])
         if isinstance(entries, list):
             self.replace_entries(
-                [migrate_legacy_entry_dict(entry) for entry in entries if isinstance(entry, dict)]
+                [migrate_entry_dict(entry) for entry in entries if isinstance(entry, dict)]
             )
         else:
             self.replace_entries([])
@@ -120,7 +120,7 @@ class GraphKnowledgeBoard:
     def replace_entries(self: Self, entries: list[dict[str, Any]]) -> None:
         self.clear_board()
         for entry in entries:
-            props = migrate_legacy_entry_dict(entry)
+            props = migrate_entry_dict(entry)
             agent_id = str(props.get("agent_id", "unknown"))
             self._run(
                 """
@@ -168,12 +168,13 @@ class GraphKnowledgeBoard:
 
     def add_entry(
         self: Self,
-        entry: str | BoardEntry,
+        entry: BoardEntry,
         agent_id: str,
         step: int,
         vector: dict[str, int] | None = None,
     ) -> bool:
-        entry_id, props = prepare_entry_payload(entry, agent_id, step)
+        entry_id, record = prepare_entry_payload(entry, agent_id, step)
+        props = record.to_dict()
         self._run(
             """
             MERGE (a:Agent {agent_id: $agent_id})
@@ -196,9 +197,8 @@ class GraphKnowledgeBoard:
         parent_entry_id = props.get("parent_entry_id")
         if parent_entry_id:
             relation = KnowledgeRelationshipType.AMENDS.value
-            relationship_hint = (
-                (props.get("reference_metadata") or {}).get("relationship") or ""
-            ).lower()
+            metadata = props.get("reference_metadata") or {}
+            relationship_hint = str(metadata.get("relationship") or "").lower()
             if relationship_hint == "supersedes":
                 relation = KnowledgeRelationshipType.SUPERCEDES.value
             self._run(
@@ -212,7 +212,8 @@ class GraphKnowledgeBoard:
             )
 
         if props.get("entry_type") == KnowledgeEntryType.VOTE.value and parent_entry_id:
-            approve = bool((props.get("reference_metadata") or {}).get("approve", False))
+            metadata = props.get("reference_metadata") or {}
+            approve = bool(metadata.get("approve", False))
             self._run(
                 """
                 MERGE (a:Agent {agent_id: $agent_id})
@@ -359,6 +360,45 @@ class GraphKnowledgeBoard:
             agent_id=agent_id,
         )
         return [dict(record) for record in records]
+
+    def get_active_proposal_projection(self: Self, limit: int = 20) -> list[Any]:
+        from src.sim.knowledge_board_protocol import ActiveProposalProjection
+
+        return [
+            ActiveProposalProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                agent_id=str(item.get("agent_id", "")),
+                content_summary=str(item.get("content_summary") or item.get("content_full") or ""),
+            )
+            for item in self.get_active_proposals(limit)
+        ]
+
+    def get_consensus_projection(self: Self, proposal_id: str) -> Any:
+        from src.sim.knowledge_board_protocol import ConsensusStatusProjection
+
+        row = self.get_consensus_status(proposal_id)
+        return ConsensusStatusProjection(
+            proposal_id=str(row.get("proposal_id", proposal_id)),
+            approvals=int(row.get("approvals", 0)),
+            rejections=int(row.get("rejections", 0)),
+            consensus=bool(row.get("consensus", False)),
+        )
+
+    def get_agent_stance_projection(self: Self, agent_id: str) -> list[Any]:
+        from src.sim.knowledge_board_protocol import AgentStanceProjection
+
+        return [
+            AgentStanceProjection(
+                entry_id=str(item.get("entry_id", "")),
+                step=int(item.get("step", 0)),
+                entry_type=str(item.get("entry_type", "")),
+                parent_entry_id=item.get("parent_entry_id"),
+                target_agent_id=item.get("target_agent_id"),
+                stance=item.get("stance"),
+            )
+            for item in self.get_agent_stance_history(agent_id)
+        ]
 
     def _get_endorsement_count(self: Self, entry_id: str) -> int:
         if not entry_id:
