@@ -104,7 +104,7 @@ class ExternalEventIngestionService:
         msg: SimulationMessage = {
             "step": sim.current_step,
             "turn_index": sim.current_step,
-            "world_time": sim.environment_system.world_time_snapshot(),
+            "world_time": sim.environment_system.world_time_snapshot(sim.world_state),
             "sender_id": sender,
             "recipient_id": recipient,
             "content": str(evt.data.get("content", "")),

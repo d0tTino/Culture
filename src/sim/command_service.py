@@ -488,7 +488,7 @@ class SimulationCommandService:
         except Exception:
             logger.debug("Ledger spend failed", exc_info=True)
 
-        world_time = self.simulation.environment_system.world_time_snapshot()
+        world_time = self.simulation.environment_system.world_time_snapshot(self.simulation.world_state)
         turn_index = self.simulation.current_step
         recipients = self.simulation.agents if broadcast else [target]
         msgs = [

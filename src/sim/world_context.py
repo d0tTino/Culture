@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.sim.environment import EnvironmentSystem
+from src.sim.world.state import WorldState
 from src.sim.world_map import WorldMap
 
 WORLD_CONTEXT_PROJECTION_VERSION = 1
@@ -49,9 +50,10 @@ class WorldContextProjection:
         turn_index: int,
         actor_id: str,
         environment_system: EnvironmentSystem,
+        world_state: WorldState,
         world_map: WorldMap,
     ) -> WorldContextProjection:
-        world_time = environment_system.world_time_snapshot()
+        world_time = environment_system.world_time_snapshot(world_state)
         location = world_map.agent_positions.get(actor_id, (0, 0))
         nearby_agents = sorted(
             other_id
@@ -59,7 +61,7 @@ class WorldContextProjection:
             if other_id != actor_id and other_location == location
         )
         governance_phase = (
-            "council_window" if environment_system.state.council_window_active else "standard"
+            "council_window" if world_state.environment.council_window_active else "standard"
         )
         return cls(
             projection_version=WORLD_CONTEXT_PROJECTION_VERSION,
@@ -75,10 +77,10 @@ class WorldContextProjection:
                 ),
                 formatted=str(world_time["formatted"]),
             ),
-            weather=str(environment_system.state.weather),
-            season=environment_system._season_name(),
+            weather=str(world_state.environment.weather),
+            season=environment_system.season_name(world_state),
             council=GovernanceContext(
-                council_window_active=bool(environment_system.state.council_window_active),
+                council_window_active=bool(world_state.environment.council_window_active),
                 phase=governance_phase,
             ),
             map_neighborhood=MapNeighborhoodContext(
