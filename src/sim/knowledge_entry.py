@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
@@ -73,6 +73,34 @@ class KnowledgeEntry:
         return result
 
 
+ENTRY_SCHEMA_VERSION = 2
+
+
+@dataclass(slots=True, frozen=True)
+class KnowledgeEntryRecord:
+    """Immutable persisted record for board entries."""
+
+    entry_id: str
+    step: int
+    agent_id: str
+    entry_type: str
+    content_full: str
+    content_display: str
+    content_summary: str
+    tags: tuple[str, ...] = ()
+    parent_entry_id: str | None = None
+    target_agent_id: str | None = None
+    project_id: str | None = None
+    governance_rule_id: str | None = None
+    reference_metadata: dict[str, Any] | None = None
+    entry_schema_version: int = ENTRY_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["tags"] = list(self.tags)
+        return payload
+
+
 def parse_entry_type(raw_type: KnowledgeEntryType | str | None) -> KnowledgeEntryType:
     """Parse an entry type and enforce ontology strictness."""
 
@@ -119,13 +147,42 @@ def migrate_legacy_entry_dict(entry: dict[str, Any]) -> dict[str, Any]:
         tags = []
     migrated["tags"] = [str(t) for t in tags if isinstance(t, str) and t]
     migrated["reference_metadata"] = metadata or None
+    migrated["entry_schema_version"] = ENTRY_SCHEMA_VERSION
+    return migrated
+
+
+def _migrate_v1_to_v2(entry: dict[str, Any]) -> dict[str, Any]:
+    return migrate_legacy_entry_dict(entry)
+
+
+ENTRY_SCHEMA_MIGRATIONS: dict[int, Any] = {
+    1: _migrate_v1_to_v2,
+}
+
+
+def migrate_entry_dict(entry: dict[str, Any], target_version: int = ENTRY_SCHEMA_VERSION) -> dict[str, Any]:
+    """Migrate persisted entry dictionaries to ``target_version``."""
+
+    migrated = dict(entry)
+    version = int(migrated.get("entry_schema_version", 1) or 1)
+    while version < target_version:
+        migration = ENTRY_SCHEMA_MIGRATIONS.get(version)
+        if migration is None:
+            break
+        migrated = migration(migrated)
+        version = int(migrated.get("entry_schema_version", version + 1) or (version + 1))
+    if version < target_version:
+        migrated["entry_schema_version"] = target_version
     return migrated
 
 
 __all__ = [
+    "ENTRY_SCHEMA_VERSION",
     "KnowledgeEntry",
+    "KnowledgeEntryRecord",
     "KnowledgeEntryType",
     "KnowledgeRelationshipType",
+    "migrate_entry_dict",
     "migrate_legacy_entry_dict",
     "parse_entry_type",
 ]

@@ -9,7 +9,12 @@ from src.governance.knowledge_governance_transaction import (
     make_proposal_idempotency_key,
     make_vote_idempotency_key,
 )
-from src.sim.knowledge_board_protocol import KnowledgeBoardProtocol
+from src.sim.knowledge_board_protocol import (
+    ActiveProposalProjection,
+    AgentStanceProjection,
+    ConsensusStatusProjection,
+    KnowledgeBoardProtocol,
+)
 from src.sim.knowledge_entry import KnowledgeEntry, KnowledgeEntryType
 
 
@@ -30,6 +35,15 @@ class KnowledgeBoardService:
 
     def get_recent_entries_for_prompt(self, max_entries: int = 5) -> list[str]:
         return self._board.get_recent_entries_for_prompt(max_entries=max_entries)
+
+    def get_active_proposal_projection(self, limit: int = 20) -> list[ActiveProposalProjection]:
+        return self._board.get_active_proposal_projection(limit=limit)
+
+    def get_consensus_projection(self, proposal_id: str) -> ConsensusStatusProjection:
+        return self._board.get_consensus_projection(proposal_id)
+
+    def get_agent_stance_projection(self, agent_id: str) -> list[AgentStanceProjection]:
+        return self._board.get_agent_stance_projection(agent_id)
 
     async def post_idea(
         self,

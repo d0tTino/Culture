@@ -86,7 +86,11 @@ def test_entry_and_semantic_capabilities_match_for_shared_contracts(
 ) -> None:
     board = factory()
 
-    as_entry_store(board).add_entry("seed", agent_id="agent-1", step=1)
+    as_entry_store(board).add_entry(
+        BoardEntry(content_full="seed", entry_type="note"),
+        agent_id="agent-1",
+        step=1,
+    )
     as_entry_store(board).add_entry(
         BoardEntry(
             content_full="proposal",
