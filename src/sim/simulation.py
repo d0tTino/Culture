@@ -57,7 +57,7 @@ from src.sim.contracts.lifecycle import EVENT_STEP_LIFECYCLE_CONTRACTS
 from src.sim.control_service import SimulationControlService
 from src.sim.engine import SimulationEngine
 from src.sim.engines.persistence_engine import PersistenceEngine
-from src.sim.environment import EnvironmentState, EnvironmentSystem
+from src.sim.environment import EnvironmentSystem
 from src.sim.event_kernel import EventKernel
 from src.sim.knowledge_board_protocol import (
     GraphKnowledgeBoardAdapter,
@@ -172,14 +172,9 @@ class Simulation:
         )
         season_len = int(config.get_config("WORLD_SEASON_LENGTH_DAYS") or 0)
         self.world_season_length_days: int | None = season_len if season_len > 0 else None
-        self.environment_state = EnvironmentState(
-            world_season=0 if self.world_season_length_days else None
-        )
         self.world_state = WorldState()
-        self.world_state.temporal.world_season = self.environment_state.world_season
+        self.world_state.temporal.world_season = 0 if self.world_season_length_days else None
         self.environment_system = EnvironmentSystem(
-            state=self.environment_state,
-            world_state=self.world_state,
             world_ticks_per_day=self.world_ticks_per_day,
             turns_per_world_tick=self.turns_per_world_tick,
             world_season_length_days=self.world_season_length_days,
@@ -685,41 +680,42 @@ class Simulation:
 
     @property
     def world_tick_index(self: Self) -> int:
-        return self.environment_state.world_tick
+        return self.world_state.temporal.world_tick
 
     @world_tick_index.setter
     def world_tick_index(self: Self, value: int) -> None:
-        self.environment_state.world_tick = int(value)
+        self.world_state.temporal.world_tick = int(value)
 
     @property
     def world_hour(self: Self) -> int:
-        return self.environment_state.world_hour
+        return self.world_state.temporal.world_hour
 
     @world_hour.setter
     def world_hour(self: Self, value: int) -> None:
-        self.environment_state.world_hour = int(value)
+        self.world_state.temporal.world_hour = int(value)
 
     @property
     def world_day(self: Self) -> int:
-        return self.environment_state.world_day
+        return self.world_state.temporal.world_day
 
     @world_day.setter
     def world_day(self: Self, value: int) -> None:
-        self.environment_state.world_day = int(value)
+        self.world_state.temporal.world_day = int(value)
 
     @property
     def world_season(self: Self) -> int | None:
-        return self.environment_state.world_season
+        return self.world_state.temporal.world_season
 
     @world_season.setter
     def world_season(self: Self, value: int | None) -> None:
-        self.environment_state.world_season = int(value) if value is not None else None
+        self.world_state.temporal.world_season = int(value) if value is not None else None
 
     def _build_world_context_projection(self: Self, *, actor_id: str) -> WorldContextProjection:
         return WorldContextProjection.build(
             turn_index=self.current_step,
             actor_id=actor_id,
             environment_system=self.environment_system,
+            world_state=self.world_state,
             world_map=self.world_map,
         )
 
@@ -750,7 +746,7 @@ class Simulation:
     ) -> None:
         environment_context = self._environment_context_from_projection(
             world_projection,
-            effect_hooks=self.environment_system._condition_hooks(),
+            effect_hooks=self.environment_system.condition_hooks(self.world_state),
         )
         world_time = self._world_time_from_projection(world_projection)
         for raw_event in events:
@@ -844,7 +840,9 @@ class Simulation:
 
         # Increment turn index, then sync world time to the configured tick boundary.
         self.current_step += 1
-        environment_deltas = self.environment_system.tick(self.current_step)
+        self.world_state, environment_deltas = self.environment_system.tick(
+            self.world_state, self.current_step
+        )
         environment_events = [delta.as_event() for delta in environment_deltas]
         agent = self.agents[agent_index]
         agent_id = agent.agent_id
@@ -909,11 +907,10 @@ class Simulation:
         knowledge_board_content = (
             self.knowledge_board.get_recent_entries_for_prompt() if self.knowledge_board else []
         )
-        effect_hooks = self.environment_system._condition_hooks()
+        effect_hooks = self.environment_system.condition_hooks(self.world_state)
         perception_data = self.world_perception_builder.build(
             world_state=self.world_state,
-            actor_id=agent_id,
-            turn_index=self.current_step,
+            world_projection=world_projection,
             effect_hooks=effect_hooks,
             perceived_messages=perceived_messages,
             knowledge_board_content=knowledge_board_content,
@@ -1206,14 +1203,14 @@ class Simulation:
                 "world_tick": self.world_tick_index,
                 "turns_per_world_tick": self.turns_per_world_tick,
                 "environment_state": {
-                    "world_tick": self.environment_state.world_tick,
-                    "world_hour": self.environment_state.world_hour,
-                    "world_day": self.environment_state.world_day,
-                    "world_season": self.environment_state.world_season,
-                    "weather": self.environment_state.weather,
-                    "season_effects": self.environment_state.season_effects,
-                    "active_global_modifiers": self.environment_state.active_global_modifiers,
-                    "council_window_active": self.environment_state.council_window_active,
+                    "world_tick": self.world_state.temporal.world_tick,
+                    "world_hour": self.world_state.temporal.world_hour,
+                    "world_day": self.world_state.temporal.world_day,
+                    "world_season": self.world_state.temporal.world_season,
+                    "weather": self.world_state.environment.weather,
+                    "season_effects": self.world_state.environment.season_effects,
+                    "active_global_modifiers": self.world_state.environment.active_global_modifiers,
+                    "council_window_active": self.world_state.environment.council_window_active,
                 },
                 "metadata": {"world_context_projection": world_projection.to_dict()},
                 "trace_hash": self._last_trace_hash,
@@ -1672,7 +1669,7 @@ class Simulation:
         )
         environment_context = self._environment_context_from_projection(
             projection,
-            effect_hooks=self.environment_system._condition_hooks(),
+            effect_hooks=self.environment_system.condition_hooks(self.world_state),
         )
         snapshot: dict[str, Any] = {
             "perceived_messages": copy.deepcopy(self.messages_to_perceive_this_round),
@@ -2169,15 +2166,15 @@ class Simulation:
         sim.world_tick_index = int(env_snapshot["world_tick"])
         world_season_value = env_snapshot.get("world_season")
         sim.world_season = int(world_season_value) if world_season_value is not None else None
-        sim.environment_state.weather = str(env_snapshot["weather"])
-        sim.environment_state.season_effects = dict(env_snapshot["season_effects"])
-        sim.environment_state.active_global_modifiers = list(
+        sim.world_state.environment.weather = str(env_snapshot["weather"])
+        sim.world_state.environment.season_effects = dict(env_snapshot["season_effects"])
+        sim.world_state.environment.active_global_modifiers = list(
             env_snapshot["active_global_modifiers"]
         )
-        sim.environment_state.council_window_active = bool(env_snapshot["council_window_active"])
+        sim.world_state.environment.council_window_active = bool(env_snapshot["council_window_active"])
         snapshot_turn_quantum = int(snapshot.get("turns_per_world_tick", sim.turns_per_world_tick))
         sim.turns_per_world_tick = max(1, snapshot_turn_quantum)
-        sim.environment_system.turns_per_world_tick = sim.turns_per_world_tick
+        sim.environment_system.set_turns_per_world_tick(sim.turns_per_world_tick)
         if sim.world_tick_index < 0 and sim.current_step > 0:
             sim.world_tick_index = (sim.current_step - 1) // sim.turns_per_world_tick
         sim.collective_ip = float(snapshot.get("collective_ip", 0.0))

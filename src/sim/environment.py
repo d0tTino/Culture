@@ -1,25 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from src.sim.world.state import EnvironmentTickDelta, WorldState
 
 
-@dataclass
-class EnvironmentState:
-    world_tick: int = 0
-    world_hour: int = 0
-    world_day: int = 0
-    world_season: int | None = None
-    weather: str = "clear"
-    season_effects: dict[str, Any] = field(default_factory=dict)
-    active_global_modifiers: list[str] = field(default_factory=list)
-    council_window_active: bool = False
+@dataclass(frozen=True)
+class EnvironmentReducerEvent:
+    turn_index: int
+
+
+@dataclass(frozen=True)
+class EnvironmentConfig:
+    world_ticks_per_day: int
+    turns_per_world_tick: int
+    world_season_length_days: int | None
+    weather_shift_interval_ticks: int
+    council_window_days: int
+    council_window_start_hour: int
+    council_window_duration_hours: int
+    world_time_broadcast_cadence_ticks: int
 
 
 class EnvironmentSystem:
-    """Owns temporal progression and environment context generation."""
+    """Pure world-environment reducers and read projections."""
 
     _WEATHER_CYCLE = ("clear", "rain", "windy", "storm")
     _SEASON_NAMES = ("spring", "summer", "autumn", "winter")
@@ -27,7 +32,6 @@ class EnvironmentSystem:
     def __init__(
         self,
         *,
-        state: EnvironmentState,
         world_ticks_per_day: int,
         turns_per_world_tick: int,
         world_season_length_days: int | None,
@@ -36,63 +40,40 @@ class EnvironmentSystem:
         council_window_start_hour: int = 9,
         council_window_duration_hours: int = 3,
         world_time_broadcast_cadence_ticks: int = 24,
-        world_state: WorldState | None = None,
     ) -> None:
-        self.state = state
-        self.world_state = world_state
-        if world_state is not None:
-            self._sync_state_to_world()
-        self.world_ticks_per_day = max(1, int(world_ticks_per_day))
-        self.turns_per_world_tick = max(1, int(turns_per_world_tick))
-        self.world_season_length_days = (
-            int(world_season_length_days) if world_season_length_days is not None else None
+        self.config = EnvironmentConfig(
+            world_ticks_per_day=max(1, int(world_ticks_per_day)),
+            turns_per_world_tick=max(1, int(turns_per_world_tick)),
+            world_season_length_days=(
+                int(world_season_length_days) if world_season_length_days is not None else None
+            ),
+            weather_shift_interval_ticks=max(1, int(weather_shift_interval_ticks)),
+            council_window_days=max(1, int(council_window_days)),
+            council_window_start_hour=max(0, int(council_window_start_hour)),
+            council_window_duration_hours=max(1, int(council_window_duration_hours)),
+            world_time_broadcast_cadence_ticks=max(1, int(world_time_broadcast_cadence_ticks)),
         )
-        self.weather_shift_interval_ticks = max(1, int(weather_shift_interval_ticks))
-        self.council_window_days = max(1, int(council_window_days))
-        self.council_window_start_hour = max(0, int(council_window_start_hour))
-        self.council_window_duration_hours = max(1, int(council_window_duration_hours))
-        self.world_time_broadcast_cadence_ticks = max(1, int(world_time_broadcast_cadence_ticks))
 
-    def _sync_state_to_world(self) -> None:
-        if self.world_state is None:
-            return
-        self.world_state.temporal.world_tick = self.state.world_tick
-        self.world_state.temporal.world_hour = self.state.world_hour
-        self.world_state.temporal.world_day = self.state.world_day
-        self.world_state.temporal.world_season = self.state.world_season
-        self.world_state.environment.weather = self.state.weather
-        self.world_state.environment.season_effects = dict(self.state.season_effects)
-        self.world_state.environment.active_global_modifiers = list(
-            self.state.active_global_modifiers
+    def set_turns_per_world_tick(self, value: int) -> None:
+        self.config = EnvironmentConfig(
+            **{**self.config.__dict__, "turns_per_world_tick": max(1, int(value))}
         )
-        self.world_state.environment.council_window_active = self.state.council_window_active
 
-    def _sync_world_to_state(self) -> None:
-        if self.world_state is None:
-            return
-        self.state.world_tick = self.world_state.temporal.world_tick
-        self.state.world_hour = self.world_state.temporal.world_hour
-        self.state.world_day = self.world_state.temporal.world_day
-        self.state.world_season = self.world_state.temporal.world_season
-        self.state.weather = self.world_state.environment.weather
-        self.state.season_effects = dict(self.world_state.environment.season_effects)
-        self.state.active_global_modifiers = list(
-            self.world_state.environment.active_global_modifiers
+    def _format_world_time(self, world_state: WorldState) -> str:
+        time_str = (
+            f"Day {world_state.temporal.world_day}, "
+            f"{world_state.temporal.world_hour:02d}:00"
         )
-        self.state.council_window_active = self.world_state.environment.council_window_active
-
-    def _format_world_time(self) -> str:
-        time_str = f"Day {self.state.world_day}, {self.state.world_hour:02d}:00"
-        if self.state.world_season is not None:
-            time_str += f" (Season {self.state.world_season})"
+        if world_state.temporal.world_season is not None:
+            time_str += f" (Season {world_state.temporal.world_season})"
         return time_str
 
-    def _season_name(self) -> str | None:
-        if self.state.world_season is None:
+    def season_name(self, world_state: WorldState) -> str | None:
+        if world_state.temporal.world_season is None:
             return None
-        return self._SEASON_NAMES[self.state.world_season % len(self._SEASON_NAMES)]
+        return self._SEASON_NAMES[world_state.temporal.world_season % len(self._SEASON_NAMES)]
 
-    def _condition_hooks(self) -> dict[str, Any]:
+    def condition_hooks(self, world_state: WorldState) -> dict[str, Any]:
         # unchanged semantics
         weather_hooks: dict[str, dict[str, Any]] = {
             "clear": {
@@ -134,8 +115,8 @@ class EnvironmentSystem:
                 "mood_modifiers": {"baseline": -0.06},
             },
         }
-        weather = weather_hooks.get(self.state.weather, weather_hooks["clear"])
-        season = season_hooks.get(self._season_name() or "spring", {})
+        weather = weather_hooks.get(world_state.environment.weather, weather_hooks["clear"])
+        season = season_hooks.get(self.season_name(world_state) or "spring", {})
         return {
             "resource_multipliers": {
                 **weather.get("resource_multipliers", {}),
@@ -148,67 +129,72 @@ class EnvironmentSystem:
             },
         }
 
-    def world_time_snapshot(self) -> dict[str, Any]:
-        self._sync_world_to_state()
+    def world_time_snapshot(self, world_state: WorldState) -> dict[str, Any]:
         return {
-            "world_tick": self.state.world_tick,
-            "world_hour": self.state.world_hour,
-            "world_day": self.state.world_day,
-            "world_season": self.state.world_season,
-            "formatted": self._format_world_time(),
+            "world_tick": world_state.temporal.world_tick,
+            "world_hour": world_state.temporal.world_hour,
+            "world_day": world_state.temporal.world_day,
+            "world_season": world_state.temporal.world_season,
+            "formatted": self._format_world_time(world_state),
         }
 
-    def tick(self, turn_index: int) -> tuple[EnvironmentTickDelta, ...]:
-        self._sync_world_to_state()
-        if turn_index <= 0:
-            return ()
-        target_tick = (turn_index - 1) // self.turns_per_world_tick
+    def tick(
+        self, world_state: WorldState, turn_index: int
+    ) -> tuple[WorldState, tuple[EnvironmentTickDelta, ...]]:
+        return self.reduce(world_state, EnvironmentReducerEvent(turn_index=turn_index))
+
+    def reduce(
+        self, world_state: WorldState, event: EnvironmentReducerEvent
+    ) -> tuple[WorldState, tuple[EnvironmentTickDelta, ...]]:
+        if event.turn_index <= 0:
+            return world_state, ()
+        state = WorldState.from_snapshot(world_state.snapshot())
+        target_tick = (event.turn_index - 1) // self.config.turns_per_world_tick
         events: list[EnvironmentTickDelta] = []
-        while self.state.world_tick < target_tick:
-            self.state.world_tick += 1
-            self.state.world_hour += 1
-            if self.state.world_hour >= self.world_ticks_per_day:
-                self.state.world_hour = 0
-                self.state.world_day += 1
-                events.append(self._event("daily_reset", turn_index))
-            if self.state.world_tick % self.weather_shift_interval_ticks == 0:
-                idx = (self.state.world_tick // self.weather_shift_interval_ticks) % len(
+        while state.temporal.world_tick < target_tick:
+            state.temporal.world_tick += 1
+            state.temporal.world_hour += 1
+            if state.temporal.world_hour >= self.config.world_ticks_per_day:
+                state.temporal.world_hour = 0
+                state.temporal.world_day += 1
+                events.append(self._event(state, "daily_reset", event.turn_index))
+            if state.temporal.world_tick % self.config.weather_shift_interval_ticks == 0:
+                idx = (state.temporal.world_tick // self.config.weather_shift_interval_ticks) % len(
                     self._WEATHER_CYCLE
                 )
-                self.state.weather = self._WEATHER_CYCLE[idx]
-                events.append(self._event("weather_shift", turn_index))
-            if self.world_season_length_days and self.state.world_day > 0:
-                new_season = self.state.world_day // self.world_season_length_days
-                if new_season != self.state.world_season:
-                    self.state.world_season = new_season
-                    self.state.season_effects = {
-                        "season": self._season_name(),
-                        "hooks": self._condition_hooks(),
+                state.environment.weather = self._WEATHER_CYCLE[idx]
+                events.append(self._event(state, "weather_shift", event.turn_index))
+            if self.config.world_season_length_days and state.temporal.world_day > 0:
+                new_season = state.temporal.world_day // self.config.world_season_length_days
+                if new_season != state.temporal.world_season:
+                    state.temporal.world_season = new_season
+                    state.environment.season_effects = {
+                        "season": self.season_name(state),
+                        "hooks": self.condition_hooks(state),
                     }
-                    events.append(self._event("season_transition", turn_index))
-            is_council_day = (self.state.world_day % self.council_window_days) == 0
+                    events.append(self._event(state, "season_transition", event.turn_index))
+            is_council_day = (state.temporal.world_day % self.config.council_window_days) == 0
             in_hour_window = (
-                self.council_window_start_hour
-                <= self.state.world_hour
-                < self.council_window_start_hour + self.council_window_duration_hours
+                self.config.council_window_start_hour
+                <= state.temporal.world_hour
+                < self.config.council_window_start_hour + self.config.council_window_duration_hours
             )
             council_active = is_council_day and in_hour_window
-            if council_active != self.state.council_window_active:
-                self.state.council_window_active = council_active
-                events.append(self._event("council_meeting_window", turn_index))
-            if self.state.world_tick % self.world_time_broadcast_cadence_ticks == 0:
-                events.append(self._event("world_time", turn_index))
-        self._sync_state_to_world()
-        return tuple(events)
+            if council_active != state.environment.council_window_active:
+                state.environment.council_window_active = council_active
+                events.append(self._event(state, "council_meeting_window", event.turn_index))
+            if state.temporal.world_tick % self.config.world_time_broadcast_cadence_ticks == 0:
+                events.append(self._event(state, "world_time", event.turn_index))
+        return state, tuple(events)
 
-    def _event(self, event_name: str, turn_index: int) -> EnvironmentTickDelta:
+    def _event(self, world_state: WorldState, event_name: str, turn_index: int) -> EnvironmentTickDelta:
         return EnvironmentTickDelta(
             event_name=event_name,
             turn_index=turn_index,
-            world_time=self.world_time_snapshot(),
-            weather=self.state.weather,
-            season=self._season_name(),
-            council_window_active=self.state.council_window_active,
-            active_global_modifiers=tuple(self.state.active_global_modifiers),
-            effect_hooks=self._condition_hooks(),
+            world_time=self.world_time_snapshot(world_state),
+            weather=world_state.environment.weather,
+            season=self.season_name(world_state),
+            council_window_active=world_state.environment.council_window_active,
+            active_global_modifiers=tuple(world_state.environment.active_global_modifiers),
+            effect_hooks=self.condition_hooks(world_state),
         )

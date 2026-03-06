@@ -13,17 +13,17 @@ class WorldEngine:
         world_time = TickContext.freeze_mapping(simulation._world_time_from_projection(world_projection))
         governance_state = TickContext.freeze_mapping(
             {
-                "council_window_active": simulation.environment_state.council_window_active,
-                "world_day": simulation.environment_state.world_day,
+                "council_window_active": simulation.world_state.environment.council_window_active,
+                "world_day": simulation.world_state.temporal.world_day,
             }
         )
         return TickContext(
             step=int(simulation.current_step),
             world_time=world_time,
-            weather=str(simulation.environment_state.weather),
+            weather=str(simulation.world_state.environment.weather),
             governance_state=governance_state,
             world_modifiers=TickContext.freeze_mapping(
-                simulation.environment_state.active_global_modifiers
+                simulation.world_state.environment.active_global_modifiers
             ),
             replay_metadata=TickContext.freeze_mapping(
                 {
