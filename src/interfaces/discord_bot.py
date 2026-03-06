@@ -16,7 +16,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
-import httpx
 from opentelemetry import trace
 from typing_extensions import Self
 
@@ -39,6 +38,7 @@ from src.interfaces.interaction_schema import (
     ControlEnvelope,
     InjectEventEnvelope,
     KnowledgeBoardEnvelope,
+    ModerationEnvelope,
     SpawnEnvelope,
 )
 from src.sim.context import SimulationContext
@@ -79,7 +79,6 @@ if dashboard_message_queue is None or not hasattr(dashboard_message_queue, "put_
 message_sse_queue = dashboard_message_queue
 
 
-_DEFAULT_DASHBOARD_API_BASE_URL = "http://localhost:8000"
 _MAX_RATE = 5
 has_admin_permission = interaction_permissions.has_admin_permission
 reset_command_counts = interaction_permissions.reset_command_counts
@@ -90,20 +89,6 @@ async def check_command_rate_limit(user: Any) -> bool:
     set_max_rate(_MAX_RATE)
     interaction_permissions.time = time
     return await policy_check_command_rate_limit(user)
-
-
-def _dashboard_api_base_url() -> str:
-    configured = str(config.get("DASHBOARD_API_BASE_URL", _DEFAULT_DASHBOARD_API_BASE_URL)).strip()
-    return configured.rstrip("/") or _DEFAULT_DASHBOARD_API_BASE_URL
-
-
-def _classify_api_error(exc: Exception) -> str:
-    if isinstance(exc, httpx.HTTPStatusError):
-        if exc.response.status_code in (400, 422):
-            return "invalid_payload"
-    if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError)):
-        return "network_unavailable"
-    return "network_unavailable"
 
 
 def _governance_message_from_outcome(
@@ -118,19 +103,6 @@ def _governance_message_from_outcome(
     if approved:
         return "Approved"
     return "Rejected by vote"
-
-
-def _governance_simulation_from_interaction(interaction: Any) -> Any | None:
-    bot_instance = get_active_bot()
-    if bot_instance is not None:
-        return bot_instance.context.sim_state.get("simulation")
-    return DEFAULT_CONTEXT.sim_state.get("simulation")
-
-
-def _governance_agent_for_sim(sim: Any, agent_id: str) -> Any | None:
-    return next(
-        (agent for agent in getattr(sim, "agents", []) if agent.agent_id == agent_id), None
-    )
 
 
 @contextmanager
@@ -277,6 +249,8 @@ def create_onboarding_embed(channel_id: int) -> Any:
 
 
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
+
+
 def _parse_json_object_argument(raw: str | None, field_name: str) -> dict[str, Any] | None:
     """Parse a JSON object argument from a slash-command string option."""
     if raw is None:
@@ -696,7 +670,9 @@ class SimulationDiscordBot:
                         return
                     if payload is None:
                         return
-                    routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+                    routing = (
+                        payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+                    )
                     target_agent_id = routing.get("target_agent_id")
                     span.set_attribute("discord.agent.id", target_agent_id or "")
                     if user_id and sender is None and target_agent_id is not None:
@@ -1222,7 +1198,9 @@ async def _has_control_command_permission(
 
 async def _rate_limit_check(interaction: Any) -> bool:
     """Global slash-command check enforcing per-user rate limits."""
-    identity = discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None))
+    identity = discord_identity(
+        user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)
+    )
     if await check_command_rate_limit(identity):
         return True
     try:
@@ -1353,7 +1331,10 @@ async def slash_resume(interaction: Any) -> None:
             await bus.dispatch(
                 ControlEnvelope(
                     action="resume",
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1363,7 +1344,9 @@ async def slash_resume(interaction: Any) -> None:
 async def slash_pause_all(interaction: Any) -> None:
     """Pause all activity in the simulation. Administrator only."""
     with command_span("pause_all", interaction) as span:
-        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
+        if not discord_identity(
+            user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)
+        ).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         bot_instance = get_active_bot()
@@ -1373,7 +1356,10 @@ async def slash_pause_all(interaction: Any) -> None:
             await bus.dispatch(
                 ControlEnvelope(
                     action="pause_all",
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1383,7 +1369,9 @@ async def slash_pause_all(interaction: Any) -> None:
 async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
     """Remove an agent from the simulation. Administrator only."""
     with command_span("kill_agent", interaction, agent_id=agent_id) as span:
-        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
+        if not discord_identity(
+            user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)
+        ).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         bot_instance = get_active_bot()
@@ -1394,7 +1382,10 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
                 ControlEnvelope(
                     action="kill_agent",
                     agent_id=agent_id,
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1402,13 +1393,32 @@ async def slash_kill_agent(interaction: Any, agent_id: str) -> None:
 
 
 async def slash_nudge(interaction: Any, prompt: str) -> None:
-    """Send a custom prompt to the simulation."""
+    """Send a custom prompt through the command bus."""
     with command_span("nudge", interaction) as span:
         span.set_attribute("discord.message.length", len(prompt))
         bot_instance = get_active_bot()
         ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
-        await ctx.get_event_queue().put(SimulationEvent(type="nudge", data={"prompt": prompt}))
-        await send_interaction_response(interaction, "nudge sent", ephemeral=True)
+        bus = get_command_bus(ctx)
+        if bus is None:
+            await send_interaction_response(interaction, "command bus unavailable", ephemeral=True)
+            return
+        result = await bus.dispatch(
+            ModerationEnvelope(
+                action="nudge",
+                agent_id=str(getattr(interaction, "user", "human")),
+                routing={
+                    "sender_id": str(getattr(interaction, "user", "human")),
+                    "source": "discord",
+                },
+                auth={"permissions": {"admin", "moderator"}},
+                metadata={
+                    "prompt": prompt,
+                    "correlation_id": str(getattr(interaction, "id", "")) or None,
+                },
+                correlation_id=str(getattr(interaction, "id", "")) or None,
+            )
+        )
+        await send_interaction_response(interaction, result.user_message, ephemeral=True)
 
 
 async def slash_start(interaction: Any) -> None:
@@ -1436,7 +1446,10 @@ async def slash_start(interaction: Any) -> None:
             await bus.dispatch(
                 ControlEnvelope(
                     action="start",
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1493,7 +1506,10 @@ async def slash_stop(interaction: Any) -> None:
             await bus.dispatch(
                 ControlEnvelope(
                     action="stop",
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1580,7 +1596,10 @@ async def slash_spawn(
                     persona=spawn_kwargs.get("persona"),
                     backstory=spawn_kwargs.get("backstory"),
                     traits=spawn_kwargs.get("traits"),
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1609,7 +1628,9 @@ async def slash_spawn(
 async def slash_kill(interaction: Any) -> None:
     """Shutdown the bot. Administrator only."""
     with command_span("kill", interaction) as span:
-        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
+        if not discord_identity(
+            user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)
+        ).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         await send_interaction_response(interaction, "shutting down", ephemeral=True)
@@ -1619,7 +1640,9 @@ async def slash_kill(interaction: Any) -> None:
 async def slash_set_max_rate(interaction: Any, value: int) -> None:
     """Adjust the per-user command rate limit."""
     with command_span("set_max_rate", interaction) as span:
-        if not discord_identity(user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)).is_admin:
+        if not discord_identity(
+            user=getattr(interaction, "user", None), channel=getattr(interaction, "channel", None)
+        ).is_admin:
             await send_interaction_response(interaction, "unauthorized", ephemeral=True)
             return
         set_max_rate(value)
@@ -1638,7 +1661,10 @@ async def slash_set_speed(interaction: Any, value: float) -> None:
                 ControlEnvelope(
                     action="set_speed",
                     value=value,
-                    routing={"sender_id": str(getattr(interaction, "user", "discord")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "discord")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1670,7 +1696,10 @@ async def slash_kb(interaction: Any, text: str) -> None:
             await bus.dispatch(
                 KnowledgeBoardEnvelope(
                     text=text,
-                    routing={"sender_id": str(getattr(interaction, "user", "human")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "human")),
+                        "source": "discord",
+                    },
                 )
             )
         await send_interaction_response(interaction, "KB entry created", ephemeral=True)
@@ -1696,7 +1725,10 @@ async def slash_event(interaction: Any, text: str) -> None:
                     text=text,
                     scope="global",
                     agent_id=str(getattr(interaction, "user", "human")),
-                    routing={"sender_id": str(getattr(interaction, "user", "human")), "source": "discord"},
+                    routing={
+                        "sender_id": str(getattr(interaction, "user", "human")),
+                        "source": "discord",
+                    },
                     auth={"permissions": {"admin", "moderator"}},
                 )
             )
@@ -1704,7 +1736,7 @@ async def slash_event(interaction: Any, text: str) -> None:
 
 
 async def slash_propose(interaction: Any, text: str) -> None:
-    """Propose a law via the dashboard API."""
+    """Propose a law through the command bus."""
     with command_span("propose", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         agent_id = None
@@ -1721,37 +1753,30 @@ async def slash_propose(interaction: Any, text: str) -> None:
         if ip <= 0 or du <= 0:
             await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
             return
-        payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
-        approved = False
-        error_kind: str | None = None
-        sim = _governance_simulation_from_interaction(interaction)
-        if sim is not None and hasattr(sim, "propose_law"):
-            try:
-                approved = bool(await sim.propose_law(agent_id, text))
-            except Exception:
-                error_kind = "network_unavailable"
-        else:
-            endpoint = f"{_dashboard_api_base_url()}/api/governance/propose"
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(endpoint, json=payload)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    approved = bool(data.get("approved", False))
-            except Exception as exc:
-                error_kind = _classify_api_error(exc)
-        try:
-            await send_interaction_response(
-                interaction,
-                _governance_message_from_outcome(approved=approved, error_kind=error_kind),
-                ephemeral=True,
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        bus = get_command_bus(ctx)
+        if bus is None:
+            await send_interaction_response(interaction, "command bus unavailable", ephemeral=True)
+            return
+        result = await bus.dispatch(
+            ModerationEnvelope(
+                action="propose",
+                agent_id=agent_id,
+                routing={"sender_id": agent_id, "source": "discord", "target_agent_id": agent_id},
+                metadata={"text": text},
+                correlation_id=str(getattr(interaction, "id", "")) or None,
             )
-        except Exception:  # pragma: no cover - defensive
-            await send_interaction_response(interaction, "Rejected by vote", ephemeral=True)
+        )
+        approved = bool((result.data or {}).get("approved", False))
+        await send_interaction_response(
+            interaction,
+            _governance_message_from_outcome(approved=approved),
+            ephemeral=True,
+        )
 
 
 async def slash_propose_law(interaction: Any, text: str, weights: str | None = None) -> None:
-    """Propose a law via the dashboard API."""
+    """Propose a law through the command bus."""
     with command_span("propose_law", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         agent_id = None
@@ -1768,46 +1793,30 @@ async def slash_propose_law(interaction: Any, text: str, weights: str | None = N
         if ip <= 0 or du <= 0:
             await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
             return
-        payload: dict[str, object] = {"proposer_id": agent_id, "text": text}
-        if weights:
-            try:
-                payload["vote_weights"] = json.loads(weights)
-            except Exception:
-                await send_interaction_response(
-                    interaction,
-                    _governance_message_from_outcome(error_kind="invalid_payload"),
-                    ephemeral=True,
-                )
-                return
-
-        approved = False
-        error_kind: str | None = None
-        sim = _governance_simulation_from_interaction(interaction)
-        if sim is not None and hasattr(sim, "propose_law"):
-            try:
-                vote_weights = cast(dict[str, int] | None, payload.get("vote_weights"))
-                approved = bool(await sim.propose_law(agent_id, text, vote_weights))
-            except Exception:
-                error_kind = "network_unavailable"
-        else:
-            endpoint = f"{_dashboard_api_base_url()}/api/propose_law"
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(endpoint, json=payload)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    approved = bool(data.get("approved", False))
-            except Exception as exc:
-                error_kind = _classify_api_error(exc)
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        bus = get_command_bus(ctx)
+        if bus is None:
+            await send_interaction_response(interaction, "command bus unavailable", ephemeral=True)
+            return
+        result = await bus.dispatch(
+            ModerationEnvelope(
+                action="propose_law",
+                agent_id=agent_id,
+                routing={"sender_id": agent_id, "source": "discord", "target_agent_id": agent_id},
+                metadata={"text": text, "vote_weights": weights},
+                correlation_id=str(getattr(interaction, "id", "")) or None,
+            )
+        )
+        approved = bool((result.data or {}).get("approved", False))
         await send_interaction_response(
             interaction,
-            _governance_message_from_outcome(approved=approved, error_kind=error_kind),
+            _governance_message_from_outcome(approved=approved),
             ephemeral=True,
         )
 
 
 async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
-    """Cast a manual vote on a proposal via the governance service."""
+    """Cast a governance vote through the command bus."""
     with command_span("vote", interaction) as span:
         span.set_attribute("discord.message.length", len(text))
         agent_id = None
@@ -1824,34 +1833,24 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
         if ip <= 0 or du <= 0:
             await send_interaction_response(interaction, "Insufficient IP/DU", ephemeral=True)
             return
-        payload = {"agent_id": agent_id, "text": text, "approve": approve}
-        vote_cast = False
-        error_kind: str | None = None
-        sim = _governance_simulation_from_interaction(interaction)
-        if sim is not None:
-            agent = _governance_agent_for_sim(sim, agent_id)
-            if agent is not None:
-                try:
-                    from src.governance.service import governance
-
-                    vote_cast = bool(await governance.vote_weighted(agent, text, 1, approve))
-                except Exception:
-                    error_kind = "network_unavailable"
-            else:
-                error_kind = "invalid_payload"
-        else:
-            endpoint = f"{_dashboard_api_base_url()}/api/vote"
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(endpoint, json=payload)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    vote_cast = bool(data.get("vote", False))
-            except Exception as exc:
-                error_kind = _classify_api_error(exc)
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        bus = get_command_bus(ctx)
+        if bus is None:
+            await send_interaction_response(interaction, "command bus unavailable", ephemeral=True)
+            return
+        result = await bus.dispatch(
+            ModerationEnvelope(
+                action="vote",
+                agent_id=agent_id,
+                routing={"sender_id": agent_id, "source": "discord", "target_agent_id": agent_id},
+                metadata={"text": text, "approve": approve},
+                correlation_id=str(getattr(interaction, "id", "")) or None,
+            )
+        )
+        vote_cast = bool((result.data or {}).get("vote", False))
         await send_interaction_response(
             interaction,
-            _governance_message_from_outcome(vote_cast=vote_cast, error_kind=error_kind),
+            _governance_message_from_outcome(vote_cast=vote_cast),
             ephemeral=True,
         )
 
@@ -1859,34 +1858,30 @@ async def slash_vote(interaction: Any, text: str, approve: bool = True) -> None:
 async def slash_gov(interaction: Any) -> None:
     """Show active governance rules and enforcement stats."""
     with command_span("gov", interaction):
-        sim = _governance_simulation_from_interaction(interaction)
-        rules: list[dict[str, Any]] = []
-        if sim is not None and hasattr(sim, "get_governance_read_model"):
-            try:
-                model = cast(dict[str, Any], sim.get_governance_read_model())
-                rules = cast(list[dict[str, Any]], model.get("rules", []))
-            except Exception:
-                rules = []
-        if not rules:
-            endpoint = f"{_dashboard_api_base_url()}/api/gov"
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(endpoint)
-                    resp.raise_for_status()
-                    payload = cast(dict[str, Any], resp.json())
-                    rules = cast(list[dict[str, Any]], payload.get("rules", []))
-            except Exception:
-                await send_interaction_response(
-                    interaction, "No active governance rules.", ephemeral=True
-                )
-                return
-
+        bot_instance = get_active_bot()
+        ctx = bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        bus = get_command_bus(ctx)
+        if bus is None:
+            await send_interaction_response(
+                interaction, "No active governance rules.", ephemeral=True
+            )
+            return
+        result = await bus.dispatch(
+            ModerationEnvelope(
+                action="gov",
+                routing={
+                    "sender_id": str(getattr(interaction, "user", "human")),
+                    "source": "discord",
+                },
+                correlation_id=str(getattr(interaction, "id", "")) or None,
+            )
+        )
+        rules = cast(list[dict[str, Any]], (result.data or {}).get("rules", []))
         if not rules:
             await send_interaction_response(
                 interaction, "No active governance rules.", ephemeral=True
             )
             return
-
         lines = []
         for rule in rules[:8]:
             stats = cast(dict[str, Any], rule.get("enforcement_stats", {}))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -17,11 +17,17 @@ ENVELOPE_INTENTS = {
     "inject_event",
 }
 
+INTERACTION_SCHEMA_NAME = "interaction-envelope"
+INTERACTION_SCHEMA_VERSION = "2.0"
+
 
 class InteractionResult(BaseModel):
+    schema_name: Literal["interaction-envelope"] = "interaction-envelope"
+    schema_version: Literal["2.0"] = "2.0"
     status: Literal["ok", "rejected", "error"]
     user_message: str
     reason_code: str
+    correlation_id: str | None = None
     data: dict[str, Any] | None = None
     decision_provenance: DecisionProvenance
 
@@ -70,6 +76,9 @@ class InteractionBudgetAttribution(BaseModel):
 class BaseInteractionIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    schema_name: Literal["interaction-envelope"] = "interaction-envelope"
+    schema_version: Literal["2.0"] = "2.0"
+    correlation_id: str | None = None
     intent: str
     routing: InteractionRouting = Field(default_factory=InteractionRouting)
     auth: InteractionAuthScope = Field(default_factory=InteractionAuthScope)
@@ -140,18 +149,22 @@ InteractionIntent = Annotated[
     Field(discriminator="intent"),
 ]
 
-_INTERACTION_INTENT_ADAPTER = TypeAdapter(InteractionIntent)
+_INTERACTION_INTENT_ADAPTER: TypeAdapter[InteractionIntent] = TypeAdapter(InteractionIntent)
 
 
 def parse_interaction_intent(payload: dict[str, Any]) -> InteractionIntent:
     normalized = dict(payload)
-    routing = dict(normalized.get("routing") or {}) if isinstance(normalized.get("routing"), dict) else {}
+    routing = (
+        dict(normalized.get("routing") or {})
+        if isinstance(normalized.get("routing"), dict)
+        else {}
+    )
     for key in ("sender_id", "source", "channel_id", "recipient_id", "target_agent_id"):
         if key in normalized and key not in routing:
             routing[key] = normalized[key]
     if routing:
         normalized["routing"] = routing
-    return _INTERACTION_INTENT_ADAPTER.validate_python(normalized)
+    return cast(InteractionIntent, _INTERACTION_INTENT_ADAPTER.validate_python(normalized))
 
 
 # Backward-compatible aliases during transport migration.

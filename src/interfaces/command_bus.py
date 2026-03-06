@@ -3,10 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from pydantic import ValidationError
-
-from src.governance.decision_kernel import DecisionProvenance
-from src.interfaces.domain_command_adapters import command_from_envelope, command_from_payload
 from src.interfaces.interaction_schema import (
     BaseInteractionEnvelope,
     InteractionContext,
@@ -31,8 +27,10 @@ class CommandBus:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        normalized = command_from_envelope(command) if isinstance(command, BaseInteractionEnvelope) else command
-        return await self.interaction_service.execute(normalized, context=context)
+        dispatcher = self.interaction_service.simulation.command_dispatcher
+        if isinstance(command, BaseInteractionEnvelope):
+            return await dispatcher.dispatch_envelope(command, context=context)
+        return await dispatcher.dispatch(command, context=context)
 
     async def dispatch_payload(
         self,
@@ -40,16 +38,5 @@ class CommandBus:
         *,
         context: InteractionContext | None = None,
     ) -> InteractionResult:
-        try:
-            command = command_from_payload(payload, context=context)
-        except ValidationError as exc:
-            return InteractionResult(
-                status="rejected",
-                user_message=f"Invalid command payload: {exc}",
-                reason_code="invalid_payload",
-                decision_provenance=DecisionProvenance(
-                    policy_id="interaction-policy-v1",
-                    rule_id="policy.validation.payload",
-                ),
-            )
-        return await self.dispatch(command, context=context)
+        dispatcher = self.interaction_service.simulation.command_dispatcher
+        return await dispatcher.dispatch_payload(payload, context=context)
