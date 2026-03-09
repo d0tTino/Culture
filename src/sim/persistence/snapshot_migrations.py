@@ -4,7 +4,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-CURRENT_SNAPSHOT_SCHEMA_VERSION = 3
+CURRENT_SNAPSHOT_SCHEMA_VERSION = 4
 
 
 def _migrate_v1_to_v2(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -55,13 +55,35 @@ def _migrate_v2_to_v3(snapshot: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(migrated.get("world_map"), dict):
         migrated["world_map"] = {"width": 10, "height": 10, "agents": {}, "vector": {}}
 
-    migrated["snapshot_schema_version"] = CURRENT_SNAPSHOT_SCHEMA_VERSION
+    migrated["snapshot_schema_version"] = 3
     return migrated
 
 
+
+
+def _migrate_v3_to_v4(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Backfill identity/personality arc event payloads for snapshots."""
+
+    migrated = deepcopy(snapshot)
+    agents = migrated.get("agents")
+    if isinstance(agents, list):
+        for agent_data in agents:
+            if not isinstance(agent_data, dict):
+                continue
+            agent_data.setdefault("personality_transition_events", [])
+            agent_data.setdefault("identity_events", [])
+
+    metadata = migrated.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata.setdefault("character_arcs", {})
+    migrated["metadata"] = metadata
+    migrated["snapshot_schema_version"] = CURRENT_SNAPSHOT_SCHEMA_VERSION
+    return migrated
 SNAPSHOT_MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
+    3: _migrate_v3_to_v4,
 }
 
 

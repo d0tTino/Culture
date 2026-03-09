@@ -1192,6 +1192,10 @@ class Simulation:
                         ),
                         "predecessor_id": getattr(ag.state, "predecessor_id", None),
                         "successor_id": getattr(ag.state, "successor_id", None),
+                        "personality_transition_events": list(
+                            getattr(ag.state, "personality_transition_events", [])
+                        ),
+                        "identity_events": list(getattr(ag.state, "identity_events", [])),
                     }
                     for ag in self.agents
                 ],
@@ -1212,7 +1216,18 @@ class Simulation:
                     "active_global_modifiers": self.world_state.environment.active_global_modifiers,
                     "council_window_active": self.world_state.environment.council_window_active,
                 },
-                "metadata": {"world_context_projection": world_projection.to_dict()},
+                "metadata": {
+                    "world_context_projection": world_projection.to_dict(),
+                    "character_arcs": {
+                        ag.agent_id: {
+                            "personality_events": list(
+                                getattr(ag.state, "personality_transition_events", [])
+                            ),
+                            "identity_events": list(getattr(ag.state, "identity_events", [])),
+                        }
+                        for ag in self.agents
+                    },
+                },
                 "trace_hash": self._last_trace_hash,
             }
             snapshot["trace_hash"] = SnapshotPersistenceService.compute_hash(snapshot)
@@ -2188,16 +2203,32 @@ class Simulation:
                     ag.state.ip = float(a_data.get("ip", 0.0))
                     ag.state.du = float(a_data.get("du", 0.0))
                     ag.state.mood_level = float(a_data.get("mood", 0.0))
-                    ag.state.lifecycle_state = AgentLifecycleState(
+                    target_state = AgentLifecycleState(
                         str(a_data.get("lifecycle_state", AgentLifecycleState.ACTIVE.value))
                     )
+                    if target_state != AgentLifecycleState.ACTIVE:
+                        self_event = {
+                            "step": int(sim.current_step),
+                            "from_state": AgentLifecycleState.ACTIVE.value,
+                            "to_state": target_state.value,
+                            "reason": "snapshot_restore",
+                            "legacy_artifacts": dict(a_data.get("legacy_artifacts", {})),
+                            "memory_archival_policy": dict(a_data.get("memory_archival_policy", {})),
+                        }
+                        sim.population_service.apply_lifecycle_transition_event(
+                            agent=ag,
+                            event=self_event,
+                        )
                     ag.state.lifecycle_history = list(a_data.get("lifecycle_history", []))
                     ag.state.legacy_artifacts = dict(a_data.get("legacy_artifacts", {}))
-                    ag.state.memory_archival_policy = dict(
-                        a_data.get("memory_archival_policy", {})
-                    )
+                    ag.state.memory_archival_policy = dict(a_data.get("memory_archival_policy", {}))
+                    ag.state.is_alive = target_state != AgentLifecycleState.DECEASED
                     ag.state.predecessor_id = a_data.get("predecessor_id")
                     ag.state.successor_id = a_data.get("successor_id")
+                    ag.state.personality_transition_events = list(
+                        a_data.get("personality_transition_events", [])
+                    )
+                    ag.state.identity_events = list(a_data.get("identity_events", []))
                     break
 
         kb = snapshot.get("knowledge_board", {})

@@ -1,5 +1,5 @@
 {
-  "snapshot_schema_version": 3,
+  "snapshot_schema_version": 4,
   "step": 8,
   "collective_ip": 7.0,
   "collective_du": 2.0,
@@ -14,7 +14,9 @@
       "legacy_artifacts": {},
       "memory_archival_policy": {},
       "predecessor_id": null,
-      "successor_id": null
+      "successor_id": null,
+      "personality_transition_events": [],
+      "identity_events": []
     }
   ],
   "seed": 23,
@@ -36,7 +38,13 @@
     "width": 12,
     "height": 8,
     "agents": {
-      "agent-2": [1, 1]
+      "agent-2": [
+        1,
+        1
+      ]
     }
+  },
+  "metadata": {
+    "character_arcs": {}
   }
 }

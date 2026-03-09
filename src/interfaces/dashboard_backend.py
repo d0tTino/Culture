@@ -798,6 +798,24 @@ async def api_observability_metrics() -> Response:
     return JSONResponse(_cost_metrics_data())
 
 
+
+
+@app.get("/api/character_arcs")
+async def api_character_arcs() -> Response:
+    """Return user-facing character-arc event streams per agent."""
+
+    simulation = DEFAULT_CONTEXT.sim_state.get("simulation")
+    if simulation is None:
+        return JSONResponse({"arcs": {}})
+
+    arcs: dict[str, dict[str, Any]] = {}
+    for agent in getattr(simulation, "agents", []):
+        arcs[str(agent.agent_id)] = {
+            "personality": list(getattr(agent.state, "personality_transition_events", [])),
+            "identity": list(getattr(agent.state, "identity_events", [])),
+        }
+    return JSONResponse({"arcs": arcs})
+
 @app.get("/api/auctions")
 async def api_auctions() -> Response:
     """Return auctions and their current bids."""
