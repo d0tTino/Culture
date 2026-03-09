@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from src.agents.core.agent_state import AgentLifecycleState
+from src.sim.engines.domain_events import (
+    LifecycleTransitioned,
+    SocialImpactApplied,
+    SuccessorRegistered,
+)
 
 
 @dataclass(slots=True)
@@ -97,21 +102,17 @@ class PopulationService:
             )
 
         archival_policy = self._memory_archival_policy(to_state)
-        history = list(getattr(state, "lifecycle_history", []) or [])
-        history.append(
-            {
-                "step": simulation.current_step,
-                "from": from_state.value,
-                "to": to_state.value,
-                "reason": reason,
-            }
-        )
 
-        state.lifecycle_state = to_state
-        state.lifecycle_history = history
-        state.legacy_artifacts = artifacts
-        state.memory_archival_policy = archival_policy
-        state.is_alive = to_state != AgentLifecycleState.DECEASED
+        lifecycle_event = LifecycleTransitioned(
+            agent_id=agent.agent_id,
+            step=int(simulation.current_step),
+            from_state=from_state.value,
+            to_state=to_state.value,
+            reason=reason,
+            legacy_artifacts=artifacts,
+            memory_archival_policy=archival_policy,
+        )
+        self._apply_lifecycle_transition(state=state, event=lifecycle_event)
 
         if from_state == AgentLifecycleState.ACTIVE and to_state != AgentLifecycleState.ACTIVE:
             state.inheritance = float(getattr(state, "ip", 0.0)) + float(getattr(state, "du", 0.0))
@@ -165,9 +166,6 @@ class PopulationService:
             autonomous=autonomous,
         )
 
-        predecessor.state.successor_id = successor.agent_id
-        successor.state.predecessor_id = predecessor.agent_id
-
         inherited: dict[str, Any] = {}
         if inherit_role:
             successor.state.current_role = predecessor.state.current_role
@@ -191,12 +189,12 @@ class PopulationService:
             predecessor.state.inheritance = 0.0
             inherited["inheritance"] = transferred
 
-        payload = {
-            "relationship": "successor_of",
-            "predecessor_id": predecessor.agent_id,
-            "successor_id": successor.agent_id,
-            "inherited": inherited,
-        }
+        payload = self._apply_successor_registration(
+            predecessor=predecessor,
+            successor=successor,
+            inherited=inherited,
+            step=int(simulation.current_step),
+        )
         await self._emit_lifecycle_event(
             simulation=simulation,
             actor_id=predecessor.agent_id,
@@ -209,20 +207,66 @@ class PopulationService:
 
     def apply_lifecycle_transition_event(self, *, agent: Any, event: dict[str, Any]) -> None:
         """Project a persisted lifecycle transition event onto an agent state."""
-        to_state = AgentLifecycleState(str(event.get("to_state", AgentLifecycleState.ACTIVE.value)))
-        history = list(getattr(agent.state, "lifecycle_history", []) or [])
+        transition = LifecycleTransitioned(
+            agent_id=agent.agent_id,
+            step=int(event.get("step", 0)),
+            from_state=str(event.get("from_state", AgentLifecycleState.ACTIVE.value)),
+            to_state=str(event.get("to_state", AgentLifecycleState.ACTIVE.value)),
+            reason=str(event.get("reason", "")),
+            legacy_artifacts=dict(event.get("legacy_artifacts") or {}),
+            memory_archival_policy=dict(event.get("memory_archival_policy") or {}),
+        )
+        self._apply_lifecycle_transition(state=agent.state, event=transition)
+
+
+    def _append_identity_event(self, state: Any, event_payload: dict[str, Any]) -> None:
+        events = list(getattr(state, "identity_events", []) or [])
+        events.append(event_payload)
+        state.identity_events = events
+
+    def _apply_successor_registration(
+        self,
+        *,
+        predecessor: Any,
+        successor: Any,
+        inherited: dict[str, Any],
+        step: int,
+    ) -> dict[str, Any]:
+        predecessor.state.successor_id = successor.agent_id
+        successor.state.predecessor_id = predecessor.agent_id
+        event = SuccessorRegistered(
+            predecessor_id=predecessor.agent_id,
+            successor_id=successor.agent_id,
+            step=step,
+            inherited=inherited,
+        )
+        event_payload = event.to_domain_event().payload
+        self._append_identity_event(predecessor.state, event_payload)
+        self._append_identity_event(successor.state, event_payload)
+        return event_payload
+
+    def _apply_lifecycle_transition(
+        self,
+        *,
+        state: Any,
+        event: LifecycleTransitioned,
+    ) -> None:
+        to_state = AgentLifecycleState(event.to_state)
+        history = list(getattr(state, "lifecycle_history", []) or [])
         history.append(
             {
-                "step": int(event.get("step", 0)),
-                "from": str(event.get("from_state", "active")),
-                "to": to_state.value,
-                "reason": str(event.get("reason", "")),
+                "step": int(event.step),
+                "from": str(event.from_state),
+                "to": str(event.to_state),
+                "reason": str(event.reason),
             }
         )
-        agent.state.lifecycle_state = to_state
-        agent.state.lifecycle_history = history
-        agent.state.legacy_artifacts = dict(event.get("legacy_artifacts") or {})
-        agent.state.memory_archival_policy = dict(event.get("memory_archival_policy") or {})
+        state.lifecycle_state = to_state
+        state.lifecycle_history = history
+        state.legacy_artifacts = dict(event.legacy_artifacts)
+        state.memory_archival_policy = dict(event.memory_archival_policy)
+        state.is_alive = to_state != AgentLifecycleState.DECEASED
+        self._append_identity_event(state, event.to_domain_event().payload)
 
     def _enforce_policy(
         self,
@@ -313,6 +357,14 @@ class PopulationService:
                         "reason": reason,
                     }
                 )
+            social_event = SocialImpactApplied(
+                departed_agent_id=departed_agent.agent_id,
+                survivor_id=survivor.agent_id,
+                step=int(simulation.current_step),
+                reason=reason,
+                relationship_delta=-1.0,
+            )
+            self._append_identity_event(survivor.state, social_event.to_domain_event().payload)
 
     async def _emit_lifecycle_event(
         self,

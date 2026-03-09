@@ -78,3 +78,25 @@ async def test_api_observability_metrics_serializes_extended_payload(
     assert expected_keys.issubset(payload.keys())
     assert payload["memory_retrieval_errors_total"] == 20
     assert payload["llm_errors_total"] == 5
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_api_character_arcs_returns_identity_and_personality_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_dashboard_backend(monkeypatch)
+    db = load_dashboard_backend()
+
+    state = types.SimpleNamespace(
+        personality_transition_events=[{"cause": "experience_drift"}],
+        identity_events=[{"to_state": "retired"}],
+    )
+    sim = types.SimpleNamespace(agents=[types.SimpleNamespace(agent_id="agent-1", state=state)])
+    monkeypatch.setitem(db.DEFAULT_CONTEXT.sim_state, "simulation", sim)
+
+    resp = await db.api_character_arcs()
+    payload = json.loads(resp.body)
+
+    assert payload["arcs"]["agent-1"]["personality"][0]["cause"] == "experience_drift"
+    assert payload["arcs"]["agent-1"]["identity"][0]["to_state"] == "retired"

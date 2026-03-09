@@ -5,6 +5,8 @@ from typing import cast
 
 from pydantic import BaseModel
 
+from src.sim.engines.domain_events import TraitDriftApplied
+
 from .agent_state import AgentState
 from .personality_transition import PersonalityTransition, TraitDelta, TraitTransitionLog
 from .trait_policy import (
@@ -163,16 +165,31 @@ class PersonalityEngine:
             )
         )
 
-    def apply_experience_drift(
+    def reduce_trait_drift_event(
+        self,
+        state: AgentState,
+        event: TraitDriftApplied,
+    ) -> list[dict[str, float | str | int]]:
+        """Apply trait drift exclusively from a domain event payload."""
+
+        transition = self._build_transition(
+            state,
+            event.deltas,
+            max_step=event.max_step,
+            cause=event.cause,
+            source=event.source,
+            input_signals=event.input_signals,
+        )
+        return self._reduce_transition(state, transition)
+
+    def build_experience_drift_event(
         self,
         state: AgentState,
         signals: ExperienceSignal,
         *,
         max_step: float = 0.01,
         source: str = "simulation.turn",
-    ) -> list[dict[str, float | str | int]]:
-        """Apply bounded per-turn drift updates and persist an audit trail on ``state``."""
-
+    ) -> TraitDriftApplied:
         projection = self.trait_projection(state)
         drift = trait_drift_from_experience(
             {
@@ -185,16 +202,33 @@ class PersonalityEngine:
         drift["resilience"] += 0.003 * signals.task_outcome
         drift["adaptability"] += 0.003 * signals.governance_participation
         drift["assertiveness"] += 0.002 * signals.conflict_outcome
-
-        transition = self._build_transition(
-            state,
-            drift,
-            max_step=max_step,
-            cause="experience_drift",
+        return TraitDriftApplied(
+            agent_id=str(getattr(state, "agent_id", "")),
+            step=int(state.step_counter),
             source=source,
+            cause="experience_drift",
+            deltas={str(k): float(v) for k, v in drift.items()},
+            max_step=float(max_step),
             input_signals=signals.model_dump(),
         )
-        return self._reduce_transition(state, transition)
+
+    def apply_experience_drift(
+        self,
+        state: AgentState,
+        signals: ExperienceSignal,
+        *,
+        max_step: float = 0.01,
+        source: str = "simulation.turn",
+    ) -> list[dict[str, float | str | int]]:
+        """Apply bounded per-turn drift updates and persist an audit trail on ``state``."""
+
+        drift_event = self.build_experience_drift_event(
+            state,
+            signals,
+            max_step=max_step,
+            source=source,
+        )
+        return self.reduce_trait_drift_event(state, drift_event)
 
     def apply_role_transition_blend(
         self,
@@ -212,15 +246,16 @@ class PersonalityEngine:
             for trait, target in target_traits.items()
             if hasattr(state.traits, trait)
         }
-        transition = self._build_transition(
-            state,
-            deltas,
-            max_step=max_step,
-            cause="role_transition_blend",
+        event = TraitDriftApplied(
+            agent_id=str(getattr(state, "agent_id", "")),
+            step=int(state.step_counter),
             source=source,
-            input_signals={"blend_ratio": blend_ratio},
+            cause="role_transition_blend",
+            deltas={str(k): float(v) for k, v in deltas.items()},
+            max_step=float(max_step),
+            input_signals={"blend_ratio": float(blend_ratio)},
         )
-        return self._reduce_transition(state, transition)
+        return self.reduce_trait_drift_event(state, event)
 
     def apply_exogenous_trait_intervention(
         self,
@@ -233,11 +268,13 @@ class PersonalityEngine:
     ) -> list[dict[str, float | str | int]]:
         """Apply external/admin trait edits through the same bounded/audited engine path."""
 
-        transition = self._build_transition(
-            state,
-            trait_updates,
-            max_step=max_step,
-            cause=cause,
+        event = TraitDriftApplied(
+            agent_id=str(getattr(state, "agent_id", "")),
+            step=int(state.step_counter),
             source=source,
+            cause=cause,
+            deltas={str(k): float(v) for k, v in trait_updates.items()},
+            max_step=float(max_step),
+            input_signals={},
         )
-        return self._reduce_transition(state, transition)
+        return self.reduce_trait_drift_event(state, event)
