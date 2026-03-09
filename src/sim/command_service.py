@@ -157,6 +157,29 @@ class SimulationCommandService:
         elif action == "stop":
             sim.simulation_complete = True
             await sim.stop_event_listener()
+        elif action == "checkpoint":
+            await sim.persist_snapshot(reason="operator_checkpoint")
+        elif action == "replay_to_step":
+            from src.sim.persistence.snapshot_service import SnapshotPersistenceService
+
+            target_raw = envelope.metadata.get("step")
+            if target_raw is None:
+                target_raw = envelope.value
+            try:
+                target_step = int(target_raw)
+            except (TypeError, ValueError):
+                target_step = sim.current_step
+            latest = SnapshotPersistenceService.latest_snapshot_path()
+            if latest is not None:
+                replayed = sim.__class__.replay_from_snapshot(
+                    latest,
+                    end_step=target_step,
+                )
+                return {
+                    "replay_step": replayed.current_step,
+                    "snapshot": str(latest),
+                }
+            return {"replay_step": sim.current_step, "snapshot": None}
         elif action == "spawn" and isinstance(envelope, SpawnEnvelope):
             await self._spawn_agent(envelope)
         elif action == "kill_agent":

@@ -52,3 +52,19 @@ def test_load_snapshot_rejects_tampered_hash(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Trace hash mismatch"):
         SnapshotPersistenceService.load(7, directory=tmp_path)
+
+
+def test_load_latest_snapshot_returns_highest_step(tmp_path: Path) -> None:
+    payload_v1 = _snapshot_payload(CURRENT_SNAPSHOT_SCHEMA_VERSION)
+    payload_v2 = {**payload_v1, "step": 9}
+    payload_v2["trace_hash"] = SnapshotPersistenceService.compute_hash(payload_v2)
+
+    save_snapshot(7, payload_v1, directory=tmp_path)
+    save_snapshot(9, payload_v2, directory=tmp_path)
+
+    latest = SnapshotPersistenceService.load_latest(directory=tmp_path)
+
+    assert latest is not None
+    latest_path, latest_payload = latest
+    assert latest_path.name == "snapshot_9.json"
+    assert latest_payload["step"] == 9

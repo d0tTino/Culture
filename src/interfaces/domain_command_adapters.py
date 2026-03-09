@@ -208,7 +208,17 @@ def _canonical_intent(data: Mapping[str, Any]) -> str:
         return "direct_message"
     if command == "kb":
         return "knowledge_board"
-    if command in {"pause", "resume", "pause_all", "start", "stop", "set_speed", "kill_agent"}:
+    if command in {
+        "pause",
+        "resume",
+        "pause_all",
+        "start",
+        "stop",
+        "set_speed",
+        "kill_agent",
+        "checkpoint",
+        "replay_to_step",
+    }:
         return "control"
     if command in {"moderation", "reset_memory", "penalty", "mute", "unmute"}:
         return "moderation"

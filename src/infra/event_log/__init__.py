@@ -91,6 +91,45 @@ def _sanitize_event_payload(event: dict[str, Any]) -> dict[str, Any]:
     return event
 
 
+def build_domain_event_batch(
+    *,
+    step: int,
+    events: Iterable[Mapping[str, Any]],
+    phase_order: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Build a canonical domain-event batch payload for a simulation step."""
+
+    canonical_events = [_jsonify(dict(event)) for event in events]
+    batch: dict[str, Any] = {
+        "type": "domain_event_batch",
+        "step": int(step),
+        "events": canonical_events,
+    }
+    if phase_order is not None:
+        batch["phase_order"] = [str(phase) for phase in phase_order]
+
+    batch_hash_payload = {
+        "step": batch["step"],
+        "events": canonical_events,
+        "phase_order": batch.get("phase_order", []),
+    }
+    batch["batch_hash"] = compute_trace_hash(batch_hash_payload)
+    return batch
+
+
+def log_domain_event_batch(
+    *,
+    step: int,
+    events: Iterable[Mapping[str, Any]],
+    phase_order: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Persist a canonical domain-event batch for a step in the append-only log."""
+
+    return log_event(
+        build_domain_event_batch(step=step, events=events, phase_order=phase_order)
+    )
+
+
 def candidate_event_logs_for_snapshot(snapshot: str | Path) -> Iterable[Path]:
     """Yield plausible event log paths relative to ``snapshot``."""
 

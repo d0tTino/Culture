@@ -15,4 +15,5 @@ class StepContext:
     phase_order: list[str] = field(default_factory=list)
     planned_outputs: list[dict[str, Any]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
+    persisted_batch: dict[str, Any] | None = None
     tick_context: TickContext | None = None

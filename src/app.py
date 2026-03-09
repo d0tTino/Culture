@@ -451,28 +451,33 @@ def main() -> None:
         sim, _meta = load_checkpoint(args.checkpoint)
         sim.steps_to_run = args.steps
     else:
-        sim_kwargs = {
-            "num_agents": args.agents,
-            "steps": args.steps,
-            "scenario": args.scenario,
-            "beats": beats,
-            "use_discord": args.discord,
-            "use_vector_store": args.vector_store,
-            "vector_store_dir": args.vector_dir,
-            "use_semantic_memory": args.semantic_memory,
-            "semantic_db_uri": args.semantic_db,
-            "semantic_user": args.semantic_user,
-            "semantic_password": args.semantic_password,
-        }
-        if evaluation_hooks:
-            sim_kwargs["evaluation_hook_names"] = evaluation_hooks
-        if evaluation_targets:
-            sim_kwargs["evaluation_targets"] = evaluation_targets
-        if success_metrics:
-            sim_kwargs["success_metrics"] = success_metrics
-        if args.seed is not None:
-            sim_kwargs["seed"] = args.seed
-        sim = create_simulation(**sim_kwargs)
+        try:
+            sim = Simulation.recover_from_latest_snapshot(seed=args.seed)
+            sim.steps_to_run = args.steps
+            logging.info("Recovered simulation from latest snapshot at step %s", sim.current_step)
+        except FileNotFoundError:
+            sim_kwargs = {
+                "num_agents": args.agents,
+                "steps": args.steps,
+                "scenario": args.scenario,
+                "beats": beats,
+                "use_discord": args.discord,
+                "use_vector_store": args.vector_store,
+                "vector_store_dir": args.vector_dir,
+                "use_semantic_memory": args.semantic_memory,
+                "semantic_db_uri": args.semantic_db,
+                "semantic_user": args.semantic_user,
+                "semantic_password": args.semantic_password,
+            }
+            if evaluation_hooks:
+                sim_kwargs["evaluation_hook_names"] = evaluation_hooks
+            if evaluation_targets:
+                sim_kwargs["evaluation_targets"] = evaluation_targets
+            if success_metrics:
+                sim_kwargs["success_metrics"] = success_metrics
+            if args.seed is not None:
+                sim_kwargs["seed"] = args.seed
+            sim = create_simulation(**sim_kwargs)
 
     if args.proposal:
         asyncio.run(sim.forward_proposal(args.proposer_id, args.proposal))
