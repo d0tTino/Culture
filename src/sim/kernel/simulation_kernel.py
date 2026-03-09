@@ -46,7 +46,4 @@ class SimulationKernel:
         _ = self.persistence_engine.capture_tick(simulation, tick)
 
         context.phase_order.append(KERNEL_PHASE_SEQUENCE[4])
-        if not context.planned_outputs:
-            await simulation.engine.emit_evaluation_events(context.events)
-
         return len(context.planned_outputs) if context.planned_outputs else len(context.events)

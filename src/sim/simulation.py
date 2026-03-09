@@ -36,7 +36,6 @@ from src.infra.event_log import log_event
 from src.infra.ledger import ledger
 from src.infra.llm_client import get_llm_client
 from src.infra.logging_config import setup_logging
-from src.infra.snapshot import save_snapshot, upload_snapshot
 from src.interfaces.command_bus import CommandBus
 from src.interfaces.dashboard_backend import (
     SimulationEvent,
@@ -99,10 +98,6 @@ logger = logging.getLogger(__name__)
 
 # Backward-compatible alias retained for existing callers/tests.
 EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE = EVENT_STEP_LIFECYCLE_CONTRACTS
-
-# Backward-compatible module exports for snapshot monkeypatching in tests.
-_ = (save_snapshot, upload_snapshot)
-
 
 class Simulation:
     """
@@ -1166,76 +1161,7 @@ class Simulation:
                 span.set_attribute("simulation.latency_ms", (time.perf_counter() - start) * 1000)
 
         if self.current_step % int(config.SNAPSHOT_INTERVAL_STEPS) == 0:
-            from src.infra.checkpoint import capture_rng_state
-
-            snapshot = {
-                "snapshot_schema_version": CURRENT_SNAPSHOT_SCHEMA_VERSION,
-                "step": self.current_step,
-                "collective_ip": self.collective_ip,
-                "collective_du": self.collective_du,
-                "knowledge_board": self.knowledge_board.to_snapshot(),
-                "world_map": self.world_map.to_dict(),
-                "world_state": self.world_state.snapshot(),
-                "agents": [
-                    {
-                        "agent_id": ag.agent_id,
-                        "ip": ag.state.ip,
-                        "du": ag.state.du,
-                        "mood": ag.state.mood_level,
-                        "lifecycle_state": getattr(
-                            ag.state, "lifecycle_state", AgentLifecycleState.ACTIVE
-                        ).value,
-                        "lifecycle_history": list(getattr(ag.state, "lifecycle_history", [])),
-                        "legacy_artifacts": dict(getattr(ag.state, "legacy_artifacts", {})),
-                        "memory_archival_policy": dict(
-                            getattr(ag.state, "memory_archival_policy", {})
-                        ),
-                        "predecessor_id": getattr(ag.state, "predecessor_id", None),
-                        "successor_id": getattr(ag.state, "successor_id", None),
-                        "personality_transition_events": list(
-                            getattr(ag.state, "personality_transition_events", [])
-                        ),
-                        "identity_events": list(getattr(ag.state, "identity_events", [])),
-                    }
-                    for ag in self.agents
-                ],
-                "seed": self.seed,
-                "rng_state": capture_rng_state(),
-                "world_hour": self.world_hour,
-                "world_day": self.world_day,
-                "world_season": self.world_season,
-                "world_tick": self.world_tick_index,
-                "turns_per_world_tick": self.turns_per_world_tick,
-                "environment_state": {
-                    "world_tick": self.world_state.temporal.world_tick,
-                    "world_hour": self.world_state.temporal.world_hour,
-                    "world_day": self.world_state.temporal.world_day,
-                    "world_season": self.world_state.temporal.world_season,
-                    "weather": self.world_state.environment.weather,
-                    "season_effects": self.world_state.environment.season_effects,
-                    "active_global_modifiers": self.world_state.environment.active_global_modifiers,
-                    "council_window_active": self.world_state.environment.council_window_active,
-                },
-                "metadata": {
-                    "world_context_projection": world_projection.to_dict(),
-                    "character_arcs": {
-                        ag.agent_id: {
-                            "personality_events": list(
-                                getattr(ag.state, "personality_transition_events", [])
-                            ),
-                            "identity_events": list(getattr(ag.state, "identity_events", [])),
-                        }
-                        for ag in self.agents
-                    },
-                },
-                "trace_hash": self._last_trace_hash,
-            }
-            snapshot["trace_hash"] = SnapshotPersistenceService.compute_hash(snapshot)
-            self._last_trace_hash = snapshot["trace_hash"]
-            SnapshotPersistenceService.save(self.current_step, snapshot)
-            SnapshotPersistenceService.upload(self.current_step)
-            snapshot_event = log_event({"type": "snapshot", **snapshot})
-            await emit_event(SimulationEvent(type="snapshot", data=snapshot_event))
+            await self.persist_snapshot(reason="periodic")
 
         # Advance to the next agent for the next turn
         self.current_agent_index = next_agent_index
@@ -1673,6 +1599,79 @@ class Simulation:
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the deterministic simulation engine."""
         return await self.engine.run_step(max_turns=max_turns)
+
+    def _build_snapshot_payload(self: Self) -> dict[str, Any]:
+        from src.infra.checkpoint import capture_rng_state
+
+        return {
+            "snapshot_schema_version": CURRENT_SNAPSHOT_SCHEMA_VERSION,
+            "step": self.current_step,
+            "collective_ip": self.collective_ip,
+            "collective_du": self.collective_du,
+            "knowledge_board": self.knowledge_board.to_snapshot(),
+            "world_map": self.world_map.to_dict(),
+            "world_state": self.world_state.snapshot(),
+            "agents": [
+                {
+                    "agent_id": ag.agent_id,
+                    "ip": ag.state.ip,
+                    "du": ag.state.du,
+                    "mood": ag.state.mood_level,
+                    "lifecycle_state": getattr(
+                        ag.state, "lifecycle_state", AgentLifecycleState.ACTIVE
+                    ).value,
+                    "lifecycle_history": list(getattr(ag.state, "lifecycle_history", [])),
+                    "legacy_artifacts": dict(getattr(ag.state, "legacy_artifacts", {})),
+                    "memory_archival_policy": dict(getattr(ag.state, "memory_archival_policy", {})),
+                    "predecessor_id": getattr(ag.state, "predecessor_id", None),
+                    "successor_id": getattr(ag.state, "successor_id", None),
+                    "personality_transition_events": list(
+                        getattr(ag.state, "personality_transition_events", [])
+                    ),
+                    "identity_events": list(getattr(ag.state, "identity_events", [])),
+                }
+                for ag in self.agents
+            ],
+            "seed": self.seed,
+            "rng_state": capture_rng_state(),
+            "world_hour": self.world_hour,
+            "world_day": self.world_day,
+            "world_season": self.world_season,
+            "world_tick": self.world_tick_index,
+            "turns_per_world_tick": self.turns_per_world_tick,
+            "environment_state": {
+                "world_tick": self.world_state.temporal.world_tick,
+                "world_hour": self.world_state.temporal.world_hour,
+                "world_day": self.world_state.temporal.world_day,
+                "world_season": self.world_state.temporal.world_season,
+                "weather": self.world_state.environment.weather,
+                "season_effects": self.world_state.environment.season_effects,
+                "active_global_modifiers": self.world_state.environment.active_global_modifiers,
+                "council_window_active": self.world_state.environment.council_window_active,
+            },
+            "metadata": {
+                "character_arcs": {
+                    ag.agent_id: {
+                        "personality_events": list(
+                            getattr(ag.state, "personality_transition_events", [])
+                        ),
+                        "identity_events": list(getattr(ag.state, "identity_events", [])),
+                    }
+                    for ag in self.agents
+                },
+            },
+            "trace_hash": self._last_trace_hash,
+        }
+
+    async def persist_snapshot(self: Self, *, reason: str = "periodic") -> dict[str, Any]:
+        snapshot = self._build_snapshot_payload()
+        snapshot["trace_hash"] = SnapshotPersistenceService.compute_hash(snapshot)
+        self._last_trace_hash = snapshot["trace_hash"]
+        SnapshotPersistenceService.save(self.current_step, snapshot)
+        SnapshotPersistenceService.upload(self.current_step)
+        snapshot_event = log_event({"type": "snapshot", "reason": reason, **snapshot})
+        await emit_event(SimulationEvent(type="snapshot", data=snapshot_event))
+        return snapshot_event
 
     def _build_step_perception_snapshot(
         self: Self, turn_index: int, *, actor_id: str | None = None
@@ -2130,6 +2129,24 @@ class Simulation:
                         f" event {expected_hash} != file {snapshot.get('trace_hash')}"
                     )
                 self._last_trace_hash = snapshot.get("trace_hash", "")
+        elif event.get("type") == "domain_event_batch":
+            events = event.get("events")
+            phase_order = event.get("phase_order")
+            normalized_events = events if isinstance(events, list) else []
+            normalized_phase_order = phase_order if isinstance(phase_order, list) else []
+            persisted_batch_hash = event.get("batch_hash")
+            computed_batch_hash = TraceHashService.compute(
+                {
+                    "step": int(event.get("step", 0)),
+                    "events": normalized_events,
+                    "phase_order": normalized_phase_order,
+                }
+            )
+            if isinstance(persisted_batch_hash, str) and persisted_batch_hash != computed_batch_hash:
+                raise ValueError(
+                    f"Domain event batch hash mismatch at step {event.get('step')}:"
+                    f" persisted {persisted_batch_hash}, computed {computed_batch_hash}"
+                )
         elif event.get("type") == "agent_lifecycle_transition":
             aid = event.get("agent_id")
             if not isinstance(aid, str):
@@ -2309,6 +2326,26 @@ class Simulation:
                 continue
             sim.apply_event(event)
         return sim
+
+    @classmethod
+    def recover_from_latest_snapshot(
+        cls: type[Self],
+        *,
+        directory: str | Path = "snapshots",
+        seed: int | None = None,
+        stop_step: int | None = None,
+        events_path: str | Path | None = None,
+    ) -> Self:
+        latest = SnapshotPersistenceService.load_latest(directory=directory)
+        if latest is None:
+            raise FileNotFoundError(f"No snapshots found in {directory}")
+        snapshot_path, _snapshot = latest
+        return cls._replay_from_snapshot_impl(
+            snapshot_path,
+            seed=seed,
+            stop_step=stop_step,
+            events_path=events_path,
+        )
 
     async def run_turns_concurrent(self: Self, agents: list["Agent"]) -> list[dict[str, Any]]:
         """Run a batch of agent turns concurrently.
