@@ -713,4 +713,63 @@ The Culture.ai architecture provides a flexible, modular foundation for multi-ag
 
 The memory-centric approach, with its sophisticated hierarchical organization and intelligent pruning, enables agents to develop persistent personalities and knowledge bases that evolve throughout the simulation. The LangGraph-based decision process provides a structured yet flexible framework for agent reasoning and action selection.
 
-This architecture documentation will evolve as the system grows and new capabilities are added. 
+This architecture documentation will evolve as the system grows and new capabilities are added.
+
+
+## Runtime Command Flow (Authoritative)
+
+All runtime interactions now follow one authoritative lifecycle:
+
+**ingest → decide → execute → persist → publish**
+
+Canonical implementation path:
+
+- `src/sim/simulation.py::Simulation.run_step` → `Simulation._progress_step`
+- `src/sim/engine.py::SimulationEngine.run_step`
+- `src/sim/kernel/simulation_kernel.py::SimulationKernel.run_tick`
+
+```mermaid
+sequenceDiagram
+    participant Discord as Discord / Human UI
+    participant Dashboard as Dashboard Control API
+    participant Bus as Event Bus
+    participant Adapter as Transport Adapter
+    participant Dispatcher as SimulationCommandDispatcher
+    participant Service as SimulationCommandService
+    participant Engine as SimulationEngine
+    participant Kernel as SimulationKernel
+    participant Persist as Persistence/Event Log
+    participant Publish as WS/SSE/Discord Publisher
+
+    Discord->>Adapter: message payload
+    Dashboard->>Adapter: control payload
+    Bus->>Adapter: control/moderation payload
+    Adapter->>Dispatcher: dispatch_payload(...)
+    Dispatcher->>Service: execute(command)
+    Service->>Service: policy decision (decide)
+    Service->>Engine: runtime action / run step (execute)
+    Engine->>Kernel: run_tick(...)
+    Kernel->>Persist: capture + log batch (persist)
+    Persist-->>Publish: persisted event batch
+    Publish-->>Discord: updates
+    Publish-->>Dashboard: ws/sse events
+```
+
+### Deprecated Path Policy
+
+The following legacy entrypoints are compatibility adapters only and must normalize
+into the same command dispatcher before state mutation:
+
+- `Simulation._handle_human_command(...)` (deprecated)
+- `Simulation._handle_human_command_from_bus(...)` (deprecated)
+- Direct external queue broadcast handlers (deprecated)
+- `Simulation.run_turns_concurrent(...)` for runtime progression (deprecated adapter)
+
+Policy requirements:
+
+1. New transport interfaces must call `Simulation.command_bus.dispatch_payload(...)` or
+   `Simulation.command_dispatcher.dispatch_*`.
+2. Adapters may parse/normalize payload shape, but may not mutate simulation state
+   before dispatcher routing.
+3. Any new step progression path must route through `Simulation._progress_step(...)`.
+
