@@ -7,6 +7,7 @@ import random
 import statistics
 import threading
 import time
+import warnings
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from itertools import pairwise
 from pathlib import Path
@@ -42,6 +43,10 @@ from src.interfaces.dashboard_backend import (
     emit_event,
 )
 from src.interfaces.discord_event_listener import DiscordSimulationEventListener
+from src.interfaces.external_event_routing import (
+    build_interaction_context,
+    normalize_human_command_payload,
+)
 from src.interfaces.interaction_commands import InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
@@ -400,7 +405,7 @@ class Simulation:
                 self.external_event_ingestion._event_listener_loop()
             )
             self._event_task = loop.create_task(
-                self.event_kernel.forward_external_events(self._handle_human_command_from_bus)
+                self.event_kernel.forward_external_events(self._ingest_legacy_event_queue_payload)
             )
         else:
             asyncio.set_event_loop(asyncio.new_event_loop())
@@ -454,18 +459,43 @@ class Simulation:
     async def _handle_human_command_from_bus(
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
-        """Compatibility adapter for external event forwarding callbacks."""
+        """Deprecated compatibility adapter for external event forwarding callbacks."""
 
-        try:
-            await self._handle_human_command(text, metadata)
-        except TypeError:
-            await self._handle_human_command(text)  # type: ignore[misc]
+        warnings.warn(
+            "Simulation._handle_human_command_from_bus is deprecated; "
+            "use Simulation._ingest_legacy_event_queue_payload instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        await self._ingest_legacy_event_queue_payload(text, metadata)
+
+    async def _ingest_legacy_event_queue_payload(
+        self: Self, text: str, metadata: dict[str, Any] | None = None
+    ) -> None:
+        """Normalize legacy queue injections into the canonical command pipeline."""
+
+        payload = normalize_human_command_payload(text, metadata)
+        if (
+            payload.get("command_type") == "human_message"
+            and payload.get("recipient_id")
+            and not bool(payload.get("broadcast"))
+        ):
+            payload["command_type"] = "direct_message"
+        context = build_interaction_context(payload, default_source="simulation")
+        await self.command_bus.dispatch_payload(payload, context=context)
 
     async def _handle_human_command(
         self: Self, text: str, metadata: dict[str, Any] | None = None
     ) -> None:
-        """Delegate inbound command parsing/routing to the ingestion service."""
-        await self.external_event_ingestion.handle_human_command(text, metadata)
+        """Legacy adapter for human commands; routes through the unified command dispatcher."""
+
+        warnings.warn(
+            "Simulation._handle_human_command is deprecated; send payloads via command_bus or "
+            "interaction_service instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        await self._ingest_legacy_event_queue_payload(text, metadata)
 
     async def handle_control_command(self: Self, cmd: Mapping[str, Any]) -> dict[str, Any] | None:
         """Process a control command sent via the event queue."""
@@ -1598,6 +1628,14 @@ class Simulation:
 
     async def run_step(self: Self, max_turns: int = 1) -> int:
         """Dispatch up to ``max_turns`` events via the deterministic simulation engine."""
+        return await self._progress_step(max_turns=max_turns)
+
+    async def _progress_step(self: Self, *, max_turns: int = 1) -> int:
+        """Authoritative runtime step progression entrypoint.
+
+        Flow: ingest → decide → execute → persist → publish.
+        """
+
         return await self.engine.run_step(max_turns=max_turns)
 
     def _build_snapshot_payload(self: Self) -> dict[str, Any]:
@@ -1793,6 +1831,13 @@ class Simulation:
         parallel_decision: bool = True,
     ) -> list[dict[str, Any]]:
         """Run a phased step pipeline: perception, parallel planning, deterministic commit."""
+
+        warnings.warn(
+            "Simulation._run_step_pipeline is an internal kernel path and will be removed as "
+            "a public entrypoint; use Simulation.run_step instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         if not self.agents:
             return []
@@ -2348,21 +2393,24 @@ class Simulation:
         )
 
     async def run_turns_concurrent(self: Self, agents: list["Agent"]) -> list[dict[str, Any]]:
-        """Run a batch of agent turns concurrently.
+        """Deprecated compatibility adapter for concurrent turn progression.
 
-        Each agent executes ``run_turn`` simultaneously using :func:`asyncio.gather`.
-        This helper is useful for stress testing large simulations where sequential
-        execution would be too slow.
-
-        Args:
-            agents: The agents whose turns should be executed.
-
-        Returns:
-            A list of dictionaries returned by each agent's ``run_turn``.
+        Runtime state progression now routes through :meth:`_progress_step` so every
+        ingest→decide→execute→persist→publish lifecycle uses the same kernel path.
         """
 
+        warnings.warn(
+            "Simulation.run_turns_concurrent is deprecated; use Simulation.run_step "
+            "for canonical runtime progression.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         _ = agents
-        return await self._run_step_pipeline(max_turns=len(agents))
+        await self._progress_step(max_turns=len(agents))
+        context = self.engine.last_step_context
+        if context is None:
+            return []
+        return context.planned_outputs if context.planned_outputs else context.events
 
     def close(self: Self) -> None:
         """Release resources held by the simulation."""

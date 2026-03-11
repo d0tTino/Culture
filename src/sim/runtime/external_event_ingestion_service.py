@@ -24,7 +24,7 @@ class ExternalEventIngestionService:
             sim._event_listener_task = asyncio.create_task(self._event_listener_loop())
         if sim._event_task is None or sim._event_task.done():
             sim._event_task = asyncio.create_task(
-                sim.event_kernel.forward_external_events(sim._handle_human_command_from_bus)
+                sim.event_kernel.forward_external_events(sim._ingest_legacy_event_queue_payload)
             )
 
     async def stop(self) -> None:
@@ -67,7 +67,7 @@ class ExternalEventIngestionService:
         sim = self.simulation
         payload = normalize_human_command_payload(text, metadata)
         context = build_interaction_context(payload, default_source="simulation")
-        result = await sim.interaction_service.execute_from_payload(payload, context=context)
+        result = await sim.command_bus.dispatch_payload(payload, context=context)
         if result.status == "ok" or not sim.discord_bot:
             return
         channel_id = context.channel_id
