@@ -1,6 +1,14 @@
 import pytest
 
 from src.sim.knowledge_board import KnowledgeBoard
+from src.sim.knowledge_board_queries import (
+    AgentContributionQueryDTO,
+    CausalChainQueryDTO,
+    ProposalStatusQueryDTO,
+    QueryPagination,
+    ThreadQueryDTO,
+    TimelineQueryDTO,
+)
 from src.sim.knowledge_board_service import KnowledgeBoardService
 from src.sim.knowledge_entry import KnowledgeEntryType
 
@@ -71,3 +79,61 @@ async def test_governance_linkage_is_attached_to_entry_and_metadata() -> None:
     metadata = entry.reference_metadata or {}
     governance = metadata.get("governance") or {}
     assert governance.get("rule_id") == "rule-123"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_query_views_and_digest_generation() -> None:
+    step = 40
+    board = KnowledgeBoard()
+    service = KnowledgeBoardService(
+        board,
+        step_provider=lambda: step,
+        vector_provider=lambda: {"sim": step},
+    )
+
+    await service.post_proposal(
+        actor_id="agent-1",
+        content="proposal alpha",
+        causal_source="test.proposal",
+    )
+    proposal_id = board.entries[-1].entry_id
+    await service.post_vote(
+        actor_id="agent-2",
+        proposal_id=proposal_id,
+        approve=True,
+        causal_source="test.vote",
+    )
+    await service.post_vote(
+        actor_id="agent-3",
+        proposal_id=proposal_id,
+        approve=False,
+        causal_source="test.child",
+    )
+
+    timeline = service.query_timeline(TimelineQueryDTO(pagination=QueryPagination(page_size=10)))
+    assert timeline.total >= 3
+
+    thread = service.query_thread(
+        ThreadQueryDTO(root_entry_id=proposal_id, pagination=QueryPagination(page_size=10))
+    )
+    assert any(item.parent_entry_id == proposal_id for item in thread.items)
+
+    status = service.query_proposal_status(
+        ProposalStatusQueryDTO(proposal_id=proposal_id, pagination=QueryPagination(page_size=10))
+    )
+    assert status["consensus"]["approvals"] == 1
+
+    contributions = service.query_agent_contribution(
+        AgentContributionQueryDTO(agent_id="agent-2", pagination=QueryPagination(page_size=10))
+    )
+    assert contributions.total >= 1
+
+    chain = service.query_causal_chain(
+        CausalChainQueryDTO(entry_id=board.entries[-1].entry_id, depth=4)
+    )
+    assert chain
+
+    digests = service.generate_story_digests()
+    assert set(digests.keys()) == {"daily", "weekly"}
+    assert digests["daily"].period == "daily"

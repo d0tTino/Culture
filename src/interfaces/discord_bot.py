@@ -42,6 +42,14 @@ from src.interfaces.interaction_schema import (
     SpawnEnvelope,
 )
 from src.sim.context import SimulationContext
+from src.sim.knowledge_board_queries import (
+    AgentContributionQueryDTO,
+    CausalChainQueryDTO,
+    ProposalStatusQueryDTO,
+    QueryPagination,
+    ThreadQueryDTO,
+    TimelineQueryDTO,
+)
 from src.utils.policy import allow_message, evaluate_with_opa
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -197,6 +205,7 @@ def build_help_text() -> str:
             "- `/dm <agent_id> <message>` — send a direct message to one agent.",
             "- `/broadcast <message>` — send a message to all agents.",
             "- `/kb <text>` — add a note to the Knowledge Board.",
+            "- `/kb_timeline`, `/kb_thread`, `/kb_proposal_status`, `/kb_agent`, `/kb_causal_chain`, `/kb_digest` — query KB views.",
             "- `/status`, `/stats` — view current state/metrics.",
             "- `/start_here` — show onboarding, modes, and scenario cards.",
             "- `/propose`, `/propose_law`, `/vote` — governance interactions.",
@@ -1732,18 +1741,20 @@ async def slash_help(interaction: Any) -> None:
         await send_interaction_response(interaction, help_text, ephemeral=True)
 
 
-
-
 async def slash_start_here(interaction: Any) -> None:
     """Show onboarding flow with modes and scenario cards."""
     with command_span("start_here", interaction):
         cards = scenario_intro_cards()
-        lines = ["## 🚀 Start Here", "Modes: observer · participant · world-shaper · moderator", "", "Scenario cards:"]
+        lines = [
+            "## 🚀 Start Here",
+            "Modes: observer · participant · world-shaper · moderator",
+            "",
+            "Scenario cards:",
+        ]
         for card in cards:
-            lines.append(
-                f"- **{card['title']}** ({card['recommended_mode']}): {card['prompt']}"
-            )
+            lines.append(f"- **{card['title']}** ({card['recommended_mode']}): {card['prompt']}")
         await send_interaction_response(interaction, "\n".join(lines), ephemeral=True)
+
 
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
@@ -1763,6 +1774,167 @@ async def slash_kb(interaction: Any, text: str) -> None:
                 )
             )
         await send_interaction_response(interaction, "KB entry created", ephemeral=True)
+
+
+async def slash_kb_timeline(interaction: Any, page: int = 1, page_size: int = 10) -> None:
+    """Show ranked Knowledge Board timeline entries."""
+    with command_span("kb_timeline", interaction) as span:
+        bot_instance = get_active_bot()
+        sim = (
+            bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        ).sim_state.get("simulation")
+        service = getattr(sim, "knowledge_board_service", None) if sim is not None else None
+        if service is None:
+            await send_interaction_response(
+                interaction, "Knowledge Board unavailable", ephemeral=True
+            )
+            return
+        result = service.query_timeline(
+            TimelineQueryDTO(pagination=QueryPagination(page=page, page_size=page_size))
+        )
+        lines = [
+            f"{item.step} · {item.entry_type} · {item.agent_id}: {item.content_summary}"
+            for item in result.items
+        ]
+        await send_interaction_response(
+            interaction,
+            "\n".join(lines) if lines else "No timeline entries.",
+            ephemeral=True,
+        )
+
+
+async def slash_kb_thread(
+    interaction: Any, root_entry_id: str, page: int = 1, page_size: int = 10
+) -> None:
+    """Show thread replies rooted at an entry."""
+    with command_span("kb_thread", interaction) as span:
+        bot_instance = get_active_bot()
+        sim = (
+            bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        ).sim_state.get("simulation")
+        service = getattr(sim, "knowledge_board_service", None) if sim is not None else None
+        if service is None:
+            await send_interaction_response(
+                interaction, "Knowledge Board unavailable", ephemeral=True
+            )
+            return
+        result = service.query_thread(
+            ThreadQueryDTO(
+                root_entry_id=root_entry_id,
+                pagination=QueryPagination(page=page, page_size=page_size),
+            )
+        )
+        lines = [f"{item.step} · {item.agent_id}: {item.content_summary}" for item in result.items]
+        await send_interaction_response(
+            interaction,
+            "\n".join(lines) if lines else "No thread entries.",
+            ephemeral=True,
+        )
+
+
+async def slash_kb_proposal_status(
+    interaction: Any, proposal_id: str, page: int = 1, page_size: int = 10
+) -> None:
+    """Show proposal status and vote rollup."""
+    with command_span("kb_proposal_status", interaction) as span:
+        bot_instance = get_active_bot()
+        sim = (
+            bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        ).sim_state.get("simulation")
+        service = getattr(sim, "knowledge_board_service", None) if sim is not None else None
+        if service is None:
+            await send_interaction_response(
+                interaction, "Knowledge Board unavailable", ephemeral=True
+            )
+            return
+        result = service.query_proposal_status(
+            ProposalStatusQueryDTO(
+                proposal_id=proposal_id,
+                pagination=QueryPagination(page=page, page_size=page_size),
+            )
+        )
+        consensus = result["consensus"]
+        await send_interaction_response(
+            interaction,
+            f"approvals={consensus['approvals']} rejections={consensus['rejections']} consensus={consensus['consensus']}",
+            ephemeral=True,
+        )
+
+
+async def slash_kb_agent(
+    interaction: Any, agent_id: str, page: int = 1, page_size: int = 10
+) -> None:
+    """Show ranked contributions for an agent."""
+    with command_span("kb_agent", interaction) as span:
+        bot_instance = get_active_bot()
+        sim = (
+            bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        ).sim_state.get("simulation")
+        service = getattr(sim, "knowledge_board_service", None) if sim is not None else None
+        if service is None:
+            await send_interaction_response(
+                interaction, "Knowledge Board unavailable", ephemeral=True
+            )
+            return
+        result = service.query_agent_contribution(
+            AgentContributionQueryDTO(
+                agent_id=agent_id,
+                pagination=QueryPagination(page=page, page_size=page_size),
+            )
+        )
+        lines = [
+            f"{item.step} · {item.entry_type}: {item.content_summary}" for item in result.items
+        ]
+        await send_interaction_response(
+            interaction,
+            "\n".join(lines) if lines else "No contributions.",
+            ephemeral=True,
+        )
+
+
+async def slash_kb_causal_chain(interaction: Any, entry_id: str, depth: int = 3) -> None:
+    """Show an entry's causal chain."""
+    with command_span("kb_causal_chain", interaction) as span:
+        bot_instance = get_active_bot()
+        sim = (
+            bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        ).sim_state.get("simulation")
+        service = getattr(sim, "knowledge_board_service", None) if sim is not None else None
+        if service is None:
+            await send_interaction_response(
+                interaction, "Knowledge Board unavailable", ephemeral=True
+            )
+            return
+        chain = service.query_causal_chain(CausalChainQueryDTO(entry_id=entry_id, depth=depth))
+        lines = [f"{item.step} · {item.entry_id} · {item.content_summary}" for item in chain]
+        await send_interaction_response(
+            interaction,
+            "\n".join(lines) if lines else "No causal chain.",
+            ephemeral=True,
+        )
+
+
+async def slash_kb_digest(interaction: Any) -> None:
+    """Show daily and weekly story digests."""
+    with command_span("kb_digest", interaction) as span:
+        bot_instance = get_active_bot()
+        sim = (
+            bot_instance.context if bot_instance is not None else DEFAULT_CONTEXT
+        ).sim_state.get("simulation")
+        service = getattr(sim, "knowledge_board_service", None) if sim is not None else None
+        if service is None:
+            await send_interaction_response(
+                interaction, "Knowledge Board unavailable", ephemeral=True
+            )
+            return
+        digests = service.generate_story_digests()
+        daily = digests["daily"]
+        weekly = digests["weekly"]
+        await send_interaction_response(
+            interaction,
+            f"Daily: {len(daily.highlights)} highlights | Weekly: {len(weekly.highlights)} highlights",
+            ephemeral=True,
+        )
 
 
 async def slash_event(interaction: Any, text: str) -> None:
@@ -2040,6 +2212,12 @@ def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
     _register("help", slash_help)
     _register("start_here", slash_start_here)
     _register("kb", slash_kb)
+    _register("kb_timeline", slash_kb_timeline)
+    _register("kb_thread", slash_kb_thread)
+    _register("kb_proposal_status", slash_kb_proposal_status)
+    _register("kb_agent", slash_kb_agent)
+    _register("kb_causal_chain", slash_kb_causal_chain)
+    _register("kb_digest", slash_kb_digest)
     _register("event", slash_event)
     _register("propose", slash_propose)
     _register("propose_law", slash_propose_law)

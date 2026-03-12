@@ -21,6 +21,15 @@ from src.infra.ledger import ledger
 from src.interfaces import metrics
 from src.sim.context import SimulationContext
 from src.sim.event_bus import get_event_bus
+from src.sim.knowledge_board_queries import (
+    AgentContributionQueryDTO,
+    CausalChainQueryDTO,
+    ProposalStatusQueryDTO,
+    QueryFilters,
+    QueryPagination,
+    ThreadQueryDTO,
+    TimelineQueryDTO,
+)
 from src.sim.persistence.snapshot_service import SnapshotPersistenceService
 
 from .widget_registry import WidgetRegistry
@@ -255,6 +264,17 @@ class StakeRequest(BaseModel):
 
 
 app = FastAPI()
+
+
+def _csv_param(raw: str | None) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
+def _sim_kb_service() -> Any | None:
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    return getattr(sim, "knowledge_board_service", None) if sim is not None else None
 
 
 async def _require_token(
@@ -582,6 +602,115 @@ async def api_memory(agent_id: str, limit: int = 5) -> Response:
     return JSONResponse({"semantic": semantic, "episodic": episodic})
 
 
+@app.get("/api/knowledge/timeline")
+async def api_knowledge_timeline(
+    page: int = 1,
+    page_size: int = 20,
+    agent_id: str | None = None,
+    entry_types: str | None = None,
+    tags: str | None = None,
+    search: str | None = None,
+    start_step: int | None = None,
+    end_step: int | None = None,
+    anchor_entry_id: str | None = None,
+) -> Response:
+    service = _sim_kb_service()
+    if service is None:
+        return JSONResponse({"total": 0, "page": page, "page_size": page_size, "items": []})
+    query = TimelineQueryDTO(
+        filters=QueryFilters(
+            agent_id=agent_id,
+            entry_types=_csv_param(entry_types),
+            tags=_csv_param(tags),
+            search=search,
+            start_step=start_step,
+            end_step=end_step,
+        ),
+        pagination=QueryPagination(page=page, page_size=page_size),
+        anchor_entry_id=anchor_entry_id,
+    )
+    return JSONResponse(service.query_timeline(query).to_dict())
+
+
+@app.get("/api/knowledge/thread/{root_entry_id}")
+async def api_knowledge_thread(root_entry_id: str, page: int = 1, page_size: int = 20) -> Response:
+    service = _sim_kb_service()
+    if service is None:
+        return JSONResponse({"total": 0, "page": page, "page_size": page_size, "items": []})
+    query = ThreadQueryDTO(
+        root_entry_id=root_entry_id,
+        pagination=QueryPagination(page=page, page_size=page_size),
+    )
+    return JSONResponse(service.query_thread(query).to_dict())
+
+
+@app.get("/api/knowledge/proposal/{proposal_id}")
+async def api_knowledge_proposal_status(
+    proposal_id: str, page: int = 1, page_size: int = 20
+) -> Response:
+    service = _sim_kb_service()
+    if service is None:
+        return JSONResponse(
+            {
+                "proposal_id": proposal_id,
+                "proposal": None,
+                "consensus": {"approvals": 0, "rejections": 0, "consensus": False},
+                "votes": {"total": 0, "page": page, "page_size": page_size, "items": []},
+            }
+        )
+    query = ProposalStatusQueryDTO(
+        proposal_id=proposal_id,
+        pagination=QueryPagination(page=page, page_size=page_size),
+    )
+    return JSONResponse(service.query_proposal_status(query))
+
+
+@app.get("/api/knowledge/agent/{agent_id}")
+async def api_knowledge_agent_contribution(
+    agent_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    entry_types: str | None = None,
+    tags: str | None = None,
+    search: str | None = None,
+    start_step: int | None = None,
+    end_step: int | None = None,
+) -> Response:
+    service = _sim_kb_service()
+    if service is None:
+        return JSONResponse({"total": 0, "page": page, "page_size": page_size, "items": []})
+    query = AgentContributionQueryDTO(
+        agent_id=agent_id,
+        filters=QueryFilters(
+            entry_types=_csv_param(entry_types),
+            tags=_csv_param(tags),
+            search=search,
+            start_step=start_step,
+            end_step=end_step,
+        ),
+        pagination=QueryPagination(page=page, page_size=page_size),
+    )
+    return JSONResponse(service.query_agent_contribution(query).to_dict())
+
+
+@app.get("/api/knowledge/causal/{entry_id}")
+async def api_knowledge_causal_chain(entry_id: str, depth: int = 3) -> Response:
+    service = _sim_kb_service()
+    if service is None:
+        return JSONResponse({"entry_id": entry_id, "chain": []})
+    chain = service.query_causal_chain(CausalChainQueryDTO(entry_id=entry_id, depth=depth))
+    return JSONResponse({"entry_id": entry_id, "chain": [item.to_dict() for item in chain]})
+
+
+@app.get("/api/knowledge/digests")
+async def api_knowledge_digests() -> Response:
+    service = _sim_kb_service()
+    if service is None:
+        return JSONResponse({"daily": None, "weekly": None})
+    digests = service.generate_story_digests()
+    return JSONResponse({key: value.to_dict() for key, value in digests.items()})
+
+
 @app.post("/api/propose_law")
 async def api_propose_law(proposal: LawProposal) -> Response:
     """Submit a (weighted) law proposal to the active simulation."""
@@ -798,8 +927,6 @@ async def api_observability_metrics() -> Response:
     return JSONResponse(_cost_metrics_data())
 
 
-
-
 @app.get("/api/character_arcs")
 async def api_character_arcs() -> Response:
     """Return user-facing character-arc event streams per agent."""
@@ -815,6 +942,7 @@ async def api_character_arcs() -> Response:
             "identity": list(getattr(agent.state, "identity_events", [])),
         }
     return JSONResponse({"arcs": arcs})
+
 
 @app.get("/api/auctions")
 async def api_auctions() -> Response:
