@@ -265,3 +265,49 @@ async def test_message_queue_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
     assert queue.qsize() == 2
     remaining = [queue.get_nowait().content for _ in range(queue.qsize())]
     assert remaining == ["2", "3"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_knowledge_query_endpoints() -> None:
+    from src.interfaces import dashboard_backend as db
+    from src.sim.knowledge_board import KnowledgeBoard
+    from src.sim.knowledge_board_service import KnowledgeBoardService
+
+    board = KnowledgeBoard()
+    service = KnowledgeBoardService(
+        board,
+        step_provider=lambda: 30,
+        vector_provider=lambda: {"sim": 30},
+    )
+    await service.post_proposal(
+        actor_id="agent-1",
+        content="proposal body",
+        causal_source="test.proposal",
+    )
+    proposal_id = board.entries[-1].entry_id
+    await service.post_vote(
+        actor_id="agent-2",
+        proposal_id=proposal_id,
+        approve=True,
+        causal_source="test.vote",
+    )
+
+    class _Sim:
+        knowledge_board_service = service
+
+    db.DEFAULT_CONTEXT.sim_state["simulation"] = _Sim()
+
+    timeline_resp = await db.api_knowledge_timeline(page=1, page_size=5)
+    timeline_payload = json.loads(timeline_resp.body)
+    assert timeline_payload["total"] >= 2
+
+    proposal_resp = await db.api_knowledge_proposal_status(
+        proposal_id=proposal_id, page=1, page_size=5
+    )
+    proposal_payload = json.loads(proposal_resp.body)
+    assert proposal_payload["consensus"]["approvals"] == 1
+
+    digest_resp = await db.api_knowledge_digests()
+    digest_payload = json.loads(digest_resp.body)
+    assert digest_payload["daily"]["period"] == "daily"
