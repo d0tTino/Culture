@@ -12,11 +12,18 @@ from typing import TYPE_CHECKING, Any, Final, cast
 from opentelemetry import trace
 from pydantic import BaseModel
 
+from src.agents.core.personality_insights import (
+    build_character_arc_summaries,
+    personality_timeline,
+    top_trait_changes,
+)
+from src.agents.core.personality_transition import TraitTransitionLog
 from src.governance.decision_kernel import PolicyDecisionService
 from src.governance.rules_engine import governance_rules_engine
 from src.governance.service import governance
 from src.infra import event_log
 from src.infra import metrics as infra_metrics
+from src.infra.config import get_config
 from src.infra.ledger import ledger
 from src.interfaces import metrics
 from src.sim.context import SimulationContext
@@ -557,7 +564,73 @@ async def get_agent_state(agent_id: str) -> Response:
                 state = cast(dict[str, Any], agent.state.model_dump())
             except Exception:  # pragma: no cover - defensive
                 state = {}
+            trait_log = getattr(agent.state, "trait_transition_log", TraitTransitionLog())
+            if not isinstance(trait_log, TraitTransitionLog):
+                trait_log = (
+                    TraitTransitionLog.model_validate(trait_log)
+                    if hasattr(TraitTransitionLog, "model_validate")
+                    else TraitTransitionLog.parse_obj(trait_log)
+                )
+            highlights = top_trait_changes(trait_log.transitions, top_k=5)
+            for entry in highlights:
+                step = int(entry.get("step", 0))
+                trait = str(entry.get("trait", ""))
+                entry["timeline_link"] = (
+                    f"/api/agents/{agent_id}/personality_timeline?start_step={step}&trait={trait}"
+                )
+            if state is None:
+                state = {}
+            state["top_trait_changes"] = highlights
     return JSONResponse({"state": state or {}})
+
+
+@app.get("/api/agents/{agent_id}/personality_timeline")
+async def get_agent_personality_timeline(
+    agent_id: str,
+    start_step: int | None = None,
+    end_step: int | None = None,
+    trait: str | None = None,
+) -> Response:
+    """Return merged personality + lifecycle timeline artifacts for an agent."""
+
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    if sim is None:
+        return JSONResponse({"timeline": [], "hash_chain_valid": True})
+
+    agent = next((a for a in sim.agents if a.agent_id == agent_id), None)
+    if agent is None:
+        return JSONResponse({"timeline": [], "hash_chain_valid": True})
+
+    trait_log = getattr(agent.state, "trait_transition_log", TraitTransitionLog())
+    if not isinstance(trait_log, TraitTransitionLog):
+        trait_log = (
+            TraitTransitionLog.model_validate(trait_log)
+            if hasattr(TraitTransitionLog, "model_validate")
+            else TraitTransitionLog.parse_obj(trait_log)
+        )
+    timeline = personality_timeline(
+        trait_log,
+        lifecycle_history=list(getattr(agent.state, "lifecycle_history", [])),
+    )
+    if start_step is not None:
+        timeline = [item for item in timeline if int(item.get("step", 0)) >= start_step]
+    if end_step is not None:
+        timeline = [item for item in timeline if int(item.get("step", 0)) <= end_step]
+    if trait:
+        timeline = [
+            item
+            for item in timeline
+            if item.get("kind") != "personality_transition"
+            or any(delta.get("trait") == trait for delta in item.get("deltas", []))
+        ]
+
+    return JSONResponse(
+        {
+            "timeline": timeline,
+            "hash_chain_valid": bool(trait_log.verify_hash_chain()),
+            "seed_traits": dict(trait_log.seed_traits),
+        }
+    )
 
 
 @app.get("/api/agents/{agent_id}/memories")
@@ -935,11 +1008,27 @@ async def api_character_arcs() -> Response:
     if simulation is None:
         return JSONResponse({"arcs": {}})
 
+    window_size = int(get_config("CHARACTER_ARC_SUMMARY_WINDOW") or 20)
     arcs: dict[str, dict[str, Any]] = {}
     for agent in getattr(simulation, "agents", []):
+        trait_log = getattr(agent.state, "trait_transition_log", TraitTransitionLog())
+        if not isinstance(trait_log, TraitTransitionLog):
+            trait_log = (
+                TraitTransitionLog.model_validate(trait_log)
+                if hasattr(TraitTransitionLog, "model_validate")
+                else TraitTransitionLog.parse_obj(trait_log)
+            )
+        lifecycle = list(getattr(agent.state, "lifecycle_history", []))
+        summaries = build_character_arc_summaries(
+            trait_log,
+            lifecycle_history=lifecycle,
+            window_size=window_size,
+        )
         arcs[str(agent.agent_id)] = {
             "personality": list(getattr(agent.state, "personality_transition_events", [])),
             "identity": list(getattr(agent.state, "identity_events", [])),
+            "timeline": personality_timeline(trait_log, lifecycle_history=lifecycle),
+            "summaries": summaries,
         }
     return JSONResponse({"arcs": arcs})
 

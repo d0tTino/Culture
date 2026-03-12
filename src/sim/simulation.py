@@ -25,6 +25,10 @@ from src.agents.core.agent_state import (
     AgentLifecycleState,
 )
 from src.agents.core.personality_engine import ExperienceSignal, PersonalityEngine
+from src.agents.core.personality_insights import (
+    build_character_arc_summaries,
+    discord_trait_shift_message,
+)
 from src.agents.memory.memory_service import MemoryService
 from src.agents.memory.semantic_memory_manager import SemanticMemoryManager
 from src.agents.memory.vector_store import ChromaDBException
@@ -791,6 +795,37 @@ class Simulation:
             if event_name == "world_time":
                 await self.send_discord_update(message=f"🕒 {world_time['formatted']}")
 
+    async def _maybe_send_discord_character_arc_summary(
+        self: Self,
+        *,
+        agent_id: str,
+        state: Any,
+    ) -> None:
+        if not bool(config.get_config("DISCORD_CHARACTER_ARC_SUMMARIES") or False):
+            return
+        window_size = int(config.get_config("CHARACTER_ARC_SUMMARY_WINDOW") or 20)
+        trait_log = getattr(state, "trait_transition_log", None)
+        if trait_log is None:
+            return
+        summaries = build_character_arc_summaries(
+            trait_log,
+            lifecycle_history=list(getattr(state, "lifecycle_history", [])),
+            window_size=window_size,
+        )
+        if not summaries:
+            return
+        latest = summaries[-1]
+        end_step = int(latest.get("window_end_step", -1))
+        if end_step <= 0 or end_step % max(1, window_size) != 0:
+            return
+        message = discord_trait_shift_message(
+            agent_name=str(getattr(state, "name", agent_id)),
+            summary=latest,
+        )
+        if not message:
+            return
+        await self.send_discord_update(message=message, agent_id=agent_id)
+
     async def send_discord_update(
         self: Self,
         message: str | None = None,
@@ -1119,6 +1154,10 @@ class Simulation:
             current_agent_state,
             experience_signals,
             source="simulation.turn",
+        )
+        await self._maybe_send_discord_character_arc_summary(
+            agent_id=agent_id,
+            state=current_agent_state,
         )
         self._assert_trait_update_invariants(
             current_agent_state,

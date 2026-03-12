@@ -5,9 +5,11 @@ from typing import cast
 
 from pydantic import BaseModel
 
+from src.infra.config import get_config
 from src.sim.engines.domain_events import TraitDriftApplied
 
 from .agent_state import AgentState
+from .personality_insights import smooth_trait_deltas
 from .personality_transition import PersonalityTransition, TraitDelta, TraitTransitionLog
 from .trait_policy import (
     action_intent_biasing,
@@ -202,6 +204,18 @@ class PersonalityEngine:
         drift["resilience"] += 0.003 * signals.task_outcome
         drift["adaptability"] += 0.003 * signals.governance_participation
         drift["assertiveness"] += 0.002 * signals.conflict_outcome
+
+        smoothing_window = int(get_config("TRAIT_DRIFT_SMOOTHING_WINDOW") or 5)
+        smoothing_alpha = float(get_config("TRAIT_DRIFT_SMOOTHING_ALPHA") or 0.65)
+        hysteresis = float(get_config("TRAIT_DRIFT_HYSTERESIS_THRESHOLD") or 0.0025)
+        drift = smooth_trait_deltas(
+            drift,
+            recent_transitions=state.trait_transition_log.transitions,
+            window_size=smoothing_window,
+            alpha=smoothing_alpha,
+            hysteresis_threshold=hysteresis,
+        )
+
         return TraitDriftApplied(
             agent_id=str(getattr(state, "agent_id", "")),
             step=int(state.step_counter),
