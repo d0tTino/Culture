@@ -4,7 +4,7 @@ pytest.importorskip("hypothesis")
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from src.agents.core import ResourceManager
+from src.sim.resource_manager import ResourceManager
 
 pytestmark = pytest.mark.unit
 

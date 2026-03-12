@@ -954,7 +954,7 @@ class Simulation:
                 knowledge_board=self.knowledge_board,
             )
 
-        self.resource_manager.cap_tick(
+        self.resource_manager.tick_cap(
             ip_start=ip_start, du_start=du_start, obj=current_agent_state
         )
 
