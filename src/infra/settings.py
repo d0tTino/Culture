@@ -153,6 +153,11 @@ class ConfigSettings(BaseSettings):
     WORLD_TICKS_PER_DAY: int = 24
     WORLD_SEASON_LENGTH_DAYS: int = 0
     WORLD_TIME_BROADCAST_CADENCE_TICKS: int = 24
+    TRAIT_DRIFT_SMOOTHING_WINDOW: int = 5
+    TRAIT_DRIFT_SMOOTHING_ALPHA: float = 0.65
+    TRAIT_DRIFT_HYSTERESIS_THRESHOLD: float = 0.0025
+    CHARACTER_ARC_SUMMARY_WINDOW: int = 20
+    DISCORD_CHARACTER_ARC_SUMMARIES: bool = False
     ROLE_DU_GENERATION: ClassVar[dict[str, dict[str, float]]] = {
         "Facilitator": {"base": 1.2, "bonus_factor": 0.3},
         "Innovator": {"base": 1.0, "bonus_factor": 0.5},

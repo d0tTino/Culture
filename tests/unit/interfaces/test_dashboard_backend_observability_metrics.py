@@ -91,6 +91,31 @@ async def test_api_character_arcs_returns_identity_and_personality_events(
     state = types.SimpleNamespace(
         personality_transition_events=[{"cause": "experience_drift"}],
         identity_events=[{"to_state": "retired"}],
+        trait_transition_log={
+            "schema_version": 1,
+            "seed_traits": {"trust_baseline": 0.5},
+            "transitions": [
+                {
+                    "step": 2,
+                    "cause": "experience_drift",
+                    "source": "simulation.turn",
+                    "max_step": 0.01,
+                    "input_signals": {"social_outcome": 0.4},
+                    "deltas": [
+                        {
+                            "trait": "trust_baseline",
+                            "before": 0.5,
+                            "proposed_delta": 0.01,
+                            "bounded_delta": 0.01,
+                            "after": 0.51,
+                        }
+                    ],
+                    "resulting_traits": {"trust_baseline": 0.51},
+                }
+            ],
+            "hash_chain": ["abc"],
+        },
+        lifecycle_history=[{"step": 3, "from": "active", "to": "retired", "reason": "test"}],
     )
     sim = types.SimpleNamespace(agents=[types.SimpleNamespace(agent_id="agent-1", state=state)])
     monkeypatch.setitem(db.DEFAULT_CONTEXT.sim_state, "simulation", sim)
@@ -100,3 +125,58 @@ async def test_api_character_arcs_returns_identity_and_personality_events(
 
     assert payload["arcs"]["agent-1"]["personality"][0]["cause"] == "experience_drift"
     assert payload["arcs"]["agent-1"]["identity"][0]["to_state"] == "retired"
+    assert payload["arcs"]["agent-1"]["timeline"]
+    assert payload["arcs"]["agent-1"]["summaries"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_state_and_timeline_include_trait_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_dashboard_backend(monkeypatch)
+    db = load_dashboard_backend()
+
+    state = types.SimpleNamespace(
+        model_dump=lambda: {"name": "Agent"},
+        trait_transition_log={
+            "schema_version": 1,
+            "seed_traits": {"trust_baseline": 0.5},
+            "transitions": [
+                {
+                    "step": 2,
+                    "cause": "experience_drift",
+                    "source": "simulation.turn",
+                    "max_step": 0.01,
+                    "input_signals": {"social_outcome": 0.4},
+                    "deltas": [
+                        {
+                            "trait": "trust_baseline",
+                            "before": 0.5,
+                            "proposed_delta": 0.01,
+                            "bounded_delta": 0.01,
+                            "after": 0.51,
+                        }
+                    ],
+                    "resulting_traits": {"trust_baseline": 0.51},
+                }
+            ],
+            "hash_chain": ["abc"],
+        },
+        lifecycle_history=[{"step": 3, "from": "active", "to": "retired", "reason": "test"}],
+    )
+    sim = types.SimpleNamespace(agents=[types.SimpleNamespace(agent_id="agent-1", state=state)])
+    monkeypatch.setitem(db.DEFAULT_CONTEXT.sim_state, "simulation", sim)
+
+    state_payload = json.loads((await db.get_agent_state("agent-1")).body)
+    assert state_payload["state"]["top_trait_changes"]
+    assert state_payload["state"]["top_trait_changes"][0]["timeline_link"].startswith(
+        "/api/agents/agent-1/personality_timeline"
+    )
+
+    timeline_payload = json.loads((await db.get_agent_personality_timeline("agent-1")).body)
+    assert timeline_payload["timeline"]
+    assert {item["kind"] for item in timeline_payload["timeline"]} == {
+        "personality_transition",
+        "lifecycle_transition",
+    }
