@@ -45,6 +45,7 @@ def discord_message_to_intent_payload(
     sender_agent_id: str | None,
     fallback_agent_id: str | None,
     raw_metadata: Mapping[str, Any] | None = None,
+    mode: str = "participant",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Convert text content into canonical interaction payload."""
     recipient, is_broadcast, parsed_content, validation_error = parse_message_routing(content)
@@ -57,6 +58,7 @@ def discord_message_to_intent_payload(
 
     payload: dict[str, Any] = {
         "intent": "broadcast" if is_broadcast else ("direct_message" if recipient else "human_message"),
+        "mode": mode,
         "text": parsed_content,
         "routing": {
             "target_agent_id": target_agent_id,

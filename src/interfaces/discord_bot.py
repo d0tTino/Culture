@@ -198,6 +198,7 @@ def build_help_text() -> str:
             "- `/broadcast <message>` — send a message to all agents.",
             "- `/kb <text>` — add a note to the Knowledge Board.",
             "- `/status`, `/stats` — view current state/metrics.",
+            "- `/start_here` — show onboarding, modes, and scenario cards.",
             "- `/propose`, `/propose_law`, `/vote` — governance interactions.",
             "",
             "### Moderator/Admin commands",
@@ -218,6 +219,12 @@ def build_help_text() -> str:
             "- Admin-only commands require Discord administrator privileges.",
             "- Slash commands are globally rate-limited per user (default: 5 commands / 60s).",
             "- Some moderation actions also have cooldowns to reduce spam.",
+            "",
+            "### User modes",
+            "- `observer` — read-only guidance and context.",
+            "- `participant` — regular conversation with agents.",
+            "- `world-shaper` — propose world-level interventions.",
+            "- `moderator` — policy and safety operations.",
         ]
     )
 
@@ -231,7 +238,12 @@ def create_onboarding_embed(channel_id: int) -> Any:
     )
     embed.add_field(
         name="Start with these",
-        value="`/help`, `/dm`, `/broadcast`, `/kb`, `/status`",
+        value="`/start_here`, `/help`, `/dm`, `/broadcast`, `/kb`, `/status`",
+        inline=False,
+    )
+    embed.add_field(
+        name="Modes",
+        value="observer · participant · world-shaper · moderator",
         inline=False,
     )
     embed.add_field(
@@ -246,6 +258,40 @@ def create_onboarding_embed(channel_id: int) -> Any:
     )
     embed.set_footer(text=f"Channel ID: {channel_id}")
     return embed
+
+
+def scenario_intro_cards() -> list[dict[str, str]]:
+    """Starter scenarios shown in onboarding surfaces."""
+    return [
+        {
+            "title": "Coalition Tension",
+            "prompt": "Ask two agents to align on a scarce resource policy.",
+            "recommended_mode": "participant",
+        },
+        {
+            "title": "Crisis Injection",
+            "prompt": "Inject a disruption event and observe adaptation.",
+            "recommended_mode": "world-shaper",
+        },
+        {
+            "title": "Safety Review",
+            "prompt": "Evaluate and enforce moderation boundaries for escalating speech.",
+            "recommended_mode": "moderator",
+        },
+    ]
+
+
+def format_explainable_acknowledgement(result: Any) -> str:
+    """Return user-visible "what happened and why" summary."""
+    data = getattr(result, "data", None) or {}
+    provenance = getattr(result, "decision_provenance", None)
+    policy_id = getattr(provenance, "policy_id", "") if provenance is not None else ""
+    rule_id = getattr(provenance, "rule_id", "") if provenance is not None else ""
+    action = data.get("action") or data.get("intent") or "request"
+    why = "policy checks passed" if getattr(result, "status", "") == "ok" else "policy blocked"
+    if policy_id or rule_id:
+        why = f"{why} ({policy_id}:{rule_id})"
+    return f"Action: {action}. Outcome: {getattr(result, 'user_message', '')} Why: {why}."
 
 
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
@@ -664,6 +710,7 @@ class SimulationDiscordBot:
                         sender_agent_id=sender,
                         fallback_agent_id=fallback_agent,
                         raw_metadata={"channel_id": channel_id, "user_id": user_id},
+                        mode="participant",
                     )
                     if validation_error is not None:
                         await send_channel_message(channel, content=validation_error)
@@ -689,8 +736,8 @@ class SimulationDiscordBot:
                             channel=channel,
                         ),
                     )
-                    if result.status != "ok":
-                        await send_channel_message(channel, content=result.user_message)
+                    acknowledgement = format_explainable_acknowledgement(result)
+                    await send_channel_message(channel, content=acknowledgement)
 
     async def _select_client(self: Self, agent_id: str | None) -> Any:
         """Return the Discord client for the given agent."""
@@ -1685,6 +1732,19 @@ async def slash_help(interaction: Any) -> None:
         await send_interaction_response(interaction, help_text, ephemeral=True)
 
 
+
+
+async def slash_start_here(interaction: Any) -> None:
+    """Show onboarding flow with modes and scenario cards."""
+    with command_span("start_here", interaction):
+        cards = scenario_intro_cards()
+        lines = ["## 🚀 Start Here", "Modes: observer · participant · world-shaper · moderator", "", "Scenario cards:"]
+        for card in cards:
+            lines.append(
+                f"- **{card['title']}** ({card['recommended_mode']}): {card['prompt']}"
+            )
+        await send_interaction_response(interaction, "\n".join(lines), ephemeral=True)
+
 async def slash_kb(interaction: Any, text: str) -> None:
     """Post an entry to the Knowledge Board."""
     with command_span("kb", interaction) as span:
@@ -1978,6 +2038,7 @@ def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
     _register("set_speed", slash_set_speed)
     _register("speed", slash_speed)
     _register("help", slash_help)
+    _register("start_here", slash_start_here)
     _register("kb", slash_kb)
     _register("event", slash_event)
     _register("propose", slash_propose)

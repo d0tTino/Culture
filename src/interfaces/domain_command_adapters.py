@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from src.interfaces.interaction_schema import (
@@ -28,6 +29,17 @@ from src.sim.commands.domain_commands import (
     SpawnAgentCommand,
 )
 
+USER_MODES = {"observer", "participant", "world-shaper", "moderator"}
+
+
+@dataclass(frozen=True)
+class MediatedIntent:
+    intent: str
+    confidence: float
+    mode: str
+    fallback_prompt: str | None = None
+    rationale: str = ""
+
 
 def parse_bus_command(
     payload: Mapping[str, Any],
@@ -36,13 +48,21 @@ def parse_bus_command(
 ) -> InteractionEnvelope:
     data = _normalize_legacy_payload(payload)
     ctx = context or InteractionContext()
-    intent = _canonical_intent(data)
+    mediation = mediate_user_input(data)
+    intent = mediation.intent
 
     routing = data.get("routing") if isinstance(data.get("routing"), Mapping) else {}
     auth = data.get("auth") if isinstance(data.get("auth"), Mapping) else {}
     budget = data.get("budget") if isinstance(data.get("budget"), Mapping) else {}
 
     metadata = _metadata_with_context(data, ctx)
+    metadata["intent_mediation"] = {
+        "intent": mediation.intent,
+        "confidence": mediation.confidence,
+        "mode": mediation.mode,
+        "fallback_prompt": mediation.fallback_prompt,
+        "rationale": mediation.rationale,
+    }
     correlation_id = (
         data.get("correlation_id") or metadata.get("correlation_id") or metadata.get("request_id")
     )
@@ -234,6 +254,87 @@ def _canonical_intent(data: Mapping[str, Any]) -> str:
     }:
         return command
     return "human_message"
+
+
+def mediate_user_input(payload: Mapping[str, Any]) -> MediatedIntent:
+    """Map plain-text user input into a structured intent with safety metadata."""
+
+    explicit_mode = str(payload.get("mode") or "").strip().lower()
+    metadata = payload.get("metadata")
+    if explicit_mode not in USER_MODES and isinstance(metadata, Mapping):
+        explicit_mode = str(metadata.get("mode") or "").strip().lower()
+    mode = explicit_mode if explicit_mode in USER_MODES else "participant"
+
+    explicit_intent = _canonical_intent(payload)
+    text = str(payload.get("text") or payload.get("content") or "").strip()
+    lowered = text.lower()
+
+    if explicit_intent != "human_message":
+        return MediatedIntent(
+            intent=explicit_intent,
+            confidence=1.0,
+            mode=mode,
+            rationale="explicit_intent",
+        )
+
+    if not text:
+        return MediatedIntent(
+            intent="human_message",
+            confidence=0.0,
+            mode=mode,
+            fallback_prompt="I didn't catch any text. Try asking a question or issuing a command.",
+            rationale="empty_text",
+        )
+
+    if lowered.startswith("/help") or lowered.startswith("help"):
+        return MediatedIntent(
+            intent="human_message",
+            confidence=0.95,
+            mode="observer",
+            rationale="help_request",
+        )
+
+    if lowered.startswith("/broadcast"):
+        return MediatedIntent(
+            intent="broadcast",
+            confidence=0.95,
+            mode="participant" if mode == "observer" else mode,
+            rationale="broadcast_prefix",
+        )
+
+    if any(token in lowered for token in ("spawn", "inject event", "set speed", "pause", "resume")):
+        if mode in {"world-shaper", "moderator"}:
+            return MediatedIntent(
+                intent="control",
+                confidence=0.7,
+                mode=mode,
+                rationale="world_control_language",
+            )
+        return MediatedIntent(
+            intent="human_message",
+            confidence=0.45,
+            mode=mode,
+            fallback_prompt=(
+                "This sounds like a world-level action. Switch to world-shaper or moderator mode, "
+                "or use an explicit control command."
+            ),
+            rationale="world_control_without_mode",
+        )
+
+    if lowered.startswith("@") or lowered.startswith("/dm"):
+        return MediatedIntent(
+            intent="direct_message",
+            confidence=0.9,
+            mode=mode,
+            rationale="direct_message_pattern",
+        )
+
+    return MediatedIntent(
+        intent="human_message",
+        confidence=0.75,
+        mode=mode,
+        rationale="default_human_message",
+    )
 
 
 def _normalize_legacy_payload(payload: Mapping[str, Any]) -> dict[str, Any]:

@@ -13,6 +13,7 @@ EXPECTED_HELP_TEXT = "\n".join(
         "- `/broadcast <message>` — send a message to all agents.",
         "- `/kb <text>` — add a note to the Knowledge Board.",
         "- `/status`, `/stats` — view current state/metrics.",
+        "- `/start_here` — show onboarding, modes, and scenario cards.",
         "- `/propose`, `/propose_law`, `/vote` — governance interactions.",
         "",
         "### Moderator/Admin commands",
@@ -33,11 +34,15 @@ EXPECTED_HELP_TEXT = "\n".join(
         "- Admin-only commands require Discord administrator privileges.",
         "- Slash commands are globally rate-limited per user (default: 5 commands / 60s).",
         "- Some moderation actions also have cooldowns to reduce spam.",
+        "",
+        "### User modes",
+        "- `observer` — read-only guidance and context.",
+        "- `participant` — regular conversation with agents.",
+        "- `world-shaper` — propose world-level interventions.",
+        "- `moderator` — policy and safety operations.",
     ]
 )
 
-
-@pytest.mark.unit
 def test_build_help_text_is_stable() -> None:
     assert discord_bot.build_help_text() == EXPECTED_HELP_TEXT
 
@@ -87,5 +92,23 @@ def test_create_onboarding_embed_contains_interaction_guidance(monkeypatch: pyte
     assert embed.title == "🧭 How to interact"
     assert "slash commands" in embed.description
     assert any(name == "Permissions" for name, _, _ in fields)
+    assert any(name == "Modes" for name, _, _ in fields)
     assert any(name == "Rate limits" for name, _, _ in fields)
     assert embed.footer_text == "Channel ID: 99"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_slash_start_here_returns_scenarios() -> None:
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(send_message=AsyncMock()),
+        user=SimpleNamespace(id="user-1"),
+        channel=SimpleNamespace(id=123),
+    )
+
+    await discord_bot.slash_start_here.callback(interaction)
+
+    sent = interaction.response.send_message.await_args.args[0]
+    assert "Start Here" in sent
+    assert "observer" in sent
+    assert "Scenario cards" in sent

@@ -121,3 +121,16 @@ async def test_set_speed_invalid_value() -> None:
     resp = await db.control(DummyRequest({"command": "set_speed", "value": "bad"}))
     data = json.loads(resp.body)
     assert data["speed"] == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dashboard_help_and_onboarding_endpoints() -> None:
+    db = load_dashboard_backend()
+    help_payload = json.loads((await db.api_interaction_help()).body)
+    assert "observer" in help_payload["modes"]
+    assert "moderator" in help_payload["modes"]
+
+    cards_payload = json.loads((await db.api_onboarding_scenarios()).body)
+    assert len(cards_payload["cards"]) >= 3
+    assert {"title", "prompt", "recommended_mode"}.issubset(cards_payload["cards"][0].keys())
