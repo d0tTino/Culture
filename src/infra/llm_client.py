@@ -104,9 +104,9 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                     token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
                 # Ensure the agent has at least enough DU for the base call
                 try:
-                    from src.sim.resource_manager import get_resource_manager
+                    from src.sim.resource_manager import get_budget_checker
 
-                    get_resource_manager().ensure_du_budget(state.agent_id, base_price)
+                    get_budget_checker().budget_check(state.agent_id, base_price)
                 except Exception:
                     logger.warning(
                         "Insufficient DU for agent %s: required=%s, available=%s",
@@ -138,9 +138,9 @@ def charge_du_cost(func: Callable[P, T]) -> Callable[P, T]:
                     span.set_attribute("llm.du.tokens", tokens)
                     span.set_attribute("llm.du.cost", cost)
                     try:
-                        from src.sim.resource_manager import get_resource_manager
+                        from src.sim.resource_manager import get_budget_charger
 
-                        get_resource_manager().charge_du(state.agent_id, cost)
+                        get_budget_charger().charge(state.agent_id, cost)
                     except Exception:
                         logger.warning(
                             "Insufficient DU for agent %s: cost=%s, available=%s",
@@ -179,9 +179,9 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                     base_price = float(get_config("GAS_PRICE_PER_CALL"))
                     token_price = float(get_config("GAS_PRICE_PER_TOKEN"))
                 try:
-                    from src.sim.resource_manager import get_resource_manager
+                    from src.sim.resource_manager import get_budget_checker
 
-                    get_resource_manager().ensure_du_budget(state.agent_id, base_price)
+                    get_budget_checker().budget_check(state.agent_id, base_price)
                 except Exception:
                     logger.warning(
                         "Insufficient DU for agent %s: required=%s, available=%s",
@@ -213,9 +213,9 @@ def async_charge_du_cost(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitab
                     span.set_attribute("llm.du.tokens", tokens)
                     span.set_attribute("llm.du.cost", cost)
                     try:
-                        from src.sim.resource_manager import get_resource_manager
+                        from src.sim.resource_manager import get_budget_charger
 
-                        get_resource_manager().charge_du(state.agent_id, cost)
+                        get_budget_charger().charge(state.agent_id, cost)
                     except Exception:
                         logger.warning(
                             "Insufficient DU for agent %s: cost=%s, available=%s",

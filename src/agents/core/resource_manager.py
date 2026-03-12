@@ -1,27 +1,28 @@
-from __future__ import annotations
+"""Compatibility re-export for canonical resource-management APIs.
 
-from typing import Protocol
+Use ``src.sim.resource_manager`` as the source of truth.
+"""
 
-# Skip self argument annotation warnings for simple methods
+from src.sim.resource_manager import (
+    BudgetCharger,
+    BudgetChecker,
+    HasResources,
+    ResourceManager,
+    TickCapper,
+    get_budget_charger,
+    get_budget_checker,
+    get_resource_manager,
+    get_tick_capper,
+)
 
-
-class HasResources(Protocol):
-    ip: float
-    du: float
-
-
-class ResourceManager:
-    """Utility to cap per-tick resource accumulation."""
-
-    def __init__(self, max_ip_per_tick: float, max_du_per_tick: float) -> None:
-        self.max_ip_per_tick = float(max_ip_per_tick)
-        self.max_du_per_tick = float(max_du_per_tick)
-
-    def cap_tick(self, *, ip_start: float, du_start: float, obj: HasResources) -> None:
-        """Clamp the object's IP and DU gains for the current tick."""
-        ip_gain = obj.ip - ip_start
-        if ip_gain > self.max_ip_per_tick:
-            obj.ip = ip_start + self.max_ip_per_tick
-        du_gain = obj.du - du_start
-        if du_gain > self.max_du_per_tick:
-            obj.du = du_start + self.max_du_per_tick
+__all__ = [
+    "BudgetCharger",
+    "BudgetChecker",
+    "HasResources",
+    "ResourceManager",
+    "TickCapper",
+    "get_budget_charger",
+    "get_budget_checker",
+    "get_resource_manager",
+    "get_tick_capper",
+]

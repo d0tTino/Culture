@@ -482,7 +482,9 @@ class SimulationCommandService:
         from src.sim import simulation as simulation_module
 
         try:
-            simulation_module.get_resource_manager().ensure_du_budget(budget_agent_id, du_cost)
+            manager = simulation_module.get_resource_manager()
+            budget_check = getattr(manager, "budget_check", None) or getattr(manager, "ensure_du_budget")
+            budget_check(budget_agent_id, du_cost)
         except Exception as exc:
             logger.info("Rejecting interaction for %s: %s", budget_agent_id, exc)
             return InteractionResult(
