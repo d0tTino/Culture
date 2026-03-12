@@ -1013,6 +1013,54 @@ async def websocket_events(websocket: WebSocket) -> None:
         await websocket.close()
 
 
+def _dashboard_acknowledgement(result: Any) -> str:
+    data = getattr(result, "data", None) or {}
+    provenance = getattr(result, "decision_provenance", None)
+    policy_id = getattr(provenance, "policy_id", "") if provenance is not None else ""
+    rule_id = getattr(provenance, "rule_id", "") if provenance is not None else ""
+    action = data.get("action") or data.get("intent") or "request"
+    why = "policy checks passed" if getattr(result, "status", "") == "ok" else "policy blocked"
+    if policy_id or rule_id:
+        why = f"{why} ({policy_id}:{rule_id})"
+    return f"Action: {action}. Outcome: {getattr(result, 'user_message', '')} Why: {why}."
+
+
+def _scenario_intro_cards() -> list[dict[str, str]]:
+    return [
+        {
+            "title": "Coalition Tension",
+            "prompt": "Ask two agents to align on a scarce resource policy.",
+            "recommended_mode": "participant",
+        },
+        {
+            "title": "Crisis Injection",
+            "prompt": "Inject a disruption event and observe adaptation.",
+            "recommended_mode": "world-shaper",
+        },
+        {
+            "title": "Safety Review",
+            "prompt": "Evaluate moderation boundaries for escalation.",
+            "recommended_mode": "moderator",
+        },
+    ]
+
+
+@app.get("/api/help/interaction")
+async def api_interaction_help() -> Response:
+    return JSONResponse(
+        {
+            "modes": ["observer", "participant", "world-shaper", "moderator"],
+            "commands": ["dm", "broadcast", "kb", "event", "spawn", "pause", "resume"],
+            "note": "Use mode with control-style actions for safer routing.",
+        }
+    )
+
+
+@app.get("/api/onboarding/scenarios")
+async def api_onboarding_scenarios() -> Response:
+    return JSONResponse({"cards": _scenario_intro_cards()})
+
+
 async def handle_control_command(
     cmd: dict[str, Any], ctx: SimulationContext = DEFAULT_CONTEXT
 ) -> dict[str, Any]:
@@ -1047,6 +1095,7 @@ async def handle_control_command(
     return {
         "status": result.status,
         "message": result.user_message,
+        "acknowledgement": _dashboard_acknowledgement(result),
         "reason_code": result.reason_code,
         "data": result.data,
         "decision_provenance": result.decision_provenance.model_dump(),
