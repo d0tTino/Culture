@@ -5,7 +5,11 @@ import asyncio
 import pytest
 
 from src.sim.runtime.actor_runtime import EventEnvelope, Mailbox
-from src.sim.runtime.load_test_harness import observability_payload, run_default_load_suite
+from src.sim.runtime.load_test_harness import (
+    observability_payload,
+    run_default_load_suite,
+    run_scenario_ab_harness,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -53,3 +57,14 @@ def test_observability_payload_includes_latency_and_memory_growth() -> None:
         assert "tick_latency_p50_ms" in row
         assert "tick_latency_p95_ms" in row
         assert "memory_growth_bytes" in row
+
+
+def test_run_scenario_ab_harness_reports_metric_deltas() -> None:
+    result = run_scenario_ab_harness(scenario_name="engagement", agent_count=6, steps=3)
+
+    assert result.scenario_name == "engagement"
+    assert result.variant_a == "baseline"
+    assert result.variant_b == "interaction_enhanced"
+    assert "cross_agent_interaction_diversity" in result.engagement_metrics_a
+    assert "cross_agent_interaction_diversity" in result.engagement_metrics_b
+    assert "cross_agent_interaction_diversity" in result.deltas
