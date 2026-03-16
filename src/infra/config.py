@@ -25,6 +25,7 @@ CONFIG_OVERRIDES: dict[str, Any] = {}
 
 # Default values
 DEFAULT_CONFIG: dict[str, object] = {
+    "PROFILE": "",
     "LLM_API_BASE": "http://localhost:11434",
     "OLLAMA_API_BASE": "http://localhost:11434",
     "VLLM_API_BASE": "",
@@ -347,6 +348,38 @@ BOOL_CONFIG_KEYS = [
     "DISCORD_CHARACTER_ARC_SUMMARIES",
 ]
 
+PUBLIC_PERSISTENT_PROFILE: dict[str, Any] = {
+    "LLM_API_BASE": "http://localhost:8001/v1",
+    "VLLM_API_BASE": "http://localhost:8001/v1",
+    "DEFAULT_LLM_MODEL": "mistralai/Mistral-7B-Instruct-v0.2",
+    "MODEL_NAME": "mistralai/Mistral-7B-Instruct-v0.2",
+    "SNAPSHOT_INTERVAL_STEPS": 25,
+    "MEMORY_PRUNING_ENABLED": True,
+    "MEMORY_PRUNING_L2_ENABLED": True,
+    "MEMORY_PRUNING_L1_MUS_ENABLED": True,
+    "MEMORY_PRUNING_L2_MUS_ENABLED": True,
+    "MEMORY_PRUNING_L1_MUS_THRESHOLD": 0.2,
+    "MEMORY_PRUNING_L2_MUS_THRESHOLD": 0.2,
+    "MEMORY_PRUNING_USAGE_COUNT_THRESHOLD": 2,
+    "DISCORD_DEFAULT_BROADCAST": True,
+    "DISCORD_ALLOW_OPA_CONTROL_COMMANDS": True,
+    "USE_COUNCIL_MODE": True,
+    "USE_COUNCIL_FOR_DECISIONS": True,
+    "KNOWLEDGE_BOARD_BACKEND": "graph",
+}
+
+
+def _apply_profile_overrides(data: dict[str, Any]) -> dict[str, Any]:
+    """Apply optional named configuration profile defaults."""
+    profile = str(data.get("PROFILE") or os.getenv("PROFILE") or "").strip().lower()
+    if profile == "public_persistent":
+        for key, value in PUBLIC_PERSISTENT_PROFILE.items():
+            if key not in os.environ:
+                data[key] = value
+        data["PROFILE"] = "public_persistent"
+    return data
+
+
 # Keys that must be defined for a complete runtime configuration.
 # ``REDPANDA_BROKER`` enables event logging through Redpanda, while
 # ``OPA_URL`` points to the Open Policy Agent service used to filter
@@ -386,7 +419,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
         if missing:
             raise RuntimeError("Missing mandatory configuration keys: " + ", ".join(missing))
 
-    data: dict[str, Any] = new_settings.model_dump()
+    data: dict[str, Any] = _apply_profile_overrides(new_settings.model_dump())
     for key, value in data.items():
         setattr(settings, key, value)
     _CONFIG.update(data)
@@ -396,7 +429,7 @@ def load_config(*, validate_required: bool = True) -> dict[str, Any]:
 def get_config(key: str | None = None) -> Any:
     """Return a configuration value from :class:`ConfigSettings`."""
     if key is None:
-        return settings.model_dump()
+        return _apply_profile_overrides(settings.model_dump())
     if key in _CONFIG and str(_CONFIG.get(key, "")).strip() != "":
         return _CONFIG[key]
     if hasattr(settings, key):

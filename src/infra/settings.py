@@ -28,6 +28,7 @@ class ConfigSettings(BaseSettings):
         super().__init__(**data)
 
     # Deprecated individual base URLs - still loaded for backward compatibility
+    PROFILE: str = ""
     OLLAMA_API_BASE: str = "http://localhost:11434"
     VLLM_API_BASE: str = ""
 
@@ -114,6 +115,7 @@ class ConfigSettings(BaseSettings):
     DISCORD_BOT_TOKEN: str = ""
     DISCORD_CHANNEL_ID: int | None = None
     DISCORD_TOKENS_DB_URL: str = ""
+    DISCORD_DEFAULT_BROADCAST: bool = False
     DASHBOARD_API_BASE_URL: str = "http://localhost:8000"
     DISCORD_ALLOW_OPA_CONTROL_COMMANDS: bool = False
     OPENAI_API_KEY: str = ""
