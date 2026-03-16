@@ -26,6 +26,7 @@ from src.infra import metrics as infra_metrics
 from src.infra.config import get_config
 from src.infra.ledger import ledger
 from src.interfaces import metrics
+from src.sim.analytics import compute_user_value_kpis
 from src.sim.context import SimulationContext
 from src.sim.event_bus import get_event_bus
 from src.sim.knowledge_board_queries import (
@@ -1019,6 +1020,46 @@ async def api_token_balances() -> Response:
     return JSONResponse({"agents": agents})
 
 
+
+
+def _knowledge_entries_for_analytics(sim: Any) -> list[dict[str, Any]]:
+    board = getattr(sim, "knowledge_board", None)
+    if board is None:
+        return []
+    if hasattr(board, "to_snapshot"):
+        try:
+            snapshot = board.to_snapshot()
+            entries = snapshot.get("entries", []) if isinstance(snapshot, dict) else []
+            if isinstance(entries, list):
+                return [dict(item) for item in entries if isinstance(item, dict)]
+        except Exception:
+            logger.exception("Failed to snapshot knowledge board for analytics")
+    entries = getattr(board, "entries", [])
+    return [
+        item.model_dump() if hasattr(item, "model_dump") else dict(item)
+        for item in entries
+        if hasattr(item, "model_dump") or isinstance(item, dict)
+    ]
+
+
+def _user_value_metrics_data() -> dict[str, Any]:
+    sim = SIM_STATE.get("simulation")
+    if sim is None:
+        return {}
+    events = event_log.fetch_events(after_step=0)
+    knowledge_entries = _knowledge_entries_for_analytics(sim)
+    report = compute_user_value_kpis(events=events, knowledge_entries=knowledge_entries)
+    latest_eval = sim.metrics[-1] if getattr(sim, "metrics", None) else {}
+    target_summary = latest_eval.get("_target_summary") if isinstance(latest_eval, dict) else None
+    target_alerts = latest_eval.get("_target_alerts") if isinstance(latest_eval, dict) else []
+    payload = report.as_dict()
+    payload["periodic_summary"] = {
+        "step": getattr(sim, "current_step", 0),
+        "target_summary": target_summary if isinstance(target_summary, dict) else {},
+        "target_alerts": target_alerts if isinstance(target_alerts, list) else [],
+    }
+    return payload
+
 def _cost_metrics_data() -> dict[str, float | int]:
     """Collect DU cost, sentiment, and reliability metrics for dashboards."""
 
@@ -1055,14 +1096,25 @@ def _cost_metrics_data() -> dict[str, float | int]:
 async def api_cost_metrics() -> Response:
     """Return DU cost and latency metrics for dashboards."""
 
-    return JSONResponse(_cost_metrics_data())
+    payload = _cost_metrics_data()
+    payload["user_value_kpis"] = _user_value_metrics_data()
+    return JSONResponse(payload)
 
 
 @app.get("/api/observability_metrics")
 async def api_observability_metrics() -> Response:
     """Return DU cost and latency metrics for dashboards."""
 
-    return JSONResponse(_cost_metrics_data())
+    payload = _cost_metrics_data()
+    payload["user_value_kpis"] = _user_value_metrics_data()
+    return JSONResponse(payload)
+
+
+@app.get("/api/user_value_metrics")
+async def api_user_value_metrics() -> Response:
+    """Return simulator user-value KPIs, stagnation alerts, and periodic summary metadata."""
+
+    return JSONResponse(_user_value_metrics_data())
 
 
 @app.get("/api/character_arcs")

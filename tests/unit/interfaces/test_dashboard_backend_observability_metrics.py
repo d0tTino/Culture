@@ -180,3 +180,48 @@ async def test_agent_state_and_timeline_include_trait_artifacts(
         "personality_transition",
         "lifecycle_transition",
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_api_user_value_metrics_includes_kpis_and_periodic_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_dashboard_backend(monkeypatch)
+    db = load_dashboard_backend()
+
+    sim = types.SimpleNamespace(
+        current_step=12,
+        metrics=[{"_target_summary": {"novelty": {"status": "pass"}}, "_target_alerts": ["none"]}],
+        knowledge_board=types.SimpleNamespace(
+            to_snapshot=lambda: {
+                "entries": [
+                    {
+                        "entry_id": "e1",
+                        "step": 1,
+                        "entry_type": "conflict",
+                        "content_summary": "conflict",
+                        "tags": ["conflict"],
+                    }
+                ]
+            }
+        ),
+    )
+    monkeypatch.setitem(db.DEFAULT_CONTEXT.sim_state, "simulation", sim)
+    monkeypatch.setattr(
+        db.event_log,
+        "fetch_events",
+        lambda after_step=0: [
+            {"type": "agent_action", "step": 1, "agent_id": "a", "action_intent": "idle"},
+            {"type": "human_command", "step": 2},
+            {"type": "snapshot", "step": 3},
+        ],
+    )
+
+    resp = await db.api_user_value_metrics()
+    payload = json.loads(resp.body)
+
+    assert "narrative_continuity_score" in payload
+    assert "unresolved_conflict_count" in payload
+    assert "stagnation_alerts" in payload
+    assert payload["periodic_summary"]["step"] == 12
