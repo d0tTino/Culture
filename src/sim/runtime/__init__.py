@@ -14,6 +14,7 @@ __all__ = [
     "RuntimeOrchestrator",
     "Sequencer",
     "StepContext",
+    "observability_payload",
     "run_default_load_suite",
     "run_synthetic_scenario",
 ]
@@ -21,6 +22,7 @@ __all__ = [
 from src.sim.runtime.actor_runtime import EventEnvelope, Mailbox, RuntimeOrchestrator, Sequencer
 from src.sim.runtime.load_test_harness import (
     LoadScenarioResult,
+    observability_payload,
     run_default_load_suite,
     run_synthetic_scenario,
 )
