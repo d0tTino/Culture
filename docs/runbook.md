@@ -153,3 +153,54 @@ Follow these steps to manually export a dataset using `scripts/export_traces.py`
    ```bash
    python scripts/export_traces.py --snapshots snapshots/ --output data/traces.jsonl
    ```
+
+## Public Persistent World Profile
+Use the `public_persistent` profile for long-lived public deployments:
+
+```bash
+PROFILE=public_persistent scripts/start_public_persistent.sh --steps 100
+```
+
+This launcher validates Python/runtime dependencies and checks LLM connectivity before booting.
+
+## Incident Recovery
+When production traffic degrades or halts:
+1. Check subsystem status and readiness:
+   ```bash
+   curl -s http://localhost:8000/health | jq
+   curl -s -o /tmp/ready.json -w "%{http_code}\n" http://localhost:8000/ready
+   cat /tmp/ready.json | jq
+   ```
+2. If `llm` is degraded, restore backend first (`scripts/start_vllm.sh` or Ollama fallback) and retest `/ready`.
+3. If `event_bus` is degraded, restart the app process to reinitialize subscribers.
+4. If `graph_store`/`vector_store` is degraded, switch to safe mode by temporarily setting `KNOWLEDGE_BOARD_BACKEND=memory` and restarting.
+5. Confirm recovery by replaying one smoke event through dashboard/event ingestion test.
+
+## Snapshot Restore
+To restore from latest snapshot:
+
+```bash
+python -m src.app --replay snapshots/snapshot_<step>.json --replay-start <step>
+```
+
+To inspect available snapshots and latest candidate:
+
+```bash
+ls snapshots/snapshot_*.json snapshots/snapshot_*.json.zst 2>/dev/null | tail -n 5
+```
+
+After restore, verify `/health` and compare expected current step in dashboard.
+
+## Schema Migration
+Snapshots are schema-versioned and validated on load. For migrations:
+1. Back up snapshots:
+   ```bash
+   cp -r snapshots snapshots.backup.$(date +%Y%m%d%H%M%S)
+   ```
+2. Apply migration tooling/process for the new release.
+3. Run targeted tests:
+   ```bash
+   python -m pytest tests/integration/test_snapshot_replay.py
+   ```
+4. Load a migrated snapshot in staging and verify `/ready` plus event ingestion.
+5. Promote only after successful replay and health checks.

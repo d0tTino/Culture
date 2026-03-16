@@ -177,6 +177,60 @@ MISSIONS_PATH = (
 )
 
 
+def _subsystem_status() -> dict[str, dict[str, str | bool]]:
+    """Return readiness details for core runtime subsystems."""
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    statuses: dict[str, dict[str, str | bool]] = {
+        "llm": {"ok": False, "detail": "simulation not initialized"},
+        "vector_store": {"ok": False, "detail": "simulation not initialized"},
+        "graph_store": {"ok": False, "detail": "simulation not initialized"},
+        "event_bus": {"ok": False, "detail": "event bus unavailable"},
+        "snapshot_service": {"ok": False, "detail": "snapshot service unavailable"},
+    }
+
+    llm_base = str(get_config("LLM_API_BASE") or "").strip()
+    if llm_base:
+        statuses["llm"] = {"ok": True, "detail": f"configured at {llm_base}"}
+    else:
+        statuses["llm"] = {"ok": False, "detail": "LLM_API_BASE is not configured"}
+
+    if sim is not None:
+        vector_store = getattr(sim, "vector_store_manager", None)
+        if vector_store is not None:
+            statuses["vector_store"] = {"ok": True, "detail": type(vector_store).__name__}
+        else:
+            statuses["vector_store"] = {"ok": False, "detail": "vector store manager missing"}
+
+        board = getattr(sim, "knowledge_board", None)
+        board_name = type(board).__name__ if board is not None else "None"
+        if board is not None and "graph" in board_name.lower():
+            statuses["graph_store"] = {"ok": True, "detail": board_name}
+        else:
+            statuses["graph_store"] = {
+                "ok": False,
+                "detail": f"graph backend not active (current: {board_name})",
+            }
+
+    try:
+        bus = get_event_bus()
+    except Exception as exc:  # pragma: no cover - defensive
+        statuses["event_bus"] = {"ok": False, "detail": f"event bus error: {exc}"}
+    else:
+        subscribers = len(getattr(bus, "_queues", []))
+        statuses["event_bus"] = {"ok": True, "detail": f"active with {subscribers} subscribers"}
+
+    latest = SnapshotPersistenceService.latest_snapshot_path(directory=SNAPSHOT_DIR)
+    if latest is not None:
+        statuses["snapshot_service"] = {"ok": True, "detail": f"latest snapshot: {latest.name}"}
+    else:
+        statuses["snapshot_service"] = {
+            "ok": True,
+            "detail": f"snapshot directory ready at {SNAPSHOT_DIR}",
+        }
+
+    return statuses
+
+
 class AgentMessage(BaseModel):
     agent_id: str
     content: str
@@ -519,7 +573,18 @@ async def api_agent_stats() -> Response:
 
 @app.get("/health")
 async def health() -> Response:
-    return JSONResponse({"status": "ok"})
+    statuses = _subsystem_status()
+    overall = "ok" if all(bool(item.get("ok")) for item in statuses.values()) else "degraded"
+    return JSONResponse({"status": overall, "subsystems": statuses})
+
+
+@app.get("/ready")
+async def readiness() -> Response:
+    statuses = _subsystem_status()
+    required = ("llm", "event_bus", "snapshot_service")
+    missing = [name for name in required if not bool(statuses[name].get("ok"))]
+    payload = {"ready": not missing, "required": required, "subsystems": statuses}
+    return JSONResponse(payload, status_code=200 if not missing else 503)
 
 
 @app.get("/api/missions")

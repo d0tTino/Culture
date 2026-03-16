@@ -128,6 +128,25 @@ L2 MUS-based pruning:
 
 - `MAX_PROJECT_MEMBERS` - Maximum number of members in a project
 
+
+### Deployment Profiles
+
+- `PROFILE` - Optional named preset. Set `PROFILE=public_persistent` to enable a cohesive deployment tuned for persistent public worlds.
+
+`public_persistent` applies defaults for:
+- vLLM-backed LLM endpoint/model (`LLM_API_BASE`, `VLLM_API_BASE`, `DEFAULT_LLM_MODEL`)
+- Faster snapshot cadence (`SNAPSHOT_INTERVAL_STEPS=25`)
+- Memory pruning policy (`MEMORY_PRUNING_*` toggles + MUS thresholds)
+- Moderation defaults (`DISCORD_DEFAULT_BROADCAST=1`, `DISCORD_ALLOW_OPA_CONTROL_COMMANDS=1`)
+- Governance toggles (`USE_COUNCIL_MODE=1`, `USE_COUNCIL_FOR_DECISIONS=1`)
+- Graph knowledge backend (`KNOWLEDGE_BOARD_BACKEND=graph`)
+
+Use the startup helper to validate dependencies and start with this profile:
+
+```bash
+scripts/start_public_persistent.sh --steps 25
+```
+
 ### Observability Settings
 
 - `ENABLE_OTEL` - Set to `1` to enable OpenTelemetry log export
