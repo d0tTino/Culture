@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from src.sim.runtime.actor_runtime import EventEnvelope, Mailbox
-from src.sim.runtime.load_test_harness import run_default_load_suite
+from src.sim.runtime.load_test_harness import observability_payload, run_default_load_suite
 
 pytestmark = pytest.mark.unit
 
@@ -38,5 +38,18 @@ def test_default_load_suite_metrics_and_replay_determinism() -> None:
     assert [result.agent_count for result in results] == [20, 50, 100]
     for result in results:
         assert result.throughput_events_per_sec > 0
+        assert result.p50_step_latency_ms >= 0
         assert result.p95_step_latency_ms >= 0
+        assert result.memory_growth_bytes >= 0
         assert result.deterministic_replay
+
+
+def test_observability_payload_includes_latency_and_memory_growth() -> None:
+    results = asyncio.run(run_default_load_suite())
+    payload = observability_payload(results)
+
+    assert len(payload) == 3
+    for row in payload:
+        assert "tick_latency_p50_ms" in row
+        assert "tick_latency_p95_ms" in row
+        assert "memory_growth_bytes" in row

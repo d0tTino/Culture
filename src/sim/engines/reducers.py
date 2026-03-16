@@ -21,6 +21,8 @@ class DomainEventReducer:
                 )
             elif event.name == "planned_turns_ready":
                 context.planned_outputs = list(event.payload.get("planned_outputs", []))
+            elif event.name == "planned_turns_committed":
+                context.planned_outputs = list(event.payload.get("committed_outputs", []))
             elif event.name == "scheduler_events_ready":
                 context.events = list(event.payload.get("events", []))
             elif event.name == "bootstrap_agent_event_requested":

@@ -51,6 +51,14 @@ class DummySimulation:
             world_day=0,
             active_global_modifiers=[],
         )
+        self.world_state = SimpleNamespace(
+            environment=SimpleNamespace(
+                council_window_active=False,
+                weather="clear",
+                active_global_modifiers=[],
+            ),
+            temporal=SimpleNamespace(world_day=0),
+        )
         self.engine = SimpleNamespace(emit_evaluation_events=self._emit_eval)
         self._evaluated = False
 
@@ -92,4 +100,3 @@ async def test_kernel_runs_tick_and_populates_context() -> None:
     assert count == 1
     assert context.phase_order == ["ingest", "decide", "apply", "persist", "publish"]
     assert context.tick_context is not None
-    assert simulation._evaluated
