@@ -124,15 +124,12 @@ class TurnEngine:
             intents = [dict(intent) for intent in context.planned_outputs]
             accepted, rejected = simulation._resolve_tick_conflicts(intents)
             committed = [*accepted, *rejected]
+            accepted_turns = 0
             for commit_index, intent in enumerate(committed):
                 intent["commit_index"] = commit_index
                 if intent.get("merge_outcome") == "accepted":
-                    simulation.total_turns_executed += 1
+                    accepted_turns += 1
 
-            simulation.current_step += len(intents)
-            simulation.current_agent_index = (simulation.current_agent_index + len(intents)) % len(
-                simulation.agents
-            )
             simulation._set_labeled_gauge(
                 STEP_PHASE_LATENCY_MS,
                 phase="deterministic_commit_apply",
@@ -147,7 +144,12 @@ class TurnEngine:
                 DomainEvent(
                     domain="turn",
                     name="planned_turns_committed",
-                    payload={"committed_outputs": committed, "tick_step": tick.step},
+                    payload={
+                        "committed_outputs": committed,
+                        "tick_step": tick.step,
+                        "turn_count": len(intents),
+                        "accepted_turn_count": accepted_turns,
+                    },
                 )
             ]
         agent_id = simulation.agents[simulation.current_agent_index].get_id()

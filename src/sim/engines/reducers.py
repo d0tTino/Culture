@@ -23,8 +23,16 @@ class DomainEventReducer:
                 context.planned_outputs = list(event.payload.get("planned_outputs", []))
             elif event.name == "planned_turns_committed":
                 context.planned_outputs = list(event.payload.get("committed_outputs", []))
+                turn_count = int(event.payload.get("turn_count", len(context.planned_outputs)))
+                if simulation.agents:
+                    simulation.current_step += turn_count
+                    simulation.current_agent_index = (
+                        simulation.current_agent_index + turn_count
+                    ) % len(simulation.agents)
+                simulation.total_turns_executed += int(event.payload.get("accepted_turn_count", 0))
             elif event.name == "scheduler_events_ready":
                 context.events = list(event.payload.get("events", []))
+                simulation.total_turns_executed += len(context.events)
             elif event.name == "bootstrap_agent_event_requested":
                 agent_index = int(event.payload["agent_index"])
                 agent_id = str(event.payload["agent_id"])
