@@ -60,6 +60,7 @@ class DummySimulation:
             temporal=SimpleNamespace(world_day=0),
         )
         self.engine = SimpleNamespace(emit_evaluation_events=self._emit_eval)
+        self.total_turns_executed = 0
         self._evaluated = False
 
     async def _emit_eval(self, _events: list[dict[str, Any]]) -> None:

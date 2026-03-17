@@ -54,8 +54,6 @@ from src.interfaces.external_event_routing import (
 from src.interfaces.interaction_commands import InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
-    STEP_PHASE_LATENCY_MS,
-    STEP_PHASE_QUEUE_DEPTH,
 )
 from src.shared.telemetry import trace_agent_action
 from src.shared.typing import SimulationMessage
@@ -1869,123 +1867,21 @@ class Simulation:
         *,
         parallel_decision: bool = True,
     ) -> list[dict[str, Any]]:
-        """Run a phased step pipeline: perception, parallel planning, deterministic commit."""
+        """Deprecated compatibility adapter around the canonical kernel step path."""
 
         warnings.warn(
-            "Simulation._run_step_pipeline is an internal kernel path and will be removed as "
-            "a public entrypoint; use Simulation.run_step instead.",
+            "Simulation._run_step_pipeline is a compatibility adapter; use "
+            "Simulation.run_step for canonical runtime progression.",
             DeprecationWarning,
             stacklevel=2,
         )
-
-        if not self.agents:
+        _ = parallel_decision
+        await self._progress_step(max_turns=max_turns)
+        context = self.engine.last_step_context
+        if context is None:
             return []
+        return context.planned_outputs if context.planned_outputs else context.events
 
-        batch_size = min(max_turns, len(self.agents))
-        base_step = self.current_step + 1
-
-        tick_snapshot = self._build_tick_read_snapshot(turn_index=base_step)
-
-        phase_start = time.perf_counter()
-        plans: list[dict[str, Any]] = []
-        for idx in range(batch_size):
-            agent_index = (self.current_agent_index + idx) % len(self.agents)
-            agent = self.agents[agent_index]
-            plans.append(
-                {
-                    "batch_index": idx,
-                    "agent_index": agent_index,
-                    "agent_id": agent.agent_id,
-                    "simulation_step": base_step + idx,
-                    "resource": "agent_turn",
-                    "target": agent.agent_id,
-                    "tick_snapshot": tick_snapshot,
-                    "snapshot": self._build_step_perception_snapshot(base_step + idx),
-                }
-            )
-        self._set_labeled_gauge(
-            STEP_PHASE_LATENCY_MS,
-            phase="perception_snapshot",
-            value=(time.perf_counter() - phase_start) * 1000,
-        )
-        self._set_labeled_gauge(
-            STEP_PHASE_QUEUE_DEPTH, phase="planning_batch_size", value=len(plans)
-        )
-
-        phase_start = time.perf_counter()
-
-        async def _run_plan(plan: Mapping[str, Any]) -> Mapping[str, Any]:
-            return await self.agents[int(plan["agent_index"])].run_turn(
-                simulation_step=int(plan["simulation_step"]),
-                environment_perception=dict(cast(Mapping[str, Any], plan["snapshot"])),
-                memory_service=self.memory_service,
-                vector_store_manager=self.vector_store_manager,
-                knowledge_board=self.knowledge_board,
-            )
-
-        if parallel_decision:
-            planning_results = await asyncio.gather(*[_run_plan(plan) for plan in plans])
-        else:
-            planning_results = []
-            for plan in plans:
-                planning_results.append(await _run_plan(plan))
-        self._set_labeled_gauge(
-            STEP_PHASE_LATENCY_MS,
-            phase="concurrent_planning",
-            value=(time.perf_counter() - phase_start) * 1000,
-        )
-
-        phase_start = time.perf_counter()
-        intents: list[dict[str, Any]] = []
-        for plan, output in zip(plans, planning_results, strict=False):
-            plan["output"] = output
-            if isinstance(output, Mapping):
-                action_intent = str(output.get("action_intent", AgentActionIntent.IDLE.value))
-                intent = {
-                    "batch_index": int(plan["batch_index"]),
-                    "agent_index": int(plan["agent_index"]),
-                    "agent_id": str(plan["agent_id"]),
-                    "simulation_step": int(plan["simulation_step"]),
-                    "action_intent": action_intent,
-                    "requested_action_intent": action_intent,
-                    "message_content": output.get("message_content"),
-                    "message_recipient_id": output.get("message_recipient_id"),
-                    "map_action": output.get("map_action"),
-                    "resource": self._action_resource_key(
-                        {
-                            "agent_id": plan["agent_id"],
-                            "action_intent": action_intent,
-                            "map_action": output.get("map_action"),
-                            "message_recipient_id": output.get("message_recipient_id"),
-                        }
-                    ),
-                    "target": str(output.get("target", plan["target"])),
-                    "metadata": {
-                        "governance_sensitive": self._is_governance_sensitive(
-                            {"action_intent": action_intent}
-                        ),
-                        "tick_snapshot_turn": tick_snapshot["turn_index"],
-                    },
-                }
-                intents.append(intent)
-
-        ordered, rejected = self._resolve_tick_conflicts(intents)
-        committed: list[dict[str, Any]] = []
-        for intent in ordered:
-            committed.append(intent)
-            self.total_turns_executed += 1
-        committed.extend(rejected)
-        self.current_step += len(intents)
-        self.current_agent_index = (self.current_agent_index + len(intents)) % len(self.agents)
-        self._set_labeled_gauge(
-            STEP_PHASE_LATENCY_MS,
-            phase="deterministic_commit_apply",
-            value=(time.perf_counter() - phase_start) * 1000,
-        )
-        self._set_labeled_gauge(
-            STEP_PHASE_QUEUE_DEPTH, phase="commit_batch_size", value=len(committed)
-        )
-        return committed
 
     async def async_run(self: Self, num_steps: int) -> None:
         """
