@@ -2228,4 +2228,14 @@ def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
     return commands
 
 
+_legacy_register_slash_commands = register_slash_commands
+
+
+def register_slash_commands(tree: Any) -> dict[str, Callable[..., Any]]:
+    """Register slash commands via declarative routing table."""
+    from src.interfaces.discord_bot.routing import register_slash_commands as _register
+
+    return _register(tree)
+
+
 register_slash_commands(bot.tree)
