@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.interfaces.command_dto import CommandDTOT
 from src.interfaces.interaction_schema import (
     ENVELOPE_INTENTS,
     InteractionAuthScope,
@@ -50,6 +51,7 @@ class InteractionService:
 
 __all__ = [
     "ENVELOPE_INTENTS",
+    "CommandDTOT",
     "InteractionAuthScope",
     "InteractionBudgetAttribution",
     "InteractionContext",

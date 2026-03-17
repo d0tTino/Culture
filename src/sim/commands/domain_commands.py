@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Literal
-
-from pydantic import BaseModel, Field
-
+from src.interfaces.command_dto import (
+    BroadcastDTO,
+    ControlDTO,
+    DirectMessageDTO,
+    HumanMessageDTO,
+    InjectEventDTO,
+    KnowledgeBoardDTO,
+    ModerationDTO,
+    SpawnAgentDTO,
+)
 from src.interfaces.interaction_schema import (
     BroadcastEnvelope,
     ControlEnvelope,
@@ -18,19 +24,12 @@ from src.interfaces.interaction_schema import (
 )
 
 
-class DomainCommand(BaseModel):
-    kind: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
+class DomainCommand:
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         raise NotImplementedError
 
 
-class HumanMessageCommand(DomainCommand):
-    kind: Literal["human_message"] = "human_message"
-    content: str
-    recipient_id: str | None = None
-    target_agent_id: str | None = None
+class HumanMessageCommand(HumanMessageDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return HumanMessageEnvelope(
@@ -47,12 +46,7 @@ class HumanMessageCommand(DomainCommand):
         )
 
 
-class DirectMessageCommand(DomainCommand):
-    kind: Literal["direct_message"] = "direct_message"
-    content: str
-    recipient_id: str | None = None
-    target_agent_id: str | None = None
-    budget_agent_id: str | None = None
+class DirectMessageCommand(DirectMessageDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return DirectMessageEnvelope(
@@ -70,10 +64,7 @@ class DirectMessageCommand(DomainCommand):
         )
 
 
-class BroadcastCommand(DomainCommand):
-    kind: Literal["broadcast"] = "broadcast"
-    content: str
-    budget_agent_id: str | None = None
+class BroadcastCommand(BroadcastDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return BroadcastEnvelope(
@@ -89,9 +80,7 @@ class BroadcastCommand(DomainCommand):
         )
 
 
-class KnowledgeBoardCommand(DomainCommand):
-    kind: Literal["knowledge_board"] = "knowledge_board"
-    content: str
+class KnowledgeBoardCommand(KnowledgeBoardDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return KnowledgeBoardEnvelope(
@@ -102,13 +91,7 @@ class KnowledgeBoardCommand(DomainCommand):
         )
 
 
-class SpawnAgentCommand(DomainCommand):
-    kind: Literal["spawn"] = "spawn"
-    agent_id: str | None = None
-    role: str | dict[str, Any] | None = None
-    persona: str | None = None
-    backstory: str | None = None
-    traits: dict[str, float] | None = None
+class SpawnAgentCommand(SpawnAgentDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return SpawnEnvelope(
@@ -123,12 +106,7 @@ class SpawnAgentCommand(DomainCommand):
         )
 
 
-class ControlCommand(DomainCommand):
-    kind: Literal["control"] = "control"
-    action: str
-    value: float | None = None
-    tags: list[str] | None = None
-    agent_id: str | None = None
+class ControlCommand(ControlDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return ControlEnvelope(
@@ -142,11 +120,7 @@ class ControlCommand(DomainCommand):
         )
 
 
-class ModerationCommand(DomainCommand):
-    kind: Literal["moderation"] = "moderation"
-    action: str
-    agent_id: str | None = None
-    value: float | None = None
+class ModerationCommand(ModerationDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return ModerationEnvelope(
@@ -159,11 +133,7 @@ class ModerationCommand(DomainCommand):
         )
 
 
-class InjectEventCommand(DomainCommand):
-    kind: Literal["inject_event"] = "inject_event"
-    text: str
-    scope: str = "global"
-    agent_id: str | None = None
+class InjectEventCommand(InjectEventDTO, DomainCommand):
 
     def to_envelope(self, *, context: InteractionContext) -> InteractionEnvelope:
         return InjectEventEnvelope(
