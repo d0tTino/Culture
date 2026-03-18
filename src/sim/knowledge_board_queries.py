@@ -112,3 +112,42 @@ class PagedQueryResultDTO:
             "page_size": self.page_size,
             "items": [item.to_dict() for item in self.items],
         }
+
+
+@dataclass(frozen=True)
+class UnsupportedCapabilityQueryResultDTO:
+    capability: str
+    message: str
+    query_type: str
+    fallback_items: tuple[RankedEntryDTO, ...] = ()
+
+    @property
+    def total(self) -> int:
+        return len(self.fallback_items)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "unsupported": True,
+            "capability": self.capability,
+            "message": self.message,
+            "query_type": self.query_type,
+            "total": self.total,
+            "items": [item.to_dict() for item in self.fallback_items],
+        }
+
+
+def unsupported_capability_result(
+    *,
+    capability: str,
+    query_type: str,
+    fallback_items: tuple[RankedEntryDTO, ...] = (),
+) -> UnsupportedCapabilityQueryResultDTO:
+    return UnsupportedCapabilityQueryResultDTO(
+        capability=capability,
+        message=(
+            f"Knowledge board backend does not support capability '{capability}' "
+            f"required for query '{query_type}'."
+        ),
+        query_type=query_type,
+        fallback_items=fallback_items,
+    )

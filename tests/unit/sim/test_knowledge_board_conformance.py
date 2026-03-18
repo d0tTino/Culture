@@ -30,7 +30,9 @@ class MockSession:
             return DummyResult([{"cnt": len(self.driver.entries)}])
         if "ORDER BY e.step DESC" in query:
             limit = params["limit"]
-            rows = sorted(self.driver.entries, key=lambda entry: entry["step"], reverse=True)[:limit]
+            rows = sorted(self.driver.entries, key=lambda entry: entry["step"], reverse=True)[
+                :limit
+            ]
             return DummyResult([{"e": row} for row in rows])
         if "ORDER BY e.step ASC" in query:
             rows = sorted(self.driver.entries, key=lambda entry: entry["step"])
@@ -131,14 +133,17 @@ def test_snapshot_replay_invariants(
 
 
 @pytest.mark.parametrize(
-    ("factory", "expects_extensions"),
-    [(_memory_factory, False), (_graph_factory, True)],
+    ("factory", "expects_extensions", "expects_voting"),
+    [(_memory_factory, False, True), (_graph_factory, True, True)],
 )
 def test_optional_feature_checks(
     factory: Callable[[], KnowledgeBoardProtocol],
     expects_extensions: bool,
+    expects_voting: bool,
 ) -> None:
     board = factory()
 
-    assert supports_voting(board) is expects_extensions
+    assert supports_voting(board) is expects_voting
     assert supports_graph_queries(board) is expects_extensions
+    assert board.supports_threads is True
+    assert board.supports_causal_chain is True

@@ -165,6 +165,11 @@ class LoggingList(list[T], Generic[T]):
 
 
 class KnowledgeBoard:
+    supports_threads = True
+    supports_causal_chain = True
+    supports_votes = True
+    supports_graph_queries = False
+
     """
     Represents a shared knowledge board that agents can read from and eventually write to.
     Maintains a list of knowledge entries as structured dictionaries.
@@ -263,7 +268,9 @@ class KnowledgeBoard:
         self.entries = LoggingList(self._records_from_dicts(entries))
         metrics.KNOWLEDGE_BOARD_SIZE.set(len(self.entries))
 
-    def _records_from_dicts(self: Self, entries: list[dict[str, Any]]) -> list[KnowledgeEntryRecord]:
+    def _records_from_dicts(
+        self: Self, entries: list[dict[str, Any]]
+    ) -> list[KnowledgeEntryRecord]:
         records: list[KnowledgeEntryRecord] = []
         for entry in entries:
             migrated = migrate_entry_dict(entry)
@@ -273,7 +280,9 @@ class KnowledgeBoard:
                         entry_id=str(migrated.get("entry_id") or ""),
                         step=int(migrated.get("step") or 0),
                         agent_id=str(migrated.get("agent_id") or "unknown"),
-                        entry_type=str(migrated.get("entry_type") or KnowledgeEntryType.NOTE.value),
+                        entry_type=str(
+                            migrated.get("entry_type") or KnowledgeEntryType.NOTE.value
+                        ),
                         content_full=str(migrated.get("content_full") or ""),
                         content_display=str(migrated.get("content_display") or ""),
                         content_summary=str(
@@ -438,7 +447,8 @@ class KnowledgeBoard:
         votes = [
             entry
             for entry in self.entries
-            if entry.entry_type == KnowledgeEntryType.VOTE.value and entry.parent_entry_id == proposal_id
+            if entry.entry_type == KnowledgeEntryType.VOTE.value
+            and entry.parent_entry_id == proposal_id
         ]
         approvals = 0
         rejections = 0

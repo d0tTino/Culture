@@ -55,6 +55,10 @@ class KnowledgeBoardCapabilities(Protocol):
     """Strict capability contract used by callers."""
 
     lock: Any
+    supports_threads: bool
+    supports_causal_chain: bool
+    supports_votes: bool
+    supports_graph_queries: bool
 
     def append_entry(
         self,
@@ -100,7 +104,9 @@ class KnowledgeBoardCapabilities(Protocol):
 
     def get_agent_stance_history(self, agent_id: str) -> list[dict[str, Any]]: ...
 
-    def get_active_proposal_projection(self, limit: int = 20) -> list[ActiveProposalProjection]: ...
+    def get_active_proposal_projection(
+        self, limit: int = 20
+    ) -> list[ActiveProposalProjection]: ...
 
     def get_consensus_projection(self, proposal_id: str) -> ConsensusStatusProjection: ...
 
@@ -143,20 +149,40 @@ def _require_capability(board: object, capability: type[CapabilityT], name: str)
     raise UnsupportedKnowledgeBoardCapabilityError(capability=name, board=board)
 
 
+def _coerce_board(board: object) -> KnowledgeBoardCapabilities:
+    if isinstance(board, KnowledgeBoardCapabilities):
+        return cast(KnowledgeBoardCapabilities, board)
+    if isinstance(board, GraphKnowledgeBoard):
+        return GraphKnowledgeBoardAdapter(board)
+    if isinstance(board, KnowledgeBoard):
+        return InMemoryKnowledgeBoardAdapter(board)
+    raise UnsupportedKnowledgeBoardCapabilityError(
+        capability="KnowledgeBoardCapabilities", board=board
+    )
+
+
 def as_entry_store(board: object) -> EntryStore:
-    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
+    return _coerce_board(board)
 
 
 def as_relationship_store(board: object) -> RelationshipStore:
-    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
+    capability_board = _coerce_board(board)
+    if not getattr(capability_board, "supports_graph_queries", False):
+        raise UnsupportedKnowledgeBoardCapabilityError(capability="RelationshipStore", board=board)
+    return capability_board
 
 
 def as_proposal_voting_store(board: object) -> ProposalVotingStore:
-    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
+    capability_board = _coerce_board(board)
+    if not getattr(capability_board, "supports_votes", False):
+        raise UnsupportedKnowledgeBoardCapabilityError(
+            capability="ProposalVotingStore", board=board
+        )
+    return capability_board
 
 
 def as_semantic_query_store(board: object) -> SemanticQueryStore:
-    return _require_capability(board, KnowledgeBoardCapabilities, "KnowledgeBoardCapabilities")
+    return _coerce_board(board)
 
 
 def _normalize_entries(
@@ -217,6 +243,10 @@ class InMemoryKnowledgeBoardAdapter:
     def __init__(self, board: KnowledgeBoard | None = None) -> None:
         self._board = board or KnowledgeBoard()
         self.lock = self._board.lock
+        self.supports_threads = self._board.supports_threads
+        self.supports_causal_chain = self._board.supports_causal_chain
+        self.supports_votes = self._board.supports_votes
+        self.supports_graph_queries = self._board.supports_graph_queries
         self._links: list[dict[str, Any]] = []
 
     def add_entry(
@@ -356,9 +386,11 @@ class InMemoryKnowledgeBoardAdapter:
                 entry_type=str(item.get("entry_type", "")),
                 parent_entry_id=item.get("parent_entry_id"),
                 target_agent_id=item.get("target_agent_id"),
-                stance=(item.get("reference_metadata") or {}).get("stance")
-                if isinstance(item.get("reference_metadata"), dict)
-                else item.get("stance"),
+                stance=(
+                    (item.get("reference_metadata") or {}).get("stance")
+                    if isinstance(item.get("reference_metadata"), dict)
+                    else item.get("stance")
+                ),
             )
             for item in self.get_agent_stance_history(agent_id)
         ]
@@ -370,6 +402,10 @@ class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
     def __init__(self, board: GraphKnowledgeBoard | None = None) -> None:
         self._graph = board or GraphKnowledgeBoard()
         self.lock = self._graph.lock
+        self.supports_threads = self._graph.supports_threads
+        self.supports_causal_chain = self._graph.supports_causal_chain
+        self.supports_votes = self._graph.supports_votes
+        self.supports_graph_queries = self._graph.supports_graph_queries
         self._tx_journal: dict[int, dict[str, list[dict[str, Any]]]] = {}
 
     def append_entry(
@@ -436,7 +472,21 @@ class GraphKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
         )
 
     def get_proposal_support_counts(self, proposal_ids: list[str] | None = None) -> dict[str, int]:
-        return {pid: row["support"] for pid, row in self.aggregate_votes(proposal_ids).items()}
+        return self._graph.get_proposal_support_counts(proposal_ids)
+
+    def get_endorsed_ideas(
+        self,
+        *,
+        min_endorsements: int = 1,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        return self._graph.get_endorsed_ideas(
+            min_endorsements=min_endorsements,
+            limit=limit,
+        )
+
+    def get_agent_contribution_graph(self, agent_id: str | None = None) -> list[dict[str, Any]]:
+        return self._graph.get_agent_contribution_graph(agent_id=agent_id)
 
     def begin_transaction(self) -> object:
         tx_id = id(object())
@@ -547,11 +597,11 @@ class VectorAugmentedKnowledgeBoardAdapter(InMemoryKnowledgeBoardAdapter):
 
 
 def supports_voting(board: object) -> bool:
-    return hasattr(board, "record_vote") and hasattr(board, "get_proposal_support_counts")
+    return bool(getattr(board, "supports_votes", False))
 
 
 def supports_graph_queries(board: object) -> bool:
-    return hasattr(board, "get_endorsed_ideas") and hasattr(board, "get_agent_contribution_graph")
+    return bool(getattr(board, "supports_graph_queries", False))
 
 
 def supports_read_models(board: object) -> bool:
