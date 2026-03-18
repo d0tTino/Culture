@@ -545,6 +545,45 @@ See [culture-ui/README.md](culture-ui/README.md) for additional details.
 UI requirements are summarized in [docs/culture_ui_requirements.md](docs/culture_ui_requirements.md).
 Steps for launching the Memory Explorer are in [docs/memory_explorer.md](docs/memory_explorer.md).
 
+
+## User Value KPI Reference
+
+The canonical user-value KPI contract is exposed in two places:
+
+- the dashboard KPI Card page (`/kpi-card`) for product-facing reference, and
+- this README for engineering-facing implementation details.
+
+The `/api/user_value_metrics` payload is currently versioned as `payload_version = 2`.
+Consumers should branch on `payload_version` before assuming metric semantics.
+
+### KPI definitions
+
+| Field | Definition |
+| --- | --- |
+| `payload_version` | Schema/semantics version for the KPI payload. Increment this whenever field meaning or alert behavior changes. |
+| `thresholds.min_novelty_score` | Minimum acceptable `novelty_score` before raising `low_novelty`. |
+| `thresholds.min_interaction_diversity` | Minimum acceptable `cross_agent_interaction_diversity` before raising `low_interaction_diversity`. |
+| `thresholds.max_repetitive_intents_ratio` | Maximum acceptable `repetitive_intents_ratio` before raising `repetitive_intents`. |
+| `thresholds.min_social_graph_change_count` | Minimum acceptable `social_graph_change_count` before raising `no_social_graph_change`. |
+| `narrative_continuity_score` | Average of knowledge-board continuation coverage and contiguous event-step continuity. |
+| `unresolved_conflict_count` | Conflict entries without linked resolution entries on the knowledge board. |
+| `cross_agent_interaction_diversity` | Observed directed interaction pairs divided by the total possible directed agent pairs. |
+| `user_intervention_rate` | Fraction of sampled events triggered by `human_command`. |
+| `return_session_continuity` | Continuity of snapshot/resume progression across snapshot steps. |
+| `novelty_score` | Unique action intents divided by total action intents. |
+| `repetitive_intents_ratio` | Frequency of the dominant action intent divided by total action intents. |
+| `social_graph_change_count` | Count of events mentioning relationship, coalition, ally, or rival changes. |
+| `stagnation_alerts` | Independent alerts emitted when a single KPI crosses its dedicated threshold. |
+
+### Stagnation alerts
+
+The stagnation alerts are intentionally independent so dashboards can explain *which* signal regressed:
+
+- `low_novelty` → `novelty_score < thresholds.min_novelty_score`
+- `low_interaction_diversity` → `cross_agent_interaction_diversity < thresholds.min_interaction_diversity`
+- `repetitive_intents` → `repetitive_intents_ratio > thresholds.max_repetitive_intents_ratio`
+- `no_social_graph_change` → `social_graph_change_count < thresholds.min_social_graph_change_count`
+
 ## Extensions and Plug-ins
 
 Culture exposes simple hooks for registering dashboard widgets and agent behaviors.
