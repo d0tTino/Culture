@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +16,7 @@ from src.interfaces.interaction_schema import (
     SpawnEnvelope,
     parse_interaction_envelope,
 )
+from src.interfaces.legacy_command_adapter import normalize_legacy_command_payload
 from src.sim.commands.domain_commands import (
     BroadcastCommand,
     ControlCommand,
@@ -46,7 +46,12 @@ def parse_bus_command(
     *,
     context: InteractionContext | None = None,
 ) -> InteractionEnvelope:
-    data = _normalize_legacy_payload(payload)
+    data = normalize_legacy_command_payload(
+        payload,
+        adapter="domain_command_adapters.parse_bus_command",
+        context_source=(context.source if context is not None else None),
+        sender_id=((context.sender_id) if context is not None else None),
+    )
     ctx = context or InteractionContext()
     mediation = mediate_user_input(data)
     intent = mediation.intent
@@ -302,7 +307,9 @@ def mediate_user_input(payload: Mapping[str, Any]) -> MediatedIntent:
             rationale="broadcast_prefix",
         )
 
-    if any(token in lowered for token in ("spawn", "inject event", "set speed", "pause", "resume")):
+    if any(
+        token in lowered for token in ("spawn", "inject event", "set speed", "pause", "resume")
+    ):
         if mode in {"world-shaper", "moderator"}:
             return MediatedIntent(
                 intent="control",
@@ -335,24 +342,6 @@ def mediate_user_input(payload: Mapping[str, Any]) -> MediatedIntent:
         mode=mode,
         rationale="default_human_message",
     )
-
-
-def _normalize_legacy_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-    data = dict(payload)
-    if "content" in data and "text" not in data:
-        data["text"] = data["content"]
-        warnings.warn("'content' is deprecated; use 'text'.", DeprecationWarning, stacklevel=3)
-    if "prompt" in data and "scope" not in data:
-        data["scope"] = data["prompt"]
-        warnings.warn("'prompt' is deprecated; use 'scope'.", DeprecationWarning, stacklevel=3)
-    if "command_type" in data and "intent" not in data and "type" not in data:
-        warnings.warn(
-            "'command_type' is deprecated; use 'intent'.", DeprecationWarning, stacklevel=3
-        )
-    if "type" in data and "intent" not in data:
-        data["intent"] = data["type"]
-        warnings.warn("'type' is deprecated; use 'intent'.", DeprecationWarning, stacklevel=3)
-    return data
 
 
 def _metadata_with_context(data: Mapping[str, Any], context: InteractionContext) -> dict[str, Any]:

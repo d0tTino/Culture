@@ -1020,8 +1020,6 @@ async def api_token_balances() -> Response:
     return JSONResponse({"agents": agents})
 
 
-
-
 def _knowledge_entries_for_analytics(sim: Any) -> list[dict[str, Any]]:
     board = getattr(sim, "knowledge_board", None)
     if board is None:
@@ -1059,6 +1057,7 @@ def _user_value_metrics_data() -> dict[str, Any]:
         "target_alerts": target_alerts if isinstance(target_alerts, list) else [],
     }
     return payload
+
 
 def _cost_metrics_data() -> dict[str, float | int]:
     """Collect DU cost, sentiment, and reliability metrics for dashboards."""
@@ -1425,7 +1424,7 @@ async def handle_control_command(
         source="dashboard",
         permissions={"admin", "moderator"},
     )
-    result = await simulation.interaction_service.execute_from_payload(cmd, context=context)
+    result = await simulation.command_bus.dispatch_payload(cmd, context=context)
     return {
         "status": result.status,
         "message": result.user_message,

@@ -24,7 +24,7 @@ class ExternalEventIngestionService:
             sim._event_listener_task = asyncio.create_task(self._event_listener_loop())
         if sim._event_task is None or sim._event_task.done():
             sim._event_task = asyncio.create_task(
-                sim.event_kernel.forward_external_events(sim._ingest_legacy_event_queue_payload)
+                sim.event_kernel.forward_external_events(self.handle_human_command)
             )
 
     async def stop(self) -> None:

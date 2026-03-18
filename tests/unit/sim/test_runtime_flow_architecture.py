@@ -53,14 +53,14 @@ class DummyAgent:
 
 
 @pytest.mark.asyncio
-async def test_legacy_human_command_routes_through_command_bus() -> None:
+async def test_legacy_human_ingestion_routes_through_command_bus() -> None:
     sys.modules.setdefault("neo4j", DummyNeo4j())
     from src.sim.simulation import Simulation
 
     sim = Simulation([DummyAgent("A")])
     sim.command_bus.dispatch_payload = AsyncMock()
 
-    await sim._handle_human_command("hello", {"sender_id": "user-1"})
+    await sim.external_event_ingestion.handle_human_command("hello", {"sender_id": "user-1"})
 
     sim.command_bus.dispatch_payload.assert_awaited_once()
     await sim.stop_event_listener()

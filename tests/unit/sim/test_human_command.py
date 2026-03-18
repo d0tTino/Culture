@@ -65,7 +65,7 @@ async def test_human_command_deducts_resources(
     agent = DummyAgent("A")
     sim = Simulation([agent])
 
-    await sim._handle_human_command("hello")
+    await sim.external_event_ingestion.handle_human_command("hello")
 
     assert agent.state.ip == pytest.approx(1.0)
     assert agent.state.du == pytest.approx(1.0)
@@ -92,7 +92,7 @@ async def test_human_command_rejected_without_resources(
     agent = DummyAgent("A", ip=0.5, du=0.5)
     sim = Simulation([agent])
 
-    await sim._handle_human_command("hello")
+    await sim.external_event_ingestion.handle_human_command("hello")
 
     assert agent.state.ip == pytest.approx(0.5)
     assert agent.state.du == pytest.approx(0.5)
@@ -120,7 +120,7 @@ async def test_human_command_uses_structured_routing_metadata(
     beta = DummyAgent("beta")
     sim = Simulation([alpha, beta])
 
-    await sim._handle_human_command(
+    await sim.external_event_ingestion.handle_human_command(
         "hello beta",
         {
             "sender_id": "human-42",
@@ -157,7 +157,9 @@ async def test_human_command_broadcast_falls_back_to_current_agent(
     sim = Simulation([alpha, beta])
     sim.current_agent_index = 1
 
-    await sim._handle_human_command("hello all", {"sender_id": "human-x", "broadcast": True})
+    await sim.external_event_ingestion.handle_human_command(
+        "hello all", {"sender_id": "human-x", "broadcast": True}
+    )
 
     assert beta.state.ip == pytest.approx(1.0)
     async with sim._msg_lock:
@@ -181,7 +183,7 @@ async def test_human_command_ignores_empty_text_without_spending_resources(
     agent = DummyAgent("A")
     sim = Simulation([agent])
 
-    await sim._handle_human_command("   ")
+    await sim.external_event_ingestion.handle_human_command("   ")
 
     assert agent.state.ip == pytest.approx(2.0)
     assert agent.state.du == pytest.approx(2.0)

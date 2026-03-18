@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from src.governance.decision_kernel import DecisionProvenance
+from src.interfaces.legacy_command_adapter import normalize_legacy_command_payload
 
 ENVELOPE_INTENTS = {
     "human_message",
@@ -153,7 +154,7 @@ _INTERACTION_INTENT_ADAPTER: TypeAdapter[InteractionIntent] = TypeAdapter(Intera
 
 
 def parse_interaction_intent(payload: dict[str, Any]) -> InteractionIntent:
-    normalized = dict(payload)
+    normalized = normalize_legacy_command_payload(payload, adapter="interaction_schema.parse")
     routing = (
         dict(normalized.get("routing") or {})
         if isinstance(normalized.get("routing"), dict)

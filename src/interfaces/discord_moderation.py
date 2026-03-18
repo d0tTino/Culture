@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.infra.ledger import log_penalty
 from src.interfaces import discord_bot
-from src.interfaces.dashboard_backend import DEFAULT_CONTEXT, SimulationEvent
+from src.interfaces.dashboard_backend import DEFAULT_CONTEXT
 from src.utils.policy import evaluate_with_opa
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
@@ -108,16 +108,26 @@ def register_moderation_commands(
     @_context_description(agent_id="ID of the agent to reset")
     @moderation_rate_limit("reset_memory")
     async def slash_reset_memory(interaction: Any, agent_id: str) -> None:
-        _, event_queue = resolve_context()
+        context, _ = resolve_context()
         if not has_admin_permission(getattr(interaction, "user", None)):
             await interaction.response.send_message("unauthorized", ephemeral=True)
             return
-        await event_queue.put(
-            SimulationEvent(
-                type="moderation", data={"command": "reset_memory", "agent_id": agent_id}
-            )
+        bus = discord_bot.get_command_bus(context)
+        if bus is None:
+            await interaction.response.send_message("command bus unavailable", ephemeral=True)
+            return
+        command_context = discord_bot.discord_interaction_context(
+            user=getattr(interaction, "user", None),
+            channel=getattr(interaction, "channel", None),
         )
-        await discord_bot.send_interaction_response(interaction, "memory reset", ephemeral=True)
+        command_context.permissions.update({"admin", "moderator"})
+        result = await bus.dispatch_payload(
+            {"intent": "moderation", "command": "reset_memory", "agent_id": agent_id},
+            context=command_context,
+        )
+        await discord_bot.send_interaction_response(
+            interaction, result.user_message, ephemeral=True
+        )
 
     commands["reset_memory"] = slash_reset_memory
 
@@ -134,21 +144,37 @@ def register_moderation_commands(
         ip: float = 0.0,
         du: float = 0.0,
     ) -> None:
-        _, event_queue = resolve_context()
+        context, _ = resolve_context()
         if not has_admin_permission(getattr(interaction, "user", None)):
             await interaction.response.send_message("unauthorized", ephemeral=True)
             return
-        await event_queue.put(
-            SimulationEvent(
-                type="moderation",
-                data={"command": "penalty", "agent_id": agent_id, "ip": ip, "du": du},
-            )
+        bus = discord_bot.get_command_bus(context)
+        if bus is None:
+            await interaction.response.send_message("command bus unavailable", ephemeral=True)
+            return
+        command_context = discord_bot.discord_interaction_context(
+            user=getattr(interaction, "user", None),
+            channel=getattr(interaction, "channel", None),
+        )
+        command_context.permissions.update({"admin", "moderator"})
+        result = await bus.dispatch_payload(
+            {
+                "intent": "moderation",
+                "command": "penalty",
+                "agent_id": agent_id,
+                "value": ip,
+                "ip": ip,
+                "du": du,
+            },
+            context=command_context,
         )
         try:  # pragma: no cover - best effort
             log_penalty(agent_id, abs(ip), abs(du), "moderation_penalty")
         except Exception:
             pass
-        await discord_bot.send_interaction_response(interaction, "penalty applied", ephemeral=True)
+        await discord_bot.send_interaction_response(
+            interaction, result.user_message, ephemeral=True
+        )
 
     commands["penalty"] = slash_penalty
 
@@ -156,11 +182,23 @@ def register_moderation_commands(
     @_context_description(agent_id="ID of the agent to mute")
     @moderation_rate_limit("mute")
     async def slash_mute(interaction: Any, agent_id: str) -> None:
-        _, event_queue = resolve_context()
-        await event_queue.put(
-            SimulationEvent(type="moderation", data={"command": "mute", "agent_id": agent_id})
+        context, _ = resolve_context()
+        bus = discord_bot.get_command_bus(context)
+        if bus is None:
+            await interaction.response.send_message("command bus unavailable", ephemeral=True)
+            return
+        command_context = discord_bot.discord_interaction_context(
+            user=getattr(interaction, "user", None),
+            channel=getattr(interaction, "channel", None),
         )
-        await discord_bot.send_interaction_response(interaction, "muted", ephemeral=True)
+        command_context.permissions.update({"moderator"})
+        result = await bus.dispatch_payload(
+            {"intent": "moderation", "command": "mute", "agent_id": agent_id},
+            context=command_context,
+        )
+        await discord_bot.send_interaction_response(
+            interaction, result.user_message, ephemeral=True
+        )
 
     commands["mute"] = slash_mute
 
@@ -168,11 +206,23 @@ def register_moderation_commands(
     @_context_description(agent_id="ID of the agent to unmute")
     @moderation_rate_limit("unmute")
     async def slash_unmute(interaction: Any, agent_id: str) -> None:
-        _, event_queue = resolve_context()
-        await event_queue.put(
-            SimulationEvent(type="moderation", data={"command": "unmute", "agent_id": agent_id})
+        context, _ = resolve_context()
+        bus = discord_bot.get_command_bus(context)
+        if bus is None:
+            await interaction.response.send_message("command bus unavailable", ephemeral=True)
+            return
+        command_context = discord_bot.discord_interaction_context(
+            user=getattr(interaction, "user", None),
+            channel=getattr(interaction, "channel", None),
         )
-        await discord_bot.send_interaction_response(interaction, "unmuted", ephemeral=True)
+        command_context.permissions.update({"moderator"})
+        result = await bus.dispatch_payload(
+            {"intent": "moderation", "command": "unmute", "agent_id": agent_id},
+            context=command_context,
+        )
+        await discord_bot.send_interaction_response(
+            interaction, result.user_message, ephemeral=True
+        )
 
     commands["unmute"] = slash_unmute
 

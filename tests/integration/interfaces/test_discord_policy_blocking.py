@@ -107,10 +107,12 @@ async def test_blocked_messages_do_not_reach_handler(
 
     handled: list[str] = []
 
-    async def handler(self: Simulation, text: str) -> None:
+    async def handler(self: object, text: str, metadata: dict | None = None) -> None:
         handled.append(text)
 
-    monkeypatch.setattr(Simulation, "_handle_human_command", handler)
+    from src.sim.runtime.external_event_ingestion_service import ExternalEventIngestionService
+
+    monkeypatch.setattr(ExternalEventIngestionService, "handle_human_command", handler)
 
     with patch("src.interfaces.discord_bot.discord.Client", DummyDiscordClient):
         bot = await SimulationDiscordBot.create("token", 123, context=ctx)

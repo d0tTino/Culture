@@ -44,15 +44,19 @@ class DummyAgent:
 async def test_event_task_runs_without_running_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     received: list[str] = []
 
-    async def handler(self: Simulation, text: str) -> None:
+    from src.sim.runtime.external_event_ingestion_service import ExternalEventIngestionService
+
+    async def handler(
+        self: ExternalEventIngestionService, text: str, metadata: dict | None = None
+    ) -> None:
         received.append(text)
 
-    monkeypatch.setattr(Simulation, "_handle_human_command", handler)
+    monkeypatch.setattr(ExternalEventIngestionService, "handle_human_command", handler)
 
     async def dummy_listener(self: Simulation) -> None:
         await asyncio.sleep(0)
 
-    monkeypatch.setattr(Simulation, "_event_listener_loop", dummy_listener)
+    monkeypatch.setattr(ExternalEventIngestionService, "_event_listener_loop", dummy_listener)
     sim = Simulation([DummyAgent()])
     await sim.start_event_listener()
 

@@ -84,11 +84,15 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     q_msgs: asyncio.Queue[db.AgentMessage] = asyncio.Queue()
     handled: list[str] = []
 
-    original_handle = Simulation._handle_human_command
+    from src.sim.runtime.external_event_ingestion_service import ExternalEventIngestionService
 
-    async def wrapped(self: Simulation, text: str) -> None:
+    original_handle = ExternalEventIngestionService.handle_human_command
+
+    async def wrapped(
+        self: ExternalEventIngestionService, text: str, metadata: dict | None = None
+    ) -> None:
         handled.append(text)
-        await original_handle(self, text)
+        await original_handle(self, text, metadata)
 
     class Client(DummyDiscordClient):
         pass
@@ -98,7 +102,7 @@ async def test_simulation_bot_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         patch("src.interfaces.dashboard_backend.get_event_queue", lambda: q_events),
         patch("src.interfaces.dashboard_backend.message_sse_queue", q_msgs),
         patch("src.interfaces.discord_bot.message_sse_queue", q_msgs),
-        patch.object(Simulation, "_handle_human_command", wrapped),
+        patch.object(ExternalEventIngestionService, "handle_human_command", wrapped),
         patch("src.interfaces.dashboard_backend.EventSourceResponse", object),
     ):
         bot = await SimulationDiscordBot.create(

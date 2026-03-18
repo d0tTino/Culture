@@ -70,16 +70,18 @@ async def test_event_bus_forwarding(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     monkeypatch.setattr("src.sim.event_kernel.get_event_bus", lambda: bus)
     monkeypatch.setattr("src.sim.simulation.get_event_bus", lambda: bus)
 
+    from src.sim.runtime.external_event_ingestion_service import ExternalEventIngestionService
+
     handled: list[str] = []
-    original = Simulation._handle_human_command
+    original = ExternalEventIngestionService.handle_human_command
 
     async def wrapped(
-        self: Simulation, text: str, metadata: dict | None = None
+        self: ExternalEventIngestionService, text: str, metadata: dict | None = None
     ) -> None:
         handled.append(text)
         await original(self, text, metadata)
 
-    monkeypatch.setattr(Simulation, "_handle_human_command", wrapped)
+    monkeypatch.setattr(ExternalEventIngestionService, "handle_human_command", wrapped)
 
     with patch("src.interfaces.discord_bot.SimulationDiscordBot", AsyncMock()):
         agent = DummyAgent("A")
@@ -135,8 +137,12 @@ async def test_human_command_rate_limit_scoped_by_sender(
 
     sim = Simulation([DummyAgent("A")])
 
-    await sim._handle_human_command("hello from user 1", {"sender_id": "user-1"})
-    await sim._handle_human_command("hello from user 2", {"sender_id": "user-2"})
+    await sim.external_event_ingestion.handle_human_command(
+        "hello from user 1", {"sender_id": "user-1"}
+    )
+    await sim.external_event_ingestion.handle_human_command(
+        "hello from user 2", {"sender_id": "user-2"}
+    )
 
     assert spend_mock.await_count == 2
     assert emit_mock.await_count == 0
@@ -175,8 +181,8 @@ async def test_human_command_rate_limit_sends_feedback(
 
     sim = Simulation([DummyAgent("A")])
 
-    await sim._handle_human_command("first", {"sender_id": "user-1"})
-    await sim._handle_human_command("second", {"sender_id": "user-1"})
+    await sim.external_event_ingestion.handle_human_command("first", {"sender_id": "user-1"})
+    await sim.external_event_ingestion.handle_human_command("second", {"sender_id": "user-1"})
 
     assert spend_mock.await_count == 1
     assert emit_mock.await_count == 1

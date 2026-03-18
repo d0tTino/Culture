@@ -196,8 +196,8 @@ async def test_kb_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
 
     sim = Simulation([DummyAgent()])
     sim.knowledge_board.add_entry = MagicMock()
-    await sim._handle_human_command("/kb first")
-    await sim._handle_human_command("/kb second")
+    await sim.external_event_ingestion.handle_human_command("/kb first")
+    await sim.external_event_ingestion.handle_human_command("/kb second")
     sim.knowledge_board.add_entry.assert_called_once()
 
 
@@ -223,11 +223,9 @@ async def test_message_relay_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None
         lambda: SimpleNamespace(ensure_du_budget=lambda *args, **kwargs: None),
     )
     monkeypatch.setattr(ledger_module.ledger, "spend", AsyncMock())
-    await sim._handle_human_command("hello")
-    await sim._handle_human_command("hello again")
+    await sim.external_event_ingestion.handle_human_command("hello")
+    await sim.external_event_ingestion.handle_human_command("hello again")
     ledger_module.ledger.spend.assert_awaited_once()
-
-
 
 
 @pytest.mark.unit
@@ -239,9 +237,13 @@ async def test_slash_event_enqueues_control_event(
     ctx = SimpleNamespace(get_event_queue=lambda: queue)
     bot = SimpleNamespace(context=ctx)
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
-    monkeypatch.setattr(discord_module, "_has_control_command_permission", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        discord_module, "_has_control_command_permission", AsyncMock(return_value=True)
+    )
     interaction = DummyInteraction()
-    interaction.user = SimpleNamespace(id="u-1", guild_permissions=SimpleNamespace(administrator=False))
+    interaction.user = SimpleNamespace(
+        id="u-1", guild_permissions=SimpleNamespace(administrator=False)
+    )
     await discord_module.slash_event(interaction, "meteor shower")
     event = await queue.get()
     assert event.type == "control"
@@ -261,11 +263,14 @@ async def test_slash_event_requires_authorization(
     ctx = SimpleNamespace(get_event_queue=lambda: queue)
     bot = SimpleNamespace(context=ctx)
     monkeypatch.setattr(discord_module, "get_active_bot", lambda ctx=None: bot)
-    monkeypatch.setattr(discord_module, "_has_control_command_permission", AsyncMock(return_value=False))
+    monkeypatch.setattr(
+        discord_module, "_has_control_command_permission", AsyncMock(return_value=False)
+    )
     interaction = DummyInteraction()
     await discord_module.slash_event(interaction, "storm")
     assert queue.empty()
     interaction.response.send_message.assert_awaited_once_with("unauthorized", ephemeral=True)
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
