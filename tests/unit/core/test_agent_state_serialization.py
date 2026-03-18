@@ -1,30 +1,62 @@
+from __future__ import annotations
+
 import pytest
 
-try:
-    from src.agents.core.agent_controller import AgentController
-    from src.agents.core.agent_state import AgentState
-except IndentationError:
-    pytest.skip("agent_state module is unparsable", allow_module_level=True)
+from src.agents.core.agent_lifecycle import AgentLifecycleState, is_valid_lifecycle_transition
+from src.agents.core.agent_state import AgentState
 
 
 @pytest.mark.unit
-def test_agent_state_serialization_roundtrip() -> None:
+def test_agent_state_serialization_roundtrip_preserves_invariants() -> None:
     state = AgentState(
         agent_id="agent1",
         name="TestAgent",
-        persona="Calm collaborator",
-        backstory="Grew up solving logistics puzzles",
+        current_role="Innovator",
+        step_counter=7,
+        mood_level=0.25,
+        role_history=[],
+        mood_history=[],
     )
-    controller = AgentController(state)
-    controller.update_mood(0.4)
-    controller.update_relationship("agent2", sentiment_score=0.2)
 
     serialized = state.to_dict()
     restored = AgentState.from_dict(serialized)
 
-    assert serialized == restored.to_dict()
     assert restored.agent_id == "agent1"
     assert restored.name == "TestAgent"
-    assert restored.persona == "Calm collaborator"
-    assert restored.backstory == "Grew up solving logistics puzzles"
-    assert restored.traits.openness == pytest.approx(state.traits.openness)
+    assert restored.current_role.name == "Innovator"
+    assert restored.role_history == [(7, "Innovator")]
+    assert restored.mood_history == [(7, 0.25)]
+    assert restored.role_embedding == list(restored.current_role.embedding)
+    assert restored.reputation_score == pytest.approx(restored.current_role.reputation)
+
+
+@pytest.mark.unit
+def test_agent_state_from_dict_coerces_string_role_and_excludes_runtime_refs() -> None:
+    restored = AgentState.from_dict(
+        {
+            "agent_id": "agent2",
+            "name": "FromDict",
+            "current_role": "Strategist",
+            "memory_store_manager": None,
+        }
+    )
+
+    assert restored.current_role.name == "Strategist"
+    assert "llm_client" not in restored.to_dict()
+    assert "memory_store_manager" not in restored.to_dict()
+
+
+@pytest.mark.unit
+def test_lifecycle_transition_invariants() -> None:
+    assert is_valid_lifecycle_transition(AgentLifecycleState.ACTIVE, AgentLifecycleState.RETIRED)
+    assert is_valid_lifecycle_transition(AgentLifecycleState.ACTIVE, AgentLifecycleState.DECEASED)
+    assert is_valid_lifecycle_transition(AgentLifecycleState.ARCHIVED, AgentLifecycleState.ACTIVE)
+
+    assert not is_valid_lifecycle_transition(
+        AgentLifecycleState.DECEASED,
+        AgentLifecycleState.ACTIVE,
+    )
+    assert not is_valid_lifecycle_transition(
+        AgentLifecycleState.RETIRED,
+        AgentLifecycleState.DECEASED,
+    )

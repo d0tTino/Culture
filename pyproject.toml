@@ -11,7 +11,6 @@ exclude = '''
   | dist
 )/
 '''
-extend-exclude = "src/agents/core/agent_state.py"
 
 [tool.isort]
 profile = "black"
@@ -21,7 +20,7 @@ line_length = 99
 line-length = 99
 # Ruff's autofix is enabled via CLI, but document here for clarity
 fix = true
-extend-exclude = ["requirements-dev.txt", "src/agents/core/agent_state.py"]
+extend-exclude = ["requirements-dev.txt"]
 force-exclude = true
 
 [tool.ruff.lint]
@@ -41,7 +40,6 @@ suppress-none-returning = true
 "tests/integration/**.py" = ["E402"]
 "tests/**.py" = ["ANN"]
 "src/shared/llm_mocks.py" = ["ANN001", "ANN002", "ANN003", "ANN204"]
-"src/agents/core/agent_state.py" = ["E999"]
 "src/sim/world_map.py" = ["ANN101"]
 "src/infra/ledger.py" = ["ANN101"]
 
@@ -71,7 +69,6 @@ exclude = [
     "\\.venv",
     "build/",
     "tests/",
-    "src/agents/core/agent_state.py",
     "src/ollama/.*"
     , "dspy_ai/.*"
 
