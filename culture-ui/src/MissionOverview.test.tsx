@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { vi } from 'vitest'
 import MissionOverview from './pages/MissionOverview'
 import { reorderMissions } from './lib/reorderMissions'
 
@@ -9,12 +10,16 @@ const missions = [
 ]
 
 describe('MissionOverview', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
 
-  it('renders missions table', async () => {
-
+  it('renders missions table from backend envelope', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve({ schema: 'dashboard.missions', version: '2026-03-18', enabled: true, data: { missions }, missions }) }) as unknown as Response))
     render(<MissionOverview />)
     expect(screen.getByRole('heading', { name: /mission overview/i })).toBeInTheDocument()
-    expect(screen.getByText('Gather Intel')).toBeInTheDocument()
+    expect(await screen.findByText('Gather Intel')).toBeInTheDocument()
     expect(screen.getByText('Prepare Brief')).toBeInTheDocument()
   })
 

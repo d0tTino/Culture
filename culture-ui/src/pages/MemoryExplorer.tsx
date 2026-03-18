@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { fetchApiEnvelope } from '../lib/api'
+import { useCapabilities } from '../lib/useCapabilities'
 
 interface AgentInfo {
   mood?: number
@@ -11,6 +13,9 @@ interface MessagePayload {
 }
 
 export default function MemoryExplorerPage() {
+  const capabilities = useCapabilities()
+  const memoryCapability = capabilities.memory
+  const memoryEnabled = memoryCapability?.enabled ?? true
   const [agents, setAgents] = useState<string[]>([])
   const [agentId, setAgentId] = useState('')
   const [semantic, setSemantic] = useState<string[]>([])
@@ -18,15 +23,19 @@ export default function MemoryExplorerPage() {
   const [messages, setMessages] = useState<string[]>([])
 
   useEffect(() => {
+    if (!memoryEnabled) {
+      setAgents([])
+      setAgentId('')
+      setSemantic([])
+      setEpisodic([])
+      return
+    }
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('/api/map')
-        const json = (await res.json()) as {
-          agents?: Record<string, AgentInfo>
-        }
+        const envelope = await fetchApiEnvelope<{ agents?: Record<string, AgentInfo> }>('/api/map')
         if (cancelled) return
-        const ids = Object.keys(json.agents || {})
+        const ids = Object.keys(envelope.data.agents || {})
         setAgents(ids)
         if (ids.length) setAgentId(ids[0])
       } catch {
@@ -37,21 +46,20 @@ export default function MemoryExplorerPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [memoryEnabled])
 
   useEffect(() => {
-    if (!agentId) return
+    if (!agentId || !memoryEnabled) return
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch(`/api/memory/${agentId}`)
-        const json = (await res.json()) as {
+        const envelope = await fetchApiEnvelope<{
           semantic?: string[]
           episodic?: Array<{ content?: string } | string>
-        }
+        }>(`/api/memory/${agentId}`)
         if (cancelled) return
-        setSemantic(json.semantic || [])
-        const eps = (json.episodic || []).map((m) =>
+        setSemantic(envelope.data.semantic || [])
+        const eps = (envelope.data.episodic || []).map((m) =>
           typeof m === 'string' ? m : m.content || String(m),
         )
         setEpisodic(eps)
@@ -63,10 +71,10 @@ export default function MemoryExplorerPage() {
     return () => {
       cancelled = true
     }
-  }, [agentId])
+  }, [agentId, memoryEnabled])
 
   useEffect(() => {
-    if (!agentId) return
+    if (!agentId || !memoryEnabled) return
     const es = new EventSource('/stream/messages')
     es.onmessage = (ev) => {
       try {
@@ -79,11 +87,12 @@ export default function MemoryExplorerPage() {
       }
     }
     return () => es.close()
-  }, [agentId])
+  }, [agentId, memoryEnabled])
 
   return (
     <div className="p-4 space-y-4">
       <h1 className="text-xl font-bold">Memory Explorer</h1>
+      {!memoryEnabled && memoryCapability && <p data-testid="memory-fallback">{memoryCapability.reason}</p>}
       <label className="block">
         Agent:
         <select
@@ -91,6 +100,7 @@ export default function MemoryExplorerPage() {
           value={agentId}
           onChange={(e) => setAgentId(e.target.value)}
           className="border p-1 ml-2"
+          disabled={!memoryEnabled}
         >
           {agents.map((id) => (
             <option key={id} value={id}>
@@ -99,22 +109,9 @@ export default function MemoryExplorerPage() {
           ))}
         </select>
       </label>
-      <div data-testid="summaries">
-        {semantic.map((s, i) => (
-          <div key={i}>{s}</div>
-        ))}
-      </div>
-      <div data-testid="memories">
-        {episodic.map((m, i) => (
-          <div key={i}>{m}</div>
-        ))}
-      </div>
-      <div data-testid="messages">
-        {messages.map((m, i) => (
-          <div key={i}>{m}</div>
-        ))}
-      </div>
+      <div data-testid="summaries">{semantic.map((s, i) => <div key={i}>{s}</div>)}</div>
+      <div data-testid="memories">{episodic.map((m, i) => <div key={i}>{m}</div>)}</div>
+      <div data-testid="messages">{messages.map((m, i) => <div key={i}>{m}</div>)}</div>
     </div>
   )
 }
-

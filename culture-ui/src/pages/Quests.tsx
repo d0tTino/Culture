@@ -1,26 +1,24 @@
 import { useEffect, useState } from 'react'
 import { registerWidget } from '../lib/widgetRegistry'
-
-interface Quest {
-  id: number
-  title: string
-  description: string
-  progress: number
-  status: string
-}
+import { fetchQuests, type Quest } from '../lib/api'
 
 export default function Quests() {
   const [quests, setQuests] = useState<Quest[]>([])
+  const [fallback, setFallback] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('/api/quests')
-        const json = (await res.json()) as { quests: Quest[] }
-        if (!cancelled) setQuests(json.quests || [])
+        const envelope = await fetchQuests()
+        if (!cancelled) {
+          setQuests(envelope.data.quests || [])
+          setFallback(envelope.enabled ? null : envelope.fallback?.reason || 'Quests unavailable.')
+        }
       } catch {
-        /* ignore */
+        if (!cancelled) {
+          setFallback('Quests unavailable.')
+        }
       }
     }
     void load()
@@ -32,6 +30,7 @@ export default function Quests() {
   return (
     <div className="p-4 space-y-4">
       <h1 className="text-xl font-bold">Quests</h1>
+      {fallback && <p data-testid="quests-fallback">{fallback}</p>}
       <table className="min-w-full border" data-testid="quest-table">
         <thead>
           <tr>

@@ -83,9 +83,10 @@ async def test_api_observability_metrics_serializes_extended_payload(
         "llm_error_rate",
     }
 
-    assert expected_keys.issubset(payload.keys())
-    assert payload["memory_retrieval_errors_total"] == 20
-    assert payload["llm_errors_total"] == 5
+    assert payload["schema"] == "dashboard.observability"
+    assert expected_keys.issubset(payload["data"].keys())
+    assert payload["data"]["memory_retrieval_errors_total"] == 20
+    assert payload["data"]["llm_errors_total"] == 5
 
 
 @pytest.mark.unit
