@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 class GraphKnowledgeBoard:
+    supports_threads = True
+    supports_causal_chain = True
+    supports_votes = True
+    supports_graph_queries = True
+
     """Knowledge Board backed by a Neo4j graph database."""
 
     def __init__(
@@ -71,7 +76,6 @@ class GraphKnowledgeBoard:
     def _count_entries(self: Self) -> int:
         res = self._run("MATCH (e:KBEntry) RETURN count(e) AS cnt")
         return int(res[0]["cnt"]) if res else 0
-
 
     def begin_transaction(self: Self) -> dict[str, Any]:
         """Capture a snapshot used for compensating rollback."""

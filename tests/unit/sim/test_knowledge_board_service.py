@@ -137,3 +137,34 @@ async def test_query_views_and_digest_generation() -> None:
     digests = service.generate_story_digests()
     assert set(digests.keys()) == {"daily", "weekly"}
     assert digests["daily"].period == "daily"
+
+
+class _CapabilityLimitedBoard(KnowledgeBoard):
+    supports_threads = False
+    supports_causal_chain = False
+    supports_votes = False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_query_methods_return_structured_unsupported_capability_payloads() -> None:
+    board = _CapabilityLimitedBoard()
+    service = KnowledgeBoardService(
+        board,
+        step_provider=lambda: 1,
+        vector_provider=lambda: {"sim": 1},
+    )
+
+    thread = service.query_thread(
+        ThreadQueryDTO(root_entry_id="missing", pagination=QueryPagination(page_size=10))
+    )
+    assert thread.to_dict()["capability"] == "supports_threads"
+
+    proposal = service.query_proposal_status(
+        ProposalStatusQueryDTO(proposal_id="proposal-1", pagination=QueryPagination(page_size=10))
+    )
+    assert proposal["capability"] == "supports_votes"
+    assert proposal["unsupported"] is True
+
+    chain = service.query_causal_chain(CausalChainQueryDTO(entry_id="entry-1", depth=4))
+    assert chain.to_dict()["capability"] == "supports_causal_chain"

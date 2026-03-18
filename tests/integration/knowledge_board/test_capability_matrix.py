@@ -32,6 +32,30 @@ class DummySession:
         if "SET e = $props" in query:
             self.driver.entries.append(dict(params["props"]))
             return DummyResult([])
+        if "MATCH (a:Agent {agent_id: $agent_id})-[:AUTHORED]->(e:KBEntry)" in query:
+            agent_id = params["agent_id"]
+            rows = [
+                entry
+                for entry in self.driver.entries
+                if entry.get("agent_id") == agent_id
+                and entry.get("entry_type") in ["vote", "endorsement"]
+            ]
+            return DummyResult(
+                [
+                    {
+                        "entry_id": row["entry_id"],
+                        "step": row["step"],
+                        "entry_type": row["entry_type"],
+                        "parent_entry_id": row.get("parent_entry_id"),
+                        "target_agent_id": row.get("target_agent_id"),
+                    }
+                    for row in rows
+                ]
+            )
+        if "RETURN a.agent_id AS agent_id, e.entry_id AS entry_id" in query:
+            return DummyResult(
+                [{"agent_id": "agent-1", "entry_id": "idea-1", "entry_type": "idea", "step": 1}]
+            )
         if "ORDER BY e.step DESC" in query:
             limit = params["limit"]
             rows = sorted(self.driver.entries, key=lambda entry: entry["step"], reverse=True)[
@@ -44,15 +68,31 @@ class DummySession:
         if "DETACH DELETE" in query:
             self.driver.entries.clear()
             return DummyResult([])
+        if "MATCH (p:KBEntry {entry_type: 'proposal'})" in query:
+            proposals = [
+                entry for entry in self.driver.entries if entry.get("entry_type") == "proposal"
+            ]
+            return DummyResult([{"proposal": row} for row in proposals[: params["limit"]]])
+        if "OPTIONAL MATCH (:Agent)-[v:VOTED]->(p)" in query:
+            proposal_id = params["proposal_id"]
+            votes = [
+                entry
+                for entry in self.driver.entries
+                if entry.get("entry_type") == "vote"
+                and entry.get("parent_entry_id") == proposal_id
+            ]
+            approvals = sum(
+                1 for vote in votes if (vote.get("reference_metadata") or {}).get("approve")
+            )
+            rejections = len(votes) - approvals
+            return DummyResult(
+                [{"proposal_id": proposal_id, "approvals": approvals, "rejections": rejections}]
+            )
         if "RETURN p.entry_id AS proposal_id, count(v) AS support_count" in query:
             return DummyResult([{"proposal_id": "p-1", "support_count": 2}])
         if "RETURN i AS entry, endorsements" in query:
             return DummyResult(
                 [{"entry": {"entry_id": "idea-1", "entry_type": "idea"}, "endorsements": 2}]
-            )
-        if "RETURN a.agent_id AS agent_id, e.entry_id AS entry_id" in query:
-            return DummyResult(
-                [{"agent_id": "agent-1", "entry_id": "idea-1", "entry_type": "idea", "step": 1}]
             )
         return DummyResult([])
 
@@ -128,9 +168,9 @@ def test_capability_adapters_fail_explicitly_for_unsupported_memory_features() -
         as_relationship_store(board)
     assert relationship_error.value.capability == "RelationshipStore"
 
-    with pytest.raises(UnsupportedKnowledgeBoardCapabilityError) as voting_error:
-        as_proposal_voting_store(board)
-    assert voting_error.value.capability == "ProposalVotingStore"
+    voting_store = as_proposal_voting_store(board)
+    voting_store.record_vote(voter_agent_id="agent-1", proposal_id="p-1", approve=True)
+    assert board.supports_votes is True
 
 
 @pytest.mark.integration

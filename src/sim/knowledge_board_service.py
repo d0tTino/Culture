@@ -28,6 +28,8 @@ from src.sim.knowledge_board_queries import (
     StoryDigestDTO,
     ThreadQueryDTO,
     TimelineQueryDTO,
+    UnsupportedCapabilityQueryResultDTO,
+    unsupported_capability_result,
 )
 from src.sim.knowledge_entry import KnowledgeEntry, KnowledgeEntryType
 
@@ -66,7 +68,14 @@ class KnowledgeBoardService:
             ranked, page=query.pagination.page, page_size=query.pagination.page_size
         )
 
-    def query_thread(self, query: ThreadQueryDTO) -> PagedQueryResultDTO:
+    def query_thread(
+        self, query: ThreadQueryDTO
+    ) -> PagedQueryResultDTO | UnsupportedCapabilityQueryResultDTO:
+        if not self._board.supports_threads:
+            return unsupported_capability_result(
+                capability="supports_threads",
+                query_type="thread",
+            )
         all_entries = self._all_entries()
         children_by_parent: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for entry in all_entries:
@@ -96,6 +105,11 @@ class KnowledgeBoardService:
         )
 
     def query_proposal_status(self, query: ProposalStatusQueryDTO) -> dict[str, Any]:
+        if not self._board.supports_votes:
+            return unsupported_capability_result(
+                capability="supports_votes",
+                query_type="proposal_status",
+            ).to_dict()
         entries = self._all_entries()
         proposal = next(
             (entry for entry in entries if str(entry.get("entry_id", "")) == query.proposal_id),
@@ -116,9 +130,11 @@ class KnowledgeBoardService:
         )
         return {
             "proposal_id": query.proposal_id,
-            "proposal": self._entry_to_ranked(proposal, score=1.0, signals={}).to_dict()
-            if proposal
-            else None,
+            "proposal": (
+                self._entry_to_ranked(proposal, score=1.0, signals={}).to_dict()
+                if proposal
+                else None
+            ),
             "consensus": {
                 "approvals": consensus.approvals,
                 "rejections": consensus.rejections,
@@ -142,7 +158,14 @@ class KnowledgeBoardService:
             ranked, page=query.pagination.page, page_size=query.pagination.page_size
         )
 
-    def query_causal_chain(self, query: CausalChainQueryDTO) -> list[RankedEntryDTO]:
+    def query_causal_chain(
+        self, query: CausalChainQueryDTO
+    ) -> list[RankedEntryDTO] | UnsupportedCapabilityQueryResultDTO:
+        if not self._board.supports_causal_chain:
+            return unsupported_capability_result(
+                capability="supports_causal_chain",
+                query_type="causal_chain",
+            )
         entries = self._all_entries()
         by_id = {str(entry.get("entry_id", "")): entry for entry in entries}
         path: list[RankedEntryDTO] = []

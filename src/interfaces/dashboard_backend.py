@@ -230,12 +230,12 @@ def _subsystem_status() -> dict[str, dict[str, str | bool]]:
 
         board = getattr(sim, "knowledge_board", None)
         board_name = type(board).__name__ if board is not None else "None"
-        if board is not None and "graph" in board_name.lower():
+        if board is not None and bool(getattr(board, "supports_graph_queries", False)):
             statuses["graph_store"] = {"ok": True, "detail": board_name}
         else:
             statuses["graph_store"] = {
                 "ok": False,
-                "detail": f"graph backend not active (current: {board_name})",
+                "detail": f"graph capability unavailable (current: {board_name})",
             }
 
     try:
@@ -916,7 +916,8 @@ async def api_knowledge_thread(root_entry_id: str, page: int = 1, page_size: int
         root_entry_id=root_entry_id,
         pagination=QueryPagination(page=page, page_size=page_size),
     )
-    return JSONResponse(service.query_thread(query).to_dict())
+    result = service.query_thread(query)
+    return JSONResponse(result.to_dict())
 
 
 @app.get("/api/knowledge/proposal/{proposal_id}")
@@ -974,6 +975,8 @@ async def api_knowledge_causal_chain(entry_id: str, depth: int = 3) -> Response:
     if service is None:
         return JSONResponse({"entry_id": entry_id, "chain": []})
     chain = service.query_causal_chain(CausalChainQueryDTO(entry_id=entry_id, depth=depth))
+    if hasattr(chain, "to_dict"):
+        return JSONResponse({"entry_id": entry_id, "chain": [], "error": chain.to_dict()})
     return JSONResponse({"entry_id": entry_id, "chain": [item.to_dict() for item in chain]})
 
 
