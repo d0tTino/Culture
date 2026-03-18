@@ -123,7 +123,7 @@ async def test_graph_backend_kb_write_commands_use_lock(monkeypatch: pytest.Monk
     sim = Simulation([DummyAgent("A")])
     sim.event_kernel.emit_environment_event = AsyncMock()
 
-    await sim._handle_human_command("/kb graph path")
+    await sim.external_event_ingestion.handle_human_command("/kb graph path")
     await sim.handle_control_command(
         {
             "command": "post_kb",
@@ -197,7 +197,9 @@ def test_apply_event_replaces_graph_backend_kb_state(monkeypatch: pytest.MonkeyP
     from tests.integration.knowledge_board.test_graph_backend import DummyDriver
 
     monkeypatch.setattr(config, "KNOWLEDGE_BOARD_BACKEND", "graph")
-    monkeypatch.setattr("src.sim.simulation.GraphKnowledgeBoard", lambda: GraphKnowledgeBoard(driver=DummyDriver()))
+    monkeypatch.setattr(
+        "src.sim.simulation.GraphKnowledgeBoard", lambda: GraphKnowledgeBoard(driver=DummyDriver())
+    )
 
     sim = Simulation([DummyAgent("A")])
     event = {

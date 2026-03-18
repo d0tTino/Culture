@@ -21,17 +21,16 @@ def test_parse_bus_command_accepts_modern_text_payload() -> None:
     assert envelope.text == "hello"
 
 
-def test_parse_bus_command_supports_legacy_fields_with_deprecation_warning() -> None:
-    with pytest.deprecated_call(match="deprecated"):
-        envelope = parse_bus_command(
-            {
-                "command_type": "inject_event",
-                "content": "storm incoming",
-                "prompt": "global",
-                "agent_id": "mod-1",
-            },
-            context=InteractionContext(sender_id="mod-1", source="discord", permissions={"admin"}),
-        )
+def test_parse_bus_command_supports_legacy_fields_with_telemetry() -> None:
+    envelope = parse_bus_command(
+        {
+            "command_type": "inject_event",
+            "content": "storm incoming",
+            "prompt": "global",
+            "agent_id": "mod-1",
+        },
+        context=InteractionContext(sender_id="mod-1", source="discord", permissions={"admin"}),
+    )
 
     assert isinstance(envelope, InjectEventEnvelope)
     assert envelope.text == "storm incoming"

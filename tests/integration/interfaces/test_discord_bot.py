@@ -120,6 +120,7 @@ async def test_agent_update_blocked_content_not_sent(monkeypatch: pytest.MonkeyP
         assert metrics.get_discord_agent_outputs_blocked_total() == before + 1
         bot.client.get_channel.assert_not_called()
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_multi_token_message_forwarding() -> None:
@@ -255,7 +256,6 @@ async def test_control_commands_require_admin_without_opa(
     await _assert_unauthorized(slash_spawn, "agent-1")
 
 
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_on_message_updates_agent_state(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -350,7 +350,7 @@ async def test_broadcast_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     agents = [DummyAgent("A"), DummyAgent("B"), DummyAgent("C")]
     sim = Simulation(agents)
 
-    await sim._handle_human_command("/broadcast hello all")
+    await sim.external_event_ingestion.handle_human_command("/broadcast hello all")
 
     async with sim._msg_lock:
         recipients = {m["recipient_id"] for m in sim.pending_messages_for_next_round}

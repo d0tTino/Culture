@@ -96,9 +96,9 @@ async def test_handle_human_command_missing_config(
     ]:
         monkeypatch.setitem(config._CONFIG, key, None)
 
-    await sim._handle_human_command("hello")
+    await sim.external_event_ingestion.handle_human_command("hello")
     sim._last_relay_times.clear()
-    await sim._handle_human_command("/broadcast hi")
+    await sim.external_event_ingestion.handle_human_command("/broadcast hi")
 
     assert agent.state.ip == pytest.approx(2.0)
     assert agent.state.du == pytest.approx(2.0)
@@ -129,7 +129,7 @@ async def test_human_command_uses_human_budget_without_agent_state_deduction(
         lambda: types.SimpleNamespace(ensure_du_budget=lambda *_args, **_kwargs: None),
     )
 
-    await sim._handle_human_command("hello")
+    await sim.external_event_ingestion.handle_human_command("hello")
 
     assert agent.state.ip == pytest.approx(2.0)
     hip, hdu = ledger.get_balance("human")

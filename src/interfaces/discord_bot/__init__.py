@@ -1,7 +1,7 @@
 """Discord bot interface for the Culture simulation.
 
 Provides real-time updates about the simulation to a Discord channel and
-forwards user messages to :meth:`Simulation._handle_human_command`. Messages
+forwards user messages through the canonical command bus. Messages
 prefixed with ``/broadcast`` will be delivered to all agents, incurring a single
 IP/DU cost for the currently active agent.
 """
@@ -538,7 +538,7 @@ class SimulationDiscordBot:
     simulation events, including Knowledge Board updates, agent messages, role
     changes, and other significant state changes. Incoming Discord messages are
     placed on the shared event queue and ultimately handled by
-    ``Simulation._handle_human_command``.
+    the canonical command bus.
     """
 
     @classmethod

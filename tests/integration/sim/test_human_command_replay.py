@@ -49,7 +49,9 @@ class RecordingAgent:
         knowledge_board: Any | None = None,
         memory_service: Any | None = None,
     ) -> dict[str, Any]:
-        perceived = environment_perception.get("perceived_messages", []) if environment_perception else []
+        perceived = (
+            environment_perception.get("perceived_messages", []) if environment_perception else []
+        )
         self.perceptions.append([dict(msg) for msg in perceived])
         return {}
 
@@ -79,7 +81,7 @@ async def test_human_command_event_replays_messages(
     ledger.log_change(agent.agent_id, agent.state.ip, agent.state.du, "init")
     sim = Simulation([agent], seed=123)
 
-    await sim._handle_human_command("hello there")
+    await sim.external_event_ingestion.handle_human_command("hello there")
     await sim.run_step()
     original_messages = agent.perceptions[-1]
 

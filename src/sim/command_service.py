@@ -29,6 +29,7 @@ from src.interfaces.interaction_schema import (
 )
 from src.shared.typing import SimulationMessage
 from src.sim.commands.domain_commands import DomainCommandT
+from src.sim.resources import apply_penalty
 
 if TYPE_CHECKING:
     from src.sim.simulation import Simulation
@@ -197,6 +198,21 @@ class SimulationCommandService:
                 sim.speed = float(envelope.value or 1)
             except (TypeError, ValueError):
                 pass
+        elif action == "mute" and envelope.agent_id:
+            await sim.mute_agent(str(envelope.agent_id), emit_event=False)
+        elif action == "unmute" and envelope.agent_id:
+            await sim.unmute_agent(str(envelope.agent_id), emit_event=False)
+        elif action == "reset_memory" and envelope.agent_id:
+            await sim.reset_memory(str(envelope.agent_id), emit_event=False)
+        elif action == "penalty" and envelope.agent_id:
+            penalty_ip = envelope.metadata.get("ip", envelope.value or 0.0)
+            penalty_du = envelope.metadata.get("du", 0.0)
+            apply_penalty(
+                sim,
+                str(envelope.agent_id),
+                ip=float(penalty_ip or 0.0),
+                du=float(penalty_du or 0.0),
+            )
         elif action == "post_kb" and isinstance(envelope, (ModerationEnvelope, ControlEnvelope)):
             await self._post_knowledge_board(envelope)
         elif action == "inject_event" and isinstance(envelope, InjectEventEnvelope):
@@ -483,7 +499,9 @@ class SimulationCommandService:
 
         try:
             manager = simulation_module.get_resource_manager()
-            budget_check = getattr(manager, "budget_check", None) or getattr(manager, "ensure_du_budget")
+            budget_check = getattr(manager, "budget_check", None) or getattr(
+                manager, "ensure_du_budget"
+            )
             budget_check(budget_agent_id, du_cost)
         except Exception as exc:
             logger.info("Rejecting interaction for %s: %s", budget_agent_id, exc)
@@ -513,7 +531,9 @@ class SimulationCommandService:
         except Exception:
             logger.debug("Ledger spend failed", exc_info=True)
 
-        world_time = self.simulation.environment_system.world_time_snapshot(self.simulation.world_state)
+        world_time = self.simulation.environment_system.world_time_snapshot(
+            self.simulation.world_state
+        )
         turn_index = self.simulation.current_step
         recipients = self.simulation.agents if broadcast else [target]
         msgs = [

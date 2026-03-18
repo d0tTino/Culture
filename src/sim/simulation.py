@@ -47,10 +47,6 @@ from src.interfaces.dashboard_backend import (
     emit_event,
 )
 from src.interfaces.discord_event_listener import DiscordSimulationEventListener
-from src.interfaces.external_event_routing import (
-    build_interaction_context,
-    normalize_human_command_payload,
-)
 from src.interfaces.interaction_commands import InteractionService
 from src.interfaces.metrics import (
     ACTIVE_AGENT_COUNT,
@@ -105,6 +101,7 @@ logger = logging.getLogger(__name__)
 
 # Backward-compatible alias retained for existing callers/tests.
 EVENT_STEP_LIFECYCLE_MUST_NOT_CHANGE = EVENT_STEP_LIFECYCLE_CONTRACTS
+
 
 class Simulation:
     """
@@ -271,9 +268,9 @@ class Simulation:
         self.action_rules_engine = ActionRulesEngine()
 
         # --- NEW: Initialize Project Tracking ---
-        self.projects: dict[str, dict[str, Any]] = (
-            {}
-        )  # Structure: {project_id: {name, creator_id, members}}
+        self.projects: dict[
+            str, dict[str, Any]
+        ] = {}  # Structure: {project_id: {name, creator_id, members}}
 
         logger.info("Simulation initialized with project tracking system.")
 
@@ -348,9 +345,9 @@ class Simulation:
 
         self.pending_messages_for_next_round: list[SimulationMessage] = []
         # Messages available for agents to perceive in the current round.
-        self.messages_to_perceive_this_round: list[SimulationMessage] = (
-            []
-        )  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
+        self.messages_to_perceive_this_round: list[
+            SimulationMessage
+        ] = []  # THIS WILL BE THE ACCUMULATOR FOR THE CURRENT ROUND
 
         self.track_collective_metrics: bool = True
 
@@ -407,7 +404,9 @@ class Simulation:
                 self.external_event_ingestion._event_listener_loop()
             )
             self._event_task = loop.create_task(
-                self.event_kernel.forward_external_events(self._ingest_legacy_event_queue_payload)
+                self.event_kernel.forward_external_events(
+                    self.external_event_ingestion.handle_human_command
+                )
             )
         else:
             asyncio.set_event_loop(asyncio.new_event_loop())
@@ -457,47 +456,6 @@ class Simulation:
                 raise AssertionError(f"Trait drift exceeded per-step max: {record}")
             if not record.get("cause") or not record.get("source"):
                 raise AssertionError(f"Trait audit record missing cause/source: {record}")
-
-    async def _handle_human_command_from_bus(
-        self: Self, text: str, metadata: dict[str, Any] | None = None
-    ) -> None:
-        """Deprecated compatibility adapter for external event forwarding callbacks."""
-
-        warnings.warn(
-            "Simulation._handle_human_command_from_bus is deprecated; "
-            "use Simulation._ingest_legacy_event_queue_payload instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        await self._ingest_legacy_event_queue_payload(text, metadata)
-
-    async def _ingest_legacy_event_queue_payload(
-        self: Self, text: str, metadata: dict[str, Any] | None = None
-    ) -> None:
-        """Normalize legacy queue injections into the canonical command pipeline."""
-
-        payload = normalize_human_command_payload(text, metadata)
-        if (
-            payload.get("command_type") == "human_message"
-            and payload.get("recipient_id")
-            and not bool(payload.get("broadcast"))
-        ):
-            payload["command_type"] = "direct_message"
-        context = build_interaction_context(payload, default_source="simulation")
-        await self.command_bus.dispatch_payload(payload, context=context)
-
-    async def _handle_human_command(
-        self: Self, text: str, metadata: dict[str, Any] | None = None
-    ) -> None:
-        """Legacy adapter for human commands; routes through the unified command dispatcher."""
-
-        warnings.warn(
-            "Simulation._handle_human_command is deprecated; send payloads via command_bus or "
-            "interaction_service instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        await self._ingest_legacy_event_queue_payload(text, metadata)
 
     async def handle_control_command(self: Self, cmd: Mapping[str, Any]) -> dict[str, Any] | None:
         """Process a control command sent via the event queue."""
@@ -945,9 +903,7 @@ class Simulation:
             # and populate it from what was pending for the next round.
             if agent_to_run_index == 0:
                 self.messages_to_perceive_this_round = list(self.pending_messages_for_next_round)
-                self.pending_messages_for_next_round = (
-                    []
-                )  # Clear pending for the new round accumulation
+                self.pending_messages_for_next_round = []  # Clear pending for the new round accumulation
 
                 debug_len = len(self.messages_to_perceive_this_round)
                 logger.debug(
@@ -1697,7 +1653,9 @@ class Simulation:
                     ).value,
                     "lifecycle_history": list(getattr(ag.state, "lifecycle_history", [])),
                     "legacy_artifacts": dict(getattr(ag.state, "legacy_artifacts", {})),
-                    "memory_archival_policy": dict(getattr(ag.state, "memory_archival_policy", {})),
+                    "memory_archival_policy": dict(
+                        getattr(ag.state, "memory_archival_policy", {})
+                    ),
                     "predecessor_id": getattr(ag.state, "predecessor_id", None),
                     "successor_id": getattr(ag.state, "successor_id", None),
                     "personality_transition_events": list(
@@ -1881,7 +1839,6 @@ class Simulation:
         if context is None:
             return []
         return context.planned_outputs if context.planned_outputs else context.events
-
 
     async def async_run(self: Self, num_steps: int) -> None:
         """
@@ -2122,7 +2079,10 @@ class Simulation:
                     "phase_order": normalized_phase_order,
                 }
             )
-            if isinstance(persisted_batch_hash, str) and persisted_batch_hash != computed_batch_hash:
+            if (
+                isinstance(persisted_batch_hash, str)
+                and persisted_batch_hash != computed_batch_hash
+            ):
                 raise ValueError(
                     f"Domain event batch hash mismatch at step {event.get('step')}:"
                     f" persisted {persisted_batch_hash}, computed {computed_batch_hash}"
@@ -2183,7 +2143,9 @@ class Simulation:
         sim.world_state.environment.active_global_modifiers = list(
             env_snapshot["active_global_modifiers"]
         )
-        sim.world_state.environment.council_window_active = bool(env_snapshot["council_window_active"])
+        sim.world_state.environment.council_window_active = bool(
+            env_snapshot["council_window_active"]
+        )
         snapshot_turn_quantum = int(snapshot.get("turns_per_world_tick", sim.turns_per_world_tick))
         sim.turns_per_world_tick = max(1, snapshot_turn_quantum)
         sim.environment_system.set_turns_per_world_tick(sim.turns_per_world_tick)
@@ -2210,7 +2172,9 @@ class Simulation:
                             "to_state": target_state.value,
                             "reason": "snapshot_restore",
                             "legacy_artifacts": dict(a_data.get("legacy_artifacts", {})),
-                            "memory_archival_policy": dict(a_data.get("memory_archival_policy", {})),
+                            "memory_archival_policy": dict(
+                                a_data.get("memory_archival_policy", {})
+                            ),
                         }
                         sim.population_service.apply_lifecycle_transition_event(
                             agent=ag,
@@ -2218,7 +2182,9 @@ class Simulation:
                         )
                     ag.state.lifecycle_history = list(a_data.get("lifecycle_history", []))
                     ag.state.legacy_artifacts = dict(a_data.get("legacy_artifacts", {}))
-                    ag.state.memory_archival_policy = dict(a_data.get("memory_archival_policy", {}))
+                    ag.state.memory_archival_policy = dict(
+                        a_data.get("memory_archival_policy", {})
+                    )
                     ag.state.is_alive = target_state != AgentLifecycleState.DECEASED
                     ag.state.predecessor_id = a_data.get("predecessor_id")
                     ag.state.successor_id = a_data.get("successor_id")

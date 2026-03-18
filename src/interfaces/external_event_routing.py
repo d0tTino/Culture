@@ -5,7 +5,9 @@ from typing import Any
 from src.interfaces.interaction_commands import InteractionContext
 
 
-def build_interaction_context(payload: dict[str, Any], *, default_source: str) -> InteractionContext:
+def build_interaction_context(
+    payload: dict[str, Any], *, default_source: str
+) -> InteractionContext:
     permissions = payload.get("permissions", [])
     return InteractionContext(
         sender_id=str(payload.get("sender_id", payload.get("author", "external"))),
@@ -16,9 +18,15 @@ def build_interaction_context(payload: dict[str, Any], *, default_source: str) -
     )
 
 
-def normalize_human_command_payload(text: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+def normalize_human_command_payload(
+    text: str, metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
     payload = dict(metadata or {})
     command_type = payload.get("command_type")
     if not command_type and bool(payload.get("broadcast")):
         command_type = "broadcast"
+    if not command_type and text.lstrip().startswith("/broadcast"):
+        command_type = "broadcast"
+    if not command_type and payload.get("recipient_id") and not bool(payload.get("broadcast")):
+        command_type = "direct_message"
     return {"command_type": command_type or "human_message", "content": text, **payload}
