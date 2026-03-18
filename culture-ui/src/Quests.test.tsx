@@ -8,10 +8,14 @@ describe('Quests page', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders quests from api', async () => {
-    vi.stubGlobal('fetch', vi.fn(() =>
+  it('renders quests from versioned api envelope', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) =>
       Promise.resolve({
-        json: () => Promise.resolve({ quests: [{ id: 1, title: 'Q1', description: '', progress: 0, status: 'pending' }] })
+        json: () => Promise.resolve(
+          url === '/api/quests'
+            ? { schema: 'dashboard.quests', version: '2026-03-18', enabled: true, data: { quests: [{ id: 1, title: 'Q1', description: '', progress: 0, status: 'pending' }] } }
+            : { schema: 'dashboard.capabilities', version: '2026-03-18', enabled: true, data: { capabilities: {} } },
+        )
       }) as unknown as Response
     ))
     render(<Quests />)

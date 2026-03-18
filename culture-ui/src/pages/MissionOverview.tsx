@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { registerWidget } from '../lib/widgetRegistry'
 import clsx from 'clsx'
 import type { ColumnDef, Row } from '@tanstack/react-table'
@@ -8,7 +8,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import type { Mission } from '../lib/api'
-import missionsData from '../mock/missions.json'
+import { fetchMissions } from '../lib/api'
 import {
   DndContext,
   KeyboardSensor,
@@ -26,7 +26,6 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { reorderMissions } from '../lib/reorderMissions'
 
-export { reorderMissions }
 
 function DraggableRow({ row }: { row: Row<Mission> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
@@ -56,7 +55,29 @@ function DraggableRow({ row }: { row: Row<Mission> }) {
 }
 
 export default function MissionOverview() {
-  const [data, setData] = useState<Mission[]>(missionsData as Mission[])
+  const [data, setData] = useState<Mission[]>([])
+  const [fallback, setFallback] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const envelope = await fetchMissions()
+        if (cancelled) return
+        setData(envelope.data.missions || [])
+        setFallback(envelope.enabled ? null : envelope.fallback?.reason || 'Missions unavailable.')
+      } catch {
+        if (!cancelled) {
+          setData([])
+          setFallback('Missions unavailable.')
+        }
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const columns: ColumnDef<Mission>[] = [
     {
@@ -95,6 +116,7 @@ export default function MissionOverview() {
   return (
     <div className="p-4">
       <h2 className="mb-4 text-xl font-bold">Mission Overview</h2>
+      {fallback && <p data-testid="missions-fallback">{fallback}</p>}
       <DndContext
         sensors={sensors}
         onDragEnd={({ active, over }) => {

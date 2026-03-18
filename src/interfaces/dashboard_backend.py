@@ -172,10 +172,36 @@ BREAKPOINT_TAGS: set[str] = {"violence", "nsfw"}
 # Registry of widgets registered by the UI or plugins
 WIDGET_REGISTRY = WidgetRegistry()
 
-# Path to the initial missions data bundled with the front-end
-MISSIONS_PATH = (
-    Path(__file__).resolve().parents[2] / "culture-ui" / "src" / "mock" / "missions.json"
-)
+API_SCHEMA_VERSION = "2026-03-18"
+DEV_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "dev" / "dashboard"
+MISSIONS_PATH = DEV_DATA_DIR / "missions.json"
+
+
+class CapabilityInfo(BaseModel):
+    enabled: bool
+    reason: str
+
+
+class ApiSchemaEnvelope(BaseModel):
+    schema: str
+    version: str = API_SCHEMA_VERSION
+    enabled: bool = True
+    data: Any
+    fallback: dict[str, Any] | None = None
+
+
+def _schema_payload(
+    schema: str,
+    data: Any,
+    *,
+    enabled: bool = True,
+    fallback: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    envelope = ApiSchemaEnvelope(schema=schema, data=data, enabled=enabled, fallback=fallback)
+    payload = envelope.model_dump()
+    if isinstance(data, dict):
+        payload.update(data)
+    return payload
 
 
 def _subsystem_status() -> dict[str, dict[str, str | bool]]:
@@ -230,6 +256,72 @@ def _subsystem_status() -> dict[str, dict[str, str | bool]]:
         }
 
     return statuses
+
+
+def _dashboard_capabilities() -> dict[str, CapabilityInfo]:
+    statuses = _subsystem_status()
+    sim = DEFAULT_CONTEXT.sim_state.get("simulation")
+    return {
+        "missions": CapabilityInfo(
+            enabled=MISSIONS_PATH.exists(),
+            reason=(
+                f"development seed available at {MISSIONS_PATH}"
+                if MISSIONS_PATH.exists()
+                else "No development mission seed found. Run scripts/seed_dashboard_dev.py."
+            ),
+        ),
+        "quests": CapabilityInfo(
+            enabled=True,
+            reason="Quest data served from the runtime ledger.",
+        ),
+        "governance": CapabilityInfo(
+            enabled=bool(sim is not None),
+            reason=(
+                "Governance endpoints require an initialized simulation."
+                if sim is None
+                else "Governance service available."
+            ),
+        ),
+        "observability": CapabilityInfo(
+            enabled=True,
+            reason="Observability metrics are always exposed with zero/default fallbacks.",
+        ),
+        "map": CapabilityInfo(
+            enabled=bool(sim is not None and getattr(sim, "world_map", None) is not None),
+            reason=(
+                "Map endpoints require a simulation world map."
+                if sim is None or getattr(sim, "world_map", None) is None
+                else "World map available."
+            ),
+        ),
+        "memory": CapabilityInfo(
+            enabled=bool(sim is not None),
+            reason=(
+                "Memory views require an initialized simulation."
+                if sim is None
+                else "Memory services available with empty fallback responses."
+            ),
+        ),
+        "graph_kb": CapabilityInfo(
+            enabled=bool(statuses.get("graph_store", {}).get("ok")),
+            reason=str(statuses.get("graph_store", {}).get("detail", "graph backend unavailable")),
+        ),
+        "moderation": CapabilityInfo(
+            enabled=True,
+            reason="Moderation controls are routed through dashboard/Discord policies.",
+        ),
+    }
+
+
+def _capability_enabled(name: str) -> bool:
+    capability = _dashboard_capabilities().get(name)
+    return bool(capability.enabled) if capability is not None else False
+
+
+def _capability_fallback(name: str) -> dict[str, Any]:
+    capability = _dashboard_capabilities().get(name)
+    reason = capability.reason if capability is not None else "Capability unavailable."
+    return {"reason": reason, "action": "Show deterministic empty state in the UI."}
 
 
 class AgentMessage(BaseModel):
@@ -520,7 +612,15 @@ async def api_map() -> Response:
                 except Exception:  # pragma: no cover - defensive
                     logger.exception("Failed to load summary for %s", ag.agent_id)
             agents[ag.agent_id] = {"mood": mood, "summary": summary}
-    return JSONResponse({"world_map": world_map, "agents": agents})
+    enabled = _capability_enabled("map")
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.map_state",
+            {"world_map": world_map, "agents": agents},
+            enabled=enabled,
+            fallback=None if enabled else _capability_fallback("map"),
+        )
+    )
 
 
 @app.get("/api/agent_stats")
@@ -588,19 +688,47 @@ async def readiness() -> Response:
     return JSONResponse(payload, status_code=200 if not missing else 503)
 
 
+@app.get("/api/capabilities")
+async def api_capabilities() -> Response:
+    capabilities = {key: value.model_dump() for key, value in _dashboard_capabilities().items()}
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.capabilities",
+            {"capabilities": capabilities},
+        )
+    )
+
+
 @app.get("/api/missions")
 async def get_missions() -> Response:
-    """Return the list of missions from the bundled JSON file."""
-    with open(MISSIONS_PATH, encoding="utf-8") as f:
-        missions = json.load(f)
-    return JSONResponse(missions)
+    """Return missions seeded explicitly for development environments."""
+    missions: list[dict[str, Any]] = []
+    enabled = MISSIONS_PATH.exists()
+    if enabled:
+        with open(MISSIONS_PATH, encoding="utf-8") as f:
+            missions = json.load(f)
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.missions",
+            {"missions": missions},
+            enabled=enabled,
+            fallback=None if enabled else _capability_fallback("missions"),
+        )
+    )
 
 
 @app.get("/api/quests")
 async def get_quests_api() -> Response:
     """Return the list of generated quests."""
     quests = ledger.get_quests()
-    return JSONResponse({"quests": quests})
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.quests",
+            {"quests": quests},
+            enabled=_capability_enabled("quests"),
+            fallback=None if _capability_enabled("quests") else _capability_fallback("quests"),
+        )
+    )
 
 
 @app.get("/api/agents/{agent_id}/semantic_summaries")
@@ -738,7 +866,15 @@ async def api_memory(agent_id: str, limit: int = 5) -> Response:
             except Exception:  # pragma: no cover - defensive
                 episodic = []
 
-    return JSONResponse({"semantic": semantic, "episodic": episodic})
+    enabled = _capability_enabled("memory")
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.memory_views",
+            {"semantic": semantic, "episodic": episodic},
+            enabled=enabled,
+            fallback=None if enabled else _capability_fallback("memory"),
+        )
+    )
 
 
 @app.get("/api/knowledge/timeline")
@@ -946,15 +1082,33 @@ async def api_get_gov() -> Response:
     sim = SIM_STATE.get("simulation")
     if sim is not None and hasattr(sim, "get_governance_read_model"):
         model = cast(dict[str, Any], sim.get_governance_read_model())
-        return JSONResponse(model)
+        return JSONResponse(
+            _schema_payload(
+                "dashboard.governance",
+                model,
+                enabled=_capability_enabled("governance"),
+                fallback=(
+                    None
+                    if _capability_enabled("governance")
+                    else _capability_fallback("governance")
+                ),
+            )
+        )
     return JSONResponse(
-        {
-            "rules": governance_rules_engine.current_rules(),
-            "current_rules": governance_rules_engine.current_rules(),
-            "pending_votes": governance_rules_engine.pending_votes(),
-            "active_offices": governance_rules_engine.active_offices(),
-            "sanctions": governance_rules_engine.sanctions(),
-        }
+        _schema_payload(
+            "dashboard.governance",
+            {
+                "rules": governance_rules_engine.current_rules(),
+                "current_rules": governance_rules_engine.current_rules(),
+                "pending_votes": governance_rules_engine.pending_votes(),
+                "active_offices": governance_rules_engine.active_offices(),
+                "sanctions": governance_rules_engine.sanctions(),
+            },
+            enabled=_capability_enabled("governance"),
+            fallback=(
+                None if _capability_enabled("governance") else _capability_fallback("governance")
+            ),
+        )
     )
 
 
@@ -1097,7 +1251,18 @@ async def api_cost_metrics() -> Response:
 
     payload = _cost_metrics_data()
     payload["user_value_kpis"] = _user_value_metrics_data()
-    return JSONResponse(payload)
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.observability",
+            payload,
+            enabled=_capability_enabled("observability"),
+            fallback=(
+                None
+                if _capability_enabled("observability")
+                else _capability_fallback("observability")
+            ),
+        )
+    )
 
 
 @app.get("/api/observability_metrics")
@@ -1106,7 +1271,18 @@ async def api_observability_metrics() -> Response:
 
     payload = _cost_metrics_data()
     payload["user_value_kpis"] = _user_value_metrics_data()
-    return JSONResponse(payload)
+    return JSONResponse(
+        _schema_payload(
+            "dashboard.observability",
+            payload,
+            enabled=_capability_enabled("observability"),
+            fallback=(
+                None
+                if _capability_enabled("observability")
+                else _capability_fallback("observability")
+            ),
+        )
+    )
 
 
 @app.get("/api/user_value_metrics")
