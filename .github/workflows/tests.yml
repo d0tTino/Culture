@@ -29,6 +29,11 @@ jobs:
           pip install pytest-asyncio==0.23.8
       - name: Run linters
         run: ruff check .
+
+      - name: Enforce Ruff on agents core
+        run: ruff check src/agents/core
+      - name: Enforce mypy on agents core
+        run: mypy --strict --follow-imports=skip src/agents/core/agent_state.py src/agents/core/agent_traits.py src/agents/core/agent_lifecycle.py src/agents/core/agent_relationships.py
       - name: Run unit tests
         run: pytest -m "unit" -q
 

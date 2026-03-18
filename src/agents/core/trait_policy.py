@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .agent_state import PersonalityTraits
+from .agent_traits import PersonalityTraits
 
 DEFAULT_TRAIT_POLICY_COEFFICIENTS: dict[str, float] = {
     "action_bias.openness": 0.35,
@@ -102,9 +102,11 @@ def mood_update_multiplier(
     sensitivity_weight = _coefficient(coefficients, "mood.sensitivity_weight")
     resilience_weight = _coefficient(coefficients, "mood.resilience_weight")
     centered = trait_projection["centered"]
-    multiplier = 1.0 + (
-        sensitivity_weight * centered["emotional_sensitivity"]
-    ) - (resilience_weight * centered["resilience"])
+    multiplier = (
+        1.0
+        + (sensitivity_weight * centered["emotional_sensitivity"])
+        - (resilience_weight * centered["resilience"])
+    )
     return max(0.1, multiplier)
 
 
@@ -135,7 +137,11 @@ def trait_drift_from_experience(
 
     social_assertiveness_coeff = _coefficient(
         coefficients,
-        "drift.social.assertiveness_positive" if social >= 0 else "drift.social.assertiveness_negative",
+        (
+            "drift.social.assertiveness_positive"
+            if social >= 0
+            else "drift.social.assertiveness_negative"
+        ),
     )
     assertiveness_drift = social_assertiveness_coeff * social
 
@@ -150,7 +156,9 @@ def trait_drift_from_experience(
     }
 
 
-def merge_trait_policy_coefficients(overrides: Mapping[str, Any] | None = None) -> dict[str, float]:
+def merge_trait_policy_coefficients(
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, float]:
     """Return a full coefficient map using defaults with optional overrides."""
 
     merged = dict(DEFAULT_TRAIT_POLICY_COEFFICIENTS)

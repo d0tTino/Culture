@@ -1,9 +1,8 @@
-# ruff: noqa: ANN101, ANN102
 import logging
 import random
 from collections import deque
 from enum import Enum
-from typing import Any, Optional, Protocol, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from pydantic import BaseModel, Extra, Field, PrivateAttr
 from typing_extensions import Self
@@ -21,23 +20,21 @@ else:
             pass
 
 
-from src.shared.pydantic_compat import _PYDANTIC_V2, field_validator, model_validator
-
+from src.agents.core.agent_lifecycle import AgentLifecycleState
+from src.agents.core.agent_relationships import apply_gossip_update
+from src.agents.core.agent_traits import PersonalityTraits
 from src.agents.core.mood_utils import get_descriptive_mood, get_mood_level
+from src.agents.core.personality_transition import TraitTransitionLog
 from src.agents.core.roles import (
-    ROLE_EMBEDDINGS,
     RoleProfile,
     create_role_profile,
     ensure_profile,
-    get_role_trait_template,
 )
-from src.agents.core.personality_transition import TraitTransitionLog
-from .embedding_utils import compute_embedding
 from src.infra.config import get_config  # Import get_config function
 from src.langgraph import RetrieverNode
+from src.shared.pydantic_compat import _PYDANTIC_V2, field_validator, model_validator
 
-if TYPE_CHECKING:
-    from src.infra.llm_client import LLMClient, LLMClientConfig
+from .embedding_utils import compute_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -95,37 +92,6 @@ def _coerce_policy_bool(value: Any, default: bool = True) -> bool:
     return default
 
 
-
-
-class PersonalityTraits(BaseModel):
-    """Stable-but-adaptable personality dimensions used in social/emotional decisions."""
-
-    openness: float = Field(default=0.6, ge=0.0, le=1.0)
-    analytical_focus: float = Field(default=0.6, ge=0.0, le=1.0)
-    empathy: float = Field(default=0.6, ge=0.0, le=1.0)
-    assertiveness: float = Field(default=0.5, ge=0.0, le=1.0)
-    emotional_sensitivity: float = Field(default=0.5, ge=0.0, le=1.0)
-    resilience: float = Field(default=0.6, ge=0.0, le=1.0)
-    trust_baseline: float = Field(default=0.55, ge=0.0, le=1.0)
-    adaptability: float = Field(default=0.6, ge=0.0, le=1.0)
-
-    def summarize(self) -> str:
-        return (
-            "openness={:.2f}, analytical_focus={:.2f}, empathy={:.2f}, "
-            "assertiveness={:.2f}, sensitivity={:.2f}, resilience={:.2f}, "
-            "trust_baseline={:.2f}, adaptability={:.2f}"
-        ).format(
-            self.openness,
-            self.analytical_focus,
-            self.empathy,
-            self.assertiveness,
-            self.emotional_sensitivity,
-            self.resilience,
-            self.trust_baseline,
-            self.adaptability,
-        )
-
-
 class AgentActionIntent(str, Enum):
     IDLE = "idle"
     CONTINUE_COLLABORATION = "continue_collaboration"
@@ -140,13 +106,6 @@ class AgentActionIntent(str, Enum):
     MOVE = "move"
     GATHER = "gather"
     BUILD = "build"
-
-
-class AgentLifecycleState(str, Enum):
-    ACTIVE = "active"
-    RETIRED = "retired"
-    DECEASED = "deceased"
-    ARCHIVED = "archived"
 
 
 DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
@@ -168,16 +127,16 @@ DEFAULT_AVAILABLE_ACTIONS: list[AgentActionIntent] = [
 # Forward reference for Agent (used in RelationshipHistoryEntry)
 if TYPE_CHECKING:
     from src.infra.llm_client import (
+        LLMClientInitError,
         OllamaClientProtocol,
         get_default_llm_client,
-        LLMClientInitError,
     )
 else:
     try:
         from src.infra.llm_client import (
+            LLMClientInitError,
             OllamaClientProtocol,
             get_default_llm_client,
-            LLMClientInitError,
         )
     except Exception:  # pragma: no cover - fallback when llm_client is missing
 
@@ -191,6 +150,7 @@ else:
 
         class LLMClientInitError(RuntimeError):
             pass
+
 
 # Must-not-change contract for persistence compatibility.
 #
@@ -248,11 +208,11 @@ class AgentStateData(BaseModel):
     short_term_memory: deque[dict[str, Any]] = Field(default_factory=deque)
     goals: list[dict[str, Any]] = Field(default_factory=list)
     projects: dict[str, dict[str, Any]] = Field(default_factory=dict)  # project_id: {details}
-    current_project_id: Optional[str] = None
-    llm_client_config: Optional[Any] = None  # Configuration data for LLM client
-    llm_client: Optional[Any] = None
-    memory_store_manager: Optional[Any] = None  # Optional[VectorStoreManager]
-    mock_llm_client: Optional[Any] = None
+    current_project_id: str | None = None
+    llm_client_config: Any | None = None  # Configuration data for LLM client
+    llm_client: Any | None = None
+    memory_store_manager: Any | None = None  # Optional[VectorStoreManager]
+    mock_llm_client: Any | None = None
     memory_retriever_top_k: int = Field(
         default_factory=lambda: int(str(get_config("MEMORY_RETRIEVER_TOP_K") or "5"))
     )
@@ -267,12 +227,12 @@ class AgentStateData(BaseModel):
         if hasattr(self, "model_post_init"):
             self.model_post_init(None)
 
-    last_thought: Optional[str] = None
-    last_clarification_question: Optional[str] = None
+    last_thought: str | None = None
+    last_clarification_question: str | None = None
     last_clarification_downgraded: bool = False
-    last_action_intent: Optional[AgentActionIntent] = None
-    last_message_step: Optional[int] = None
-    last_action_step: Optional[int] = None
+    last_action_intent: AgentActionIntent | None = None
+    last_message_step: int | None = None
+    last_action_step: int | None = None
     available_action_intents: list[AgentActionIntent] = Field(
         default_factory=lambda: list(DEFAULT_AVAILABLE_ACTIONS)
     )
@@ -286,11 +246,11 @@ class AgentStateData(BaseModel):
     lifecycle_history: list[dict[str, Any]] = Field(default_factory=list)
     legacy_artifacts: dict[str, Any] = Field(default_factory=dict)
     memory_archival_policy: dict[str, Any] = Field(default_factory=dict)
-    predecessor_id: Optional[str] = None
-    successor_id: Optional[str] = None
+    predecessor_id: str | None = None
+    successor_id: str | None = None
     inheritance: float = 0.0
     genes: dict[str, float] = Field(default_factory=_generate_default_genes)
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     # Memory consolidation tracking
     last_level_2_consolidation_step: int = 0
     collective_ip: float = 0.0
@@ -399,7 +359,7 @@ class AgentStateData(BaseModel):
         except (TypeError, ValueError):
             return {}
 
-    @field_validator("mood_level", mode="before")
+    @field_validator("mood_level", mode="before")  # type: ignore[untyped-decorator]
     @classmethod
     def check_mood_level_type_before(cls, v: Any) -> Any:
         if not isinstance(v, (float, int)):
@@ -415,7 +375,7 @@ class AgentStateData(BaseModel):
             # If it cannot be coerced, Pydantic will raise a validation error later if not a float
         return v
 
-    @field_validator("mood_level")
+    @field_validator("mood_level")  # type: ignore[untyped-decorator]
     @classmethod
     def check_mood_level_type_after(cls, v: float) -> float:
         if not isinstance(v, float):
@@ -427,7 +387,7 @@ class AgentStateData(BaseModel):
 
     @property
     def mood_category(self) -> str:  # Returns the string like "neutral", "positive"
-        return get_mood_level(self.mood_level)  # Uses mood_utils.get_mood_level
+        return cast(str, get_mood_level(self.mood_level))  # Uses mood_utils.get_mood_level
 
     # ... (rest of AgentStateData and AgentState classes, ensuring they use get_config() for these values)
     # For example, in update_mood:
@@ -439,7 +399,7 @@ class AgentStateData(BaseModel):
 class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses it
     @property
     def descriptive_mood(self) -> str:
-        return get_descriptive_mood(self.mood_level)
+        return cast(str, get_descriptive_mood(self.mood_level))
 
     @property
     def mood_value(self) -> float:  # This property now correctly accesses self.mood_level
@@ -511,16 +471,16 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             f"traits: {self.traits.summarize()}"
         )
 
-
     @property
     def trait_summary(self) -> str:
         return self.traits.summarize()
+
     # ------------------------------------------------------------------
     # Compatibility properties
     # ------------------------------------------------------------------
     @property
     def role(self) -> str:
-        return self.current_role.name
+        return cast(str, self.current_role.name)
 
     @role.setter
     def role(self, value: str) -> None:
@@ -585,32 +545,14 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
 
     def apply_gossip(self, other_embedding: list[float], interaction_score: float) -> None:
         """Update internal role data based on gossip."""
-        from .role_embeddings import ROLE_EMBEDDINGS
+        apply_gossip_update(self, other_embedding, interaction_score)
 
-        if not self.current_role.embedding or not other_embedding:
-            return
-        lr = 0.1
-        self.role_embedding = [
-            a + lr * interaction_score * (b - a)
-            for a, b in zip(self.role_embedding, other_embedding)
-        ]
-        self.current_role.embedding = list(self.role_embedding)
-        role_name, sim = ROLE_EMBEDDINGS.nearest_role_from_embedding(other_embedding)
-        if role_name:
-            cur = self.role_reputation.get(role_name, 0.0)
-            self.role_reputation[role_name] = (cur + sim * interaction_score) / 2
-            self.learned_roles[role_name] = other_embedding
-            if role_name == self.current_role.name:
-                self.reputation_score = self.role_reputation[role_name]
-            ROLE_EMBEDDINGS.update_role_vector(role_name, other_embedding)
-            ROLE_EMBEDDINGS.update_reputation(role_name, sim * interaction_score)
-
-    @field_validator("current_role", mode="before")
+    @field_validator("current_role", mode="before")  # type: ignore[untyped-decorator]
     @classmethod
     def _ensure_role_profile(cls, value: Any) -> RoleProfile:
         return ensure_profile(value)
 
-    @field_validator("memory_store_manager", mode="before")
+    @field_validator("memory_store_manager", mode="before")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_memory_store_manager(cls, value: Any) -> Any:
         if value is None:
@@ -619,7 +561,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             return value
         raise ValueError("Invalid memory_store_manager provided")
 
-    @model_validator(mode="after")
+    @model_validator(mode="after")  # type: ignore[untyped-decorator]
     def _validate_model_after(cls, model: Any) -> Any:
         """Post-validation to ensure LLM client initialization works on all Pydantic versions."""
         if isinstance(model, dict):
@@ -759,9 +701,7 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
             )
         return cast(
             dict[str, Any],
-            base_model.dict(
-                exclude={"llm_client", "mock_llm_client", "memory_store_manager"}
-            ),
+            base_model.dict(exclude={"llm_client", "mock_llm_client", "memory_store_manager"}),
         )
 
     @classmethod
@@ -793,3 +733,12 @@ class AgentState(AgentStateData):  # Keep AgentState for now if BaseAgent uses i
         if not obj.reputation_score:
             obj.reputation_score = obj.current_role.reputation
         return obj
+
+
+__all__ = [
+    "AgentActionIntent",
+    "AgentLifecycleState",
+    "AgentState",
+    "AgentStateData",
+    "PersonalityTraits",
+]

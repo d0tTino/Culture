@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .agent_state import PersonalityTraits
+from .agent_traits import PersonalityTraits
 from .roles import RoleProfile, ensure_profile, get_role_trait_template
 
 

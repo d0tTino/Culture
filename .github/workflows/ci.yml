@@ -66,6 +66,9 @@ jobs:
       - name: Run Ruff Linter
         run: ruff check stubs docs
 
+      - name: Enforce Ruff on agents core
+        run: ruff check src/agents/core
+
       - name: Run Black Formatter Check
         run: black --check .
 
@@ -141,6 +144,10 @@ jobs:
       - name: Run mypy
         shell: bash
         run: mypy --strict --config-file pyproject.toml
+
+      - name: Enforce mypy on agents core
+        shell: bash
+        run: mypy --strict --follow-imports=skip src/agents/core/agent_state.py src/agents/core/agent_traits.py src/agents/core/agent_lifecycle.py src/agents/core/agent_relationships.py
 
 
       - name: Run Tests & Coverage (Linux)
