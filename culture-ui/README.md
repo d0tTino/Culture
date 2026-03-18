@@ -113,3 +113,12 @@ Run the development server and navigate to `/storyboard` to see it in action.
 latest agent positions. The widget also displays each agent's mood and a recent
 one-line summary. Register it in your dashboard layout using the widget name
 `LiveMap`.
+
+
+## User Value KPI reference
+
+The KPI Card page (`/kpi-card`) includes the canonical field definitions for the
+`/api/user_value_metrics` payload. Treat the repository root README
+(`../README.md#user-value-kpi-reference`) as the engineering source of truth and
+this page as the in-dashboard companion reference for product reviews.
+

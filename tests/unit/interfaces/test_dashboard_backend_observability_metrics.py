@@ -10,7 +10,15 @@ from tests.unit.interfaces.test_dashboard_backend_control import load_dashboard_
 def _prepare_dashboard_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     if "src.sim.resource_manager" not in sys.modules:
         resource_manager = types.ModuleType("src.sim.resource_manager")
+        resource_manager.BudgetCharger = object
+        resource_manager.BudgetChecker = object
+        resource_manager.HasResources = object
+        resource_manager.ResourceManager = object
+        resource_manager.TickCapper = object
+        resource_manager.get_budget_charger = lambda: None
+        resource_manager.get_budget_checker = lambda: None
         resource_manager.get_resource_manager = lambda: None
+        resource_manager.get_tick_capper = lambda: None
         monkeypatch.setitem(sys.modules, "src.sim.resource_manager", resource_manager)
 
 
@@ -221,6 +229,13 @@ async def test_api_user_value_metrics_includes_kpis_and_periodic_summary(
     resp = await db.api_user_value_metrics()
     payload = json.loads(resp.body)
 
+    assert payload["payload_version"] == 2
+    assert payload["thresholds"] == {
+        "min_novelty_score": 0.2,
+        "min_interaction_diversity": 0.2,
+        "max_repetitive_intents_ratio": 0.75,
+        "min_social_graph_change_count": 1,
+    }
     assert "narrative_continuity_score" in payload
     assert "unresolved_conflict_count" in payload
     assert "stagnation_alerts" in payload

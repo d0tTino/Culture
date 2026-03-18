@@ -4,24 +4,37 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from itertools import pairwise
 from typing import Any
+
+USER_VALUE_KPI_PAYLOAD_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
 class SimulationStagnationThresholds:
     """Alert limits for detecting simulation stagnation signals."""
 
-    min_cross_agent_interaction_diversity: float = 0.2
+    min_novelty_score: float = 0.2
+    min_interaction_diversity: float = 0.2
     max_repetitive_intents_ratio: float = 0.75
     min_social_graph_change_count: int = 1
+
+    def as_dict(self) -> dict[str, float | int]:
+        return {
+            "min_novelty_score": self.min_novelty_score,
+            "min_interaction_diversity": self.min_interaction_diversity,
+            "max_repetitive_intents_ratio": self.max_repetitive_intents_ratio,
+            "min_social_graph_change_count": self.min_social_graph_change_count,
+        }
 
 
 @dataclass(frozen=True, slots=True)
 class UserValueKPIReport:
     """Canonical user-value KPI payload consumed by dashboards and summaries."""
 
+    payload_version: int
+    thresholds: SimulationStagnationThresholds
     narrative_continuity_score: float
     unresolved_conflict_count: int
     cross_agent_interaction_diversity: float
@@ -33,17 +46,10 @@ class UserValueKPIReport:
     stagnation_alerts: tuple[str, ...]
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            "narrative_continuity_score": self.narrative_continuity_score,
-            "unresolved_conflict_count": self.unresolved_conflict_count,
-            "cross_agent_interaction_diversity": self.cross_agent_interaction_diversity,
-            "user_intervention_rate": self.user_intervention_rate,
-            "return_session_continuity": self.return_session_continuity,
-            "novelty_score": self.novelty_score,
-            "repetitive_intents_ratio": self.repetitive_intents_ratio,
-            "social_graph_change_count": self.social_graph_change_count,
-            "stagnation_alerts": list(self.stagnation_alerts),
-        }
+        payload = asdict(self)
+        payload["stagnation_alerts"] = list(self.stagnation_alerts)
+        payload["thresholds"] = self.thresholds.as_dict()
+        return payload
 
 
 def _as_step(entry: Mapping[str, Any]) -> int:
@@ -171,14 +177,18 @@ def compute_user_value_kpis(
             social_graph_change_count += 1
 
     stagnation_alerts: list[str] = []
-    if novelty_score < cfg.min_cross_agent_interaction_diversity:
+    if novelty_score < cfg.min_novelty_score:
         stagnation_alerts.append("low_novelty")
+    if cross_agent_interaction_diversity < cfg.min_interaction_diversity:
+        stagnation_alerts.append("low_interaction_diversity")
     if repetitive_intents_ratio > cfg.max_repetitive_intents_ratio:
         stagnation_alerts.append("repetitive_intents")
     if social_graph_change_count < cfg.min_social_graph_change_count:
         stagnation_alerts.append("no_social_graph_change")
 
     return UserValueKPIReport(
+        payload_version=USER_VALUE_KPI_PAYLOAD_VERSION,
+        thresholds=cfg,
         narrative_continuity_score=round(narrative_continuity_score, 4),
         unresolved_conflict_count=unresolved_conflict_count,
         cross_agent_interaction_diversity=round(cross_agent_interaction_diversity, 4),
@@ -189,4 +199,3 @@ def compute_user_value_kpis(
         social_graph_change_count=social_graph_change_count,
         stagnation_alerts=tuple(stagnation_alerts),
     )
-
