@@ -1,0 +1,91 @@
+{
+  "additional_metrics": {
+    "command_responsiveness": 1.0,
+    "latency_score": 0.8211,
+    "memory_recall_quality": 0.8663,
+    "recovery_success": 1.0
+  },
+  "aggregate_adherence_score": 0.8808,
+  "aggregate_status": "pass",
+  "payload_version": 1,
+  "pillar_scores": [
+    {
+      "metrics": {
+        "interaction_diversity": 1.0,
+        "novelty_score": 0.9167,
+        "social_graph_change_score": 1.0
+      },
+      "name": "social_emergence",
+      "score": 0.9722,
+      "status": "pass",
+      "threshold": {
+        "critical": true,
+        "pass_floor": 0.75,
+        "warning_floor": 0.65
+      }
+    },
+    {
+      "metrics": {
+        "command_responsiveness": 1.0,
+        "latency_score": 0.8211,
+        "user_intervention_coverage": 0.6316
+      },
+      "name": "user_intervention",
+      "score": 0.8176,
+      "status": "pass",
+      "threshold": {
+        "critical": false,
+        "pass_floor": 0.75,
+        "warning_floor": 0.65
+      }
+    },
+    {
+      "metrics": {
+        "conflict_resolution_score": 1.0,
+        "narrative_continuity_score": 0.6667,
+        "recovery_success": 1.0
+      },
+      "name": "governance",
+      "score": 0.8889,
+      "status": "pass",
+      "threshold": {
+        "critical": true,
+        "pass_floor": 0.8,
+        "warning_floor": 0.7
+      }
+    },
+    {
+      "metrics": {
+        "memory_recall_quality": 0.8663,
+        "narrative_continuity_score": 0.6667,
+        "return_session_continuity": 1.0
+      },
+      "name": "long_run_persistence",
+      "score": 0.8443,
+      "status": "pass",
+      "threshold": {
+        "critical": true,
+        "pass_floor": 0.8,
+        "warning_floor": 0.7
+      }
+    }
+  ],
+  "user_value_kpis": {
+    "cross_agent_interaction_diversity": 1.0,
+    "narrative_continuity_score": 0.6667,
+    "novelty_score": 0.9167,
+    "payload_version": 2,
+    "repetitive_intents_ratio": 0.1667,
+    "return_session_continuity": 1.0,
+    "social_graph_change_count": 3,
+    "stagnation_alerts": [],
+    "thresholds": {
+      "max_repetitive_intents_ratio": 0.75,
+      "min_interaction_diversity": 0.2,
+      "min_novelty_score": 0.2,
+      "min_social_graph_change_count": 1
+    },
+    "unresolved_conflict_count": 0,
+    "user_intervention_rate": 0.1579
+  }
+}
