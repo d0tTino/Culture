@@ -33,7 +33,7 @@ types-pyyaml
 types-redis
 
 # For dependency management and other tools
-pip-tools
+pip-tools>=7.5.3
 GitPython
 zstandard==0.23.0
 neo4j

@@ -112,6 +112,7 @@ preview = false
 
 [project]
 name = "culture"
+requires-python = ">=3.11"
 
 [project.entry-points."culture.plugins"]
 minimal_plugin = "minimal_plugin:setup"
