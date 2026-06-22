@@ -1,78 +1,75 @@
-name: tests
+name: Optional Python suites
 
 on:
+  workflow_dispatch:
+    inputs:
+      run-vllm:
+        description: 'Run the optional vLLM integration suite'
+        required: false
+        default: 'true'
   pull_request:
-  push:
+    types: [opened, synchronize, reopened, labeled]
     branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/**'
+      - 'pyproject.toml'
+      - 'pytest.ini'
+      - 'requirements*.txt'
+      - 'requirements*.in'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.repository }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            python: '3.10'
-          - os: windows-latest
-            python: '3.11'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-          # Ensure pytest-asyncio is available for async tests
-          pip install pytest-asyncio==0.23.8
-      - name: Run linters
-        run: ruff check .
-
-      - name: Enforce Ruff on agents core
-        run: ruff check src/agents/core
-      - name: Enforce mypy on agents core
-        run: mypy --strict --follow-imports=skip src/agents/core/agent_state.py src/agents/core/agent_traits.py src/agents/core/agent_lifecycle.py src/agents/core/agent_relationships.py
-      - name: Run unit tests
-        run: pytest -m "unit" -q
-
+  # Runs only when manually dispatched with run-vllm=true or when a PR has the run-vllm label.
   vllm-integration:
-    needs: test
+    name: vLLM integration (opt-in)
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run-vllm == 'true') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-vllm'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python and install optional dependencies
+        uses: ./.github/actions/setup-python
         with:
-          python-version: '3.10'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-          pip install pytest-asyncio==0.23.8
-          bash scripts/install_optional_deps.sh
+          python-version: '3.11'
+          install-optional-deps: 'true'
+
       - name: Install vLLM
         id: install_vllm
         run: |
-          if pip install vllm; then
+          if python -m pip install vllm; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
+
       - name: Launch vLLM server
         if: steps.install_vllm.outputs.available == 'true'
         run: |
           scripts/start_vllm.sh &
           echo $! > vllm.pid
           sleep 30
+
       - name: Run vertical slice test
         if: steps.install_vllm.outputs.available == 'true'
         env:
           VLLM_API_BASE: http://localhost:8001
         run: pytest tests/integration/agents/test_vertical_slice_real_llm.py -m integration -q
+
       - name: Stop vLLM server
         if: steps.install_vllm.outputs.available == 'true'
         run: kill $(cat vllm.pid)
