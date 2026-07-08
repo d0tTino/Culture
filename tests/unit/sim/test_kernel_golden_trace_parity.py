@@ -57,13 +57,16 @@ async def test_golden_trace_compat_pipeline_matches_kernel_run_step() -> None:
     kernel_sim = Simulation([ScriptedAgent("A", "R"), ScriptedAgent("B", "R")], seed=123)
 
     try:
-        compat_events = await compat_sim._run_step_pipeline(max_turns=2)
+        with pytest.deprecated_call(match="compatibility adapter"):
+            compat_events = await compat_sim._run_step_pipeline(max_turns=2)
 
         _ = await kernel_sim.run_step(max_turns=2)
         kernel_context = kernel_sim.engine.last_step_context
         assert kernel_context is not None
         kernel_events = (
-            kernel_context.planned_outputs if kernel_context.planned_outputs else kernel_context.events
+            kernel_context.planned_outputs
+            if kernel_context.planned_outputs
+            else kernel_context.events
         )
 
         assert _normalize_trace(compat_events) == _normalize_trace(kernel_events)
@@ -72,3 +75,24 @@ async def test_golden_trace_compat_pipeline_matches_kernel_run_step() -> None:
         compat_sim.close()
         await kernel_sim.stop_event_listener()
         kernel_sim.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_kernel_phase_boundaries_reject_snapshot_hash_discontinuity() -> None:
+    sim = Simulation([ScriptedAgent("A", "R")], seed=123)
+    try:
+        sim._last_trace_hash = "snapshot-before"
+        original_plan = sim.engine.kernel.turn_engine.plan
+
+        async def _mutating_plan(*args: Any, **kwargs: Any) -> Any:
+            sim._last_trace_hash = "snapshot-after"
+            return await original_plan(*args, **kwargs)
+
+        sim.engine.kernel.turn_engine.plan = _mutating_plan  # type: ignore[method-assign]
+
+        with pytest.raises(AssertionError, match="Snapshot hash continuity"):
+            await sim.run_step(max_turns=2)
+    finally:
+        await sim.stop_event_listener()
+        sim.close()
