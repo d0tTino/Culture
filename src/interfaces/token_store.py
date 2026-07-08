@@ -1,6 +1,7 @@
+import hashlib
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from src.infra import config
 
@@ -34,7 +35,7 @@ async def _get_pool() -> Any:
     return _pool
 
 
-async def get_token(agent_id: str) -> Optional[str]:
+async def get_token(agent_id: str) -> str | None:
     """Return the Discord token for the given agent ID if present."""
     pool = await _get_pool()
     row = await pool.fetchrow(
@@ -44,7 +45,7 @@ async def get_token(agent_id: str) -> Optional[str]:
     return row["token"] if row else None
 
 
-async def lookup_token(agent_id: str) -> Optional[str]:
+async def lookup_token(agent_id: str) -> str | None:
     """Return or automatically assign the Discord token for ``agent_id``."""
     token = await get_token(agent_id)
     if token:
@@ -57,7 +58,9 @@ async def lookup_token(agent_id: str) -> Optional[str]:
     if not tokens:
         return None
 
-    token = tokens[hash(agent_id) % len(tokens)]
+    stable_digest = hashlib.sha256(agent_id.encode("utf-8")).digest()[:8]
+    stable_hash = int.from_bytes(stable_digest, "big")
+    token = tokens[stable_hash % len(tokens)]
     try:
         await save_token(agent_id, token)
     except Exception:
