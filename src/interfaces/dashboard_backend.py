@@ -431,13 +431,28 @@ def _sim_kb_service() -> Any | None:
     return getattr(sim, "knowledge_board_service", None) if sim is not None else None
 
 
+def _valid_bearer_token(auth_header: str | None) -> bool:
+    """Return whether an Authorization header matches the configured API token."""
+    return bool(API_TOKEN and auth_header == f"Bearer {API_TOKEN}")
+
+
+def _valid_websocket_token(websocket: WebSocket) -> bool:
+    """Validate dashboard WebSocket control authentication when configured."""
+    if not API_TOKEN:
+        return True
+
+    if _valid_bearer_token(websocket.headers.get("Authorization")):
+        return True
+
+    return websocket.query_params.get("token") == API_TOKEN
+
+
 async def _require_token(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     """Enforce bearer token for mutating requests when configured."""
     if API_TOKEN and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-        auth = request.headers.get("Authorization")
-        if auth != f"Bearer {API_TOKEN}":
+        if not _valid_bearer_token(request.headers.get("Authorization")):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
     return await call_next(request)
 
@@ -1638,6 +1653,10 @@ try:
 
     @app.websocket("/ws/control")
     async def ws_control(websocket: WebSocket) -> None:
+        if not _valid_websocket_token(websocket):
+            await websocket.close(code=1008)
+            return
+
         await websocket.accept()
         try:
             while True:
