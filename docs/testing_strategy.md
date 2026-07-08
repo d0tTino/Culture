@@ -21,7 +21,7 @@ We use pytest markers to categorize tests and make it easy to run specific subse
 ### Component Areas
 
 - `memory`: Marks tests related to agent memory systems
-- `dspy_program`: Marks tests related to DSPy programs
+- `dspy`: Marks tests related to DSPy programs
 - `agent_graph`: Marks tests involving the BasicAgentGraph and its nodes
 - `simulation`: Marks tests involving the main Simulation loop or environment
 - `vector_store`: Marks tests related to vector store functionality

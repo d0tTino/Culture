@@ -871,7 +871,7 @@ For more details, see [docs/architecture.md](docs/architecture.md#61-asynchronou
 Culture.ai uses pytest with marker-based test selection and parallelization for fast feedback:
 
 - **Default run** (`pytest`): Runs only unit tests (fast, no external dependencies)
-- **Full suite** (`pytest -m "slow or dspy_program or integration" -v -n auto`): Runs all slow, DSPy, and integration tests in parallel
+- **Full suite** (`pytest -m "slow or dspy or integration" -v -n auto`): Runs all slow, DSPy, and integration tests in parallel
 - ChromaDB test DBs are stored in RAM (tmpfs) on Linux for speed; see `docs/testing.md` for details
 
 `pytest` reads settings from `pytest.ini`. If you run tests with `-c /dev/null` or
@@ -1095,8 +1095,8 @@ Run the full test suite after installing development dependencies and starting a
    ```bash
    python -m pytest tests/
    ```
-`pytest-xdist` enables parallel execution via the `-n auto` option in `pytest.ini`.
-`scripts/run_tests.py` checks for this plugin and strips `-n auto` if it isn't installed, so tests still run serially without it.
+`pytest-xdist` enables parallel execution when you pass `-n auto` explicitly, such as in the full-suite command above.
+`scripts/run_tests.py` checks whether this plugin is installed before using parallel options, so tests still run serially without it.
 These tests also rely on optional packages (`chromadb`, `weaviate-client`, `langgraph`) which are included in `requirements.txt` and installed in CI.
 Generate a coverage report:
 ```bash
