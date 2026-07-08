@@ -22,7 +22,7 @@ If any of these optional packages are missing, `scripts/run_tests.py` prints a
 warning and skips affected tests automatically. For example, the SQL token store
 tests require both `sqlalchemy` and `aiosqlite`; tests that patch the
 `requests` library or depend on `numpy` are treated the same way. Running
-`pytest` directly may fail because `pytest.ini` specifies `-n auto` and
+`pytest` directly uses the options in `pytest.ini`, including
 `asyncio_mode=strict`.
 
 ## Test Markers and Suite Structure
@@ -31,22 +31,22 @@ Tests are categorized using pytest markers:
 
 - `unit`: Fast, self-contained tests (default selection)
 - `integration`: Multi-component or external-service tests
-- `dspy_program`: Tests that require DSPy/Ollama/LLM
+- `dspy`: Tests that require DSPy/Ollama/LLM
 - `slow`: Tests that take >5s or require heavy resources
 - `memory`, `vector_store`, `hierarchical_memory`, `mus`, etc.: Specialized subsystems
 
 ### Default vs. Full Suite
 
-- **Default run** (`pytest`): Runs only unit tests (excludes `slow`, `dspy_program`, `integration`)
-- **Full run** (`pytest -m "slow or dspy_program or integration"`): Runs all slow, DSPy, and integration tests
+- **Default run** (`pytest`): Runs tests marked `unit` and excludes `dspy` through `pytest.ini`
+- **Full run** (`pytest -m "slow or dspy or integration"`): Runs all slow, DSPy, and integration tests
 
 ## Parallelization
 
 Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for parallel test execution:
 
-- All tests are run in parallel by default (`-n auto`)
-- Tests in the same file are kept on the same worker (`--dist loadscope`)
-- This reduces wall-clock time from ~40 min to ≤5 min on modern CPUs
+- Parallel execution is available when you pass `-n auto` explicitly or use a wrapper command that adds it
+- Use `--dist loadscope` to keep tests in the same file on the same worker
+- This can reduce wall-clock time significantly on modern CPUs
 
 ## ChromaDB Test DB Optimization (tmpfs)
 
@@ -63,7 +63,7 @@ Culture.ai uses [pytest-xdist](https://pytest-xdist.readthedocs.io/) for paralle
   ```
 - **Full suite (all slow/integration/DSPy):**
   ```bash
-  pytest -m "slow or dspy_program or integration" -v -n auto
+  pytest -m "slow or dspy or integration" -v -n auto
   ```
 - **Top 10 slowest tests:**
   ```bash
@@ -109,7 +109,7 @@ The CI workflow can run this suite by triggering the `run-redteam` input of the 
 
 ## Adding/Updating Markers
 
-- Add `@pytest.mark.slow`, `@pytest.mark.integration`, or `@pytest.mark.dspy_program` to slow or external-service tests
+- Add `@pytest.mark.slow`, `@pytest.mark.integration`, or `@pytest.mark.dspy` to slow or external-service tests
 - Update `pytest.ini` to register new markers
 - Document new marker usage in this file
 
